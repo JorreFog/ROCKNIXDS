@@ -56,10 +56,18 @@ fi
         case "$ev" in
             # ES destroys its window while a game runs and makes a new one afterwards; the
             # sway config hides new ES windows in the scratchpad, so bring it back placed
-            *'"change": "new"'*'"app_id": "emulationstation"'*)
-                sleep 0.2
-                swaymsg -s "$SOCK" '[app_id="emulationstation"] scratchpad show' >/dev/null 2>&1
-                swaymsg -s "$SOCK" "$LAYOUT, focus" >/dev/null 2>&1 ;;
+            # (the event may not carry the app_id yet, so check the tree for a hidden ES)
+            *'"change": "new"'*)
+                sleep 0.3
+                if swaymsg -s "$SOCK" -t get_tree | python3 -c '
+import json, sys
+def walk(n):
+    if n.get("app_id") == "emulationstation" and not n.get("visible"): sys.exit(0)
+    for c in n.get("nodes", []) + n.get("floating_nodes", []): walk(c)
+walk(json.load(sys.stdin)); sys.exit(1)'; then
+                    swaymsg -s "$SOCK" '[app_id="emulationstation"] scratchpad show' >/dev/null 2>&1
+                    swaymsg -s "$SOCK" "$LAYOUT, focus" >/dev/null 2>&1
+                fi ;;
             *'"change": "fullscreen_mode"'*'"app_id": "emulationstation"'*)
                 sleep 0.2
                 swaymsg -s "$SOCK" -t get_tree | tr -d ' \n' | grep -q '"fullscreen_mode":1,[^}]*"app_id":"emulationstation"' &&
