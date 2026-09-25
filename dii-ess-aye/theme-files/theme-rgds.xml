@@ -71,8 +71,8 @@
             <reverse>false</reverse>
             <clock name="system-clock">
                 <color>E8E9EBFF</color>
-                <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-                <fontSize>0.0291667</fontSize><!-- 14 -->
+                <fontPath>${themePath}/assets/fonts/PressStart2P-Regular.ttf</fontPath>
+                <fontSize>0.0333333</fontSize><!-- 16px -->
                 <lineSpacing>1</lineSpacing>
             </clock>
         </stackpanel>
@@ -81,8 +81,8 @@
             <reverse>true</reverse>
             <batteryText name="system-battery-text">
                 <color>E8E9EBFF</color>
-                <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-                <fontSize>0.0291667</fontSize><!-- 14 -->
+                <fontPath>${themePath}/assets/fonts/PressStart2P-Regular.ttf</fontPath>
+                <fontSize>0.0333333</fontSize><!-- 16px -->
                 <lineSpacing>1</lineSpacing>
             </batteryText>
             <batteryIcon name="system-battery-icon">
@@ -115,8 +115,8 @@
             <pos>0.0291667 0.8708333</pos><!-- box = visible tab body, 56..156 x 418..480 -->
             <size>0.0520833 0.1291667</size>
             <verticalAlignment>center</verticalAlignment>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.05</fontSize>
+            <fontPath>${themePath}/assets/fonts/PressStart2P-Regular.ttf</fontPath>
+            <fontSize>0.0333333</fontSize><!-- 16px -->
             <color>E8E9EBFF</color>
             <alignment>left</alignment>
             <zIndex>2</zIndex>
@@ -134,8 +134,8 @@
             <pos>0.2520833 0.8708333</pos><!-- 484..584 x 418..480 -->
             <size>0.0520833 0.1291667</size>
             <verticalAlignment>center</verticalAlignment>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.05</fontSize>
+            <fontPath>${themePath}/assets/fonts/PressStart2P-Regular.ttf</fontPath>
+            <fontSize>0.0333333</fontSize><!-- 16px -->
             <color>E8E9EBFF</color>
             <alignment>right</alignment>
             <zIndex>2</zIndex>
@@ -183,8 +183,8 @@
             <y>0.9208333</y>
             <w>0.04375</w>
             <h>0.0416667</h>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.0270833</fontSize><!-- 13 -->
+            <fontPath>${themePath}/assets/fonts/PixelifySans-Medium.ttf</fontPath>
+            <fontSize>0.0333333</fontSize><!-- 16px -->
             <color>FFFFFFFF</color>
             <alignment>center</alignment>
             <verticalAlignment>center</verticalAlignment>
@@ -222,8 +222,8 @@
             <pos>0.1666667 0.5104167</pos><!-- 320,245 -->
             <origin>0.5 0.5</origin>
             <size>0.3 0.2</size>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.1458333</fontSize><!-- 70 -->
+            <fontPath>${themePath}/assets/fonts/PressStart2P-Regular.ttf</fontPath>
+            <fontSize>0.1333333</fontSize><!-- 64px -->
             <color>E8E9EBFF</color>
             <alignment>center</alignment>
             <zIndex>2</zIndex>
@@ -233,8 +233,8 @@
             <pos>0.1666667 0.6458333</pos><!-- 320,310 -->
             <origin>0.5 0.5</origin>
             <size>0.3 0.0625</size>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.0416667</fontSize><!-- 20 -->
+            <fontPath>${themePath}/assets/fonts/PressStart2P-Regular.ttf</fontPath>
+            <fontSize>0.0333333</fontSize><!-- 16px -->
             <color>8FC8FFFF</color>
             <alignment>center</alignment>
             <zIndex>2</zIndex>
@@ -272,8 +272,8 @@
             <pos>0.5 0.15</pos>
             <origin>0.5 0.5</origin>
             <size>0.2333 0.1</size>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.04</fontSize>
+            <fontPath>${themePath}/assets/fonts/PixelifySans-Medium.ttf</fontPath>
+            <fontSize>0.0500000</fontSize><!-- 24px -->
             <color>E8E9EBFF</color>
             <alignment>center</alignment>
             <zIndex>57</zIndex>
@@ -284,8 +284,8 @@
             <pos>0.5 0.2291667</pos>
             <origin>0.5 0.5</origin>
             <size>0.2333 0.06</size>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.0333333</fontSize>
+            <fontPath>${themePath}/assets/fonts/PixelifySans-Regular.ttf</fontPath>
+            <fontSize>0.0375000</fontSize><!-- 18px -->
             <color>A9AEB5FF</color>
             <alignment>center</alignment>
             <zIndex>57</zIndex>
@@ -295,8 +295,8 @@
             <pos>0.5 0.3541667</pos>
             <origin>0.5 0.5</origin>
             <size>0.2333 0.06</size>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.0333333</fontSize>
+            <fontPath>${themePath}/assets/fonts/PixelifySans-Regular.ttf</fontPath>
+            <fontSize>0.0375000</fontSize><!-- 18px -->
             <color>8FC8FFFF</color>
             <alignment>center</alignment>
             <zIndex>57</zIndex>
@@ -357,8 +357,8 @@
             <pos>0.1666667 0.5416667</pos>
             <origin>0.5 0.5</origin>
             <size>0.2291667 0.1333333</size>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.0458333</fontSize><!-- 22 -->
+            <fontPath>${themePath}/assets/fonts/PixelifySans-Medium.ttf</fontPath>
+            <fontSize>0.0458333</fontSize><!-- 22px -->
             <color>E8E9EBFF</color>
             <alignment>center</alignment>
             <verticalAlignment>center</verticalAlignment>
@@ -370,8 +370,8 @@
             <pos>0.1666667 0.6666667</pos>
             <origin>0.5 0.5</origin>
             <size>0.2291667 0.05</size>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.0333333</fontSize><!-- 16 -->
+            <fontPath>${themePath}/assets/fonts/PixelifySans-Regular.ttf</fontPath>
+            <fontSize>0.0375000</fontSize><!-- 18px -->
             <color>8FC8FFFF</color>
             <alignment>center</alignment>
             <zIndex>1.5</zIndex>
@@ -399,8 +399,8 @@
             <origin>0.5 0.5</origin>
             <text>{game:system:collection} ? proper({game:system:fullName}) : {game:system:fullName}</text>
             <alignment>center</alignment>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.05</fontSize>
+            <fontPath>${themePath}/assets/fonts/PixelifySans-Medium.ttf</fontPath>
+            <fontSize>0.0583333</fontSize><!-- 28px -->
             <color>E8E9EBFF</color>
         </text>
 
@@ -480,8 +480,8 @@
             <pos>0.5 0.15</pos>
             <origin>0.5 0.5</origin>
             <size>0.2333 0.1</size>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.04</fontSize>
+            <fontPath>${themePath}/assets/fonts/PixelifySans-Medium.ttf</fontPath>
+            <fontSize>0.0500000</fontSize><!-- 24px -->
             <color>E8E9EBFF</color>
             <alignment>center</alignment>
             <zIndex>57</zIndex>
