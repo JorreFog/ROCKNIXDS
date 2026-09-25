@@ -210,20 +210,49 @@ write("status_bar.svg", 640, 44, f'''<defs>{grad("st", [(0, "#000000"), (1, "#00
 <rect width="640" height="43" fill="#000000" fill-opacity="0.22"/>
 <path d="M0,43.5 H640" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1"/>''')
 
-# --- scroll bar, sized 1:1 for the 640px bottom screen: arrow caps + groove.
-#     The thumb is a separate image the theme positions from {system:index}/{game:index}.
+# --- scroll bar: retro pixel-art style, drawn on the exact 1:1 pixel grid (600x28 at 660,438;
+#     thumb 84x20). Only integer-aligned rects, so nanosvg's antialiasing never softens an edge.
+def px(x, y, w, h, c):
+    return f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{c}"/>'
+
+def px_box(x, y, w, h, fill, light, dark, outline, bevel=2):
+    """Beveled box with 1px notched corners, 16-bit style."""
+    o = [px(x + 1, y, w - 2, 1, outline), px(x + 1, y + h - 1, w - 2, 1, outline),
+         px(x, y + 1, 1, h - 2, outline), px(x + w - 1, y + 1, 1, h - 2, outline),
+         px(x + 1, y + 1, w - 2, h - 2, fill),
+         px(x + 1, y + 1, w - 2, bevel, light), px(x + 1, y + 1, bevel, h - 2, light),
+         px(x + 1, y + h - 1 - bevel, w - 2, bevel, dark), px(x + w - 1 - bevel, y + 1, bevel, h - 2, dark)]
+    return "\n".join(o)
+
+def px_arrow(cx, cy, left, c, shadow, b=2):
+    """Stair-stepped triangle in chunky b x b pixels (5 columns), with a drop shadow."""
+    out = []
+    for dx, col in ((b // 2, shadow), (0, c)):
+        for k in range(5):
+            n = (k + 1) if left else (5 - k)          # half-height in blocks
+            x = cx - 5 * b // 2 + k * b + dx
+            out.append(px(x, cy - n * b + b // 2 + dx, b, (2 * n - 1) * b, col))
+    return "\n".join(out)
+
+BLUE, BLUE_HI, BLUE_LO, BLUE_EDGE = "#2b8fe6", "#7cc8ff", "#1a5fa8", "#0a2f57"
 W, H = 600, 28
-write("scroll_track.svg", W, H, f'''<defs>{grad("cap", [(0, ACCENT_HI), (1, ACCENT_LO)])}
-{grad("gv", [(0, "#16171a"), (1, "#26282c")])}</defs>
-<path d="{rr(40, 7, 520, 14, 7)}" fill="url(#gv)" stroke="#000000" stroke-opacity="0.45" stroke-width="1"/>
-<path d="M47,21.5 H553" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1"/>
-<path d="{rr(1, 1, 32, 26, 7)}" fill="url(#cap)" stroke="#0d3a6b" stroke-width="1.5"/>
-<path d="{rr(W - 33, 1, 32, 26, 7)}" fill="url(#cap)" stroke="#0d3a6b" stroke-width="1.5"/>
-<path d="{rr(3, 2.5, 28, 11, 5)}" fill="#ffffff" fill-opacity="0.18"/>
-<path d="{rr(W - 31, 2.5, 28, 11, 5)}" fill="#ffffff" fill-opacity="0.18"/>
-<path d="M21,8 L11,14 L21,20 Z M{W - 21},8 L{W - 11},14 L{W - 21},20 Z" fill="#ffffff" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/>''')
-write("scroll_thumb.svg", 84, 20, f'''<defs>{grad("th", [(0, ACCENT_HI), (0.5, ACCENT), (1, ACCENT_LO)])}</defs>
-<path d="{rr(1, 1, 82, 18, 9)}" fill="url(#th)" stroke="#0d3a6b" stroke-width="1.5"/>
-<path d="{rr(4, 3, 76, 6, 3)}" fill="#ffffff" fill-opacity="0.28"/>''')
+track = [
+    # recessed groove: dark outline, inner shadow on top, highlight on the bottom edge
+    px(40, 7, 520, 1, "#08090b"), px(40, 20, 520, 1, "#08090b"),
+    px(39, 8, 1, 12, "#08090b"), px(560, 8, 1, 12, "#08090b"),
+    px(40, 8, 520, 12, "#16181b"), px(40, 8, 520, 2, "#0d0e10"),
+    px(40, 21, 520, 1, "#3a3e45"),
+    # dotted row, like the DSi menu bar
+    *[px(x, 13, 2, 2, "#3b4048") for x in range(46, 556, 8)],
+]
+write("scroll_track.svg", W, H, "\n".join(track) + "\n"
+      + px_box(0, 0, 32, 28, BLUE, BLUE_HI, BLUE_LO, BLUE_EDGE) + "\n"
+      + px_box(W - 32, 0, 32, 28, BLUE, BLUE_HI, BLUE_LO, BLUE_EDGE) + "\n"
+      + px_arrow(16, 14, True, "#ffffff", BLUE_EDGE) + "\n"
+      + px_arrow(W - 16, 14, False, "#ffffff", BLUE_EDGE))
+
+# thumb: chunky beveled block with grip lines at both ends (the label sits in the middle)
+grips = [px(x, 6, 1, 8, c) for x0 in (6, 75) for x, c in ((x0, BLUE_HI), (x0 + 1, BLUE_EDGE), (x0 + 3, BLUE_HI), (x0 + 4, BLUE_EDGE))]
+write("scroll_thumb.svg", 84, 20, px_box(0, 0, 84, 20, BLUE, BLUE_HI, BLUE_LO, BLUE_EDGE) + "\n" + "\n".join(grips))
 
 print("polish ok")
