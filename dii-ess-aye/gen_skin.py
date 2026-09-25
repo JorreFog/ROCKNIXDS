@@ -25,10 +25,11 @@ TEXT = "#e8e9eb"
 ACCENT_HI, ACCENT, ACCENT_LO = "#5cc0ff", "#2b8fe6", "#1a64b3"
 
 
-def glyph_run(text, x, y, height, fill, anchor="middle", stroke=0.0):
+def glyph_run(text, x, y, height, fill, anchor="middle", stroke=0.0, font=None):
     """Text as SVG paths; (x, y) is the baseline anchor, height is cap height."""
-    gs = FONT.getGlyphSet()
-    cmap = FONT.getBestCmap()
+    font = font or FONT
+    gs = font.getGlyphSet()
+    cmap = font.getBestCmap()
     caps = BoundsPen(gs); gs[cmap[ord("H")]].draw(caps)
     scale = height / caps.bounds[3]
     advance, parts = 0, []
@@ -254,5 +255,35 @@ write("scroll_track.svg", W, H, "\n".join(track) + "\n"
 # thumb: chunky beveled block with grip lines at both ends (the label sits in the middle)
 grips = [px(x, 6, 1, 8, c) for x0 in (6, 75) for x, c in ((x0, BLUE_HI), (x0 + 1, BLUE_EDGE), (x0 + 3, BLUE_HI), (x0 + 4, BLUE_EDGE))]
 write("scroll_thumb.svg", 84, 20, px_box(0, 0, 84, 20, BLUE, BLUE_HI, BLUE_LO, BLUE_EDGE) + "\n" + "\n".join(grips))
+
+# --- boot splash (640x480 per panel), shown as the sway background while ES loads hidden ---
+SPLASH = os.path.join(THEME, "assets/images/splash")
+os.makedirs(SPLASH, exist_ok=True)
+PS2P_PATH = os.path.join(THEME, "assets/fonts/PressStart2P-Regular.ttf")
+if os.path.exists(PS2P_PATH):
+    PS2P = TTFont(PS2P_PATH)
+    grid640 = " ".join([f"M{x},0 V480" for x in range(0, 641, 20)] + [f"M0,{y} H640" for y in range(0, 481, 20)])
+    base = f'''<defs>{grad("bg", [(0, BG_TOP), (1, BG_BOT)])}
+<radialGradient id="vig" cx="0.5" cy="0.45" r="0.75"><stop offset="0.55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.35"/></radialGradient>
+<radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="{ACCENT_HI}" stop-opacity="0.22"/><stop offset="0.45" stop-color="{ACCENT}" stop-opacity="0.08"/><stop offset="1" stop-color="{ACCENT}" stop-opacity="0"/></radialGradient></defs>
+<rect width="640" height="480" fill="url(#bg)"/>
+<path d="{grid640}" stroke="#ffffff" stroke-opacity="0.04" stroke-width="1" fill="none"/>
+<rect width="640" height="480" fill="url(#vig)"/>'''
+    logo = open(os.path.join(HERE, "rocknix_logo.paths")).read()
+    logo = logo.replace('fill="RED"', 'fill="url(#rk)"').replace('fill="GREY"', 'fill="url(#nx)"')
+    # top: logo (300px wide, like the menu) + PLEASE WAIT
+    write("../splash/splash_top.svg", 640, 480, base + f'''
+<defs>{grad("rk", [(0, "#ff6b6b"), (1, "#e8403f")])}{grad("nx", [(0, "#f2f3f5"), (1, "#c9ccd1")])}</defs>
+<ellipse cx="320" cy="200" rx="280" ry="120" fill="url(#glow)"/>
+<g transform="translate(170 {200 - 28.5}) scale(0.6) translate(0 -53)">{logo}</g>
+{glyph_run("PLEASE WAIT", 320, 312, 16, "#8fc8ff", font=PS2P)}''')
+    # bottom: a cartridge in the blue START-style frame + NOW LOADING
+    cart = open(os.path.join(OUT, "game_slot.svg")).read().split(">", 1)[1].rsplit("</svg>", 1)[0]
+    write("../splash/splash_bottom.svg", 640, 480, base + f'''
+<ellipse cx="320" cy="200" rx="200" ry="150" fill="url(#glow)"/>
+{px_box(252, 110, 136, 168, BLUE, BLUE_HI, BLUE_LO, BLUE_EDGE, bevel=3)}
+<rect x="262" y="120" width="116" height="148" fill="#14161a"/>
+<g transform="translate(260 128) scale(1)">{cart}</g>
+{glyph_run("NOW LOADING", 320, 336, 16, "#e8e9eb", font=PS2P)}''')
 
 print("polish ok")
