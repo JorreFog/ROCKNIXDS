@@ -134,17 +134,22 @@ write("preview_panel.svg", 492, 369, f'''<defs>{grad("pp", [(0, "#454950"), (1, 
 
 # --- tabs (108x56, opaque x0..100 / x8..108, y8..56) with L2/R2 badge ---
 def tab(name, flip, label):
-    shape = "M0,8 H78 A22,22 0 0 1 100,30 V56 H0 Z"
-    tr = ' transform="translate(108 0) scale(-1 1)"' if flip else ""
-    bx = 72 if flip else 8
-    write(name, 108, 56, f'''<defs>{grad("tab", [(0, PANEL_HI), (1, PANEL_LO)])}</defs>
+    """160x72, drawn at the size the theme shows it (no stretching). The visible tab body is
+    y 10..72; the badge is centred on it (y 41) so it lines up with the vertically centred text."""
+    W, H, top = 160, 72, 10
+    shape = f"M0,{top} H118 A30,30 0 0 1 148,{top + 30} V{H} H0 Z"
+    tr = f' transform="translate({W} 0) scale(-1 1)"' if flip else ""
+    bw, bh = 36, 24
+    bx = W - 12 - bw if flip else 12
+    cy = top + (H - top) / 2
+    write(name, W, H, f'''<defs>{grad("tab", [(0, PANEL_HI), (1, PANEL_LO)])}</defs>
 <g{tr}>
 <path d="{shape}" fill="url(#tab)"/>
-<path d="M0,9 H78 A21,21 0 0 1 99,30 V56" fill="none" stroke="{EDGE}" stroke-width="2"/>
-<path d="M0,11 H77 A18,18 0 0 1 96,28" fill="none" stroke="#ffffff" stroke-opacity="0.13" stroke-width="1.2"/>
+<path d="M0,{top + 1} H118 A29,29 0 0 1 147,{top + 30} V{H}" fill="none" stroke="{EDGE}" stroke-width="2"/>
+<path d="M0,{top + 3} H117 A26,26 0 0 1 144,{top + 29}" fill="none" stroke="#ffffff" stroke-opacity="0.13" stroke-width="1.2"/>
 </g>
-<path d="{rr(bx, 18, 28, 20, 6)}" fill="#1c1d21" stroke="#5d626a" stroke-width="1"/>
-{glyph_run(label, bx + 14, 33, 11, TEXT, stroke=0.6)}''')
+<path d="{rr(bx, cy - bh / 2, bw, bh, 7)}" fill="#1c1d21" stroke="#5d626a" stroke-width="1.2"/>
+{glyph_run(label, bx + bw / 2, cy + 6.5, 13, TEXT, stroke=0.7)}''')
 
 tab("left_tab.svg", False, "L2")
 tab("right_tab.svg", True, "R2")

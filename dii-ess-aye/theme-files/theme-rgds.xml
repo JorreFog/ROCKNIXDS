@@ -112,7 +112,9 @@
 
         <text name="left_tab_text" extra="true">
             <text>Prev</text>
-            <pos>0.03 0.885</pos>
+            <pos>0.0291667 0.8708333</pos><!-- box = visible tab body, 56..156 x 418..480 -->
+            <size>0.0520833 0.1291667</size>
+            <verticalAlignment>center</verticalAlignment>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.05</fontSize>
             <color>E8E9EBFF</color>
@@ -129,7 +131,9 @@
 
         <text name="right_tab_text" extra="true">
             <text>Next</text>
-            <pos>0.266 0.885</pos>
+            <pos>0.2520833 0.8708333</pos><!-- 484..584 x 418..480 -->
+            <size>0.0520833 0.1291667</size>
+            <verticalAlignment>center</verticalAlignment>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.05</fontSize>
             <color>E8E9EBFF</color>
@@ -341,6 +345,7 @@
         <!-- Placeholder for games without scraped media; box art / video draws over it -->
         <image name="preview_icon" extra="true">
             <path>${themePath}/assets/images/systems/${system.theme}.png</path>
+            <visible>"{game:image}" == ""</visible>
             <pos>0.1666667 0.3125</pos>
             <origin>0.5 0.5</origin>
             <maxSize>0.0677083 0.2708333</maxSize><!-- 130x130 -->
@@ -348,6 +353,7 @@
         </image>
         <text name="preview_name" extra="true">
             <text>{game:name}</text>
+            <visible>"{game:image}" == ""</visible>
             <pos>0.1666667 0.5416667</pos>
             <origin>0.5 0.5</origin>
             <size>0.2291667 0.1333333</size>
@@ -374,7 +380,7 @@
         <video name="md_video">
             <pos>0.167 0.45</pos>
             <origin>0.5 0.5</origin>
-            <maxSize>0.35 0.6</maxSize>
+            <maxSize>0.246875 0.5770833</maxSize><!-- panel's inner screen, 474x277 -->
             <effect>none</effect>
             <delay>3</delay>
             <showSnapshotNoVideo>true</showSnapshotNoVideo>
@@ -409,7 +415,7 @@
 
         <!-- START frame sized to exactly cover the selected cartridge -->
         <image name="start_window" extra="true">
-            <pos>0.5 0.68</pos>
+            <pos>0.5 0.6933333</pos><!-- opening centred on the cart label window (y 317), not the item -->
             <maxSize>0.0698 0.34</maxSize>
         </image>
 
@@ -482,9 +488,12 @@
         </text>
 
         <text name="md_description">
-            <pos>0.5 0.31</pos>
+            <pos>0.5 0.3229167</pos><!-- y 95..215, inside the bubble below the title -->
             <origin>0.5 0.5</origin>
-            <size>0.2333 0.22</size>
+            <size>0.2333 0.25</size>
+            <verticalAlignment>top</verticalAlignment>
+            <autoScroll>vertical</autoScroll>
+            <autoScrollDelay>3000</autoScrollDelay>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.03</fontSize>
             <color>A9AEB5FF</color>
