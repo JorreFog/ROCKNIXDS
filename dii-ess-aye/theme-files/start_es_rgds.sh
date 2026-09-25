@@ -54,6 +54,12 @@ fi
     swaymsg -s "$SOCK" -r -m -t subscribe '["window"]' 2>/dev/null | while read -r ev; do
         # the event carries the state from before the change, so check the tree
         case "$ev" in
+            # ES destroys its window while a game runs and makes a new one afterwards; the
+            # sway config hides new ES windows in the scratchpad, so bring it back placed
+            *'"change": "new"'*'"app_id": "emulationstation"'*)
+                sleep 0.2
+                swaymsg -s "$SOCK" '[app_id="emulationstation"] scratchpad show' >/dev/null 2>&1
+                swaymsg -s "$SOCK" "$LAYOUT, focus" >/dev/null 2>&1 ;;
             *'"change": "fullscreen_mode"'*'"app_id": "emulationstation"'*)
                 sleep 0.2
                 swaymsg -s "$SOCK" -t get_tree | tr -d ' \n' | grep -q '"fullscreen_mode":1,[^}]*"app_id":"emulationstation"' &&
