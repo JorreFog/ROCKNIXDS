@@ -1,0 +1,5 @@
+#!/bin/sh
+# esshot "<keys>" out.png
+D=$(dirname "$0")
+$D/rg "export XDG_RUNTIME_DIR=/var/run/0-runtime-dir WAYLAND_DISPLAY=wayland-1; SW=\"swaymsg -s \$(ls /var/run/0-runtime-dir/sway-ipc.*.sock)\"; \$SW seat seat0 attach 4660:22136:claude-vkbd >/dev/null; \$SW '[app_id=\"emulationstation\"] focus' >/dev/null; echo '$1' > /tmp/vkbd; sleep ${WAIT:-2}; grim /tmp/s.png"
+$D/rg 'cat /tmp/s.png' > $D/$2.full.png; magick $D/$2.full.png -crop 1280x480+0+0 $D/$2

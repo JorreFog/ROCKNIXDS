@@ -1,0 +1,2 @@
+#!/bin/sh
+D=$(dirname "$0"); $D/rg "/storage/drastic-vsync/go.sh shot"; $D/rg 'cat /tmp/top.png' > $D/top.png; $D/rg 'cat /tmp/bot.png' > $D/bot.png; magick $D/top.png $D/bot.png +append -resize 50% $D/$1

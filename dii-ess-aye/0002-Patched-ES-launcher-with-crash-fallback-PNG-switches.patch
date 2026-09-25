@@ -1,0 +1,219 @@
+From 5f1c7fe41e1da06ecb03fa6738c659a85d21872f Mon Sep 17 00:00:00 2001
+From: JorreFog <305496122+JorreFog@users.noreply.github.com>
+Date: Thu, 24 Sep 2026 15:08:32 +0200
+Subject: [PATCH 2/2] Patched-ES launcher with crash fallback; PNG switches;
+ dark text-edit fields
+
+---
+ assets/images/common/switch_off.png      | Bin 0 -> 2195 bytes
+ assets/images/common/switch_on.png       | Bin 0 -> 2223 bytes
+ assets/images/common/textedit.png        | Bin 0 -> 574 bytes
+ assets/images/common/textedit_active.png | Bin 0 -> 546 bytes
+ scripts/start_es_rgds.sh                 |  17 +++++++++++++++++
+ theme-rgds.xml                           |   9 +++++++--
+ 6 files changed, 24 insertions(+), 2 deletions(-)
+ create mode 100644 assets/images/common/switch_off.png
+ create mode 100644 assets/images/common/switch_on.png
+ create mode 100644 assets/images/common/textedit.png
+ create mode 100644 assets/images/common/textedit_active.png
+
+diff --git a/assets/images/common/switch_off.png b/assets/images/common/switch_off.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..af8c483baa8a410dbf7099565a852b2f85e58771
+GIT binary patch
+literal 2195
+zcmeAS@N?(olHy`uVBq!ia0y~yV2EH~V6fm|V_;yYOtjBqU|?WN@^*J&_z!{$_AZ~y
+zz`)_*>EaktG3V{<=p2#jvd8upm!(~Q{X6x#g!JqiCKm#v7F=<x^-#I&#Nj9Xlrhw|
+zS%4){(=+7jQrDFsilM8bR))rRU5;9t?C7*;k=+z86&B~aUY)ZX6nB^~U7wz?`A3`V
+zp4YMK)6<@Z{NFt9tIoE|UrVhw?4N#jX5@L9`s!zA{(sV)py=GjBWaX!VuOIhw1&2}
+zwl^K?>LwPhNk8;uHqXrhg%|}T33)L!t4*PQtAc}rRdSi$-~WHgYO?fwQJ&orH<B4b
+z?!>=fuwzM1Pd;Q*x#{QDccOwnemd*FO;PJ(Sd_Q&9Rs_9L;<6Kz5TsEQLk(M8KgFT
+z+xy{>n&J;bHXFmoubdK$q+Cmqm}aeWoS`;{<FU-D+q~<qbN8!r_ncMg7sypRGyPu8
+z-}3oOO3wZN+PK)g|I@j950!Zyt*Dh$2y8BYpHz|}aqxiz&*1}qTNY`ZIIrzc*eU<B
+zwe@?~TH^=m$7f5|I|k`QJZNU;fA;dkFXe{2Wr^+WY=$@F8<u5O2ozM`(a>Jqu)ZX8
+z(*>UNMRGO2Ly{l=*u!d9@IZ9`!KC*LH`3lp%kw`>D;HmMvGZm3?$D5sbw^))DiRT&
+zu3)aupSRsz?(!DTo^~e*S;>PA^$fLp_g*NiDzliZvtB$~ewAZh+`iiHs?LV<s#dRj
+z>353B|LmRpw~oH$zvEQDK)=vl<cWCF<!QPrRz|W<U$n&Jz>LHNt5*wOzh&=Mki*m0
+zVi*z<vS`hoL;Jo5nQ)hGKAUnqC;Q#pjW6aiezVA(yuf_7wV}xk{eEpd@ol!-Wc#nb
+zb?7|Ley;LV^5Z$D_uu?*!fnN>u7d{|IX)Lp-|*kt>7e0@S$$25l(O5Vt!6W`|Lybl
+zc5ZI&qhi)|YwrEflE~h$t-5-bK~Z|dzVrGT2iDp8FV4#S`o{l;NMg^zl2FN0r>`qq
+zczz~TS%}kl_8gbQz>Qn8|7H}_Ec$zD>G$U%Gn@<?_NKmFo|;&oU{{>^?CrY$YM&-u
+zpYJ+x^5o`Mvr2c=S}Qo)EH@PFJhA&y)MUvY!n3zu{kQV(r=v%z=9JV2&&h60`r@$I
+z^!luw*5&UV!={y=WS=>Aa`#++JJ$Sfm*!Wia@=|4Tw!CfRrQX6qf}Dcf#3Xc_fk~_
+zMY`_3c{%Czdhf!8dB@MC3SQUybiMrT#MiqYE3CD9J8hP4;P&?ix~<bVa+?00sPZpd
+zS9-cGHCngJ%WGQg9J~4a@%J`~`n62sx^$+=@L$%X10g$RuF^e`-!zFsTjchRmls8)
+zUraZ%eRX4LQh~yR8Aq9JY<z#=^i|Hrm0D>>k4*U&B`I}uXLqOAv+hN!ZtO7?tg`0H
+z4RS7cvu^820pt1J96qY<uQ{%Yt>NjN)G_rLH~;$ShMR;XWjCr8%lMxX*P7;kwfHgX
+zoCKT0i@um&<;m3y6cNqVTK&Mq>D!x-4R5Qz|2uGcrEp?vT1e5BRY@Vy9^$JfUk*6F
+zKzi3&Kjk}?mXoC|wpOm;_qow!5wgQm+%<F0x1^2YhkV+2=Tv1}<GUMHw`Y0MmPJpV
+zK0mnf#pKIUvt;V>n$-VE8=J+NEN_q56%cAZ$4f`ddr$hZ6W)78rX@NS@Ll#=axnIC
+zVDqx2>kln`eeUg)9XT)eJ<vIFl0D(=g0}fbD>OPv1i94q6(3(%m2-M_g7X~3vctE&
+z-Qu#k^2}3w@#2@eza@F<b$yh!Ih}fsVa6VH+sMdGv%LcNbz{G<Un+llRL#?@QC;2H
+zi(S2XLPO=mZvl4|?e_=By?y((HF3=!s~icdyt}Vjg%|GH*~(yNQ~K(<uu<28g!Hw{
+zM~~Y5%z9z9Yxl0OnhAI3&i!=DZ^;gob+L1HEDK6te&l=F!BLI-6QjVDzoy|AmL|_K
+z+!DW+N&V5ciV5)o`+s|SAMKgz!{Kvm+m7#A`+O#xY+7*bm-_Wv;W-oj{|n#!CD3Bx
+zrmLdgF1`CXZQA|1S$8fz=*e*qs(-0fvA2-@)zs6|4Qx!dykVA+k~(sH`hQOKM`zEq
+zosXY&BkjQXHQzZK@BjF_u{b5CyS{1RtA$xVrHqqyT==DT=;4P=yaqyikMq|)pLEIR
+zxWd*|o@e6N=Gfo6<FQQEGicQr(SM(&=!c0_pE&5`<Dzz<>Kl*JLrdKVZZ#Rc$9Hz8
+z3-syS7vC`_WX(#Kymg`H5~a+SwsB6nwIf_VUgqAWt<zZkwW%7-bjoN86yCCWv+%x4
+zLAN=@_v`HWelA|1=*2GYv;(G7vxRRrJv{O8djH&Q^=WSN|J+P}W&cA*Vjb%TgIsYD
+zG0)iomXRwY?q9yD$;>zZKL5E`?mn?~TjP)ZuFo%C<2?D=omH<&Ig90)t!o$U{P_EO
+zU0$2hleM=#Y`t~4OYwKf(~_n`i<Dj_aJDvGim|;=Fa7`J4nEhwWqmt?{FJP$tuB-;
+z6g97|dK1T#KJ&lU>L+LB=CN<?Ur@dO>b-vldu|$~pZ;OZ%WHQu;KaUPq1p155hqd{
+z?HH=ncWm0^wTpKpx6{$0?;#gGE}KN|SeUk8%ldC$EzLR=G&ZeTwQgs6XNtUJSDd~6
+z?^Q?d9d0k)8@NZe;g=-ao5qHmP<xIYwsKR}>b2kB?{zNW#x&N2)$^?jA5AZ|TNrF;
+zyWx5Kk9+(x6YS@HRcBdTo?<>#s_wgR*P>Imn3nFJvQYK6^9;2aKR!y=XZ*RksLm-N
+z{r<wk{XUYnmoR5+OOtn%`r@#pea2;$aM4gZ?-2hzN@ml=`ya({9gT{rE4H2b`P}Vo
+z&d1C?#Z9z*;rL5Zyy5edg*PX6ghXs`xK!=>O`&K5$F|rg^Y_{_)D-?Xh8k+!iP+j&
+zIX_ji&52LUC~^Y7gTX^#o}Dotlq@(V&zx`ASjcF%X2v4sj+p$+%+6)iF`!y|f}%5<
+d&4NGT*(;oOM{hB;Wnf@n@O1TaS?83{1OT>WF;oBm
+
+literal 0
+HcmV?d00001
+
+diff --git a/assets/images/common/switch_on.png b/assets/images/common/switch_on.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..036d16a3330d733deea0b287ec68c13e04ea82ad
+GIT binary patch
+literal 2223
+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
+E08OAnxc~qF
+
+literal 0
+HcmV?d00001
+
+diff --git a/assets/images/common/textedit.png b/assets/images/common/textedit.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..049d3437b22485e4d90a58a4f6bacde480718838
+GIT binary patch
+literal 574
+zcmeAS@N?(olHy`uVBq!ia0y~yU@!n-4mJh`hH$2z?F<YIY)RhkE)4%caKYZ?lNlHo
+zKYO}3hGaC}y>&i2*iqoX$M@&<Rct(|o%z<a)=WzDqmV{ZeM{BFJ5mR$RyzHcWPao*
+zEub%FbJJc~fu+ks>eu1u+0DK>H_Y_4C;y20&wT$!Bm3sv(`TkuPM16$FV%aMRcX7}
+z5!-^s*#}%dJ=Cz+l_z7Sv?zRS*k=Xng2)eFZk|>@xRFof<aWn|J)aW)o?X6~N$Pz3
+z70!2y*ZpSy{pM}1v5k$2ultk6?}AG$o@E6k{=3wa*Lq;bI@cX1H*21lcCTjr@7}v}
+z<toe820eBAI<2i)<HxEOv#&q-`t0+(J-6=OTXg^a^$jJjE}0(O>Aveydh*flbM1Fp
+z$#E6LK7ROsJ&dRQa!l-kRjg-TD9J93Ftj>f>c(y0Yv4x-{K3!lV`XE%O_+<_sY8tp
+zGq$L8FO6KIG3}Ag8_ve_QmUS;+LMlEu46Q73CzfP>~H<xmdm-_N4=)*{OP&9E`Vd-
+zOY6Dc0@s$U?_M0IcYbG*OmR`onU^nG4EUZj_S<YOoO!$aUC~dkNxf1!`}6na&F8Jw
+zS--}vtb?z5ih;?Shnw%7oBr+k(p!JaS90&aQ<CJmpZmYb)#6{v@9=!sCh+IUv(3%-
+Z9jhnvvCD9sVPIfj@O1TaS?83{1OQSj2J-*_
+
+literal 0
+HcmV?d00001
+
+diff --git a/assets/images/common/textedit_active.png b/assets/images/common/textedit_active.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..8b363e9a543b4f8898f890cfc4176c35bb25baea
+GIT binary patch
+literal 546
+zcmeAS@N?(olHy`uVBq!ia0y~yU@!n-4mJh`hH$2z?F<YIY)RhkE)4%caKYZ?lNlHo
+zuY0;UhGaC}y=Ch!5-4))<Nw;Wxp#T>=PoJ}GMVV>!{f&Nhi#vU*A=g%<kpYX5gs>=
+zopRAOT-emlz}p$6*s8bm^szkG!gAx7;$yORE*16df3?#%_)c;0aw~O%N1r}7Uydx=
+z<MTkQfKg((OdZ4g&YWe*iC-UI-h97Hd?81#_}glMc*e<7qNg8td^i31HGi%d(V6;f
+z64!HVGjcEf{xI!LLcfK@A|9uuenn}0ul_J=8FPQr5Q^BM<W!e?tZ)B~lk&NHmu&ys
+zX0$rC+U4yr;qJR8oSRR*xAA$V9{=g=?0D<-l5g^(=e$ZUjBF`59#)pS=f&Rbx99EF
+z?J%CU>6~0#%3OcfIid!Mn%_=;Jp8Zw#{bA8oZ1IWAI>T8vrwNSe2(*ZOYtE~61b1-
+zH6C1W@_1b#cxm##>g!w?kzUL6AG!v;F})x(k@xh~pY0Wad#nEYcjRcDyuz|Cn*GkK
+z6RF|5_qja%<8<*wUfV>=&hnot4*n~<*M8P&_tKX!ZCm_|?w;_k+wpV%Vz#61y;Ikh
+zciz}=T;yJxt;DWPx9n2i{$?;&j?t+)p<3V}(RW*Ap`}&cXX!4PF4=r__SFmw3=E#G
+KelF{r5}E+!&HjJ@
+
+literal 0
+HcmV?d00001
+
+diff --git a/scripts/start_es_rgds.sh b/scripts/start_es_rgds.sh
+index 4d9eced..a51420b 100755
+--- a/scripts/start_es_rgds.sh
++++ b/scripts/start_es_rgds.sh
+@@ -5,4 +5,21 @@
+ ### setup is the same
+ . $(dirname $0)/es_settings
+ 
++# Patched ES (see es-rgds-uiwidth.patch): sizes popups, keyboard, sliders and the
++# game options panel against one 640px screen instead of the 1920px canvas.
++# Falls back to the stock binary if the patched one keeps crashing on startup.
++ES_BIN=/storage/.config/emulationstation/themes/dii-ess-aye/bin/emulationstation
++FAILS=/tmp/es-rgds-fails
++
++if [ -x "$ES_BIN" ] && [ "$(cat $FAILS 2>/dev/null || echo 0)" -lt 2 ]; then
++    export ES_UI_WIDTH=640
++    START=$(date +%s)
++    "$ES_BIN" --log-path /var/log --no-splash --resolution 1920 480
++    RC=$?
++    if [ $RC -ne 0 ] && [ $(( $(date +%s) - START )) -lt 30 ]; then
++        echo $(( $(cat $FAILS 2>/dev/null || echo 0) + 1 )) > $FAILS
++    fi
++    exit $RC
++fi
++
+ emulationstation --log-path /var/log --no-splash --resolution 1920 480
+diff --git a/theme-rgds.xml b/theme-rgds.xml
+index 6bb02cd..0547f9f 100644
+--- a/theme-rgds.xml
++++ b/theme-rgds.xml
+@@ -395,10 +395,15 @@
+         </menuGroup>
+ 
+         <menuSwitch name="menuswitch">
+-            <pathOn>${themePath}/assets/images/common/switch_on.svg</pathOn>
+-            <pathOff>${themePath}/assets/images/common/switch_off.svg</pathOff>
++            <pathOn>${themePath}/assets/images/common/switch_on.png</pathOn>
++            <pathOff>${themePath}/assets/images/common/switch_off.png</pathOff>
+         </menuSwitch>
+ 
++        <menuTextEdit name="menutextedit">
++            <inactive>${themePath}/assets/images/common/textedit.png</inactive>
++            <active>${themePath}/assets/images/common/textedit_active.png</active>
++        </menuTextEdit>
++
+         <menuSlider name="menuslider">
+             <path>${themePath}/assets/images/common/slider_knob.svg</path>
+         </menuSlider>
+-- 
+2.55.0
+

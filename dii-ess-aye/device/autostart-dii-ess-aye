@@ -1,0 +1,12 @@
+#!/bin/bash
+# dii-ess-aye: put the 1920x480 ES launcher in place at boot, but only while the
+# theme is selected -- switching ThemeSet back in the menu undoes this on next boot.
+# ROCKNIX 111-sway-init regenerates /storage/.config/sway/config on every boot
+# (stock layout: ES fullscreen on one panel, DSI-1 powered off), which blacks out
+# the 1920-wide ES window -- so the theme sway config is restored here too.
+LAUNCHER=/storage/.config/emulationstation/themes/dii-ess-aye/scripts/start_es_rgds.sh
+SWAYCFG=/storage/dii-ess-aye-backup/sway-config.theme
+if [ -x "$LAUNCHER" ] && grep -q "name=\"ThemeSet\" value=\"dii-ess-aye\"" /storage/.config/emulationstation/es_settings.cfg 2>/dev/null; then
+    grep -q " /usr/bin/start_es.sh " /proc/mounts || mount --bind "$LAUNCHER" /usr/bin/start_es.sh
+    [ -s "$SWAYCFG" ] && cp "$SWAYCFG" /storage/.config/sway/config
+fi

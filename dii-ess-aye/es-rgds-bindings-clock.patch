@@ -1,0 +1,119 @@
+diff --git a/es-app/src/FileData.cpp b/es-app/src/FileData.cpp
+index f391adb8b..cf680fc28 100644
+--- a/es-app/src/FileData.cpp
++++ b/es-app/src/FileData.cpp
+@@ -1882,6 +1882,24 @@ BindableProperty FileData::getProperty(const std::string& name)
+ 	if (it != properties.cend())
+ 		return it->second(this);
+ 
++	// Position in the list the gamelist view shows (1-based), for scroll indicators
++	if (name == "index" || name == "count")
++	{
++		FolderData* parent = getParent();
++		if (parent == nullptr)
++			return 0;
++
++		auto list = parent->getChildrenListToDisplay();
++		if (name == "count")
++			return (int)list.size();
++
++		for (int i = 0; i < (int)list.size(); i++)
++			if (list[i] == this)
++				return i + 1;
++
++		return 0;
++	}
++
+ 	if (name == "nameShort")
+ 	{
+ 		auto name = getName();
+diff --git a/es-app/src/SystemData.cpp b/es-app/src/SystemData.cpp
+index b504a11ea..4c09392d0 100644
+--- a/es-app/src/SystemData.cpp
++++ b/es-app/src/SystemData.cpp
+@@ -2261,6 +2261,24 @@ BindableProperty SystemData::getProperty(const std::string& name)
+ 		return Math::max(1, getGroupChildSystemNames(getName()).size());
+ 	}
+ 
++	// Position among the systems shown in the system carousel (1-based), for
++	// themes that draw a scroll/page indicator.
++	if (name == "index" || name == "count")
++	{
++		int index = 0, count = 0;
++		for (auto sys : sSystemVector)
++		{
++			if (!sys->isVisible())
++				continue;
++
++			count++;
++			if (sys == this)
++				index = count;
++		}
++
++		return name == "index" ? index : count;
++	}
++
+ 	// Statistics
+ 	GameCountInfo* info = getGameCountInfo();
+ 	if (info == nullptr)
+diff --git a/es-core/src/ThemeData.cpp b/es-core/src/ThemeData.cpp
+index 9f331fb34..6f62cd014 100644
+--- a/es-core/src/ThemeData.cpp
++++ b/es-core/src/ThemeData.cpp
+@@ -207,7 +207,8 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
+ 		{ "imageSizeMode", STRING },			// size, minSize, maxSize
+ 		{ "reflexion", NORMALIZED_PAIR } } },
+ 
+-	{ "clock", {} }, // Inherits text
++	{ "clock", {		// Inherits text
++		{ "format", STRING } } },
+ 
+ 	{ "networkIcon", {  // Inherits image
+ 		{ "networkIcon", PATH },
+diff --git a/es-core/src/components/ClockComponent.cpp b/es-core/src/components/ClockComponent.cpp
+index 9ca1dbc5a..f46cfd332 100644
+--- a/es-core/src/components/ClockComponent.cpp
++++ b/es-core/src/components/ClockComponent.cpp
+@@ -28,7 +28,12 @@ void ClockComponent::update(int deltaTime)
+ 			// Visit http://en.cppreference.com/w/cpp/chrono/c/strftime for more information about date/time format
+ 
+ 			std::string clockBuf;
+-			if (Settings::getInstance()->getBool("ClockMode12"))
++			if (!mFormat.empty())
++			{
++				char buf[128];	// Utils::Time only knows a few codes; the theme format is plain strftime
++				clockBuf = strftime(buf, sizeof(buf), mFormat.c_str(), &clockTstruct) ? buf : "";
++			}
++			else if (Settings::getInstance()->getBool("ClockMode12"))
+ 				clockBuf = Utils::Time::timeToString(clockNow, "%I:%M %p");
+ 			else
+ 				clockBuf = Utils::Time::timeToString(clockNow, "%H:%M");
+@@ -50,3 +55,12 @@ void ClockComponent::update(int deltaTime)
+ 		mClockElapsed = 1000; // next update in 1000ms
+ 	}
+ }
++
++void ClockComponent::applyTheme(const std::shared_ptr<ThemeData>& theme, const std::string& view, const std::string& element, unsigned int properties)
++{
++	TextComponent::applyTheme(theme, view, element, properties);
++
++	const ThemeData::ThemeElement* elem = theme->getElement(view, element, getThemeTypeName());
++	mFormat = (elem && elem->has("format")) ? elem->get<std::string>("format") : "";
++	mClockElapsed = 0;
++}
+diff --git a/es-core/src/components/ClockComponent.h b/es-core/src/components/ClockComponent.h
+index 64e43c23d..4315e64b5 100644
+--- a/es-core/src/components/ClockComponent.h
++++ b/es-core/src/components/ClockComponent.h
+@@ -16,9 +16,11 @@ public:
+ 	std::string getThemeTypeName() override { return "clock"; }
+ 
+ 	virtual void update(int deltaTime);
++	void applyTheme(const std::shared_ptr<ThemeData>& theme, const std::string& view, const std::string& element, unsigned int properties) override;
+ 
+ private:
+ 	int mClockElapsed;
++	std::string mFormat;	// optional strftime format from the theme (e.g. a date line)
+ };
+ 
+ #endif // ES_CORE_COMPONENTS_CLOCK_COMPONENT_H

@@ -1,0 +1,854 @@
+From fee70ecd48b4602ccc0fd0113a2a0a07cdcf69ec Mon Sep 17 00:00:00 2001
+From: JorreFog <305496122+JorreFog@users.noreply.github.com>
+Date: Thu, 24 Sep 2026 14:43:26 +0200
+Subject: [PATCH 1/2] Dark grey vector reskin + cartridge item template for RG
+ DS
+
+---
+ assets/images/common/background.svg           |   5 +
+ assets/images/common/battery_icon_0.svg       |   2 +-
+ assets/images/common/battery_icon_100.svg     |   2 +-
+ assets/images/common/battery_icon_25.svg      |   2 +-
+ assets/images/common/battery_icon_50.svg      |   2 +-
+ assets/images/common/battery_icon_75.svg      |   2 +-
+ .../images/common/battery_icon_charging.svg   |   4 +-
+ assets/images/common/distro_logo_dark.png     | Bin 0 -> 13581 bytes
+ assets/images/common/game_slot.svg            |  12 +++
+ assets/images/common/left_tab.svg             |  11 ++
+ assets/images/common/menu_slot.svg            |   8 ++
+ assets/images/common/preview_panel.svg        |   9 ++
+ assets/images/common/right_tab.svg            |  11 ++
+ assets/images/common/scroll_bar.svg           |   9 ++
+ assets/images/common/slider_knob.svg          |   3 +
+ assets/images/common/start_window.svg         |  17 +++
+ assets/images/common/switch_off.svg           |   4 +
+ assets/images/common/switch_on.svg            |   4 +
+ assets/images/common/text_bubble.svg          |   4 +
+ theme-rgds.xml                                |  98 ++++++++++++++----
+ 20 files changed, 180 insertions(+), 29 deletions(-)
+ create mode 100644 assets/images/common/background.svg
+ create mode 100644 assets/images/common/distro_logo_dark.png
+ create mode 100644 assets/images/common/game_slot.svg
+ create mode 100644 assets/images/common/left_tab.svg
+ create mode 100644 assets/images/common/menu_slot.svg
+ create mode 100644 assets/images/common/preview_panel.svg
+ create mode 100644 assets/images/common/right_tab.svg
+ create mode 100644 assets/images/common/scroll_bar.svg
+ create mode 100644 assets/images/common/slider_knob.svg
+ create mode 100644 assets/images/common/start_window.svg
+ create mode 100644 assets/images/common/switch_off.svg
+ create mode 100644 assets/images/common/switch_on.svg
+ create mode 100644 assets/images/common/text_bubble.svg
+
+diff --git a/assets/images/common/background.svg b/assets/images/common/background.svg
+new file mode 100644
+index 0000000..6aa8da2
+--- /dev/null
++++ b/assets/images/common/background.svg
+@@ -0,0 +1,5 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="480" viewBox="0 0 1920 480">
++<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b2e33"/><stop offset="1" stop-color="#1f2124"/></linearGradient></defs>
++<rect width="1920" height="480" fill="url(#bg)"/>
++<path d="M0,0 V480 M20,0 V480 M40,0 V480 M60,0 V480 M80,0 V480 M100,0 V480 M120,0 V480 M140,0 V480 M160,0 V480 M180,0 V480 M200,0 V480 M220,0 V480 M240,0 V480 M260,0 V480 M280,0 V480 M300,0 V480 M320,0 V480 M340,0 V480 M360,0 V480 M380,0 V480 M400,0 V480 M420,0 V480 M440,0 V480 M460,0 V480 M480,0 V480 M500,0 V480 M520,0 V480 M540,0 V480 M560,0 V480 M580,0 V480 M600,0 V480 M620,0 V480 M640,0 V480 M660,0 V480 M680,0 V480 M700,0 V480 M720,0 V480 M740,0 V480 M760,0 V480 M780,0 V480 M800,0 V480 M820,0 V480 M840,0 V480 M860,0 V480 M880,0 V480 M900,0 V480 M920,0 V480 M940,0 V480 M960,0 V480 M980,0 V480 M1000,0 V480 M1020,0 V480 M1040,0 V480 M1060,0 V480 M1080,0 V480 M1100,0 V480 M1120,0 V480 M1140,0 V480 M1160,0 V480 M1180,0 V480 M1200,0 V480 M1220,0 V480 M1240,0 V480 M1260,0 V480 M1280,0 V480 M1300,0 V480 M1320,0 V480 M1340,0 V480 M1360,0 V480 M1380,0 V480 M1400,0 V480 M1420,0 V480 M1440,0 V480 M1460,0 V480 M1480,0 V480 M1500,0 V480 M1520,0 V480 M1540,0 V480 M1560,0 V480 M1580,0 V480 M1600,0 V480 M1620,0 V480 M1640,0 V480 M1660,0 V480 M1680,0 V480 M1700,0 V480 M1720,0 V480 M1740,0 V480 M1760,0 V480 M1780,0 V480 M1800,0 V480 M1820,0 V480 M1840,0 V480 M1860,0 V480 M1880,0 V480 M1900,0 V480 M1920,0 V480 M0,0 H1920 M0,20 H1920 M0,40 H1920 M0,60 H1920 M0,80 H1920 M0,100 H1920 M0,120 H1920 M0,140 H1920 M0,160 H1920 M0,180 H1920 M0,200 H1920 M0,220 H1920 M0,240 H1920 M0,260 H1920 M0,280 H1920 M0,300 H1920 M0,320 H1920 M0,340 H1920 M0,360 H1920 M0,380 H1920 M0,400 H1920 M0,420 H1920 M0,440 H1920 M0,460 H1920 M0,480 H1920" stroke="#ffffff" stroke-opacity="0.035" stroke-width="1" fill="none"/>
++</svg>
+diff --git a/assets/images/common/battery_icon_0.svg b/assets/images/common/battery_icon_0.svg
+index 73b5756..134401a 100644
+--- a/assets/images/common/battery_icon_0.svg
++++ b/assets/images/common/battery_icon_0.svg
+@@ -2,5 +2,5 @@
+ <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+ <svg width="100%" height="100%" viewBox="0 0 17 11" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+     <rect x="3" y="1" width="13" height="9" style="fill:rgb(235,235,235);"/>
+-    <path d="M2,8L0,8L0,3L2,3L2,1L3,1L3,10L2,10L2,8ZM3,1L3,0L16,0L16,1L3,1ZM16,1L17,1L17,10L16,10L16,1ZM16,10L16,11L3,11L3,10L16,10Z" style="fill:rgb(65,65,65);"/>
++    <path d="M2,8L0,8L0,3L2,3L2,1L3,1L3,10L2,10L2,8ZM3,1L3,0L16,0L16,1L3,1ZM16,1L17,1L17,10L16,10L16,1ZM16,10L16,11L3,11L3,10L16,10Z" style="fill:rgb(200,203,208);"/>
+ </svg>
+diff --git a/assets/images/common/battery_icon_100.svg b/assets/images/common/battery_icon_100.svg
+index cb61695..cf78d43 100644
+--- a/assets/images/common/battery_icon_100.svg
++++ b/assets/images/common/battery_icon_100.svg
+@@ -2,7 +2,7 @@
+ <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+ <svg width="100%" height="100%" viewBox="0 0 17 11" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+     <rect x="3" y="1" width="13" height="9" style="fill:rgb(235,235,235);"/>
+-    <path d="M2,8L0,8L0,3L2,3L2,1L3,1L3,10L2,10L2,8ZM3,1L3,0L16,0L16,1L3,1ZM16,1L17,1L17,10L16,10L16,1ZM16,10L16,11L3,11L3,10L16,10Z" style="fill:rgb(65,65,65);"/>
++    <path d="M2,8L0,8L0,3L2,3L2,1L3,1L3,10L2,10L2,8ZM3,1L3,0L16,0L16,1L3,1ZM16,1L17,1L17,10L16,10L16,1ZM16,10L16,11L3,11L3,10L16,10Z" style="fill:rgb(200,203,208);"/>
+     <g transform="matrix(1,0,0,1,9,0)">
+         <path d="M6,2L6,3L4,3L4,2L6,2ZM6,5L6,6L4,6L4,5L6,5ZM6,8L6,9L4,9L4,8L6,8Z" style="fill:rgb(0,113,251);"/>
+         <path d="M6,5L4,5L4,3L6,3L6,2L7,2L7,9L6,9L6,5Z" style="fill:rgb(32,170,251);"/>
+diff --git a/assets/images/common/battery_icon_25.svg b/assets/images/common/battery_icon_25.svg
+index de6d7f2..bf353d9 100644
+--- a/assets/images/common/battery_icon_25.svg
++++ b/assets/images/common/battery_icon_25.svg
+@@ -2,7 +2,7 @@
+ <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+ <svg width="100%" height="100%" viewBox="0 0 17 11" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+     <rect x="3" y="1" width="13" height="9" style="fill:rgb(235,235,235);"/>
+-    <path d="M2,8L0,8L0,3L2,3L2,1L3,1L3,10L2,10L2,8ZM3,1L3,0L16,0L16,1L3,1ZM16,1L17,1L17,10L16,10L16,1ZM16,10L16,11L3,11L3,10L16,10Z" style="fill:rgb(65,65,65);"/>
++    <path d="M2,8L0,8L0,3L2,3L2,1L3,1L3,10L2,10L2,8ZM3,1L3,0L16,0L16,1L3,1ZM16,1L17,1L17,10L16,10L16,1ZM16,10L16,11L3,11L3,10L16,10Z" style="fill:rgb(200,203,208);"/>
+     <g transform="matrix(1,0,0,1,9,0)">
+         <path d="M6,2L6,3L4,3L4,2L6,2ZM6,5L6,6L4,6L4,5L6,5ZM6,8L6,9L4,9L4,8L6,8Z" style="fill:rgb(0,113,251);"/>
+         <path d="M6,5L4,5L4,3L6,3L6,2L7,2L7,9L6,9L6,5Z" style="fill:rgb(32,170,251);"/>
+diff --git a/assets/images/common/battery_icon_50.svg b/assets/images/common/battery_icon_50.svg
+index 91370eb..9886633 100644
+--- a/assets/images/common/battery_icon_50.svg
++++ b/assets/images/common/battery_icon_50.svg
+@@ -2,7 +2,7 @@
+ <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+ <svg width="100%" height="100%" viewBox="0 0 17 11" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+     <rect x="3" y="1" width="13" height="9" style="fill:rgb(235,235,235);"/>
+-    <path d="M2,8L0,8L0,3L2,3L2,1L3,1L3,10L2,10L2,8ZM3,1L3,0L16,0L16,1L3,1ZM16,1L17,1L17,10L16,10L16,1ZM16,10L16,11L3,11L3,10L16,10Z" style="fill:rgb(65,65,65);"/>
++    <path d="M2,8L0,8L0,3L2,3L2,1L3,1L3,10L2,10L2,8ZM3,1L3,0L16,0L16,1L3,1ZM16,1L17,1L17,10L16,10L16,1ZM16,10L16,11L3,11L3,10L16,10Z" style="fill:rgb(200,203,208);"/>
+     <g transform="matrix(1,0,0,1,9,0)">
+         <path d="M6,2L6,3L4,3L4,2L6,2ZM6,5L6,6L4,6L4,5L6,5ZM6,8L6,9L4,9L4,8L6,8Z" style="fill:rgb(0,113,251);"/>
+         <path d="M6,5L4,5L4,3L6,3L6,2L7,2L7,9L6,9L6,5Z" style="fill:rgb(32,170,251);"/>
+diff --git a/assets/images/common/battery_icon_75.svg b/assets/images/common/battery_icon_75.svg
+index 79cef57..24c4fdd 100644
+--- a/assets/images/common/battery_icon_75.svg
++++ b/assets/images/common/battery_icon_75.svg
+@@ -2,7 +2,7 @@
+ <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+ <svg width="100%" height="100%" viewBox="0 0 17 11" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+     <rect x="3" y="1" width="13" height="9" style="fill:rgb(235,235,235);"/>
+-    <path d="M2,8L0,8L0,3L2,3L2,1L3,1L3,10L2,10L2,8ZM3,1L3,0L16,0L16,1L3,1ZM16,1L17,1L17,10L16,10L16,1ZM16,10L16,11L3,11L3,10L16,10Z" style="fill:rgb(65,65,65);"/>
++    <path d="M2,8L0,8L0,3L2,3L2,1L3,1L3,10L2,10L2,8ZM3,1L3,0L16,0L16,1L3,1ZM16,1L17,1L17,10L16,10L16,1ZM16,10L16,11L3,11L3,10L16,10Z" style="fill:rgb(200,203,208);"/>
+     <g transform="matrix(1,0,0,1,9,0)">
+         <path d="M6,2L6,3L4,3L4,2L6,2ZM6,5L6,6L4,6L4,5L6,5ZM6,8L6,9L4,9L4,8L6,8Z" style="fill:rgb(0,113,251);"/>
+         <path d="M6,5L4,5L4,3L6,3L6,2L7,2L7,9L6,9L6,5Z" style="fill:rgb(32,170,251);"/>
+diff --git a/assets/images/common/battery_icon_charging.svg b/assets/images/common/battery_icon_charging.svg
+index ea21dd3..26d635b 100644
+--- a/assets/images/common/battery_icon_charging.svg
++++ b/assets/images/common/battery_icon_charging.svg
+@@ -2,13 +2,13 @@
+ <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+ <svg width="100%" height="100%" viewBox="0 0 17 11" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+     <rect x="3" y="1" width="13" height="9" style="fill:rgb(235,235,235);"/>
+-    <path d="M2,8L0,8L0,3L2,3L2,1L3,1L3,10L2,10L2,8ZM3,1L3,0L16,0L16,1L3,1ZM16,1L17,1L17,10L16,10L16,1ZM16,10L16,11L3,11L3,10L16,10Z" style="fill:rgb(65,65,65);"/>
++    <path d="M2,8L0,8L0,3L2,3L2,1L3,1L3,10L2,10L2,8ZM3,1L3,0L16,0L16,1L3,1ZM16,1L17,1L17,10L16,10L16,1ZM16,10L16,11L3,11L3,10L16,10Z" style="fill:rgb(200,203,208);"/>
+     <g>
+         <rect x="4" y="2" width="11" height="1" style="fill:rgb(248,104,40);"/>
+         <rect x="4" y="8" width="11" height="1" style="fill:rgb(248,104,40);"/>
+         <rect x="4" y="6" width="11" height="2" style="fill:rgb(248,32,0);"/>
+         <rect x="4" y="5" width="11" height="1" style="fill:rgb(248,104,40);"/>
+         <rect x="4" y="3" width="11" height="2" style="fill:rgb(248,152,72);"/>
+-        <path d="M7,5L5,5L5,4L7,4L7,3L11,3L11,4L12,4L12,5L15,5L15,6L12,6L12,7L11,7L11,8L7,8L7,7L5,7L5,6L7,6L7,5Z" style="fill:rgb(65,65,65);"/>
++        <path d="M7,5L5,5L5,4L7,4L7,3L11,3L11,4L12,4L12,5L15,5L15,6L12,6L12,7L11,7L11,8L7,8L7,7L5,7L5,6L7,6L7,5Z" style="fill:rgb(200,203,208);"/>
+     </g>
+ </svg>
+diff --git a/assets/images/common/distro_logo_dark.png b/assets/images/common/distro_logo_dark.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..97eb1db1661e59369c01034622dd5065b68ef40f
+GIT binary patch
+literal 13581
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/assets/images/common/game_slot.svg b/assets/images/common/game_slot.svg
+new file mode 100644
+index 0000000..8604e77
+--- /dev/null
++++ b/assets/images/common/game_slot.svg
+@@ -0,0 +1,12 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="120" height="140" viewBox="0 0 120 140">
++<defs><linearGradient id="card" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a5e65"/><stop offset="0.5" stop-color="#474a50"/><stop offset="1" stop-color="#393c41"/></linearGradient>
++<linearGradient id="lbl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2c30"/><stop offset="1" stop-color="#1c1d20"/></linearGradient></defs>
++<path d="M3,0 H117 A3,3 0 0 1 120,3 V137 A3,3 0 0 1 117,140 H14 L0,126 V3 A3,3 0 0 1 3,0 Z M20,19 A6,6 0 0 0 14,25 V98 A6,6 0 0 0 20,104 H100 A6,6 0 0 0 106,98 V25 A6,6 0 0 0 100,19 Z" fill="url(#card)" fill-rule="nonzero"/>
++<path d="M3,0 H117 A3,3 0 0 1 120,3 V137 A3,3 0 0 1 117,140 H14 L0,126 V3 A3,3 0 0 1 3,0 Z" fill="none" stroke="#15161a" stroke-width="2"/>
++<path d="M4,2 H116" stroke="#ffffff" stroke-opacity="0.18" stroke-width="1.5"/>
++<path d="M19.5,17.5 H100.5 A7,7 0 0 1 107.5,24.5 V98.5 A7,7 0 0 1 100.5,105.5 H19.5 A7,7 0 0 1 12.5,98.5 V24.5 A7,7 0 0 1 19.5,17.5 Z" fill="none" stroke="#15161a" stroke-width="3"/>
++<path d="M19.5,16 H100.5 A8.5,8.5 0 0 1 109,24.5 V98.5 A8.5,8.5 0 0 1 100.5,107 H19.5 A8.5,8.5 0 0 1 11,98.5 V24.5 A8.5,8.5 0 0 1 19.5,16 Z" fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1"/>
++<path d="M50,114 H70 L60,124 Z" fill="#15161a" fill-opacity="0.85"/>
++<path d="M2,125 L15,138" stroke="#15161a" stroke-opacity="0.6" stroke-width="1.5"/>
++<path d="M104,128 H116 M104,132 H116" stroke="#15161a" stroke-opacity="0.45" stroke-width="1.5"/>
++</svg>
+diff --git a/assets/images/common/left_tab.svg b/assets/images/common/left_tab.svg
+new file mode 100644
+index 0000000..b752356
+--- /dev/null
++++ b/assets/images/common/left_tab.svg
+@@ -0,0 +1,11 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="108" height="56" viewBox="0 0 108 56">
++<defs><linearGradient id="tab" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a4e55"/><stop offset="1" stop-color="#303338"/></linearGradient></defs>
++<g>
++<path d="M0,8 H78 A22,22 0 0 1 100,30 V56 H0 Z" fill="url(#tab)"/>
++<path d="M0,9 H78 A21,21 0 0 1 99,30 V56" fill="none" stroke="#15161a" stroke-width="2"/>
++<path d="M0,11 H77 A18,18 0 0 1 96,28" fill="none" stroke="#ffffff" stroke-opacity="0.13" stroke-width="1.2"/>
++</g>
++<path d="M14,18 H30 A6,6 0 0 1 36,24 V32 A6,6 0 0 1 30,38 H14 A6,6 0 0 1 8,32 V24 A6,6 0 0 1 14,18 Z" fill="#1c1d21" stroke="#5d626a" stroke-width="1"/>
++<path transform="translate(12.840 33.000) scale(0.01410 -0.01410)" d="M581 0V104H210V780H94V0Z" fill="#e8e9eb" stroke="#e8e9eb" stroke-width="42.55" stroke-linejoin="round"/>
++<path transform="translate(21.429 33.000) scale(0.01410 -0.01410)" d="M622 0V101H210C214 187 289 269 392 316C553 390 617 470 617 580C617 706 522 798 355 798C212 798 98 706 91 559L196 534C200 636 267 700 349 700C446 700 500 650 500 575C500 508 452 450 325 390C190 325 91 202 85 53L84 0Z" fill="#e8e9eb" stroke="#e8e9eb" stroke-width="42.55" stroke-linejoin="round"/>
++</svg>
+diff --git a/assets/images/common/menu_slot.svg b/assets/images/common/menu_slot.svg
+new file mode 100644
+index 0000000..660a808
+--- /dev/null
++++ b/assets/images/common/menu_slot.svg
+@@ -0,0 +1,8 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="125" height="140" viewBox="0 0 125 140">
++<defs><linearGradient id="ms" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a4e55"/><stop offset="0.6" stop-color="#3a3d43"/><stop offset="1" stop-color="#303338"/></linearGradient></defs>
++<path d="M16,5 H109 A14,14 0 0 1 123,19 V125 A14,14 0 0 1 109,139 H16 A14,14 0 0 1 2,125 V19 A14,14 0 0 1 16,5 Z" fill="#000000" fill-opacity="0.35"/>
++<path d="M16,2 H109 A14,14 0 0 1 123,16 V122 A14,14 0 0 1 109,136 H16 A14,14 0 0 1 2,122 V16 A14,14 0 0 1 16,2 Z M32,25 A7,7 0 0 0 25,32 V93 A7,7 0 0 0 32,100 H93 A7,7 0 0 0 100,93 V32 A7,7 0 0 0 93,25 Z" fill="url(#ms)"/>
++<path d="M16,2 H109 A14,14 0 0 1 123,16 V122 A14,14 0 0 1 109,136 H16 A14,14 0 0 1 2,122 V16 A14,14 0 0 1 16,2 Z" fill="none" stroke="#15161a" stroke-width="2"/>
++<path d="M16,4 H109 A12,12 0 0 1 121,16 V122 A12,12 0 0 1 109,134 H16 A12,12 0 0 1 4,122 V16 A12,12 0 0 1 16,4 Z" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
++<path d="M32.0,23.5 H93.0 A8.5,8.5 0 0 1 101.5,32.0 V93.0 A8.5,8.5 0 0 1 93.0,101.5 H32.0 A8.5,8.5 0 0 1 23.5,93.0 V32.0 A8.5,8.5 0 0 1 32.0,23.5 Z" fill="none" stroke="#15161a" stroke-width="3"/>
++</svg>
+diff --git a/assets/images/common/preview_panel.svg b/assets/images/common/preview_panel.svg
+new file mode 100644
+index 0000000..f56b18a
+--- /dev/null
++++ b/assets/images/common/preview_panel.svg
+@@ -0,0 +1,9 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="492" height="369" viewBox="0 0 492 369">
++<defs><linearGradient id="pp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#454950"/><stop offset="1" stop-color="#2e3035"/></linearGradient>
++<linearGradient id="scr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d1f23"/><stop offset="1" stop-color="#15171a"/></linearGradient></defs>
++<path d="M18,6 H474 A16,16 0 0 1 490,22 V351 A16,16 0 0 1 474,367 H18 A16,16 0 0 1 2,351 V22 A16,16 0 0 1 18,6 Z" fill="#000000" fill-opacity="0.4"/>
++<path d="M18,2 H474 A16,16 0 0 1 490,18 V346 A16,16 0 0 1 474,362 H18 A16,16 0 0 1 2,346 V18 A16,16 0 0 1 18,2 Z" fill="url(#pp)" stroke="#15161a" stroke-width="2"/>
++<path d="M18,4 H474 A14,14 0 0 1 488,18 V346 A14,14 0 0 1 474,360 H18 A14,14 0 0 1 4,346 V18 A14,14 0 0 1 18,4 Z" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
++<path d="M26,18 H466 A8,8 0 0 1 474,26 V338 A8,8 0 0 1 466,346 H26 A8,8 0 0 1 18,338 V26 A8,8 0 0 1 26,18 Z" fill="url(#scr)" stroke="#15161a" stroke-width="2"/>
++<path d="M26.5,19.5 H465.5 A7,7 0 0 1 472.5,26.5 V337.5 A7,7 0 0 1 465.5,344.5 H26.5 A7,7 0 0 1 19.5,337.5 V26.5 A7,7 0 0 1 26.5,19.5 Z" fill="none" stroke="#2b8fe6" stroke-opacity="0.25" stroke-width="1"/>
++</svg>
+diff --git a/assets/images/common/right_tab.svg b/assets/images/common/right_tab.svg
+new file mode 100644
+index 0000000..b1fb108
+--- /dev/null
++++ b/assets/images/common/right_tab.svg
+@@ -0,0 +1,11 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="108" height="56" viewBox="0 0 108 56">
++<defs><linearGradient id="tab" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a4e55"/><stop offset="1" stop-color="#303338"/></linearGradient></defs>
++<g transform="translate(108 0) scale(-1 1)">
++<path d="M0,8 H78 A22,22 0 0 1 100,30 V56 H0 Z" fill="url(#tab)"/>
++<path d="M0,9 H78 A21,21 0 0 1 99,30 V56" fill="none" stroke="#15161a" stroke-width="2"/>
++<path d="M0,11 H77 A18,18 0 0 1 96,28" fill="none" stroke="#ffffff" stroke-opacity="0.13" stroke-width="1.2"/>
++</g>
++<path d="M78,18 H94 A6,6 0 0 1 100,24 V32 A6,6 0 0 1 94,38 H78 A6,6 0 0 1 72,32 V24 A6,6 0 0 1 78,18 Z" fill="#1c1d21" stroke="#5d626a" stroke-width="1"/>
++<path transform="translate(76.100 33.000) scale(0.01410 -0.01410)" d="M683 0 486 343C568 367 632 431 632 561C632 702 529 780 384 780H84V0H196V325H376L549 0ZM517 557C517 463 456 416 366 416H197V684H365C450 684 517 641 517 557Z" fill="#e8e9eb" stroke="#e8e9eb" stroke-width="42.55" stroke-linejoin="round"/>
++<path transform="translate(86.169 33.000) scale(0.01410 -0.01410)" d="M622 0V101H210C214 187 289 269 392 316C553 390 617 470 617 580C617 706 522 798 355 798C212 798 98 706 91 559L196 534C200 636 267 700 349 700C446 700 500 650 500 575C500 508 452 450 325 390C190 325 91 202 85 53L84 0Z" fill="#e8e9eb" stroke="#e8e9eb" stroke-width="42.55" stroke-linejoin="round"/>
++</svg>
+diff --git a/assets/images/common/scroll_bar.svg b/assets/images/common/scroll_bar.svg
+new file mode 100644
+index 0000000..cfd9d4e
+--- /dev/null
++++ b/assets/images/common/scroll_bar.svg
+@@ -0,0 +1,9 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="256" height="22" viewBox="0 0 256 22">
++<defs><linearGradient id="sb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b3e44"/><stop offset="1" stop-color="#2b2d32"/></linearGradient>
++<linearGradient id="cap" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cc0ff"/><stop offset="1" stop-color="#1a64b3"/></linearGradient></defs>
++<rect x="18" y="4" width="220" height="14" rx="3" fill="url(#sb)" stroke="#15161a" stroke-width="1.2"/>
++<path d="M30,11 h1.5 M34,11 h1.5 M38,11 h1.5 M42,11 h1.5 M46,11 h1.5 M50,11 h1.5 M54,11 h1.5 M58,11 h1.5 M62,11 h1.5 M66,11 h1.5 M70,11 h1.5 M74,11 h1.5 M78,11 h1.5 M82,11 h1.5 M86,11 h1.5 M90,11 h1.5 M94,11 h1.5 M98,11 h1.5 M102,11 h1.5 M106,11 h1.5 M110,11 h1.5 M114,11 h1.5 M118,11 h1.5 M122,11 h1.5 M126,11 h1.5 M130,11 h1.5 M134,11 h1.5 M138,11 h1.5 M142,11 h1.5 M146,11 h1.5 M150,11 h1.5 M154,11 h1.5 M158,11 h1.5 M162,11 h1.5 M166,11 h1.5 M170,11 h1.5 M174,11 h1.5 M178,11 h1.5 M182,11 h1.5 M186,11 h1.5 M190,11 h1.5 M194,11 h1.5 M198,11 h1.5 M202,11 h1.5 M206,11 h1.5 M210,11 h1.5 M214,11 h1.5 M218,11 h1.5 M222,11 h1.5 M226,11 h1.5" stroke="#7a8089" stroke-width="1.2"/>
++<rect x="1" y="1" width="22" height="20" rx="4" fill="url(#cap)" stroke="#0d3a6b" stroke-width="1.2"/>
++<rect x="233" y="1" width="22" height="20" rx="4" fill="url(#cap)" stroke="#0d3a6b" stroke-width="1.2"/>
++<path d="M16,6 L7,11 L16,16 Z M240,6 L249,11 L240,16 Z" fill="#ffffff"/>
++</svg>
+diff --git a/assets/images/common/slider_knob.svg b/assets/images/common/slider_knob.svg
+new file mode 100644
+index 0000000..025bbac
+--- /dev/null
++++ b/assets/images/common/slider_knob.svg
+@@ -0,0 +1,3 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
++<circle cx="16" cy="16" r="13" fill="#ffffff" stroke="#2b8fe6" stroke-width="3"/>
++</svg>
+diff --git a/assets/images/common/start_window.svg b/assets/images/common/start_window.svg
+new file mode 100644
+index 0000000..d5b1652
+--- /dev/null
++++ b/assets/images/common/start_window.svg
+@@ -0,0 +1,17 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="160" height="200" viewBox="0 0 160 200">
++<defs><linearGradient id="sw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cc0ff"/><stop offset="0.45" stop-color="#2b8fe6"/><stop offset="1" stop-color="#1a64b3"/></linearGradient></defs>
++<path d="M16,2 H144 A14,14 0 0 1 158,16 V184 A14,14 0 0 1 144,198 H16 A14,14 0 0 1 2,184 V16 A14,14 0 0 1 16,2 Z M29,22 A9,9 0 0 0 20,31 V133 A9,9 0 0 0 29,142 H131 A9,9 0 0 0 140,133 V31 A9,9 0 0 0 131,22 Z" fill="url(#sw)"/>
++<path d="M16,2 H144 A14,14 0 0 1 158,16 V184 A14,14 0 0 1 144,198 H16 A14,14 0 0 1 2,184 V16 A14,14 0 0 1 16,2 Z" fill="none" stroke="#0d3a6b" stroke-width="2.5"/>
++<path d="M16,5 H144 A11,11 0 0 1 155,16 V184 A11,11 0 0 1 144,195 H16 A11,11 0 0 1 5,184 V16 A11,11 0 0 1 16,5 Z" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1.5"/>
++<path d="M29.0,20.5 H131.0 A10.5,10.5 0 0 1 141.5,31.0 V133.0 A10.5,10.5 0 0 1 131.0,143.5 H29.0 A10.5,10.5 0 0 1 18.5,133.0 V31.0 A10.5,10.5 0 0 1 29.0,20.5 Z" fill="none" stroke="#0d3a6b" stroke-width="3"/>
++<path transform="translate(24.567 184.500) scale(0.03333 -0.03333)" d="M619 214C619 333 547 397 421 440L304 478C222 505 190 539 190 590C190 651 245 702 337 702C419 702 480 663 509 580L596 642C554 749 467 798 333 798C177 798 79 701 79 585C79 479 132 425 255 381L368 342C461 310 503 271 503 203C503 132 443 82 342 82C250 82 170 148 137 242L50 184C90 63 192 -18 343 -18C520 -18 619 70 619 214Z" fill="#0d3a6b" stroke="#0d3a6b" stroke-width="96.00" stroke-linejoin="round"/>
++<path transform="translate(47.267 184.500) scale(0.03333 -0.03333)" d="M597 682V780H18V682H249V0H366V682Z" fill="#0d3a6b" stroke="#0d3a6b" stroke-width="96.00" stroke-linejoin="round"/>
++<path transform="translate(67.733 184.500) scale(0.03333 -0.03333)" d="M703 0 424 780H279L0 0H116L197 222H506L585 0ZM474 320H229C240 354 345 641 350 672H353C358 641 464 353 474 320Z" fill="#0d3a6b" stroke="#0d3a6b" stroke-width="96.00" stroke-linejoin="round"/>
++<path transform="translate(91.167 184.500) scale(0.03333 -0.03333)" d="M683 0 486 343C568 367 632 431 632 561C632 702 529 780 384 780H84V0H196V325H376L549 0ZM517 557C517 463 456 416 366 416H197V684H365C450 684 517 641 517 557Z" fill="#0d3a6b" stroke="#0d3a6b" stroke-width="96.00" stroke-linejoin="round"/>
++<path transform="translate(114.967 184.500) scale(0.03333 -0.03333)" d="M597 682V780H18V682H249V0H366V682Z" fill="#0d3a6b" stroke="#0d3a6b" stroke-width="96.00" stroke-linejoin="round"/>
++<path transform="translate(24.567 182.500) scale(0.03333 -0.03333)" d="M619 214C619 333 547 397 421 440L304 478C222 505 190 539 190 590C190 651 245 702 337 702C419 702 480 663 509 580L596 642C554 749 467 798 333 798C177 798 79 701 79 585C79 479 132 425 255 381L368 342C461 310 503 271 503 203C503 132 443 82 342 82C250 82 170 148 137 242L50 184C90 63 192 -18 343 -18C520 -18 619 70 619 214Z" fill="#ffffff" stroke="#ffffff" stroke-width="48.00" stroke-linejoin="round"/>
++<path transform="translate(47.267 182.500) scale(0.03333 -0.03333)" d="M597 682V780H18V682H249V0H366V682Z" fill="#ffffff" stroke="#ffffff" stroke-width="48.00" stroke-linejoin="round"/>
++<path transform="translate(67.733 182.500) scale(0.03333 -0.03333)" d="M703 0 424 780H279L0 0H116L197 222H506L585 0ZM474 320H229C240 354 345 641 350 672H353C358 641 464 353 474 320Z" fill="#ffffff" stroke="#ffffff" stroke-width="48.00" stroke-linejoin="round"/>
++<path transform="translate(91.167 182.500) scale(0.03333 -0.03333)" d="M683 0 486 343C568 367 632 431 632 561C632 702 529 780 384 780H84V0H196V325H376L549 0ZM517 557C517 463 456 416 366 416H197V684H365C450 684 517 641 517 557Z" fill="#ffffff" stroke="#ffffff" stroke-width="48.00" stroke-linejoin="round"/>
++<path transform="translate(114.967 182.500) scale(0.03333 -0.03333)" d="M597 682V780H18V682H249V0H366V682Z" fill="#ffffff" stroke="#ffffff" stroke-width="48.00" stroke-linejoin="round"/>
++</svg>
+diff --git a/assets/images/common/switch_off.svg b/assets/images/common/switch_off.svg
+new file mode 100644
+index 0000000..05cfcfe
+--- /dev/null
++++ b/assets/images/common/switch_off.svg
+@@ -0,0 +1,4 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="44" height="28" viewBox="0 0 44 28">
++<rect x="1" y="4" width="42" height="20" rx="10" fill="#2a2c31" stroke="#5d626a" stroke-width="1.5"/>
++<circle cx="11" cy="14" r="8" fill="#8a9098"/>
++</svg>
+diff --git a/assets/images/common/switch_on.svg b/assets/images/common/switch_on.svg
+new file mode 100644
+index 0000000..749fbd6
+--- /dev/null
++++ b/assets/images/common/switch_on.svg
+@@ -0,0 +1,4 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="44" height="28" viewBox="0 0 44 28">
++<rect x="1" y="4" width="42" height="20" rx="10" fill="#2b8fe6" stroke="#0d3a6b" stroke-width="1.5"/>
++<circle cx="33" cy="14" r="8" fill="#ffffff"/>
++</svg>
+diff --git a/assets/images/common/text_bubble.svg b/assets/images/common/text_bubble.svg
+new file mode 100644
+index 0000000..d70ce25
+--- /dev/null
++++ b/assets/images/common/text_bubble.svg
+@@ -0,0 +1,4 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="250" height="85" viewBox="0 0 250 85">
++<defs><linearGradient id="tb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#42464d"/><stop offset="1" stop-color="#34373c"/></linearGradient></defs>
++<path d="M10,1 H240 A9,9 0 0 1 249,10 V67 A9,9 0 0 1 240,76 H134 L125,84 L116,76 H10 A9,9 0 0 1 1,67 V10 A9,9 0 0 1 10,1 Z" fill="url(#tb)" stroke="#5d626a" stroke-width="1.6" stroke-linejoin="round"/>
++</svg>
+diff --git a/theme-rgds.xml b/theme-rgds.xml
+index 4dfe306..6bb02cd 100644
+--- a/theme-rgds.xml
++++ b/theme-rgds.xml
+@@ -35,7 +35,7 @@
+         <image name="background" extra="true">
+             <pos>0 0</pos>
+             <size>1 1</size>
+-            <path>${themePath}/assets/images/common/background.png</path>
++            <path>${themePath}/assets/images/common/background.svg</path>
+             <zIndex>0</zIndex>
+         </image>
+ 
+@@ -53,7 +53,7 @@
+             <orientation>horizontal</orientation>
+             <reverse>false</reverse>
+             <clock name="system-clock">
+-                <color>333333FF</color>
++                <color>E8E9EBFF</color>
+                 <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+                 <fontSize>0.0291667</fontSize><!-- 14 -->
+                 <lineSpacing>1</lineSpacing>
+@@ -63,7 +63,7 @@
+             <orientation>horizontal</orientation>
+             <reverse>true</reverse>
+             <batteryText name="system-battery-text">
+-                <color>333333FF</color>
++                <color>E8E9EBFF</color>
+                 <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+                 <fontSize>0.0291667</fontSize><!-- 14 -->
+                 <lineSpacing>1</lineSpacing>
+@@ -79,7 +79,7 @@
+             </batteryIcon>
+             <networkIcon name="system-network-icon">
+                 <maxSize>1 1</maxSize>
+-                <color>333333FF</color>
++                <color>E8E9EBFF</color>
+                 <networkIcon>${themePath}/assets/images/common/network_icon_on.svg</networkIcon>
+                 <planemodeIcon>${themePath}/assets/images/common/network_icon_off.svg</planemodeIcon>
+             </networkIcon>
+@@ -87,7 +87,7 @@
+         <!-- End: System Indicators -->
+ 
+         <image name="left_tab_image" extra="true">
+-            <path>${themePath}/assets/images/common/left_tab.png</path>
++            <path>${themePath}/assets/images/common/left_tab.svg</path>
+             <pos>0 0.85</pos>
+             <size>0.0833 0.15</size>
+             <zIndex>1</zIndex>
+@@ -98,13 +98,13 @@
+             <pos>0.03 0.885</pos>
+             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+             <fontSize>0.05</fontSize>
+-            <color>333333FF</color>
++            <color>E8E9EBFF</color>
+             <alignment>left</alignment>
+             <zIndex>2</zIndex>
+         </text>
+ 
+         <image name="right_tab_image" extra="true">
+-            <path>${themePath}/assets/images/common/right_tab.png</path>
++            <path>${themePath}/assets/images/common/right_tab.svg</path>
+             <pos>0.25 0.85</pos>
+             <size>0.0833 0.15</size>
+             <zIndex>1</zIndex>
+@@ -115,14 +115,14 @@
+             <pos>0.266 0.885</pos>
+             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+             <fontSize>0.05</fontSize>
+-            <color>333333FF</color>
++            <color>E8E9EBFF</color>
+             <alignment>right</alignment>
+             <zIndex>2</zIndex>
+         </text>
+ 
+         <!-- Bottom screen (X 0.333-0.666) -->
+         <image name="text_bubble" extra="true">
+-            <path>${themePath}/assets/images/common/text_bubble.png</path>
++            <path>${themePath}/assets/images/common/text_bubble.svg</path>
+             <pos>0.5 0.3</pos>
+             <origin>0.5 0.5</origin>
+             <size>0.2667 0.45</size>
+@@ -130,7 +130,7 @@
+         </image>
+ 
+         <image name="start_window" extra="true">
+-            <path>${themePath}/assets/images/common/start_window.png</path>
++            <path>${themePath}/assets/images/common/start_window.svg</path>
+             <pos>0.5 0.67</pos>
+             <origin>0.5 0.5</origin>
+             <maxSize>0.12 0.32</maxSize>
+@@ -138,7 +138,7 @@
+         </image>
+ 
+         <image name="scroll_bar" extra="true">
+-            <path>${themePath}/assets/images/common/scroll_bar.png</path>
++            <path>${themePath}/assets/images/common/scroll_bar.svg</path>
+             <pos>0.5 0.95</pos>
+             <origin>0.5 0.5</origin>
+             <size>0.3333 0.1</size>
+@@ -156,7 +156,7 @@
+     <view name="system">
+         <!-- Top screen (X 0-0.333) -->
+         <image name="distro_logo" extra="true">
+-            <path>${themePath}/assets/images/common/distro_logo.png</path>
++            <path>${themePath}/assets/images/common/distro_logo_dark.png</path>
+             <pos>0.167 0.5</pos>
+             <origin>0.5 0.5</origin>
+             <maxSize>0.3 0.6</maxSize>
+@@ -184,6 +184,7 @@
+             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+             <forceUppercase>true</forceUppercase>
+             <fontSize>0.03</fontSize>
++            <color>E8E9EBFF</color>
+             <storyboard>
+                 <animation event="scroll" property="scale"/>
+             </storyboard>
+@@ -196,7 +197,7 @@
+             <size>0.2333 0.1</size>
+             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+             <fontSize>0.04</fontSize>
+-            <color>333333FF</color>
++            <color>E8E9EBFF</color>
+             <alignment>center</alignment>
+             <zIndex>57</zIndex>
+         </text>
+@@ -207,7 +208,7 @@
+             <size>0.2333 0.3</size>
+             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+             <fontSize>0.025</fontSize>
+-            <color>333333FF</color>
++            <color>E8E9EBFF</color>
+             <alignment>center</alignment>
+             <zIndex>53</zIndex>
+         </text>
+@@ -216,7 +217,7 @@
+             <path>${themePath}/assets/images/systems/default.png</path>
+             <path>${themePath}/assets/images/systems/${system.theme}.png</path>
+             <image name="menu_slot" extra="true">
+-                <path>${themePath}/assets/images/common/menu_slot.png</path>
++                <path>${themePath}/assets/images/common/menu_slot.svg</path>
+                 <scale>1.45</scale>
+                 <scaleOrigin>0.5 0.35</scaleOrigin>
+             </image>
+@@ -234,7 +235,7 @@
+ 
+         <!-- Top screen (X 0-0.333) -->
+         <image name="preview_panel" extra="true">
+-            <path>${themePath}/assets/images/common/preview_panel.png</path>
++            <path>${themePath}/assets/images/common/preview_panel.svg</path>
+             <pos>0.167 0.45</pos>
+             <origin>0.5 0.5</origin>
+             <size>0.2667 0.65</size>
+@@ -265,14 +266,22 @@
+             <alignment>center</alignment>
+             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+             <fontSize>0.05</fontSize>
++            <color>E8E9EBFF</color>
+         </text>
+ 
+         <!-- Bottom screen (X 0.333-0.666) -->
++        <!-- START frame sized to exactly cover the selected cartridge -->
++        <image name="start_window" extra="true">
++            <pos>0.5 0.68</pos>
++            <maxSize>0.0698 0.34</maxSize>
++        </image>
++
+         <gamecarousel name="gamecarousel">
+             <type>horizontal</type>
+-            <pos>0.5 0.64</pos>
++            <pos>0.5 0.68</pos>
+             <origin>0.5 0.5</origin>
+             <size>0.3333 0.315</size>
++            <logoSize>0.2 1</logoSize>
+             <logoScale>1</logoScale>
+             <color>00000000</color>
+             <maxLogoCount>5</maxLogoCount>
+@@ -280,12 +289,38 @@
+             <scrollSound>${themePath}/assets/sounds/scroll.wav</scrollSound>
+             <minLogoOpacity>1</minLogoOpacity>
+             <imageSource if="${system.hardwareType} == 'System'">image</imageSource>
++            <!-- Every game is a cartridge: the name sits in the label window,
++                 and the art (when scraped) is drawn over it. -->
++            <itemTemplate>
++                <text name="cart_name">
++                    <pos>0.17 0.165</pos>
++                    <size>0.66 0.555</size>
++                    <text>{game:name}</text>
++                    <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
++                    <fontSize>0.021</fontSize>
++                    <color>C9CDD2FF</color>
++                    <alignment>center</alignment>
++                    <verticalAlignment>center</verticalAlignment>
++                    <lineSpacing>1.05</lineSpacing>
++                </text>
++                <image name="cart_art">
++                    <pos>0.163 0.158</pos>
++                    <size>0.674 0.570</size>
++                    <path>{game:thumbnail}</path>
++                    <linearSmooth>true</linearSmooth>
++                </image>
++                <image name="cart_slot">
++                    <pos>0.06 0.03</pos>
++                    <size>0.88 0.94</size>
++                    <path>${themePath}/assets/images/common/game_slot.svg</path>
++                </image>
++            </itemTemplate>
+         </gamecarousel>
+ 
+         <image name="gamecarouselLogo">
+             <origin>0.5 0.5</origin>
+             <image name="game_slot" extra="true">
+-                <path>${themePath}/assets/images/common/game_slot.png</path>
++                <path>${themePath}/assets/images/common/game_slot.svg</path>
+                 <pos>0.05 0</pos>
+                 <pos if="${system.fullName} == 'Tools'">0.1175 0</pos>
+                 <size>0.9 1</size>
+@@ -304,7 +339,7 @@
+             <size>0.2333 0.1</size>
+             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+             <fontSize>0.04</fontSize>
+-            <color>333333FF</color>
++            <color>E8E9EBFF</color>
+             <alignment>center</alignment>
+             <zIndex>57</zIndex>
+         </text>
+@@ -315,13 +350,14 @@
+             <size>0.2333 0.22</size>
+             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+             <fontSize>0.03</fontSize>
+-            <color>555555FF</color>
++            <color>A9AEB5FF</color>
+             <alignment>center</alignment>
+             <zIndex>57</zIndex>
+         </text>
+ 
+         <text name="gamecarouselLogoText">
+-            <fontSize>0.01</fontSize>
++            <fontSize>0.026</fontSize>
++            <color>C9CDD2FF</color>
+             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+             <storyboard>
+                 <animation event="scroll" property="scale"/>
+@@ -331,22 +367,40 @@
+ 
+     <view name="menu">
+         <menuBackground name="menubg">
+-            <color>F0F0F0FF</color>
++            <color>2B2E33FF</color>
++            <scrollbarColor>5D626AFF</scrollbarColor>
+         </menuBackground>
+ 
+         <menuText name="menutext, menutitle, menufooter">
+             <fontSize>0.03</fontSize>
+             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
++            <color>E8E9EBFF</color>
++            <selectedColor>FFFFFFFF</selectedColor>
++            <selectorColor>2B8FE6FF</selectorColor>
++            <separatorColor>3C4047FF</separatorColor>
+         </menuText>
+ 
+         <menuTextSmall name="menutextsmall">
+             <fontSize>0.03</fontSize>
+             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
++            <color>A9AEB5FF</color>
+         </menuTextSmall>
+ 
+         <menuGroup name="menugroup">
+             <fontSize>0.03</fontSize>
+             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
++            <color>8FC8FFFF</color>
++            <backgroundColor>23252AFF</backgroundColor>
++            <separatorColor>3C4047FF</separatorColor>
+         </menuGroup>
++
++        <menuSwitch name="menuswitch">
++            <pathOn>${themePath}/assets/images/common/switch_on.svg</pathOn>
++            <pathOff>${themePath}/assets/images/common/switch_off.svg</pathOff>
++        </menuSwitch>
++
++        <menuSlider name="menuslider">
++            <path>${themePath}/assets/images/common/slider_knob.svg</path>
++        </menuSlider>
+     </view>
+ </theme>
+-- 
+2.55.0
+

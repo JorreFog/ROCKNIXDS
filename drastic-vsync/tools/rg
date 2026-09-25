@@ -1,0 +1,3 @@
+#!/bin/sh
+# ssh to the RG DS; the other tools call this. Set RGDS_HOST, and use a key or SSH_ASKPASS for the password.
+exec ssh -o ConnectTimeout=5 root@"${RGDS_HOST:-rgds.local}" "$@"

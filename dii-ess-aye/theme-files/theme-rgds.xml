@@ -1,0 +1,548 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<theme defaultTransition="instant" defaultView="gamecarousel">
+    <formatVersion>7</formatVersion>
+
+    <!--
+        Device: Anbernic RG DS
+        Display: 1920x480 (three 640x480 screens horizontally spanned)
+        Top screen (left): X 0-0.333, center X=0.167
+        Bottom screen (middle): X 0.333-0.666, center X=0.5
+        Right screen (dummy): X 0.666-1.0, center X=0.833 (unused, background only)
+    -->
+
+    <!-- This section generously provided by Ant (https://github.com/anthonycaccese)
+    ///
+    View: Screen
+    ///
+    -->
+    <view name="screen">
+        <!-- Start: Resets -->
+        <controllerActivity name="controllerActivity">
+            <visible>false</visible>
+        </controllerActivity>
+        <batteryIndicator name="batteryIndicator">
+            <visible>false</visible>
+        </batteryIndicator>
+        <text name="clock">
+            <pos>1 1</pos>
+        </text>
+        <!-- End: Resets -->
+    </view>
+
+    <!-- Global elements -->
+    <view name="system, gamecarousel">
+        <!-- Both screens -->
+        <image name="background" extra="true">
+            <pos>0 0</pos>
+            <size>1 1</size>
+            <path>${themePath}/assets/images/common/background_plain.svg</path>
+            <zIndex>0</zIndex>
+        </image>
+        <image name="background_grid" extra="true">
+            <pos>0 0</pos>
+            <size>1.0208333 1.0833333</size><!-- 1960x520 -->
+            <path>${themePath}/assets/images/common/grid.svg</path>
+            <zIndex>0.1</zIndex>
+            <storyboard repeat="forever">
+                <animation property="pos" from="0 0" to="-0.0104167 -0.0416667" duration="6000" repeat="forever"/>
+            </storyboard>
+        </image>
+
+        <!-- Top screen status strip behind the clock / battery -->
+        <image name="status_bar" extra="true">
+            <pos>0 0</pos>
+            <size>0.3333333 0.0916667</size><!-- 640x44 -->
+            <path>${themePath}/assets/images/common/status_bar.svg</path>
+            <zIndex>0.5</zIndex>
+        </image>
+
+        <!-- Top screen (X 0-0.333) -->
+        
+        <!-- This section (and its graphics) generously provided by Ant (https://github.com/anthonycaccese) -->
+        <!-- Start: System Indicators -->
+        <stackpanel name="system-indicators-left,system-indicators-right" extra="true">
+            <w>0.3229</w><!-- 620 -->
+            <h>0.05625</h><!-- 27 -->
+            <separator>5</separator>
+            <pos>0.0052083 0.0166667</pos><!-- 10 8 -->
+        </stackpanel>
+        <stackpanel name="system-indicators-left" extra="true">
+            <orientation>horizontal</orientation>
+            <reverse>false</reverse>
+            <clock name="system-clock">
+                <color>E8E9EBFF</color>
+                <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+                <fontSize>0.0291667</fontSize><!-- 14 -->
+                <lineSpacing>1</lineSpacing>
+            </clock>
+        </stackpanel>
+        <stackpanel name="system-indicators-right" extra="true">
+            <orientation>horizontal</orientation>
+            <reverse>true</reverse>
+            <batteryText name="system-battery-text">
+                <color>E8E9EBFF</color>
+                <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+                <fontSize>0.0291667</fontSize><!-- 14 -->
+                <lineSpacing>1</lineSpacing>
+            </batteryText>
+            <batteryIcon name="system-battery-icon">
+                <maxSize>1 1</maxSize>
+                <full>${themePath}/assets/images/common/battery_icon_100.svg</full>
+                <at75>${themePath}/assets/images/common/battery_icon_75.svg</at75>
+                <at50>${themePath}/assets/images/common/battery_icon_50.svg</at50>
+                <at25>${themePath}/assets/images/common/battery_icon_25.svg</at25>
+                <empty>${themePath}/assets/images/common/battery_icon_0.svg</empty>
+                <incharge>${themePath}/assets/images/common/battery_icon_charging.svg</incharge>
+            </batteryIcon>
+            <networkIcon name="system-network-icon">
+                <maxSize>1 1</maxSize>
+                <color>E8E9EBFF</color>
+                <networkIcon>${themePath}/assets/images/common/network_icon_on.svg</networkIcon>
+                <planemodeIcon>${themePath}/assets/images/common/network_icon_off.svg</planemodeIcon>
+            </networkIcon>
+        </stackpanel>
+        <!-- End: System Indicators -->
+
+        <image name="left_tab_image" extra="true">
+            <path>${themePath}/assets/images/common/left_tab.svg</path>
+            <pos>0 0.85</pos>
+            <size>0.0833 0.15</size>
+            <zIndex>1</zIndex>
+        </image>
+
+        <text name="left_tab_text" extra="true">
+            <text>Prev</text>
+            <pos>0.03 0.885</pos>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.05</fontSize>
+            <color>E8E9EBFF</color>
+            <alignment>left</alignment>
+            <zIndex>2</zIndex>
+        </text>
+
+        <image name="right_tab_image" extra="true">
+            <path>${themePath}/assets/images/common/right_tab.svg</path>
+            <pos>0.25 0.85</pos>
+            <size>0.0833 0.15</size>
+            <zIndex>1</zIndex>
+        </image>
+
+        <text name="right_tab_text" extra="true">
+            <text>Next</text>
+            <pos>0.266 0.885</pos>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.05</fontSize>
+            <color>E8E9EBFF</color>
+            <alignment>right</alignment>
+            <zIndex>2</zIndex>
+        </text>
+
+        <!-- Bottom screen (X 0.333-0.666) -->
+        <image name="text_bubble" extra="true">
+            <path>${themePath}/assets/images/common/text_bubble.svg</path>
+            <pos>0.5 0.3</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.2667 0.45</size>
+            <zIndex>56</zIndex>
+        </image>
+
+        <image name="start_window" extra="true">
+            <path>${themePath}/assets/images/common/start_window.svg</path>
+            <pos>0.5 0.67</pos>
+            <origin>0.5 0.5</origin>
+            <maxSize>0.12 0.32</maxSize>
+            <zIndex>55</zIndex>
+            <storyboard repeat="forever">
+                <animation property="scale" from="1" to="1.035" duration="900" autoReverse="true" repeat="forever" mode="easeInOut"/>
+            </storyboard>
+        </image>
+
+        <!-- Scroll bar: the thumb shows where the selection is in the list.
+             x = groove start + (index-1)/(count-1) * travel  (702px + 432px travel) -->
+        <image name="scroll_track" extra="true">
+            <path>${themePath}/assets/images/common/scroll_track.svg</path>
+            <pos>0.34375 0.9125</pos><!-- 660,438 -->
+            <size>0.3125 0.0583333</size><!-- 600x28 -->
+            <zIndex>1</zIndex>
+        </image>
+        <image name="scroll_thumb" extra="true">
+            <path>${themePath}/assets/images/common/scroll_thumb.svg</path>
+            <x>{system:count} &gt; 1 ? 0.365625 + ({system:index} - 1) / ({system:count} - 1) * 0.225 : 0.478125</x>
+            <y>0.9208333</y>
+            <w>0.04375</w><!-- 84x20 -->
+            <h>0.0416667</h>
+            <zIndex>2</zIndex>
+        </image>
+        <text name="scroll_label" extra="true">
+            <text>{system:index} of {system:count}</text>
+            <x>{system:count} &gt; 1 ? 0.365625 + ({system:index} - 1) / ({system:count} - 1) * 0.225 : 0.478125</x>
+            <y>0.9208333</y>
+            <w>0.04375</w>
+            <h>0.0416667</h>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.0270833</fontSize><!-- 13 -->
+            <color>FFFFFFFF</color>
+            <alignment>center</alignment>
+            <verticalAlignment>center</verticalAlignment>
+            <zIndex>3</zIndex>
+        </text>
+
+        <!-- Visibility override -->
+        <helpsystem name="help">
+            <textColor>00000000</textColor>
+            <iconColor>00000000</iconColor>
+        </helpsystem>
+    </view>
+
+    <!-- Main system selection menu -->
+    <view name="system">
+        <!-- Top screen (X 0-0.333) -->
+        <image name="logo_glow" extra="true">
+            <path>${themePath}/assets/images/common/logo_glow.svg</path>
+            <pos>0.1666667 0.2708333</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.2916667 0.5</size><!-- 560x240 -->
+            <zIndex>1</zIndex>
+            <storyboard repeat="forever">
+                <animation property="opacity" from="0.45" to="1" duration="2800" autoReverse="true" repeat="forever" mode="easeInOut"/>
+            </storyboard>
+        </image>
+        <image name="distro_logo" extra="true">
+            <path>${themePath}/assets/images/common/distro_logo.svg</path>
+            <pos>0.1666667 0.2708333</pos><!-- 320,130 -->
+            <origin>0.5 0.5</origin>
+            <size>0.1354167 0.1031250</size><!-- 260x49.5 -->
+            <zIndex>2</zIndex>
+        </image>
+        <clock name="home_clock" extra="true">
+            <pos>0.1666667 0.5104167</pos><!-- 320,245 -->
+            <origin>0.5 0.5</origin>
+            <size>0.3 0.2</size>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.1458333</fontSize><!-- 70 -->
+            <color>E8E9EBFF</color>
+            <alignment>center</alignment>
+            <zIndex>2</zIndex>
+        </clock>
+        <clock name="home_date" extra="true">
+            <format>%A, %B %e</format>
+            <pos>0.1666667 0.6458333</pos><!-- 320,310 -->
+            <origin>0.5 0.5</origin>
+            <size>0.3 0.0625</size>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.0416667</fontSize><!-- 20 -->
+            <color>8FC8FFFF</color>
+            <alignment>center</alignment>
+            <zIndex>2</zIndex>
+        </clock>
+
+        <!-- Bottom screen (X 0.333-0.666) -->
+        <carousel name="systemcarousel">
+            <type>horizontal</type>
+            <pos>0.5 0.64</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.3333 0.25</size>
+            <logoSize>0.1 0.17</logoSize>
+            <logoScale>1</logoScale>
+            <color>00000000</color>
+            <maxLogoCount>5</maxLogoCount>
+            <zIndex>50</zIndex>
+            <defaultTransition>instant</defaultTransition>
+            <scrollSound>${themePath}/assets/sounds/scroll.wav</scrollSound>
+            <minLogoOpacity>1</minLogoOpacity>
+            <systemInfoDelay>0</systemInfoDelay>
+        </carousel>
+
+        <text name="logoText">
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <forceUppercase>true</forceUppercase>
+            <fontSize>0.03</fontSize>
+            <color>E8E9EBFF</color>
+            <storyboard>
+                <animation event="scroll" property="scale"/>
+            </storyboard>
+        </text>
+
+        <text name="systemName" extra="true">
+            <text>{system:collection} ? proper({system:fullName}) : {system:fullName}</text>
+            <pos>0.5 0.15</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.2333 0.1</size>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.04</fontSize>
+            <color>E8E9EBFF</color>
+            <alignment>center</alignment>
+            <zIndex>57</zIndex>
+        </text>
+
+        <text name="system_maker" extra="true">
+            <text>{system:manufacturer}</text>
+            <pos>0.5 0.2291667</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.2333 0.06</size>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.0333333</fontSize>
+            <color>A9AEB5FF</color>
+            <alignment>center</alignment>
+            <zIndex>57</zIndex>
+        </text>
+        <text name="system_games" extra="true">
+            <text>"{system:total}" == "1" ? "1 game" : "{system:total}" + " games"</text>
+            <pos>0.5 0.3541667</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.2333 0.06</size>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.0333333</fontSize>
+            <color>8FC8FFFF</color>
+            <alignment>center</alignment>
+            <zIndex>57</zIndex>
+        </text>
+
+        <text name="systemInfo">
+            <pos>0.5 0.35</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.2333 0.3</size>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.025</fontSize>
+            <color>E8E9EBFF</color>
+            <alignment>center</alignment>
+            <zIndex>53</zIndex>
+        </text>
+
+        <image name="logo">
+            <path>${themePath}/assets/images/systems/default.png</path>
+            <path>${themePath}/assets/images/systems/${system.theme}.png</path>
+            <image name="menu_slot" extra="true">
+                <path>${themePath}/assets/images/common/menu_slot.svg</path>
+                <scale>1.45</scale>
+                <scaleOrigin>0.5 0.35</scaleOrigin>
+            </image>
+            <storyboard>
+                <animation event="scroll" property="scale"/>
+            </storyboard>
+        </image>
+    </view>
+
+    <view name="gamecarousel">
+        <!-- Both screens -->
+        <sound name="launch">
+            <path>${themePath}/assets/sounds/launch.wav</path>
+        </sound>
+
+        <!-- Top screen (X 0-0.333) -->
+        <image name="preview_panel" extra="true">
+            <path>${themePath}/assets/images/common/preview_panel.svg</path>
+            <pos>0.167 0.45</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.2667 0.65</size>
+            <zIndex>1</zIndex>
+        </image>
+
+        <!-- Placeholder for games without scraped media; box art / video draws over it -->
+        <image name="preview_icon" extra="true">
+            <path>${themePath}/assets/images/systems/${system.theme}.png</path>
+            <pos>0.1666667 0.3125</pos>
+            <origin>0.5 0.5</origin>
+            <maxSize>0.0677083 0.2708333</maxSize><!-- 130x130 -->
+            <zIndex>1.5</zIndex>
+        </image>
+        <text name="preview_name" extra="true">
+            <text>{game:name}</text>
+            <pos>0.1666667 0.5416667</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.2291667 0.1333333</size>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.0458333</fontSize><!-- 22 -->
+            <color>E8E9EBFF</color>
+            <alignment>center</alignment>
+            <verticalAlignment>center</verticalAlignment>
+            <multiLine>true</multiLine>
+            <zIndex>1.5</zIndex>
+        </text>
+        <text name="preview_stats" extra="true">
+            <text>"{game:playcount}" == "" || "{game:playcount}" == "0" ? "Not played yet" : "{game:playcount}" == "1" ? "Played once" : "Played " + "{game:playcount}" + " times"</text>
+            <pos>0.1666667 0.6666667</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.2291667 0.05</size>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.0333333</fontSize><!-- 16 -->
+            <color>8FC8FFFF</color>
+            <alignment>center</alignment>
+            <zIndex>1.5</zIndex>
+        </text>
+
+        <video name="md_video">
+            <pos>0.167 0.45</pos>
+            <origin>0.5 0.5</origin>
+            <maxSize>0.35 0.6</maxSize>
+            <effect>none</effect>
+            <delay>3</delay>
+            <showSnapshotNoVideo>true</showSnapshotNoVideo>
+            <showSnapshotDelay>true</showSnapshotDelay>
+            <snapshotSource>image</snapshotSource>
+            <zIndex>2</zIndex>
+        </video>
+
+        <text name="logoText">
+            <visible>false</visible>
+        </text>
+
+        <text name="systemNameFromGame" extra="true">
+            <pos>0.1667 0.9</pos>
+            <size>0.15 0.11</size>
+            <origin>0.5 0.5</origin>
+            <text>{game:system:collection} ? proper({game:system:fullName}) : {game:system:fullName}</text>
+            <alignment>center</alignment>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.05</fontSize>
+            <color>E8E9EBFF</color>
+        </text>
+
+        <!-- Bottom screen (X 0.333-0.666) -->
+        <image name="scroll_thumb" extra="true">
+            <x>{game:count} &gt; 1 ? 0.365625 + ({game:index} - 1) / ({game:count} - 1) * 0.225 : 0.478125</x>
+        </image>
+        <text name="scroll_label" extra="true">
+            <text>{game:index} of {game:count}</text>
+            <x>{game:count} &gt; 1 ? 0.365625 + ({game:index} - 1) / ({game:count} - 1) * 0.225 : 0.478125</x>
+        </text>
+
+        <!-- START frame sized to exactly cover the selected cartridge -->
+        <image name="start_window" extra="true">
+            <pos>0.5 0.68</pos>
+            <maxSize>0.0698 0.34</maxSize>
+        </image>
+
+        <gamecarousel name="gamecarousel">
+            <type>horizontal</type>
+            <pos>0.5 0.68</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.3333 0.315</size>
+            <logoSize>0.2 1</logoSize>
+            <logoScale>1</logoScale>
+            <color>00000000</color>
+            <maxLogoCount>5</maxLogoCount>
+            <zIndex>50</zIndex>
+            <scrollSound>${themePath}/assets/sounds/scroll.wav</scrollSound>
+            <minLogoOpacity>1</minLogoOpacity>
+            <imageSource if="${system.hardwareType} == 'System'">image</imageSource>
+            <!-- Every game is a cartridge: the name sits in the label window,
+                 and the art (when scraped) is drawn over it. -->
+            <itemTemplate>
+                <text name="cart_name">
+                    <pos>0.17 0.165</pos>
+                    <size>0.66 0.555</size>
+                    <text>{game:name}</text>
+                    <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+                    <fontSize>0.021</fontSize>
+                    <color>C9CDD2FF</color>
+                    <alignment>center</alignment>
+                    <verticalAlignment>center</verticalAlignment>
+                    <lineSpacing>1.05</lineSpacing>
+                </text>
+                <image name="cart_art">
+                    <pos>0.163 0.158</pos>
+                    <size>0.674 0.570</size>
+                    <path>{game:thumbnail}</path>
+                    <linearSmooth>true</linearSmooth>
+                </image>
+                <image name="cart_slot">
+                    <pos>0.06 0.03</pos>
+                    <size>0.88 0.94</size>
+                    <path>${themePath}/assets/images/common/game_slot.svg</path>
+                </image>
+            </itemTemplate>
+        </gamecarousel>
+
+        <image name="gamecarouselLogo">
+            <origin>0.5 0.5</origin>
+            <image name="game_slot" extra="true">
+                <path>${themePath}/assets/images/common/game_slot.svg</path>
+                <pos>0.05 0</pos>
+                <pos if="${system.fullName} == 'Tools'">0.1175 0</pos>
+                <size>0.9 1</size>
+                <size if="${system.fullName} == 'Tools'">0.775 1</size>
+                <scale>1.5</scale>
+                <scaleOrigin>0.5 0.4</scaleOrigin>
+            </image>
+            <storyboard>
+                <animation property="scale"/>
+            </storyboard>
+        </image>
+
+        <text name="md_name">
+            <pos>0.5 0.15</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.2333 0.1</size>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.04</fontSize>
+            <color>E8E9EBFF</color>
+            <alignment>center</alignment>
+            <zIndex>57</zIndex>
+        </text>
+
+        <text name="md_description">
+            <pos>0.5 0.31</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.2333 0.22</size>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.03</fontSize>
+            <color>A9AEB5FF</color>
+            <alignment>center</alignment>
+            <zIndex>57</zIndex>
+        </text>
+
+        <text name="gamecarouselLogoText">
+            <fontSize>0.026</fontSize>
+            <color>C9CDD2FF</color>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <storyboard>
+                <animation event="scroll" property="scale"/>
+            </storyboard>
+        </text>
+    </view>
+
+    <view name="menu">
+        <menuBackground name="menubg">
+            <color>2B2E33FF</color>
+            <scrollbarColor>5D626AFF</scrollbarColor>
+        </menuBackground>
+
+        <menuText name="menutext, menutitle, menufooter">
+            <fontSize>0.03</fontSize>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <color>E8E9EBFF</color>
+            <selectedColor>FFFFFFFF</selectedColor>
+            <selectorColor>2B8FE6FF</selectorColor>
+            <separatorColor>3C4047FF</separatorColor>
+        </menuText>
+
+        <menuTextSmall name="menutextsmall">
+            <fontSize>0.03</fontSize>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <color>A9AEB5FF</color>
+        </menuTextSmall>
+
+        <menuGroup name="menugroup">
+            <fontSize>0.03</fontSize>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <color>8FC8FFFF</color>
+            <backgroundColor>23252AFF</backgroundColor>
+            <separatorColor>3C4047FF</separatorColor>
+        </menuGroup>
+
+        <menuSwitch name="menuswitch">
+            <pathOn>${themePath}/assets/images/common/switch_on.png</pathOn>
+            <pathOff>${themePath}/assets/images/common/switch_off.png</pathOff>
+        </menuSwitch>
+
+        <menuTextEdit name="menutextedit">
+            <inactive>${themePath}/assets/images/common/textedit.png</inactive>
+            <active>${themePath}/assets/images/common/textedit_active.png</active>
+        </menuTextEdit>
+
+        <menuSlider name="menuslider">
+            <path>${themePath}/assets/images/common/slider_knob.svg</path>
+        </menuSlider>
+    </view>
+</theme>
