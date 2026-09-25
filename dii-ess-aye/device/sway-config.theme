@@ -13,6 +13,7 @@ exec_always swaymsg '[app_id="emulationstation"]' seat seat0 attach "0:0:wlr_vir
 exec_always swaymsg '[app_id="emulationstation"]' seat seat1 attach "0:0:wlr_virtual_keyboard_v1"
 for_window [title=".*(Secondary|\[w2\]|Sub|Bottom|Screen 2|GamePad).*"] output DSI-1 power on
 for_window [app_id="drastic"] input "1046:911:Goodix_Capacitive_TouchScreen" map_to_output DSI-2
+for_window [app_id="drastic"] floating enable, border none, move absolute position 0 0
 for_window [app_id="emulationstation"] reload
 exec_always swaymsg '[app_id="emulationstation"]' floating enable, fullscreen disable, move absolute position 0 0
 exec_always swaymsg '[app_id="emulationstation"]' focus
