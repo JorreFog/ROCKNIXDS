@@ -1,0 +1,94 @@
+diff --git a/es-core/src/components/CarouselComponent.cpp b/es-core/src/components/CarouselComponent.cpp
+index 679f99700..e99527f82 100644
+--- a/es-core/src/components/CarouselComponent.cpp
++++ b/es-core/src/components/CarouselComponent.cpp
+@@ -1,4 +1,5 @@
+ #include "CarouselComponent.h"
++#include <climits>
+ #include "Settings.h"
+ #include "Log.h"
+ #include "animations/LambdaAnimation.h"
+@@ -524,11 +525,34 @@ void CarouselComponent::renderCarousel(const Transform4x4f& trans)
+ 
+ 		if (!mAnyLogoHasScaleStoryboard)
+ 			comp->setScale(scale);
+-		
++
++		// RG DS: a list shorter than the carousel repeats its entries; only the copy of the selected entry nearest
++		// the centre shows its selection elements (frame), the other copies are drawn without them
++		if (index == mCursor && i != mPrimaryCursorPos)
++		{
++			auto templ = dynamic_cast<CarouselItemTemplate*>(comp.get());
++			if (templ != nullptr)
++			{
++				templ->renderWithoutActivated(logoTrans);
++				return;
++			}
++		}
++
+ 		comp->render(logoTrans);
+ 	};
+ 
+ 
++	// RG DS: the position of the selected entry nearest the centre (see renderLogo)
++	mPrimaryCursorPos = INT_MIN;
++	for (int i = center - logoCount / 2 + bufferLeft; i <= center + logoCount / 2 + bufferRight; i++)
++	{
++		int index = i % (int)mEntries.size();
++		if (index < 0)
++			index += (int)mEntries.size();
++		if (index == mCursor && (mPrimaryCursorPos == INT_MIN || fabs(i - mCamOffset) < fabs(mPrimaryCursorPos - mCamOffset)))
++			mPrimaryCursorPos = i;
++	}
++
+ 	std::vector<int> activePositions;
+ 	for (int i = center - logoCount / 2 + bufferLeft; i <= center + logoCount / 2 + bufferRight; i++)
+ 	{
+@@ -985,6 +1009,24 @@ void CarouselItemTemplate::loadTemplatedChildren(const ThemeData::ThemeElement*
+ 	loadThemedChildren(elem);
+ }
+ 
++void CarouselItemTemplate::renderWithoutActivated(const Transform4x4f& parentTrans)
++{
++	std::vector<GuiComponent*> hidden;
++	for (auto child : enumerateExtraChildrens())
++	{
++		if (child->isVisible() && child->storyBoardExists("activate"))
++		{
++			child->setVisible(false);
++			hidden.push_back(child);
++		}
++	}
++
++	render(parentTrans);
++
++	for (auto child : hidden)
++		child->setVisible(true);
++}
++
+ bool CarouselItemTemplate::selectStoryboard(const std::string& name)
+ {
+ 	bool selected = false;
+diff --git a/es-core/src/components/CarouselComponent.h b/es-core/src/components/CarouselComponent.h
+index b2f1f57ef..51ab9ae9a 100644
+--- a/es-core/src/components/CarouselComponent.h
++++ b/es-core/src/components/CarouselComponent.h
+@@ -57,6 +57,10 @@ public:
+ 
+ 	void updateBindings(IBindable* bindable) override;
+ 
++	// RG DS: render without the children that have an "activate" storyboard (e.g. a selection frame): used for
++	// the extra copies of the selected entry that a short list draws while it wraps around
++	void renderWithoutActivated(const Transform4x4f& parentTrans);
++
+ private:
+ 	std::string mName;
+ };
+@@ -129,6 +133,7 @@ private:
+ 
+ 	// unit is list index
+ 	float mCamOffset;
++	int mPrimaryCursorPos = 0;   // RG DS: see renderCarousel
+ 
+ 	bool mDisable;
+ 	bool mScreensaverActive;
