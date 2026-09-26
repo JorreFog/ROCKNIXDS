@@ -83,6 +83,8 @@ if [ $UNINSTALL = 1 ]; then
         else printf '#!/bin/sh\nexec /storage/.config/drastic/drastic.real "$@"\n' > $DRASTIC/drastic; chmod +x $DRASTIC/drastic; fi
     fi
     rm -rf $DRASTIC/dsflip
+    [ -f $BACKUP/.shaders-added ] && while read -r b; do rm -f "$DRASTIC/shaders/$b"; done < $BACKUP/.shaders-added
+    [ -e $BACKUP/.esf-created ] && rm -f /storage/.config/emulationstation/es_features.cfg
     [ -e $BACKUP/.theme-installed-by-us ] && rm -rf $THEME
     [ -d $BACKUP/theme-previous ] && mv $BACKUP/theme-previous $THEME
     systemctl restart sway.service 2>/dev/null || true; sleep 2
@@ -152,6 +154,30 @@ if [ $DSFLIP_ON = 1 ]; then
     cp "$SRC/dsflip/libdsflip.so" "$SRC/dsflip/device/session.sh" "$SRC/dsflip/device/drastic-wrapper.sh" \
        "$SRC/dsflip/device/install.sh" $WORK/dsflip/
     sh $WORK/dsflip/install.sh
+
+    # DS-pixel-aware shaders for DraStic (sharp and LCD-grid looks that work at 1x and 2x) + their ES entries
+    mkdir -p $DRASTIC/shaders
+    for f in "$SRC"/dsflip/shaders/*.frag; do
+        b=$(basename "$f")
+        if [ -e $DRASTIC/shaders/$b ]; then backup_once $DRASTIC/shaders/$b
+        else grep -qx "$b" $BACKUP/.shaders-added 2>/dev/null || echo "$b" >> $BACKUP/.shaders-added; fi
+        cp "$f" $DRASTIC/shaders/
+    done
+    ESF=/storage/.config/emulationstation/es_features.cfg
+    [ -f $ESF ] || { [ -f /usr/config/emulationstation/es_features.cfg ] && cp /usr/config/emulationstation/es_features.cfg $ESF && touch $BACKUP/.esf-created; }
+    if [ -f $ESF ]; then
+        backup_once $ESF
+        sed -i -e 's|name="ds-crisp (exact 2.5x, 1x games)"|name="ds-crisp (sharp, 1x and 2x)"|' \
+               -e 's|name="ds-grid (exact 2.5x + DS grid)"|name="ds-grid (sharp + DS pixel grid)"|' \
+               -e 's|name="ds-grid-2x (integer 2x + even grid)"|name="ds-grid-2x (pixel-perfect + even DS grid)"|' $ESF
+        if ! grep -q 'value="ds-crisp"' $ESF; then      # add the entries after DraStic's lcd1x+nds-color choice
+            awk '{ print } /value="lcd1x-nds-color"/ && !done { sub(/<choice.*/, "", $0); i = $0;
+                   print i "<choice name=\"ds-crisp (sharp, 1x and 2x)\" value=\"ds-crisp\" />";
+                   print i "<choice name=\"ds-grid (sharp + DS pixel grid)\" value=\"ds-grid\" />";
+                   print i "<choice name=\"ds-grid-2x (pixel-perfect + even DS grid)\" value=\"ds-grid-2x\" />"; done = 1 }' \
+                $ESF > $ESF.new && mv $ESF.new $ESF
+        fi
+    fi
 fi
 
 # ---- hires 3D ----------------------------------------------------------------------------------------

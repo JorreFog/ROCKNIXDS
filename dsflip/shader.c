@@ -273,7 +273,8 @@ int shader_init(int fd, const char *name) {
     const char *gx = (const char *)glGetString(0x1F03 /* GL_EXTENSIONS */);
     up_fmt = gx && strstr(gx, "GL_EXT_texture_format_BGRA8888") ? 0x80E1 /* GL_BGRA_EXT */ : 0x1908 /* GL_RGBA */;
     char path[256]; size_t n;
-    snprintf(path, sizeof path, "/storage/.config/drastic/shaders/%s.frag", name);
+    const char *sdir = getenv("DSFLIP_SHADER_DIR");   /* testing: load .frag files from elsewhere */
+    snprintf(path, sizeof path, "%s/%s.frag", sdir ? sdir : "/storage/.config/drastic/shaders", name);
     char *fs = drastouch_source(name, 0), *vs = drastouch_source(name, 1);
     const char *from = "libdrastouch";
     if (!fs) { fs = slurp(path, &n); from = path; }

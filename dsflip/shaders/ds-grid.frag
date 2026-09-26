@@ -1,0 +1,126 @@
+// ds-grid -- exact-area 2.5x reconstruction plus an LCD column/row structure, for
+// DraStic at 1x on the Anbernic RG DS. Full screen, no letterboxing.
+//
+// SCALING (identical to ds-crisp)
+// At 1x each DS screen is its own 256x192 texture drawn to 640x480: a uniform 2.5x
+// (5:2) upscale, for which pixel-area resampling is the exact reconstruction.
+// Measured against the ideal on this GPU: RMSE 0.29/255, versus 12.2 for the built-in
+// sharp-bilinear, 36.8 for bilinear, 40.6 for nearest.
+//
+// WHY THE GRID IS BUILT THIS WAY
+// One DS pixel is 2.5 output pixels, so a grid line cannot be given a fractional
+// position without changing shape from cell to cell. Computing exact sub-pixel
+// coverage -- the obvious "correct" approach, and what the first version of this file
+// did -- makes every second line land inside a pixel and the one after it straddle
+// two. The energy per line is then identical, which is why it does not shimmer, but
+// the lines visibly alternate between thin-and-dark and wide-and-soft. On a flat
+// gradient that reads as a plaid weave, not as a screen.
+//
+// So instead every line is snapped to exactly one output pixel. All lines are then
+// identical by construction; what varies is the spacing, which alternates 2px, 3px,
+// 2px, 3px (line columns fall at floor(k * 2.5) = 0, 2, 5, 7, 10, ...). Uneven
+// spacing in a fine repeating stripe is far less visible than uneven line weight,
+// because the eye reads the texture rather than measuring the gaps.
+//
+// Both axes carry the grid, at equal weight. An earlier revision ran columns only,
+// reasoning that a DS panel is an RGB/BGR vertical stripe layout -- true, but at this
+// scale it simply made the grid disappear. Rendering the shim's own lcd1x-nds-color
+// and lcd3x and looking at them settled it: both draw a full mesh in *both* axes with
+// clearly visible lines, and they read as a screen rather than as noise because their
+// mask is panel-aligned on an integer period, so every cell is identical. The snapping
+// above buys the same property here -- identical lines -- while staying locked to DS
+// pixels rather than to the panel.
+//
+// Strength is limited by legibility, not taste: a snapped line is one whole output
+// pixel, i.e. 40% of a cell, so at GRID_LEVEL_V below about 0.78 thin white text
+// starts to break up where strokes land on a dark column.
+//
+// Darkening is applied in linear light so it dims like a black matrix instead of
+// crushing shadows. GRID_COMPENSATE only restores part of the lost light; full
+// compensation pushes lit pixels above the source value and reads as glare.
+//
+// highp is required: mediump on this Mali-G52 is fp16 and quantises a texel
+// coordinate near x=256 to 0.25 texels, which would scramble the line phase.
+// No #version and no backslash continuations: the shim compiles this as ESSL 1.00.
+
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+
+varying vec2 v_texcoord;
+uniform sampler2D u_texture;
+uniform vec2 u_texture_size;
+uniform vec2 u_output_size;
+
+// The grid follows DS pixels (256x192), not texture pixels: at 2x (hires 3D) the texture is 512x384 and a
+// per-texel grid would put a line every 1.25 output pixels. The image is still sampled at full texture
+// resolution, so 2x keeps its detail inside a DS-accurate grid. At 1x the two are the same.
+const vec2 DS_SIZE = vec2(256.0, 192.0);
+
+// --- taste knobs -------------------------------------------------------------
+// Column darkness in linear light. 1.0 = off.
+//
+// Calibrated against the shim's own filters by screenshotting the actual panel with
+// grim and measuring grid depth as (1 - mean of line columns / mean of the rest),
+// which is scene-independent -- a no-grid capture measures -0.1% on it:
+//   level 0.80 -> 10.4%    0.70 -> 16.0%    0.60 -> 22.3%    0.50 -> 28.9%
+//   lcd3x      -> 20.0%    lcd1x-nds-color -> 24.3%
+// Earlier versions of this file sat at 10%, half of lcd3x, which is why the grid was
+// reported as invisible. It is not a rendering fault: these panels are ~200 PPI
+// (81mm across 640px), so one DS pixel is 0.32mm and subtends roughly 3.6 arcmin at
+// normal viewing distance -- near the acuity limit, where low-contrast detail simply
+// is not resolved. The grid has to be lcd3x-class deep to register at all.
+const float GRID_LEVEL_V    = 0.42;
+// Row darkness. Matched to the columns so the result is a square mesh like a real
+// LCD. Raise toward 1.0 for a column-dominant look.
+const float GRID_LEVEL_H    = 0.42;
+// Line thickness. A snapped line is one whole output pixel, and a cell is only 2.5,
+// so a second full pixel would leave almost no gap. Instead the column after each
+// line is darkened partially: 1.0 = off (1px lines), lower = thicker. Because every
+// line gets the same two-step profile, all lines stay identical and the grid stays
+// uniform. 0.72 reads as roughly 1.5px lines.
+const float GRID_EDGE       = 0.72;
+// Fraction of the removed light to restore. 1.0 reads as glare.
+const float GRID_COMPENSATE = 0.5;
+// -----------------------------------------------------------------------------
+
+// 1.0 when this output pixel is the one a DS-pixel boundary snaps to.
+float lineHere(float p, float scale)
+{
+    float k   = floor((p + 0.5) / scale + 0.5);   // nearest boundary index
+    float col = floor(k * scale);                 // the pixel that boundary owns
+    return 1.0 - step(0.5, abs(p - col));
+}
+
+void main()
+{
+    vec2 invS = u_texture_size / u_output_size;
+    vec2 lo   = floor(v_texcoord * u_output_size) * invS;
+    vec2 i0   = floor(lo);
+
+    // --- exact-area resample: one fetch, hardware linear filter does the blend
+    vec2 w = clamp(((lo + invS) - (i0 + 1.0)) / invS, 0.0, 1.0);
+    vec4 c = SWIZ(texture2D(u_texture, (i0 + 0.5 + w) / u_texture_size));
+
+    // --- snapped, uniform-weight LCD structure
+    vec2  scale = u_output_size / DS_SIZE;          // output pixels per DS pixel (2.5 on the RG DS)
+    vec2  invG  = DS_SIZE / u_output_size;
+    vec2  p     = floor(v_texcoord * u_output_size);
+    float gx = min(mix(1.0, GRID_LEVEL_V, lineHere(p.x,       scale.x)),
+                   mix(1.0, GRID_EDGE,     lineHere(p.x - 1.0, scale.x)));
+    float gy = min(mix(1.0, GRID_LEVEL_H, lineHere(p.y,       scale.y)),
+                   mix(1.0, GRID_EDGE,     lineHere(p.y - 1.0, scale.y)));
+    float g  = gx * gy;
+
+    // One line and one edge column per texel, so the cell mean is exact: invS of the
+    // columns are lines, invS are edges, the rest untouched.
+    float meanX  = invG.x * GRID_LEVEL_V + invG.x * GRID_EDGE + (1.0 - 2.0 * invG.x);
+    float meanY  = invG.y * GRID_LEVEL_H + invG.y * GRID_EDGE + (1.0 - 2.0 * invG.y);
+    float meanG  = meanX * meanY;
+    float bright = mix(1.0, 1.0 / meanG, GRID_COMPENSATE);
+
+    vec3 lin = c.rgb * c.rgb * (g * bright);
+    gl_FragColor = vec4(sqrt(min(lin, vec3(1.0))), c.a);
+}
