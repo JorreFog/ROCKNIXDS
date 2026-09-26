@@ -26,6 +26,30 @@ Right: <code>dsstress</code>, the stress ROM used for the benchmarks.</sub></p>
 
 ---
 
+## Install
+
+On an Anbernic RG DS running ROCKNIX, [ssh in](https://rocknix.org/play/access/) as `root` (default password
+`rocknix`) and run:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/JorreFog/rgds-rocknix/main/install.sh | sh
+```
+
+It installs the dii-ess-aye theme (downloaded from [upstream](https://github.com/beebono/dii-ess-aye) at the pinned
+commit, then this repo's overlay), the patched EmulationStation, `libdsflip` as the default DraStic launcher, and
+switches on 2× resolution for DS. Everything it replaces is backed up first under `/storage/rgds-rocknix-backup/`.
+
+| Option | |
+|---|---|
+| `--with-60hz` | also retune both panels to 60.000 Hz (edits the device tree in `/flash`, backed up; needs a reboot) |
+| `--no-theme` / `--no-dsflip` / `--no-hires` | skip that part |
+| `--uninstall` | put back everything the installer changed |
+
+Pass options like this: `curl -fsSL …/install.sh | sh -s -- --with-60hz`.
+To go back to the stock DraStic display path without uninstalling: `touch /storage/.config/drastic/nodsflip`.
+
+---
+
 ## What was achieved
 
 | | Before | After |
@@ -36,6 +60,7 @@ Right: <code>dsstress</code>, the stress ROM used for the benchmarks.</sub></p>
 | Frame pacing at 60 fps | a repeated frame every ~10 s (60.10 Hz panels), phase set by chance at each launch | **every frame on both screens in the same refresh, 0 drops/repeats** |
 | Touch in DraStic | stock sway mapping lands on the wrong area | **calibrated to the pixel** |
 | Frontend | single-screen stock theme | **dual-screen DSi-style theme, patched ES, boot splash** |
+| RetroAchievements in standalone DraStic | not supported | **supported (softcore), pop-ups on the top screen** |
 
 <p align="center"><img src="docs/img/stress-ramp.svg" width="760" alt="fps per stress level: stock vs no-display vs libdsflip"></p>
 
@@ -91,6 +116,21 @@ to the device and run `sh install.sh`.
 Not in this mode yet: the microphone (it came from ROCKNIX's `libdrastouch`), an lcd3x-style sharp filter
 (the hardware scaler is bilinear), and gptokeyb keyboard hotkeys. Everything DraStic maps to buttons itself works.
 
+### RetroAchievements
+
+Standalone DraStic has no RetroAchievements support, so `libdsflip` brings its own, built on RA's official
+[rcheevos](https://github.com/RetroAchievements/rcheevos) library (`dsflip/ra.c`):
+
+- **Login** uses ROCKNIX's own settings: turn RetroAchievements on and enter your account in ES
+  (*Settings → RetroAchievements*). After the first login only RA's login token is kept on the device.
+- **Game detection** uses rcheevos' NDS hash of the ROM DraStic was started with.
+- **Memory:** the DS keeps a copy of the cartridge header at `0x027FFE00`, so matching the ROM's header
+  inside DraStic's memory finds the emulated main RAM (RA addresses `0x000000–0x3FFFFF`) exactly.
+- **Pop-ups** (unlocks, game summary, offline/online) are drawn in the theme's pixel font on a spare hardware
+  overlay plane of the top panel, so they cost the game nothing.
+- **Softcore only.** Hardcore needs savestates, cheats and fast-forward locked, which can't be enforced
+  from outside DraStic.
+
 ### How it was measured
 
 | Tool | What it does |
@@ -107,16 +147,13 @@ exists. It's what shows the headroom.
 Build (desktop, aarch64 cross):
 
 ```sh
-# stress ROMs -> stressrom/out/*.nds
-python3 stressrom/build.py
-# libdsflip: libdrm headers from the host, libdrm.so.2 + libc.so.6 copied from the device into $SYSROOT
-clang --target=aarch64-linux-gnu -fuse-ld=lld -shared -fPIC -O2 -nostdlib \
-      '-D__float128=long double' '-D__regparm__(x)=__nothrow__' -I/usr/include/libdrm \
-      -o dsflip/libdsflip.so dsflip/dsflip.c $SYSROOT/libdrm.so.2 $SYSROOT/libc.so.6
+python3 stressrom/build.py                 # stress ROMs -> stressrom/out/*.nds
+dsflip/build.sh /path/to/aarch64-sysroot   # libdsflip.so (display + touch + RetroAchievements)
 ```
 
-(The two `-D`s make the host's x86 glibc headers parse for aarch64. `pthread_mutex_t` is avoided on purpose:
-its size differs between the two, so the code uses a spinlock.)
+`build.sh` explains how to make the sysroot: Debian trixie arm64 `libc6`/`libc6-dev`/`linux-libc-dev`/
+`libdrm-dev`/`libgcc-14-dev`, plus `libdrm.so.2` and `libgcc_s.so.1` from the device. A real aarch64 glibc
+sysroot matters: rcheevos uses pthread types whose size differs from x86's.
 
 ---
 
@@ -172,11 +209,10 @@ the top panel, the bottom panel, and an unused third.
 | File | What it is |
 |---|---|
 | `0001-*.patch`, `0002-*.patch` | Theme changes against upstream @9fd5eee |
-| `theme-files/` | `theme-rgds.xml` (the layout), `start_es_rgds.sh` (launcher, bind-mounted over `/usr/bin/start_es.sh`), the splash |
+| `overlay/` | Every file that differs from upstream: `theme-rgds.xml` (the layout), `scripts/start_es_rgds.sh` (launcher, bind-mounted over `/usr/bin/start_es.sh`), SVG skin, splash and fonts. The installer lays this over upstream |
 | `gen_skin.py`, `trace_logo.py`, `rocknix_logo.paths` | SVG skin and logo generators |
 | `es-rgds-*.patch`, `emulationstation-rgds` | ES patches and the built binary (aarch64) |
 | `device/autostart-dii-ess-aye`, `device/sway-config.theme` | Boot hook: redoes the bind mount and restores the theme's sway config, which ROCKNIX's `111-sway-init` overwrites on every boot |
-| `fonts/` | Press Start 2P and Pixelify Sans (OFL) |
 | `scrape/` | The HTTP-API scraper |
 
 ---
@@ -186,12 +222,14 @@ the top panel, the bottom panel, and an unused third.
 - **Touch in EmulationStation doesn't work** on this setup. The stock sway mapping puts both touch
   panels on the wrong outputs. Games are unaffected: `libdsflip` reads the touch panel itself.
 - **No microphone** under `libdsflip` yet. Use the `nodsflip` fallback for mic games.
+- **RetroAchievements:** softcore only, and achievements that read the DS's DTCM (rare) don't work yet.
 - `libdsflip` stops ES while a game runs, so switching takes ~5 s each way. A Wayland backend that keeps
   ES running is possible (see the plan).
 
 ## Credits
 
 [ROCKNIX](https://github.com/ROCKNIX/distribution) and its `drastic-sa` / `libdrastouch` ·
+[RetroAchievements / rcheevos](https://github.com/RetroAchievements/rcheevos) (MIT, vendored in `dsflip/third_party`) ·
 DraStic by Exophase · [beebono/dii-ess-aye](https://github.com/beebono/dii-ess-aye) ·
 GammaOS Nano's DraStic Nano, for showing the display path is where the time goes ·
 [DSperate](https://github.com/beebono/DSperate) for the RG DS measurements ·

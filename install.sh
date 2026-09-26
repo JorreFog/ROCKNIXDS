@@ -71,13 +71,18 @@ if [ $UNINSTALL = 1 ]; then
     grep -q " /usr/bin/start_es.sh " /proc/mounts && umount /usr/bin/start_es.sh || true
     rm -f /storage/.config/autostart/dii-ess-aye
     # restore every backed-up file (sway config, es_settings, system.cfg, drastic launcher)
-    ( cd $BACKUP && find . -type f ) | while read -r f; do
+    [ -d $BACKUP/storage ] && ( cd $BACKUP && find ./storage -type f ) | while read -r f; do
         p=${f#.}
         mkdir -p "$(dirname "$p")"; cp -a "$BACKUP$p" "$p"
     done
-    [ -e $BACKUP/.had-no-launcher-wrapper ] && [ -e $DRASTIC/drastic.real ] && {
-        rm -f $DRASTIC/drastic; mv $DRASTIC/drastic.real $DRASTIC/drastic; }
-    rm -rf $DRASTIC/dsflip $DRASTIC/drastic.dvsync
+    if [ -e $BACKUP/.had-no-launcher-wrapper ] && [ -e $DRASTIC/drastic.real ]; then
+        rm -f $DRASTIC/drastic $DRASTIC/drastic.dvsync; mv $DRASTIC/drastic.real $DRASTIC/drastic   # stock layout again
+    elif grep -q dsflip $DRASTIC/drastic 2>/dev/null; then
+        # the pre-install launcher was itself a libdsflip wrapper (manual install): fall back to what it wraps
+        if [ -e $DRASTIC/drastic.dvsync ]; then cp -p $DRASTIC/drastic.dvsync $DRASTIC/drastic
+        else printf '#!/bin/sh\nexec /storage/.config/drastic/drastic.real "$@"\n' > $DRASTIC/drastic; chmod +x $DRASTIC/drastic; fi
+    fi
+    rm -rf $DRASTIC/dsflip
     [ -e $BACKUP/.theme-installed-by-us ] && rm -rf $THEME
     [ -d $BACKUP/theme-previous ] && mv $BACKUP/theme-previous $THEME
     systemctl restart sway.service 2>/dev/null || true; sleep 2
@@ -122,6 +127,8 @@ if [ $THEME_ON = 1 ]; then
     say "Sway config, boot hook and ES settings"
     backup_once /storage/.config/sway/config
     backup_once $ES_SETTINGS
+    backup_once /storage/.config/autostart/dii-ess-aye        # an earlier manual install's hook: keep it on uninstall
+    backup_once /storage/dii-ess-aye-backup/sway-config.theme
     mkdir -p /storage/dii-ess-aye-backup /storage/.config/autostart
     cp "$SRC/dii-ess-aye/device/sway-config.theme" /storage/dii-ess-aye-backup/sway-config.theme
     cp "$SRC/dii-ess-aye/device/autostart-dii-ess-aye" /storage/.config/autostart/dii-ess-aye
