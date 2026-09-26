@@ -1,4 +1,6 @@
 #!/bin/sh
+# WARNING: HeartGold savestate 0 resumes inside the "save the game?" dialog; stray inputs there overwrite the
+# in-game save (backup_in_savestates=1). This script backs out with B first; never script YES.
 # taptest.sh "x y" ...: HeartGold under libdsflip. The savestate resumes inside the "save the game?" dialog,
 # so first back out with B (No) until the overworld. Then per coordinate: X opens the field menu, a synthetic
 # tap is injected with exactly those mouse coordinates, both panels are snapshotted, B backs out.

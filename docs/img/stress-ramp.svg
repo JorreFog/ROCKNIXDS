@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 400" font-family="Helvetica,Arial,sans-serif">
+<rect width="760" height="400" rx="10" fill="#ffffff"/>
+<text x="70" y="24" font-size="16" font-weight="bold" fill="#1d2330">dsstress ramp at 2&#215; internal resolution (hires_3d = 1)</text>
+<line x1="70" x2="590" y1="330.0" y2="330.0" stroke="#e3e6eb"/>
+<text x="62" y="334.0" font-size="12" text-anchor="end" fill="#5b6475">35</text>
+<line x1="70" x2="590" y1="276.3" y2="276.3" stroke="#e3e6eb"/>
+<text x="62" y="280.3" font-size="12" text-anchor="end" fill="#5b6475">40</text>
+<line x1="70" x2="590" y1="222.6" y2="222.6" stroke="#e3e6eb"/>
+<text x="62" y="226.6" font-size="12" text-anchor="end" fill="#5b6475">45</text>
+<line x1="70" x2="590" y1="168.9" y2="168.9" stroke="#e3e6eb"/>
+<text x="62" y="172.9" font-size="12" text-anchor="end" fill="#5b6475">50</text>
+<line x1="70" x2="590" y1="115.2" y2="115.2" stroke="#e3e6eb"/>
+<text x="62" y="119.2" font-size="12" text-anchor="end" fill="#5b6475">55</text>
+<line x1="70" x2="590" y1="61.5" y2="61.5" stroke="#e3e6eb"/>
+<text x="62" y="65.5" font-size="12" text-anchor="end" fill="#5b6475">60</text>
+<line x1="70" x2="590" y1="61.5" y2="61.5" stroke="#9aa3b2" stroke-dasharray="4 4"/>
+<text x="70.0" y="348" font-size="12" text-anchor="middle" fill="#5b6475">L1</text>
+<text x="70.0" y="363" font-size="10" text-anchor="middle" fill="#8a93a3">192</text>
+<text x="127.8" y="348" font-size="12" text-anchor="middle" fill="#5b6475">L2</text>
+<text x="127.8" y="363" font-size="10" text-anchor="middle" fill="#8a93a3">384</text>
+<text x="185.6" y="348" font-size="12" text-anchor="middle" fill="#5b6475">L3</text>
+<text x="185.6" y="363" font-size="10" text-anchor="middle" fill="#8a93a3">576</text>
+<text x="243.3" y="348" font-size="12" text-anchor="middle" fill="#5b6475">L4</text>
+<text x="243.3" y="363" font-size="10" text-anchor="middle" fill="#8a93a3">768</text>
+<text x="301.1" y="348" font-size="12" text-anchor="middle" fill="#5b6475">L5</text>
+<text x="301.1" y="363" font-size="10" text-anchor="middle" fill="#8a93a3">960</text>
+<text x="358.9" y="348" font-size="12" text-anchor="middle" fill="#5b6475">L6</text>
+<text x="358.9" y="363" font-size="10" text-anchor="middle" fill="#8a93a3">1152</text>
+<text x="416.7" y="348" font-size="12" text-anchor="middle" fill="#5b6475">L7</text>
+<text x="416.7" y="363" font-size="10" text-anchor="middle" fill="#8a93a3">1344</text>
+<text x="474.4" y="348" font-size="12" text-anchor="middle" fill="#5b6475">L8</text>
+<text x="474.4" y="363" font-size="10" text-anchor="middle" fill="#8a93a3">1536</text>
+<text x="532.2" y="348" font-size="12" text-anchor="middle" fill="#5b6475">L9</text>
+<text x="532.2" y="363" font-size="10" text-anchor="middle" fill="#8a93a3">1728</text>
+<text x="590.0" y="348" font-size="12" text-anchor="middle" fill="#5b6475">L10</text>
+<text x="590.0" y="363" font-size="10" text-anchor="middle" fill="#8a93a3">1920</text>
+<text x="330.0" y="392" font-size="12" text-anchor="middle" fill="#5b6475">level (polygons per frame)</text>
+<text x="18" y="185.0" font-size="12" text-anchor="middle" fill="#5b6475" transform="rotate(-90 18 185.0)">emulated fps</text>
+<polyline points="70.0,61.5 127.8,61.5 185.6,63.6 243.3,75.4 301.1,100.1 358.9,149.6 416.7,191.4 474.4,229.0 532.2,261.3 590.0,287.0" fill="none" stroke="#d9534f" stroke-width="3" stroke-dasharray="" stroke-linejoin="round"/>
+<circle cx="70.0" cy="61.5" r="3.5" fill="#d9534f"/>
+<circle cx="127.8" cy="61.5" r="3.5" fill="#d9534f"/>
+<circle cx="185.6" cy="63.6" r="3.5" fill="#d9534f"/>
+<circle cx="243.3" cy="75.4" r="3.5" fill="#d9534f"/>
+<circle cx="301.1" cy="100.1" r="3.5" fill="#d9534f"/>
+<circle cx="358.9" cy="149.6" r="3.5" fill="#d9534f"/>
+<circle cx="416.7" cy="191.4" r="3.5" fill="#d9534f"/>
+<circle cx="474.4" cy="229.0" r="3.5" fill="#d9534f"/>
+<circle cx="532.2" cy="261.3" r="3.5" fill="#d9534f"/>
+<circle cx="590.0" cy="287.0" r="3.5" fill="#d9534f"/>
+<text x="600.0" y="291.0" font-size="12" fill="#d9534f" font-weight="bold">39.0 stock ROCKNIX</text>
+<polyline points="70.0,61.5 127.8,61.5 185.6,61.5 243.3,61.5 301.1,62.6 358.9,66.9 416.7,83.0 474.4,120.6 532.2,166.7 590.0,200.0" fill="none" stroke="#9aa3b2" stroke-width="3" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<circle cx="70.0" cy="61.5" r="3.5" fill="#9aa3b2"/>
+<circle cx="127.8" cy="61.5" r="3.5" fill="#9aa3b2"/>
+<circle cx="185.6" cy="61.5" r="3.5" fill="#9aa3b2"/>
+<circle cx="243.3" cy="61.5" r="3.5" fill="#9aa3b2"/>
+<circle cx="301.1" cy="62.6" r="3.5" fill="#9aa3b2"/>
+<circle cx="358.9" cy="66.9" r="3.5" fill="#9aa3b2"/>
+<circle cx="416.7" cy="83.0" r="3.5" fill="#9aa3b2"/>
+<circle cx="474.4" cy="120.6" r="3.5" fill="#9aa3b2"/>
+<circle cx="532.2" cy="166.7" r="3.5" fill="#9aa3b2"/>
+<circle cx="590.0" cy="200.0" r="3.5" fill="#9aa3b2"/>
+<text x="600.0" y="204.0" font-size="12" fill="#9aa3b2" font-weight="bold">47.1 no display</text>
+<polyline points="70.0,61.5 127.8,62.6 185.6,62.6 243.3,61.5 301.1,63.6 358.9,65.8 416.7,67.9 474.4,91.6 532.2,127.0 590.0,164.6" fill="none" stroke="#2e7df6" stroke-width="3" stroke-dasharray="" stroke-linejoin="round"/>
+<circle cx="70.0" cy="61.5" r="3.5" fill="#2e7df6"/>
+<circle cx="127.8" cy="62.6" r="3.5" fill="#2e7df6"/>
+<circle cx="185.6" cy="62.6" r="3.5" fill="#2e7df6"/>
+<circle cx="243.3" cy="61.5" r="3.5" fill="#2e7df6"/>
+<circle cx="301.1" cy="63.6" r="3.5" fill="#2e7df6"/>
+<circle cx="358.9" cy="65.8" r="3.5" fill="#2e7df6"/>
+<circle cx="416.7" cy="67.9" r="3.5" fill="#2e7df6"/>
+<circle cx="474.4" cy="91.6" r="3.5" fill="#2e7df6"/>
+<circle cx="532.2" cy="127.0" r="3.5" fill="#2e7df6"/>
+<circle cx="590.0" cy="164.6" r="3.5" fill="#2e7df6"/>
+<text x="600.0" y="168.6" font-size="12" fill="#2e7df6" font-weight="bold">50.4 libdsflip</text>
+</svg>
