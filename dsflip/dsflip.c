@@ -40,6 +40,7 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/eventfd.h>
+#include <sys/stat.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 #include <drm_fourcc.h>
@@ -80,6 +81,7 @@ static int logical_w = 512, logical_h = 192;
 static stex *pending_route[2];          /* routes recorded by RenderCopy during this frame */
 static SDL_Rect route_dst[2]; static int touch_rect_ok;   /* touch only while a DS screen is on the bottom panel */
 static void *window;
+static int cursor_log;                  /* DSFLIP_CURSOR_LOG=1: log where DraStic draws its 32x32 stylus cursor */
 /* stats */
 static int st_present, st_commit, st_drop, st_busy, st_flips[2], st_touch;
 static long long st_t0, st_iv_max[2];
@@ -248,8 +250,9 @@ typedef struct { uint32_t type, ts, win, which; uint8_t button, state, clicks, p
 typedef struct { uint32_t type, ts, win, which, state; int32_t x, y, xrel, yrel; } mot_ev;
 typedef union { uint32_t type; btn_ev b; mot_ev m; uint8_t pad[56]; } sdl_ev;
 #define QN 128
+#define EV_BARRIER 0xFFFFu                 /* queue marker: SDL_PollEvent reports "no event" once (ends DraStic's poll loop) */
 static sdl_ev tq[QN]; static int tq_head, tq_tail;
-static int last_lx = -1, last_ly = -1, touch_inv_x = 0, touch_inv_y = 0;
+static int touch_inv_x = 0, touch_inv_y = 0;
 
 extern uint32_t SDL_GetTicks(void);
 extern uint32_t SDL_GetWindowID(void *);
@@ -260,23 +263,40 @@ static void push_ev(sdl_ev *e) {
     if (n != tq_tail) { tq[tq_head] = *e; tq_head = n; }
     unlock(&tmu);
 }
+/* DraStic ignores the absolute x/y of mouse events: it moves its stylus by the RELATIVE deltas (xrel/yrel),
+ * 1:1 in DS pixels, clamped to the bottom screen, starting from the centre (measured by logging where it
+ * draws its 32x32 cursor). So we track its stylus position and send exact deltas. On every touch-down we
+ * first pin it to (0,0) with a large negative move, then move to the target: no drift can accumulate. */
+static int sty_x = -1, sty_y = -1;
+static void stylus_move(int tx, int ty, int down, int resync) {
+    sdl_ev e; uint32_t wid = window ? SDL_GetWindowID(window) : 1, ts = SDL_GetTicks();
+    if (resync || sty_x < 0) {
+        memset(&e, 0, sizeof e);
+        e.m.type = 0x400; e.m.ts = ts; e.m.win = wid; e.m.state = 0; e.m.x = 0; e.m.y = 0; e.m.xrel = -4096; e.m.yrel = -4096;
+        push_ev(&e); sty_x = 0; sty_y = 0;
+        /* DraStic sums a frame's deltas and clamps once, so the move away from (0,0) must land in the next frame */
+        memset(&e, 0, sizeof e); e.type = EV_BARRIER; push_ev(&e);
+    }
+    if (tx == sty_x && ty == sty_y) return;
+    memset(&e, 0, sizeof e);
+    e.m.type = 0x400; e.m.ts = ts; e.m.win = wid; e.m.state = down ? 1 : 0;
+    e.m.x = tx; e.m.y = ty; e.m.xrel = tx - sty_x; e.m.yrel = ty - sty_y;
+    push_ev(&e); sty_x = tx; sty_y = ty;
+}
+
 static void touch_emit(int down_change, int down, int x, int y, int xmax, int ymax) {
-    /* DraStic takes stylus positions as mouse events in DS touchscreen pixels (0..255, 0..191),
-     * not window/logical coordinates (ROCKNIX's libdrastouch does the same). The bottom panel
-     * shows exactly the bottom DS screen, so it's a straight rescale. */
+    /* the bottom panel shows exactly the bottom DS screen: panel pixels -> DS pixels is a straight rescale */
     if (!touch_rect_ok) return;
     int rx = x, ry = y;
     if (touch_inv_x) x = xmax - x;      /* raw touch is already aligned with the panel on the RG DS */
     if (touch_inv_y) y = ymax - y;
     int lx = (int)((long long)x * 256 / (xmax + 1));
     int ly = (int)((long long)y * 192 / (ymax + 1));
-    sdl_ev e; memset(&e, 0, sizeof e);
+    sdl_ev e;
     uint32_t wid = window ? SDL_GetWindowID(window) : 1, ts = SDL_GetTicks();
-    if (lx != last_lx || ly != last_ly || down_change) {
-        e.m.type = 0x400; e.m.ts = ts; e.m.win = wid; e.m.state = down ? 1 : 0;
-        e.m.x = lx; e.m.y = ly; e.m.xrel = last_lx < 0 ? 0 : lx - last_lx; e.m.yrel = last_ly < 0 ? 0 : ly - last_ly;
-        push_ev(&e); last_lx = lx; last_ly = ly;
-    }
+    if (lx > 255) lx = 255;
+    if (ly > 191) ly = 191;
+    stylus_move(lx, ly, down, down_change && down);
     if (down_change && down) {
         LOG("[touch] down raw %d,%d -> ds %d,%d\n", rx, ry, lx, ly);
         if (tdump_n < touch_dumps) { tdump_y = ly; tdump_x = lx; }
@@ -288,6 +308,26 @@ static void touch_emit(int down_change, int down, int x, int y, int xmax, int ym
         push_ev(&e);
     }
     st_touch++;
+}
+
+/* test hook: lines "x y" written to /tmp/dsflip-tap inject a tap with exactly those mouse coordinates */
+static void *tap_fifo_thread(void *a) {
+    (void)a;
+    unlink("/tmp/dsflip-tap"); mkfifo("/tmp/dsflip-tap", 0600);
+    for (;;) {
+        FILE *f = fopen("/tmp/dsflip-tap", "r"); if (!f) return 0;
+        int x, y;
+        while (fscanf(f, "%d %d", &x, &y) == 2) {
+            sdl_ev e; uint32_t wid = window ? SDL_GetWindowID(window) : 1;
+            stylus_move(x, y, 1, 1);
+            memset(&e, 0, sizeof e); e.b.type = 0x401; e.b.ts = SDL_GetTicks(); e.b.win = wid; e.b.button = 1; e.b.state = 1; e.b.clicks = 1; e.b.x = x; e.b.y = y; push_ev(&e);
+            usleep(150000);
+            memset(&e, 0, sizeof e); e.b.type = 0x402; e.b.ts = SDL_GetTicks(); e.b.win = wid; e.b.button = 1; e.b.x = x; e.b.y = y; push_ev(&e);
+            LOG("[tap] injected %d,%d\n", x, y);
+        }
+        fclose(f);
+    }
+    return 0;
 }
 
 static void *touch_thread(void *a) {
@@ -329,6 +369,7 @@ int SDL_PollEvent(void *e) {
     if (tq_head != tq_tail) {
         lock(&tmu);
         if (tq_head != tq_tail) {
+            if (tq[tq_tail].type == EV_BARRIER) { tq_tail = (tq_tail + 1) % QN; unlock(&tmu); return 0; }
             if (e) { memcpy(e, &tq[tq_tail], sizeof tq[0]); tq_tail = (tq_tail + 1) % QN; }
             unlock(&tmu);
             return 1;
@@ -418,11 +459,15 @@ __attribute__((constructor)) static void init(void) {
     if (inv) { touch_inv_x = strchr(inv, 'x') != 0; touch_inv_y = strchr(inv, 'y') != 0; }
     const char *tp = getenv("DSFLIP_TOUCH");
     pthread_create(&th, 0, touch_thread, (void *)(tp ? tp : "fe5e0000.i2c"));
+    cursor_log = getenv("DSFLIP_CURSOR_LOG") != 0;
+    if (getenv("DSFLIP_TAP_FIFO")) pthread_create(&th, 0, tap_fifo_thread, 0);
     ok = 1;
     LOG("[dsflip] ready: top plane %u, bottom plane %u\n", P[0].plane, P[1].plane);
 }
 
 /* ---------- SDL interception ---------- */
+static struct { void *t; int w, h; } other[16]; static int nother;
+
 static stex *find(void *t) { for (int i = 0; i < nt; i++) if (T[i].tex == t) return &T[i]; return 0; }
 
 void *SDL_CreateWindow(const char *title, int x, int y, int w, int h, uint32_t flags) {
@@ -437,7 +482,10 @@ void *SDL_CreateTexture(void *rn, uint32_t fmt, int access, int w, int h) {
     void *t = real(rn, fmt, access, w, h);
     int screen = fmt == FMT_ARGB8888 && ((w == 256 && h == 192) || (w == 512 && h == 384));
     int menu = fmt == FMT_RGB565 && w >= 256 && h >= 192;
-    if (!ok || !t || access != 1 || !(screen || menu)) return t;
+    if (!ok || !t || access != 1 || !(screen || menu)) {
+        if (t && nother < 16) { other[nother].t = t; other[nother].w = w; other[nother].h = h; nother++; }
+        return t;
+    }
     lock(&mu);
     stex *s = find(t);
     if (!s) for (int i = 0; i < nt && !s; i++) if (!T[i].tex) s = &T[i];
@@ -533,7 +581,13 @@ int SDL_RenderSetLogicalSize(void *rn, int w, int h) {
 int SDL_RenderCopy(void *rn, void *t, const SDL_Rect *src, const SDL_Rect *dst) {
     REAL(int, SDL_RenderCopy, void *, void *, const SDL_Rect *, const SDL_Rect *);
     stex *s = ok ? find(t) : 0;
-    if (!s) return ok ? 0 : real(rn, t, src, dst);   /* other draws (overlays) are not shown */
+    if (!s) {                          /* other draws (overlays, stylus cursor) are not shown */
+        if (cursor_log && dst)
+            for (int i = 0; i < nother; i++) if (other[i].t == t && other[i].w == 32) {
+                static int n; if (n++ % 10 == 0) LOG("[cursor] dst %d,%d %dx%d logical %dx%d\n", dst->x, dst->y, dst->w, dst->h, logical_w, logical_h);
+            }
+        return ok ? 0 : real(rn, t, src, dst);
+    }
     if (s->kind == K_MENU) { pending_route[0] = s; pending_route[1] = &blk; return 0; }
     SDL_Rect d = dst ? *dst : (SDL_Rect){ 0, 0, logical_w, logical_h };
     int bottom = logical_w > logical_h ? d.x >= logical_w / 2 : d.y >= logical_h / 2;
