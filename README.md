@@ -28,7 +28,7 @@ Right: <code>dsstress</code>, the stress ROM used for the benchmarks.</sub></p>
 
 ## Install
 
-On an Anbernic RG DS running ROCKNIX, [ssh in](https://rocknix.org/play/access/) as `root` (default password
+On an Anbernic RG DS running ROCKNIX, ssh in as `root` (default password
 `rocknix`) and run:
 
 ```sh
