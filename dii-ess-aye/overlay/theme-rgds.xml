@@ -413,18 +413,20 @@
             <x>{game:count} &gt; 1 ? 0.365625 + ({game:index} - 1) / ({game:count} - 1) * 0.225 : 0.478125</x>
         </text>
 
-        <!-- START frame sized to exactly cover the selected cartridge -->
+        <!-- The START frame lives in the cartridge template below, so it slides with the selected cart. As a fixed
+             overlay it stayed put while the carts scrolled under it, showing two half carts mid-scroll. -->
         <image name="start_window" extra="true">
-            <pos>0.5 0.6933333</pos><!-- opening centred on the cart label window (y 317), not the item -->
-            <maxSize>0.0698 0.34</maxSize>
+            <visible>false</visible>
         </image>
 
         <gamecarousel name="gamecarousel">
             <type>horizontal</type>
             <pos>0.5 0.68</pos>
             <origin>0.5 0.5</origin>
-            <size>0.3333 0.315</size>
-            <logoSize>0.2 1</logoSize>
+            <!-- 0.05 taller than the carts (0.315) so the selected cart's START frame isn't clipped: ES clips the
+                 carousel to this box. The item height fraction keeps the carts at 0.315 (0.863 x 0.365). -->
+            <size>0.3333 0.365</size>
+            <logoSize>0.2 0.863</logoSize>
             <logoScale>1</logoScale>
             <color>00000000</color>
             <maxLogoCount>5</maxLogoCount>
@@ -456,6 +458,23 @@
                     <pos>0.06 0.03</pos>
                     <size>0.88 0.94</size>
                     <path>${themePath}/assets/images/common/game_slot.svg</path>
+                </image>
+                <!-- START frame, shown on the selected cart only (activate/deactivate storyboards), so it moves with it.
+                     Item-relative version of the old overlay: screen (0.5, 0.6933) and max 0.0698 x 0.34 over an
+                     item of 0.0667 x 0.315 whose top is at y 0.5225. -->
+                <image name="cart_start">
+                    <path>${themePath}/assets/images/common/start_window.svg</path>
+                    <pos>0.5 0.5423</pos>
+                    <origin>0.5 0.5</origin>
+                    <maxSize>1.0 1.0794</maxSize><!-- no wider than the cart: repeated carts at the screen edge showed a sliver -->
+                    <opacity>0</opacity>
+                    <storyboard event="activate">
+                        <animation property="opacity" from="0" to="1" duration="120"/>
+                        <animation property="scale" from="1" to="1.035" duration="900" autoReverse="true" repeat="forever" mode="easeInOut"/>
+                    </storyboard>
+                    <storyboard event="deactivate">
+                        <animation property="opacity" from="1" to="0" duration="60"/>
+                    </storyboard>
                 </image>
             </itemTemplate>
         </gamecarousel>
