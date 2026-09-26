@@ -8,7 +8,7 @@ keeping the most detailed band (title logo, character), so the theme can fill th
 import sys
 from PIL import Image, ImageFilter
 
-LABEL_W, LABEL_H = 304, 264                  # the card's art window, 76:66
+LABEL_W, LABEL_H = 290, 264                  # the card art window as drawn (74.2x67.6 px)
 
 
 def strip_width(img):

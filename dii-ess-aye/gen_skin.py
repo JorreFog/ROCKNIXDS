@@ -170,6 +170,19 @@ write("preview_panel.svg", 492, 369, f'''<defs>{grad("pp", [(0, "#454950"), (1, 
 <path d="{rr(18, 18, 456, 328, 8)}" fill="url(#scr)" stroke="{EDGE}" stroke-width="2"/>
 <path d="{rr(19.5, 19.5, 453, 325, 7)}" fill="none" stroke="{ACCENT}" stroke-opacity="0.25" stroke-width="1"/>''')
 
+# --- info_panel: the game list's top-screen card, 608x360: 3D box on the left (drawn over), screenshot window
+# x214..592 y18..160 (the 512:192 side-by-side DS screens), details below it, RetroAchievements strip under a
+# divider at y250 ---
+write("info_panel.svg", 608, 360, f'''<defs>{grad("ip", [(0, "#43474e"), (1, "#2f3136")])}
+{grad("scr", [(0, "#1d1f23"), (1, "#15171a")])}</defs>
+<path d="{rr(2, 6, 604, 352, 18)}" fill="#000000" fill-opacity="0.4"/>
+<path d="{rr(2, 2, 604, 352, 18)}" fill="url(#ip)" stroke="{EDGE}" stroke-width="2"/>
+<path d="{rr(4, 4, 600, 348, 16)}" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
+<path d="{rr(211, 15, 384, 148, 8)}" fill="url(#scr)" stroke="{EDGE}" stroke-width="2"/>
+<path d="{rr(212.5, 16.5, 381, 145, 7)}" fill="none" stroke="{ACCENT}" stroke-opacity="0.25" stroke-width="1"/>
+<path d="M22,250 H586" stroke="#000000" stroke-opacity="0.45" stroke-width="1.5"/>
+<path d="M22,251.5 H586" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1"/>''')
+
 # --- tabs (108x56, opaque x0..100 / x8..108, y8..56) with L2/R2 badge ---
 def tab(name, flip, label):
     """160x72, drawn at the size the theme shows it (no stretching). The visible tab body is
@@ -178,7 +191,7 @@ def tab(name, flip, label):
     shape = f"M0,{top} H118 A30,30 0 0 1 148,{top + 30} V{H} H0 Z"
     tr = f' transform="translate({W} 0) scale(-1 1)"' if flip else ""
     bw, bh = 36, 24
-    bx = W - 12 - bw if flip else 12
+    bx = W - 30 - bw if flip else 30      # the badge + word group sits centred in the visible body (x0..148)
     cy = top + (H - top) / 2
     write(name, W, H, f'''<defs>{grad("tab", [(0, PANEL_HI), (1, PANEL_LO)])}</defs>
 <g{tr}>

@@ -112,8 +112,8 @@
 
         <text name="left_tab_text" extra="true">
             <text>Prev</text>
-            <pos>0.0291667 0.8708333</pos><!-- box = visible tab body, 56..156 x 418..480 -->
-            <size>0.0520833 0.1291667</size>
+            <pos>0.040625 0.8708333</pos><!-- after the badge (x30..66): 78..148 x 418..480, centred group -->
+            <size>0.0364583 0.1291667</size>
             <verticalAlignment>center</verticalAlignment>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0333333</fontSize><!-- 16px -->
@@ -131,8 +131,8 @@
 
         <text name="right_tab_text" extra="true">
             <text>Next</text>
-            <pos>0.2520833 0.8708333</pos><!-- 484..584 x 418..480 -->
-            <size>0.0520833 0.1291667</size>
+            <pos>0.25625 0.8708333</pos><!-- before the badge (x574..610): 492..566 x 418..480, centred group -->
+            <size>0.0385417 0.1291667</size>
             <verticalAlignment>center</verticalAlignment>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0333333</fontSize><!-- 16px -->
@@ -334,54 +334,39 @@
             <path>${themePath}/assets/sounds/launch.wav</path>
         </sound>
 
-        <!-- Top screen (X 0-0.333) -->
+        <!-- Top screen (X 0-0.333): info card (info_panel.svg at x16..624 y50..410): 3D box, screenshot, details,
+             RetroAchievements strip. Canvas fractions are x/1920, y/480. -->
         <image name="preview_panel" extra="true">
-            <path>${themePath}/assets/images/common/preview_panel.svg</path>
-            <pos>0.167 0.45</pos>
+            <path>${themePath}/assets/images/common/info_panel.svg</path>
+            <pos>0.1666667 0.4791667</pos>
             <origin>0.5 0.5</origin>
-            <size>0.2667 0.65</size>
+            <size>0.3166667 0.75</size>
             <zIndex>1</zIndex>
         </image>
 
-        <!-- Placeholder for games without scraped media; box art / video draws over it -->
+        <!-- 3D box (boxart media: scrape/box3d.py), overlapping the card's left side -->
+        <image name="preview_box3d" extra="true">
+            <path>{game:boxart}</path>
+            <pos>0.0609375 0.3666667</pos><!-- centred in the card's left area, x20..214 y60..292 -->
+            <origin>0.5 0.5</origin>
+            <maxSize>0.1104167 0.4833333</maxSize><!-- 212x232 -->
+            <linearSmooth>true</linearSmooth>
+            <zIndex>3</zIndex>
+        </image>
+
+        <!-- screenshot window: x230..608 y68..210 -->
         <image name="preview_icon" extra="true">
             <path>${themePath}/assets/images/systems/${system.theme}.png</path>
             <visible>"{game:image}" == ""</visible>
-            <pos>0.1666667 0.3125</pos>
+            <pos>0.2182292 0.2895833</pos>
             <origin>0.5 0.5</origin>
-            <maxSize>0.0677083 0.2708333</maxSize><!-- 130x130 -->
+            <maxSize>0.0520833 0.2083333</maxSize>
             <zIndex>1.5</zIndex>
         </image>
-        <text name="preview_name" extra="true">
-            <text>{game:name}</text>
-            <visible>"{game:image}" == ""</visible>
-            <pos>0.1666667 0.5416667</pos>
-            <origin>0.5 0.5</origin>
-            <size>0.2291667 0.1333333</size>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.0458333</fontSize><!-- 22px -->
-            <color>E8E9EBFF</color>
-            <alignment>center</alignment>
-            <verticalAlignment>center</verticalAlignment>
-            <multiLine>true</multiLine>
-            <zIndex>1.5</zIndex>
-        </text>
-        <text name="preview_stats" extra="true">
-            <text>"{game:playcount}" == "" || "{game:playcount}" == "0" ? "Not played yet" : "{game:playcount}" == "1" ? "Played once" : "Played " + "{game:playcount}" + " times"</text>
-            <pos>0.1666667 0.6666667</pos>
-            <origin>0.5 0.5</origin>
-            <size>0.2291667 0.05</size>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.0375000</fontSize><!-- 18px -->
-            <color>8FC8FFFF</color>
-            <alignment>center</alignment>
-            <zIndex>1.5</zIndex>
-        </text>
-
         <video name="md_video">
-            <pos>0.167 0.45</pos>
+            <pos>0.2182292 0.2895833</pos>
             <origin>0.5 0.5</origin>
-            <maxSize>0.246875 0.5770833</maxSize><!-- panel's inner screen, 474x277 -->
+            <maxSize>0.196875 0.2958333</maxSize><!-- 378x142 -->
             <effect>none</effect>
             <delay>3</delay>
             <showSnapshotNoVideo>true</showSnapshotNoVideo>
@@ -389,6 +374,50 @@
             <snapshotSource>image</snapshotSource>
             <zIndex>2</zIndex>
         </video>
+
+        <!-- details under the screenshot -->
+        <text name="preview_name" extra="true">
+            <text>{game:genre}</text>
+            <pos>0.1208333 0.4583333</pos><!-- x232..608 y220..244 -->
+            <size>0.1958333 0.05</size>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.0375</fontSize><!-- 18px -->
+            <color>A9AFB8FF</color>
+            <alignment>left</alignment>
+            <zIndex>1.5</zIndex>
+        </text>
+        <text name="preview_stats" extra="true">
+            <text>"{game:playcount}" == "" || "{game:playcount}" == "0" ? "Not played yet" : "{game:playcount}" == "1" ? "Played once" : "Played " + "{game:playcount}" + " times"</text>
+            <pos>0.1208333 0.5166667</pos><!-- y248..272 -->
+            <size>0.1958333 0.05</size>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.0416667</fontSize><!-- 20px -->
+            <color>8FC8FFFF</color>
+            <alignment>left</alignment>
+            <zIndex>1.5</zIndex>
+        </text>
+
+        <!-- RetroAchievements strip (wheel media: scrape/ra-fetch.py + ra_panel.py) under the divider -->
+        <image name="preview_ra" extra="true">
+            <path>{game:wheel}</path>
+            <pos>0.1666667 0.7270833</pos>
+            <origin>0.5 0.5</origin>
+            <maxSize>0.2958333 0.1520833</maxSize><!-- 568x73 -->
+            <linearSmooth>true</linearSmooth>
+            <zIndex>2</zIndex>
+        </image>
+        <text name="preview_ra_none" extra="true">
+            <text>No achievements for this game</text>
+            <visible>{game:cheevos} == false</visible>
+            <pos>0.1666667 0.7270833</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.2958333 0.1</size>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.0375</fontSize>
+            <color>6E747DFF</color>
+            <alignment>center</alignment>
+            <zIndex>2</zIndex>
+        </text>
 
         <text name="logoText">
             <visible>false</visible>
@@ -427,35 +456,35 @@
             <path>${themePath}/assets/images/common/empty_slot.svg</path>
             <pos>0.3667 0.6292</pos>
             <origin>0.5 0.5</origin>
-            <size>0.05333 0.2219</size>
+            <size>0.05088 0.2219</size>
             <zIndex>49</zIndex>
         </image>
         <image name="empty_slot_1" extra="true">
             <path>${themePath}/assets/images/common/empty_slot.svg</path>
             <pos>0.4333 0.6292</pos>
             <origin>0.5 0.5</origin>
-            <size>0.05333 0.2219</size>
+            <size>0.05088 0.2219</size>
             <zIndex>49</zIndex>
         </image>
         <image name="empty_slot_2" extra="true">
             <path>${themePath}/assets/images/common/empty_slot.svg</path>
             <pos>0.5000 0.6292</pos>
             <origin>0.5 0.5</origin>
-            <size>0.05333 0.2219</size>
+            <size>0.05088 0.2219</size>
             <zIndex>49</zIndex>
         </image>
         <image name="empty_slot_3" extra="true">
             <path>${themePath}/assets/images/common/empty_slot.svg</path>
             <pos>0.5667 0.6292</pos>
             <origin>0.5 0.5</origin>
-            <size>0.05333 0.2219</size>
+            <size>0.05088 0.2219</size>
             <zIndex>49</zIndex>
         </image>
         <image name="empty_slot_4" extra="true">
             <path>${themePath}/assets/images/common/empty_slot.svg</path>
             <pos>0.6333 0.6292</pos>
             <origin>0.5 0.5</origin>
-            <size>0.05333 0.2219</size>
+            <size>0.05088 0.2219</size>
             <zIndex>49</zIndex>
         </image>
 
@@ -477,16 +506,23 @@
             <!-- Every game is a cartridge: the name sits in the label window,
                  and the art (when scraped) is drawn over it. -->
             <itemTemplate>
-                <!-- the card (game_slot.svg, 100x104) is drawn at 0.1 0.05 / 0.8 0.7053; its art window
-                     x12..88 y21..87 maps to 0.196 0.1924 / 0.608 0.4476 -->
+                <!-- the card area has the proportions of real DS card scans (0.9174): 0.1185 0.05 / 0.763 0.7053 of the
+                     item. game_slot.svg (100x104) is drawn into it; its art window x12..88 y21..87 maps to
+                     0.21006 0.1924 / 0.57988 0.4476 -->
+                <image name="cart_slot">
+                    <pos>0.1185 0.05</pos>
+                    <size>0.763 0.7053</size>
+                    <path>${themePath}/assets/images/common/game_slot.svg</path>
+                </image>
+                <!-- a game with no art at all: plain label paper with its name -->
                 <image name="cart_label">
-                    <pos>0.196 0.1924</pos>
-                    <size>0.608 0.4476</size>
+                    <pos>0.21006 0.1924</pos>
+                    <size>0.57988 0.4476</size>
                     <path>${themePath}/assets/images/common/game_label.svg</path>
                 </image>
                 <text name="cart_name">
-                    <pos>0.20 0.20</pos>
-                    <size>0.60 0.43</size>
+                    <pos>0.22 0.20</pos>
+                    <size>0.56 0.43</size>
                     <text>{game:name}</text>
                     <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
                     <fontSize>0.019</fontSize>
@@ -495,26 +531,28 @@
                     <verticalAlignment>center</verticalAlignment>
                     <lineSpacing>1.05</lineSpacing>
                 </text>
-                <!-- the box art, scaled to cover the window and cropped; the label art (scrape/labelart.py: the cover
-                     without its NINTENDO DS strip, cropped to 76:66) is drawn over it when the game has one. No
-                     visible condition: bound paths contain "(USA)" etc., which ES's expression parser mangles. -->
+                <!-- drawn card fallback: the box art cropped to cover the window, the label art (boxback media, unused otherwise; mix is ES's preferred preview image:
+                     scrape/labelart.py) over it. No visible conditions: bound paths contain "(USA)" etc., which
+                     ES's expression parser mangles; later layers simply cover earlier ones. -->
                 <image name="cart_boxart">
                     <pos>0.5 0.4162</pos>
                     <origin>0.5 0.5</origin>
-                    <minSize>0.608 0.4476</minSize>
+                    <minSize>0.57988 0.4476</minSize>
                     <path>{game:thumbnail}</path>
                     <linearSmooth>true</linearSmooth>
                 </image>
                 <image name="cart_art">
-                    <pos>0.196 0.1924</pos>
-                    <size>0.608 0.4476</size>
-                    <path>{game:cartridge}</path>
+                    <pos>0.21006 0.1924</pos>
+                    <size>0.57988 0.4476</size>
+                    <path>{game:boxback}</path>
                     <linearSmooth>true</linearSmooth>
                 </image>
-                <image name="cart_slot">
-                    <pos>0.1 0.05</pos>
-                    <size>0.8 0.7053</size>
-                    <path>${themePath}/assets/images/common/game_slot.svg</path>
+                <!-- the real cartridge (cartridge media: scrape/cartart.py, LaunchBox "Cart - Front"), over all of it -->
+                <image name="cart_real">
+                    <pos>0.1185 0.05</pos>
+                    <size>0.763 0.7053</size>
+                    <path>{game:cartridge}</path>
+                    <linearSmooth>true</linearSmooth>
                 </image>
                 <!-- START frame, shown on the selected cart only (activate/deactivate storyboards), so it moves with it.
                      Sized so its opening (120x120 of 160x200) hugs the card (113x107 px on a 128x151 item),
@@ -525,12 +563,14 @@
                     <origin>0.5 0.5</origin>
                     <maxSize>1.1094 1.1755</maxSize>
                     <opacity>0</opacity>
+                    <!-- the carousel slides for 500 ms: the frame appears only once the card has arrived in the centre
+                         (a frame fading in/out on a card still sliding showed up at the sides), and goes at once -->
                     <storyboard event="activate">
-                        <animation property="opacity" from="0" to="1" duration="120"/>
-                        <animation property="scale" from="1" to="1.035" duration="900" autoReverse="true" repeat="forever" mode="easeInOut"/>
+                        <animation property="opacity" begin="450" from="0" to="1" duration="120"/>
+                        <animation property="scale" begin="450" from="1" to="1.035" duration="900" autoReverse="true" repeat="forever" mode="easeInOut"/>
                     </storyboard>
                     <storyboard event="deactivate">
-                        <animation property="opacity" from="1" to="0" duration="60"/>
+                        <animation property="opacity" from="0" to="0" duration="1"/>
                     </storyboard>
                 </image>
             </itemTemplate>
