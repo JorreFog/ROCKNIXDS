@@ -423,10 +423,10 @@
             <type>horizontal</type>
             <pos>0.5 0.68</pos>
             <origin>0.5 0.5</origin>
-            <!-- 0.05 taller than the carts (0.315) so the selected cart's START frame isn't clipped: ES clips the
-                 carousel to this box. The item height fraction keeps the carts at 0.315 (0.863 x 0.365). -->
-            <size>0.3333 0.365</size>
-            <logoSize>0.2 0.863</logoSize>
+            <!-- 0.07 taller than the carts (0.315) so the selected cart's START frame isn't clipped: ES clips the
+                 carousel to this box. The item height fraction keeps the carts at 0.315 (0.8182 x 0.385). -->
+            <size>0.3333 0.385</size>
+            <logoSize>0.2 0.8182</logoSize>
             <logoScale>1</logoScale>
             <color>00000000</color>
             <maxLogoCount>5</maxLogoCount>
@@ -437,20 +437,27 @@
             <!-- Every game is a cartridge: the name sits in the label window,
                  and the art (when scraped) is drawn over it. -->
             <itemTemplate>
+                <!-- label window of game_slot.svg (x13..107, y24..104 of 120x140, drawn at 0.06 0.03 / 0.88 0.94) -->
+                <image name="cart_label">
+                    <pos>0.1553 0.1911</pos>
+                    <size>0.6893 0.5371</size>
+                    <path>${themePath}/assets/images/common/game_label.svg</path>
+                </image>
                 <text name="cart_name">
-                    <pos>0.17 0.165</pos>
-                    <size>0.66 0.555</size>
+                    <pos>0.17 0.21</pos>
+                    <size>0.66 0.50</size>
                     <text>{game:name}</text>
                     <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
                     <fontSize>0.021</fontSize>
-                    <color>C9CDD2FF</color>
+                    <color>3A3C40FF</color>
                     <alignment>center</alignment>
                     <verticalAlignment>center</verticalAlignment>
                     <lineSpacing>1.05</lineSpacing>
                 </text>
                 <image name="cart_art">
-                    <pos>0.163 0.158</pos>
-                    <size>0.674 0.570</size>
+                    <pos>0.5 0.4597</pos>
+                    <origin>0.5 0.5</origin>
+                    <maxSize>0.6893 0.5371</maxSize><!-- keeps the art's aspect: the paper shows around it, like a label -->
                     <path>{game:thumbnail}</path>
                     <linearSmooth>true</linearSmooth>
                 </image>
@@ -460,13 +467,13 @@
                     <path>${themePath}/assets/images/common/game_slot.svg</path>
                 </image>
                 <!-- START frame, shown on the selected cart only (activate/deactivate storyboards), so it moves with it.
-                     Item-relative version of the old overlay: screen (0.5, 0.6933) and max 0.0698 x 0.34 over an
-                     item of 0.0667 x 0.315 whose top is at y 0.5225. -->
+                     Sized so its opening (120x120 of 160x200) fits the cart's paper label (98 px tall on a 151 px
+                     item) with a small margin, centred on the label. -->
                 <image name="cart_start">
                     <path>${themePath}/assets/images/common/start_window.svg</path>
-                    <pos>0.5 0.5423</pos>
+                    <pos>0.5 0.532</pos>
                     <origin>0.5 0.5</origin>
-                    <maxSize>1.0 1.0794</maxSize><!-- no wider than the cart: repeated carts at the screen edge showed a sliver -->
+                    <maxSize>1.084 1.146</maxSize>
                     <opacity>0</opacity>
                     <storyboard event="activate">
                         <animation property="opacity" from="0" to="1" duration="120"/>

@@ -83,19 +83,33 @@ write("background.svg", 1920, 480, f'''<defs>{grad("bg", [(0, BG_TOP), (1, BG_BO
 <rect width="1920" height="480" fill="url(#bg)"/>
 <path d="{' '.join(lines)}" stroke="{GRID}" stroke-opacity="0.035" stroke-width="1" fill="none"/>''')
 
-# --- game_slot: DS game card, window x14..105 y19..103 ---
-hole = rr_ccw(14, 19, 92, 85, 6)
-body = "M3,0 H117 A3,3 0 0 1 120,3 V137 A3,3 0 0 1 117,140 H14 L0,126 V3 A3,3 0 0 1 3,0 Z"
-write("game_slot.svg", 120, 140, f'''<defs>{grad("card", [(0, "#5a5e65"), (0.5, "#474a50"), (1, "#393c41")])}
-{grad("lbl", [(0, "#2a2c30"), (1, "#1c1d20")])}</defs>
-<path d="{body} {hole}" fill="url(#card)" fill-rule="nonzero"/>
-<path d="{body}" fill="none" stroke="{EDGE}" stroke-width="2"/>
-<path d="M4,2 H116" stroke="#ffffff" stroke-opacity="0.18" stroke-width="1.5"/>
-<path d="{rr(12.5, 17.5, 95, 88, 7)}" fill="none" stroke="{EDGE}" stroke-width="3"/>
-<path d="{rr(11, 16, 98, 91, 8.5)}" fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1"/>
-<path d="M50,114 H70 L60,124 Z" fill="{EDGE}" fill-opacity="0.85"/>
-<path d="M2,125 L15,138" stroke="{EDGE}" stroke-opacity="0.6" stroke-width="1.5"/>
-<path d="M104,128 H116 M104,132 H116" stroke="{EDGE}" stroke-opacity="0.45" stroke-width="1.5"/>''')
+# --- game_slot: a Nintendo DS game card, label art window x13..107 y24..104 ---
+# Charcoal plastic with the chamfered top-right corner, a white paper label with the NINTENDO DS strip on top
+# and the art window below, an embossed insert arrow and grip ridges. The art is drawn under this (the window is
+# a hole); game_label.svg is the plain paper drawn behind the art, so unscaled/letterboxed art sits on paper.
+card = "M4,0 H105 L120,15 V136 A4,4 0 0 1 116,140 H4 A4,4 0 0 1 0,136 V4 A4,4 0 0 1 4,0 Z"
+label = rr(8.5, 7, 103, 104, 3.5)
+window = rr_ccw(13, 24, 94, 80, 1.5)
+write("game_slot.svg", 120, 140, f'''<defs>{grad("card", [(0, "#55585e"), (0.18, "#4a4d53"), (1, "#34363b")])}
+{grad("paper", [(0, "#f7f6f2"), (1, "#e4e2dc")])}
+{grad("ridge", [(0, "#2a2c30"), (1, "#56595f")])}</defs>
+<path d="{card} {window}" fill="url(#card)" fill-rule="nonzero"/>
+<path d="M4.5,1.2 H104.5 L118.8,15.5" fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="1.4"/>
+<path d="M1.2,5 V135" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1.2"/>
+<path d="M2,138.8 H116" stroke="#000000" stroke-opacity="0.35" stroke-width="1.4"/>
+<path d="{card}" fill="none" stroke="{EDGE}" stroke-width="1.8" stroke-linejoin="round"/>
+<path d="{rr(7.5, 6, 105, 106, 4.2)}" fill="none" stroke="#000000" stroke-opacity="0.45" stroke-width="1.6"/>
+<path d="{label} {window}" fill="url(#paper)" fill-rule="nonzero"/>
+<path d="{rr(12.5, 23.5, 95, 81, 2)}" fill="none" stroke="#000000" stroke-opacity="0.28" stroke-width="1"/>
+<rect x="11" y="9.5" width="98" height="11.5" rx="1.5" fill="#1f2125"/>
+{glyph_run("NINTENDO DS", 15, 18.3, 5.6, "#f2f3f5", anchor="start")}
+<path d="M52,117 H68 L60,127 Z" fill="#26282c"/>
+<path d="M53.5,118 H66.5" stroke="#000000" stroke-opacity="0.35" stroke-width="1"/>
+<path d="M68.4,117.6 L60.6,127.4" stroke="#ffffff" stroke-opacity="0.16" stroke-width="1"/>
+<path d="M8,120 V133 M11.5,120 V133 M15,120 V133 M105,120 V133 M108.5,120 V133 M112,120 V133"
+      stroke="url(#ridge)" stroke-width="1.6" stroke-linecap="round"/>''')
+write("game_label.svg", 94, 80, f'''<defs>{grad("gl", [(0, "#f7f6f2"), (1, "#e4e2dc")])}</defs>
+<rect width="94" height="80" fill="url(#gl)"/>''')
 
 # --- menu_slot: rounded icon frame, window x25..99 y25..99 ---
 hole = rr_ccw(25, 25, 75, 75, 7)

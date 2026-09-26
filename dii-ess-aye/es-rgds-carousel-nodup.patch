@@ -1,0 +1,16 @@
+diff --git a/es-core/src/components/CarouselComponent.cpp b/es-core/src/components/CarouselComponent.cpp
+index 679f99700..6f021cc60 100644
+--- a/es-core/src/components/CarouselComponent.cpp
++++ b/es-core/src/components/CarouselComponent.cpp
+@@ -532,6 +532,11 @@ void CarouselComponent::renderCarousel(const Transform4x4f& trans)
+ 	std::vector<int> activePositions;
+ 	for (int i = center - logoCount / 2 + bufferLeft; i <= center + logoCount / 2 + bufferRight; i++)
+ 	{
++		// RG DS: a list shorter than the carousel wraps around and draws the same entries more than once (the
++		// selected one included, with its frame). Like a DSi, show each entry once around the cursor instead.
++		if ((int)mEntries.size() < mMaxLogoCount + 2 && fabs(i - mCamOffset) >= mEntries.size() / 2.0f + 0.5f)
++			continue;
++
+ 		int index = i % (int)mEntries.size();
+ 		if (index < 0)
+ 			index += (int)mEntries.size();

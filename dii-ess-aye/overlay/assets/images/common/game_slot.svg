@@ -1,12 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="120" height="140" viewBox="0 0 120 140">
-<defs><linearGradient id="card" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a5e65"/><stop offset="0.5" stop-color="#474a50"/><stop offset="1" stop-color="#393c41"/></linearGradient>
-<linearGradient id="lbl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2c30"/><stop offset="1" stop-color="#1c1d20"/></linearGradient></defs>
-<path d="M3,0 H117 A3,3 0 0 1 120,3 V137 A3,3 0 0 1 117,140 H14 L0,126 V3 A3,3 0 0 1 3,0 Z M20,19 A6,6 0 0 0 14,25 V98 A6,6 0 0 0 20,104 H100 A6,6 0 0 0 106,98 V25 A6,6 0 0 0 100,19 Z" fill="url(#card)" fill-rule="nonzero"/>
-<path d="M3,0 H117 A3,3 0 0 1 120,3 V137 A3,3 0 0 1 117,140 H14 L0,126 V3 A3,3 0 0 1 3,0 Z" fill="none" stroke="#15161a" stroke-width="2"/>
-<path d="M4,2 H116" stroke="#ffffff" stroke-opacity="0.18" stroke-width="1.5"/>
-<path d="M19.5,17.5 H100.5 A7,7 0 0 1 107.5,24.5 V98.5 A7,7 0 0 1 100.5,105.5 H19.5 A7,7 0 0 1 12.5,98.5 V24.5 A7,7 0 0 1 19.5,17.5 Z" fill="none" stroke="#15161a" stroke-width="3"/>
-<path d="M19.5,16 H100.5 A8.5,8.5 0 0 1 109,24.5 V98.5 A8.5,8.5 0 0 1 100.5,107 H19.5 A8.5,8.5 0 0 1 11,98.5 V24.5 A8.5,8.5 0 0 1 19.5,16 Z" fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1"/>
-<path d="M50,114 H70 L60,124 Z" fill="#15161a" fill-opacity="0.85"/>
-<path d="M2,125 L15,138" stroke="#15161a" stroke-opacity="0.6" stroke-width="1.5"/>
-<path d="M104,128 H116 M104,132 H116" stroke="#15161a" stroke-opacity="0.45" stroke-width="1.5"/>
+<defs><linearGradient id="card" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#55585e"/><stop offset="0.18" stop-color="#4a4d53"/><stop offset="1" stop-color="#34363b"/></linearGradient>
+<linearGradient id="paper" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7f6f2"/><stop offset="1" stop-color="#e4e2dc"/></linearGradient>
+<linearGradient id="ridge" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2c30"/><stop offset="1" stop-color="#56595f"/></linearGradient></defs>
+<path d="M4,0 H105 L120,15 V136 A4,4 0 0 1 116,140 H4 A4,4 0 0 1 0,136 V4 A4,4 0 0 1 4,0 Z M14.5,24 A1.5,1.5 0 0 0 13,25.5 V102.5 A1.5,1.5 0 0 0 14.5,104 H105.5 A1.5,1.5 0 0 0 107,102.5 V25.5 A1.5,1.5 0 0 0 105.5,24 Z" fill="url(#card)" fill-rule="nonzero"/>
+<path d="M4.5,1.2 H104.5 L118.8,15.5" fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="1.4"/>
+<path d="M1.2,5 V135" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1.2"/>
+<path d="M2,138.8 H116" stroke="#000000" stroke-opacity="0.35" stroke-width="1.4"/>
+<path d="M4,0 H105 L120,15 V136 A4,4 0 0 1 116,140 H4 A4,4 0 0 1 0,136 V4 A4,4 0 0 1 4,0 Z" fill="none" stroke="#15161a" stroke-width="1.8" stroke-linejoin="round"/>
+<path d="M11.7,6 H108.3 A4.2,4.2 0 0 1 112.5,10.2 V107.8 A4.2,4.2 0 0 1 108.3,112 H11.7 A4.2,4.2 0 0 1 7.5,107.8 V10.2 A4.2,4.2 0 0 1 11.7,6 Z" fill="none" stroke="#000000" stroke-opacity="0.45" stroke-width="1.6"/>
+<path d="M12.0,7 H108.0 A3.5,3.5 0 0 1 111.5,10.5 V107.5 A3.5,3.5 0 0 1 108.0,111 H12.0 A3.5,3.5 0 0 1 8.5,107.5 V10.5 A3.5,3.5 0 0 1 12.0,7 Z M14.5,24 A1.5,1.5 0 0 0 13,25.5 V102.5 A1.5,1.5 0 0 0 14.5,104 H105.5 A1.5,1.5 0 0 0 107,102.5 V25.5 A1.5,1.5 0 0 0 105.5,24 Z" fill="url(#paper)" fill-rule="nonzero"/>
+<path d="M14.5,23.5 H105.5 A2,2 0 0 1 107.5,25.5 V102.5 A2,2 0 0 1 105.5,104.5 H14.5 A2,2 0 0 1 12.5,102.5 V25.5 A2,2 0 0 1 14.5,23.5 Z" fill="none" stroke="#000000" stroke-opacity="0.28" stroke-width="1"/>
+<rect x="11" y="9.5" width="98" height="11.5" rx="1.5" fill="#1f2125"/>
+<path transform="translate(15.000 18.300) scale(0.00718 -0.00718)" d="M682 0V780H573V305C573 255 579 167 582 133H579C572 159 545 219 525 256L240 780H98V0H207V466C207 535 203 604 200 651H203C212 620 237 552 251 527L537 0Z" fill="#f2f3f5"/>
+<path transform="translate(20.543 18.300) scale(0.00718 -0.00718)" d="M219 0V780H101V0Z" fill="#f2f3f5"/>
+<path transform="translate(22.783 18.300) scale(0.00718 -0.00718)" d="M682 0V780H573V305C573 255 579 167 582 133H579C572 159 545 219 525 256L240 780H98V0H207V466C207 535 203 604 200 651H203C212 620 237 552 251 527L537 0Z" fill="#f2f3f5"/>
+<path transform="translate(28.325 18.300) scale(0.00718 -0.00718)" d="M597 682V780H18V682H249V0H366V682Z" fill="#f2f3f5"/>
+<path transform="translate(32.733 18.300) scale(0.00718 -0.00718)" d="M626 0V98H209V355H558V450H209V683H607V780H94V0Z" fill="#f2f3f5"/>
+<path transform="translate(37.529 18.300) scale(0.00718 -0.00718)" d="M682 0V780H573V305C573 255 579 167 582 133H579C572 159 545 219 525 256L240 780H98V0H207V466C207 535 203 604 200 651H203C212 620 237 552 251 527L537 0Z" fill="#f2f3f5"/>
+<path transform="translate(43.072 18.300) scale(0.00718 -0.00718)" d="M723 391C723 623 582 780 354 780H94V0H360C588 0 723 169 723 391ZM608 391C608 229 515 98 344 98H209V682H338C509 682 608 565 608 391Z" fill="#f2f3f5"/>
+<path transform="translate(48.650 18.300) scale(0.00718 -0.00718)" d="M738 391C738 617 613 798 396 798C180 798 54 618 54 391C54 161 180 -18 396 -18C613 -18 738 161 738 391ZM621 391C621 210 530 82 396 82C261 82 170 210 170 391C170 573 264 698 396 698C532 698 621 573 621 391Z" fill="#f2f3f5"/>
+<path transform="translate(54.379 18.300) scale(0.00718 -0.00718)" d="" fill="#f2f3f5"/>
+<path transform="translate(56.856 18.300) scale(0.00718 -0.00718)" d="M723 391C723 623 582 780 354 780H94V0H360C588 0 723 169 723 391ZM608 391C608 229 515 98 344 98H209V682H338C509 682 608 565 608 391Z" fill="#f2f3f5"/>
+<path transform="translate(62.435 18.300) scale(0.00718 -0.00718)" d="M619 214C619 333 547 397 421 440L304 478C222 505 190 539 190 590C190 651 245 702 337 702C419 702 480 663 509 580L596 642C554 749 467 798 333 798C177 798 79 701 79 585C79 479 132 425 255 381L368 342C461 310 503 271 503 203C503 132 443 82 342 82C250 82 170 148 137 242L50 184C90 63 192 -18 343 -18C520 -18 619 70 619 214Z" fill="#f2f3f5"/>
+<path d="M52,117 H68 L60,127 Z" fill="#26282c"/>
+<path d="M53.5,118 H66.5" stroke="#000000" stroke-opacity="0.35" stroke-width="1"/>
+<path d="M68.4,117.6 L60.6,127.4" stroke="#ffffff" stroke-opacity="0.16" stroke-width="1"/>
+<path d="M8,120 V133 M11.5,120 V133 M15,120 V133 M105,120 V133 M108.5,120 V133 M112,120 V133"
+      stroke="url(#ridge)" stroke-width="1.6" stroke-linecap="round"/>
 </svg>
