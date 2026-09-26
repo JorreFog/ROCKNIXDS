@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="125" height="140" viewBox="0 0 125 140">
+<defs><linearGradient id="ms" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a4e55"/><stop offset="0.6" stop-color="#3a3d43"/><stop offset="1" stop-color="#303338"/></linearGradient></defs>
+<path d="M16,5 H109 A14,14 0 0 1 123,19 V125 A14,14 0 0 1 109,139 H16 A14,14 0 0 1 2,125 V19 A14,14 0 0 1 16,5 Z" fill="#000000" fill-opacity="0.35"/>
+<path d="M16,2 H109 A14,14 0 0 1 123,16 V122 A14,14 0 0 1 109,136 H16 A14,14 0 0 1 2,122 V16 A14,14 0 0 1 16,2 Z M32,25 A7,7 0 0 0 25,32 V93 A7,7 0 0 0 32,100 H93 A7,7 0 0 0 100,93 V32 A7,7 0 0 0 93,25 Z" fill="url(#ms)"/>
+<path d="M16,2 H109 A14,14 0 0 1 123,16 V122 A14,14 0 0 1 109,136 H16 A14,14 0 0 1 2,122 V16 A14,14 0 0 1 16,2 Z" fill="none" stroke="#15161a" stroke-width="2"/>
+<path d="M16,4 H109 A12,12 0 0 1 121,16 V122 A12,12 0 0 1 109,134 H16 A12,12 0 0 1 4,122 V16 A12,12 0 0 1 16,4 Z" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
+<path d="M32.0,23.5 H93.0 A8.5,8.5 0 0 1 101.5,32.0 V93.0 A8.5,8.5 0 0 1 93.0,101.5 H32.0 A8.5,8.5 0 0 1 23.5,93.0 V32.0 A8.5,8.5 0 0 1 32.0,23.5 Z" fill="none" stroke="#15161a" stroke-width="3"/>
+</svg>

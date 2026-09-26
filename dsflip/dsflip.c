@@ -35,6 +35,7 @@
 #include <errno.h>
 #include <glob.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <pthread.h>
 #include <sched.h>
 #include <sys/ioctl.h>
@@ -153,47 +154,129 @@ static void add_fb(drmModeAtomicReq *r, panel *p, dbuf *b) {
     drmModeAtomicAddProperty(r, p->plane, p->p_ch, p->mode.vdisplay);
 }
 
+#include "font8.h"
+void ra_frame(void);
+
+void dsflip_log(const char *fmt, ...) {
+    if (!lg) return;
+    va_list ap; va_start(ap, fmt); vfprintf(lg, fmt, ap); va_end(ap);
+}
+
 /* ---------- presenter ---------- */
-static int commit_pending;
+static int pending_mask;                /* bit i: a flip event is still due for panel i's CRTC */
 
 static void release(dbuf *b) { if (b && b != &blk.b[0]) b->state = FREE; }
 
+/* toast: a small overlay plane on the top panel (RetroAchievements pop-ups), committed together with the
+ * game frames. Rendered into one of two buffers, never the one being scanned out. */
+#define TOAST_W 640
+#define TOAST_H 56
+static uint32_t tp_plane, tp_fb, tp_crtc, tp_sx, tp_sy, tp_sw, tp_sh, tp_cx, tp_cy, tp_cw, tp_ch;
+static dbuf toast[2];
+static int toast_cur, toast_shown, toast_want, toast_dirty;
+static long long toast_until;
+
+static void add_toast(drmModeAtomicReq *r) {
+    if (toast_want) {
+        drmModeAtomicAddProperty(r, tp_plane, tp_fb, toast[toast_cur].fb);
+        drmModeAtomicAddProperty(r, tp_plane, tp_crtc, P[0].crtc);
+        drmModeAtomicAddProperty(r, tp_plane, tp_sx, 0);
+        drmModeAtomicAddProperty(r, tp_plane, tp_sy, 0);
+        drmModeAtomicAddProperty(r, tp_plane, tp_sw, (uint64_t)TOAST_W << 16);
+        drmModeAtomicAddProperty(r, tp_plane, tp_sh, (uint64_t)TOAST_H << 16);
+        drmModeAtomicAddProperty(r, tp_plane, tp_cx, 0);
+        drmModeAtomicAddProperty(r, tp_plane, tp_cy, 6);
+        drmModeAtomicAddProperty(r, tp_plane, tp_cw, TOAST_W);
+        drmModeAtomicAddProperty(r, tp_plane, tp_ch, TOAST_H);
+    } else {
+        drmModeAtomicAddProperty(r, tp_plane, tp_fb, 0);
+        drmModeAtomicAddProperty(r, tp_plane, tp_crtc, 0);
+    }
+}
+
 static void try_commit(void) {         /* called with mu held */
-    if (commit_pending) return;
-    int n = 0;
-    for (int i = 0; i < 2; i++) if (P[i].ready) n++;
-    if (!n) return;
+    if (pending_mask) return;
+    int mask = 0;
+    for (int i = 0; i < 2; i++) if (P[i].ready) mask |= 1 << i;
+    int with_toast = tp_plane && toast_dirty;
+    if (with_toast) mask |= 1;          /* the toast plane lives on the top panel's CRTC */
+    if (!mask) return;
     drmModeAtomicReq *r = drmModeAtomicAlloc();
     for (int i = 0; i < 2; i++) if (P[i].ready) add_fb(r, &P[i], P[i].ready);
+    if (with_toast) add_toast(r);
     int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, P);
     drmModeAtomicFree(r);
     if (ret) {
         st_busy++;
         if (ret != -EBUSY) {           /* rejected config: drop the frame rather than retry forever */
-            LOG("[dsflip] commit rejected: %s\n", strerror(-ret));
+            LOG("[dsflip] commit rejected: %s%s\n", strerror(-ret), with_toast ? " (toasts disabled)" : "");
+            if (with_toast) { tp_plane = 0; toast_dirty = 0; }
             for (int i = 0; i < 2; i++) if (P[i].ready) { release(P[i].ready); P[i].ready = 0; }
         }
         return;
     }
     for (int i = 0; i < 2; i++) if (P[i].ready) { P[i].queued = P[i].ready; P[i].queued->state = QUEUED; P[i].ready = 0; }
-    commit_pending = n;                 /* one flip event per CRTC in the commit */
+    if (with_toast) { toast_dirty = 0; toast_shown = toast_want; }
+    pending_mask = mask;                /* one flip event per CRTC in the commit */
     st_commit++;
 }
 
 static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned crtc, void *u) {
     (void)f; (void)seq; (void)u;
     lock(&mu);
-    for (int i = 0; i < 2; i++) if (P[i].crtc == crtc && P[i].queued) {
+    for (int i = 0; i < 2; i++) if (P[i].crtc == crtc) {
+        pending_mask &= ~(1 << i);
+        if (!P[i].queued) continue;     /* toast-only flip on this CRTC */
         long long t = sec * 1000000LL + usec;
         if (P[i].last_flip && t - P[i].last_flip > st_iv_max[i]) st_iv_max[i] = t - P[i].last_flip;
         P[i].last_flip = t; st_flips[i]++;
         if (P[i].scan != P[i].queued) release(P[i].scan);
         P[i].scan = P[i].queued; P[i].scan->state = SCANOUT; P[i].queued = 0;
-        if (commit_pending > 0) commit_pending--;
     }
-    if (!commit_pending) try_commit();
+    if (!pending_mask) try_commit();
     unlock(&mu);
 }
+
+static void toast_text(uint32_t *px, int pitch, int x, int y, const char *t, uint32_t col, int maxc) {
+    int n = 0;
+    for (; *t && n < maxc; t++, n++) {
+        unsigned char c = (unsigned char)*t;
+        if (n == maxc - 1 && t[1]) c = '~';          /* truncated */
+        if (c < 32 || c > 126) c = '?';
+        const unsigned char *g = font8[c - 32];
+        for (int gy = 0; gy < 8; gy++)
+            for (int gx = 0; gx < 8; gx++)
+                if (g[gy] & (0x80 >> gx))
+                    for (int sy = 0; sy < 2; sy++) {
+                        uint32_t *row = (uint32_t *)((char *)px + (y + gy * 2 + sy) * pitch);
+                        row[x + n * 16 + gx * 2] = row[x + n * 16 + gx * 2 + 1] = col;
+                    }
+    }
+}
+
+/* public: show a two-line pop-up on the top panel for ms milliseconds (thread-safe) */
+void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms) {
+    if (!ok || !tp_plane) return;
+    lock(&mu); int next = toast_shown ? !toast_cur : toast_cur; unlock(&mu);
+    dbuf *b = &toast[next];
+    uint32_t *px = b->map; int pitch = (int)b->pitch;
+    uint32_t bg = 0xff161b26, edge = 0xff000000 | accent;
+    for (int y = 0; y < TOAST_H; y++) {
+        uint32_t *row = (uint32_t *)((char *)px + y * pitch);
+        for (int x = 0; x < TOAST_W; x++) {
+            uint32_t c = bg;
+            if (x < 6 || y >= TOAST_H - 2) c = edge;                  /* accent bar + underline */
+            if ((x < 2 || x >= TOAST_W - 2) && (y < 2 || y >= TOAST_H - 2)) c = 0;   /* soft corners */
+            row[x] = c;
+        }
+    }
+    toast_text(px, pitch, 18, 8, l1 ? l1 : "", 0xff000000 | accent, 38);
+    toast_text(px, pitch, 18, 30, l2 ? l2 : "", 0xffffffff, 38);
+    lock(&mu);
+    toast_cur = next; toast_want = 1; toast_dirty = 1; toast_until = now_us() + (long long)ms * 1000;
+    unlock(&mu);
+    uint64_t one = 1; if (write(efd, &one, 8) < 0) {}
+    }
 
 /* SIGUSR2: dump what each panel scans out to <logdir>/scan<i>.raw (header "w h pitch bpp\n" + pixels) */
 static volatile int want_dump, touch_dumps;   /* DSFLIP_TOUCH_DUMP=N: dump the bottom screen at the first N touch-downs */
@@ -206,6 +289,11 @@ static void dump_scan(void) {
         FILE *f = fopen(fn, "wb"); if (!f) continue;
         fprintf(f, "%u %u %u %u\n", b->w, b->h, b->pitch, (uint32_t)(b->pitch / b->w * 8));
         fwrite(b->map, 1, (size_t)b->pitch * b->h, f); fclose(f);
+    }
+    if (tp_plane && toast_shown) {
+        dbuf *b = &toast[toast_cur];
+        FILE *f = fopen("/storage/dsflip/logs/toast.raw", "wb");
+        if (f) { fprintf(f, "%u %u %u 32\n", b->w, b->h, b->pitch); fwrite(b->map, 1, (size_t)b->pitch * b->h, f); fclose(f); }
     }
     LOG("[dsflip] dumped scanout buffers\n");
 }
@@ -223,11 +311,14 @@ static void *presenter(void *a) {
     drmEventContext ev = { .version = 3, .page_flip_handler2 = on_flip };
     struct pollfd pf[2] = { { .fd = fd, .events = POLLIN }, { .fd = efd, .events = POLLIN } };
     for (;;) {
-        if (poll(pf, 2, 1000) < 0) continue;
+        if (poll(pf, 2, 50) < 0) continue;
         if (pf[0].revents & POLLIN) drmHandleEvent(fd, &ev);
         if (pf[1].revents & POLLIN) {
             uint64_t v; if (read(efd, &v, 8) < 0) {}
             lock(&mu); try_commit(); unlock(&mu);
+        }
+        if (toast_want && now_us() > toast_until) {   /* hide an expired toast (commits even without a new frame) */
+            lock(&mu); toast_want = 0; toast_dirty = 1; try_commit(); unlock(&mu);
         }
         if (want_dump) { want_dump = 0; lock(&mu); dump_scan(); unlock(&mu); }
         if (tdump_n < touch_dumps && tdump_x >= 0) { lock(&mu); dump_touch(); unlock(&mu); tdump_n++; tdump_x = -1; }
@@ -450,6 +541,26 @@ __attribute__((constructor)) static void init(void) {
     }
     LOG("[dsflip] menu scaling: %s\n", menu_hw ? "hardware" : "CPU nearest");
 
+    /* toast plane: a free overlay plane that can go on the top panel's CRTC with ARGB8888 */
+    for (int k = 0; k < 2; k++) if (mkbuf(&toast[k], TOAST_W, TOAST_H, DRM_FORMAT_ARGB8888, 32)) { toast[0].map = 0; break; }
+    for (uint32_t k = 0; k < pres->count_planes && !tp_plane && toast[0].map; k++) {
+        drmModePlane *pl = drmModeGetPlane(fd, pres->planes[k]);
+        uint32_t id = pl->plane_id;
+        int fmt = 0; for (uint32_t f = 0; f < pl->count_formats; f++) if (pl->formats[f] == DRM_FORMAT_ARGB8888) fmt = 1;
+        if (id != P[0].plane && id != P[1].plane && fmt && (pl->possible_crtcs & (1u << P[0].crtc_idx)) &&
+            propval(id, DRM_MODE_OBJECT_PLANE, "type") == 0) {
+            uint32_t o = DRM_MODE_OBJECT_PLANE;
+            tp_plane = id; tp_fb = prop(id, o, "FB_ID"); tp_crtc = prop(id, o, "CRTC_ID");
+            tp_sx = prop(id, o, "SRC_X"); tp_sy = prop(id, o, "SRC_Y"); tp_sw = prop(id, o, "SRC_W"); tp_sh = prop(id, o, "SRC_H");
+            tp_cx = prop(id, o, "CRTC_X"); tp_cy = prop(id, o, "CRTC_Y"); tp_cw = prop(id, o, "CRTC_W"); tp_ch = prop(id, o, "CRTC_H");
+            toast_want = 1; toast_cur = 0;
+            drmModeAtomicReq *t = drmModeAtomicAlloc(); add_toast(t);
+            if (drmModeAtomicCommit(fd, t, DRM_MODE_ATOMIC_TEST_ONLY, 0)) tp_plane = 0;
+            drmModeAtomicFree(t); toast_want = 0;
+        }
+        drmModeFreePlane(pl);
+    }
+    LOG("[dsflip] toast plane: %u\n", tp_plane);
     signal(SIGUSR2, on_usr2);
     tdump_x = -1; if (getenv("DSFLIP_TOUCH_DUMP")) touch_dumps = atoi(getenv("DSFLIP_TOUCH_DUMP"));
     efd = eventfd(0, EFD_CLOEXEC);
@@ -623,4 +734,5 @@ void SDL_RenderPresent(void *rn) {
     }
     unlock(&mu);
     uint64_t one = 1; if (write(efd, &one, 8) < 0) {}
+    ra_frame();
 }

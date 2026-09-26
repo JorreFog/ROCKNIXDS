@@ -3,21 +3,33 @@
 # in the DTB's panel_description text in place (same length, no dtc needed). The pixel clock stays
 # 42134 kHz: pll_vpll is 126.4 MHz and the VOP divides by an integer, so any lower clock falls to
 # /4, which is about 45 Hz. Check dclk_vop0/1 = 42133334 in /sys/kernel/debug/clk/clk_summary after rebooting.
-# A ROCKNIX update overwrites /flash and undoes this.
+# Only patches a DTB that contains the stock RG DS timing string exactly twice (both panels).
+# A ROCKNIX update overwrites /flash and undoes this. Backup: /storage/rg-ds.dtb.bak
 set -e
 DTB=/flash/device_trees/rk3568-anbernic-rg-ds.dtb
-STOCK=1ad5ac3f50701304de1a00b7728e5a0a PATCHED=459c6a96159a1c0efd851a6c0a3db85f
-cur=$(md5sum $DTB | cut -d' ' -f1)
-[ "$cur" = "$PATCHED" ] && { echo "already patched"; exit 0; }
-[ "$cur" = "$STOCK" ] || { echo "unknown DTB ($cur), not touching it"; exit 1; }
-cp $DTB /storage/rg-ds.dtb.bak
-python3 - <<'PY'
-d = open("/flash/device_trees/rk3568-anbernic-rg-ds.dtb", "rb").read()
+[ -f $DTB ] || { echo "no $DTB: not an RG DS, not touching anything"; exit 1; }
+RESULT=$(python3 - "$DTB" <<'PY'
+import sys
+d = open(sys.argv[1], "rb").read()
 old = b"horizontal=640,260,220,260 vertical=480,10,2,16"
 new = b"horizontal=640,233,220,260 vertical=480,21,2,16"
-assert d.count(old) == 2
-open("/storage/rg-ds.dtb.60hz", "wb").write(d.replace(old, new))
+if d.count(new) == 2 and d.count(old) == 0: print("already"); sys.exit()
+if d.count(old) != 2: print("unknown"); sys.exit()
+p = d.replace(old, new)
+assert len(p) == len(d) and p.count(new) == 2
+open("/storage/rg-ds.dtb.60hz", "wb").write(p)
+print("ok")
 PY
-[ "$(md5sum /storage/rg-ds.dtb.60hz | cut -d' ' -f1)" = "$PATCHED" ] || { echo "md5 mismatch"; exit 1; }
-mount -o remount,rw /flash && cp /storage/rg-ds.dtb.60hz $DTB && sync && mount -o remount,ro /flash
-echo "patched; reboot to apply"
+)
+case $RESULT in
+already) echo "60 Hz panel timing already applied"; exit 0 ;;
+unknown) echo "DTB doesn't contain the stock RG DS panel timing twice: not touching it"; exit 1 ;;
+ok) ;;
+*) echo "DTB check failed"; exit 1 ;;
+esac
+cp $DTB /storage/rg-ds.dtb.bak
+mount -o remount,rw /flash
+cp /storage/rg-ds.dtb.60hz $DTB && sync
+mount -o remount,ro /flash
+cmp -s /storage/rg-ds.dtb.60hz $DTB || { echo "write verify failed; restoring"; mount -o remount,rw /flash; cp /storage/rg-ds.dtb.bak $DTB; sync; mount -o remount,ro /flash; exit 1; }
+echo "60 Hz panel timing applied; reboot to use it (backup: /storage/rg-ds.dtb.bak)"

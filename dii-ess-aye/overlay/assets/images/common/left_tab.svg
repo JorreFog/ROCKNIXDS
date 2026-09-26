@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="72" viewBox="0 0 160 72">
+<defs><linearGradient id="tab" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a4e55"/><stop offset="1" stop-color="#303338"/></linearGradient></defs>
+<g>
+<path d="M0,10 H118 A30,30 0 0 1 148,40 V72 H0 Z" fill="url(#tab)"/>
+<path d="M0,11 H118 A29,29 0 0 1 147,40 V72" fill="none" stroke="#15161a" stroke-width="2"/>
+<path d="M0,13 H117 A26,26 0 0 1 144,39" fill="none" stroke="#ffffff" stroke-opacity="0.13" stroke-width="1.2"/>
+</g>
+<path d="M19,29.0 H41 A7,7 0 0 1 48,36.0 V46.0 A7,7 0 0 1 41,53.0 H19 A7,7 0 0 1 12,46.0 V36.0 A7,7 0 0 1 19,29.0 Z" fill="#1c1d21" stroke="#5d626a" stroke-width="1.2"/>
+<path transform="translate(19.175 47.500) scale(0.01667 -0.01667)" d="M581 0V104H210V780H94V0Z" fill="#e8e9eb" stroke="#e8e9eb" stroke-width="42.00" stroke-linejoin="round"/>
+<path transform="translate(29.325 47.500) scale(0.01667 -0.01667)" d="M622 0V101H210C214 187 289 269 392 316C553 390 617 470 617 580C617 706 522 798 355 798C212 798 98 706 91 559L196 534C200 636 267 700 349 700C446 700 500 650 500 575C500 508 452 450 325 390C190 325 91 202 85 53L84 0Z" fill="#e8e9eb" stroke="#e8e9eb" stroke-width="42.00" stroke-linejoin="round"/>
+</svg>
