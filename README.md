@@ -135,10 +135,16 @@ stock path uses:
   aren't copied into this repo and stay in step with ROCKNIX updates.
 - The GPU is ARM's libmali (`/dev/mali0`, no DRM render node). ROCKNIX exports `MALI_DEFAULT_DISPLAY=wayland`,
   which can't work with sway stopped, so libdsflip uses libmali's GBM display.
-- **No GPU wait on the timing path:** both screens are submitted together and their GPU fence goes to the
-  display controller with the commit (`IN_FENCE_FD`), so the flip happens as soon as the GPU is done. An
-  earlier version waited for the GPU on the presenter thread, and that caused multi-second stutter bursts
-  whenever the GPU time grew (2.5 → 5.7 ms).
+- **Nothing on the timing path waits for the GPU:** a worker thread uploads and shades each frame, both
+  screens' GPU fence goes to the display controller with the commit (`IN_FENCE_FD`), and the presenter thread
+  (real-time priority) only handles vblank events, the latch timer and commits.
+- **Audio pump (`audio.c`):** DraStic paces its frames on its audio callback. SDL's pulse backend called it in
+  bursts under any extra load (and drained ~1.1% slow), which made DraStic's frames uneven: that, not the
+  GPU, was the shader stutter (a plain CPU spinner caused the same stutter in zero-copy mode). A real-time
+  thread now calls DraStic's callback on a precise timer into a ring buffer, which our own ALSA writer drains;
+  a slow rate trim locks it to the device clock. `DSFLIP_AUDIO_PUMP=0` restores SDL audio.
+- **Measured** (HeartGold at 2×, scripted walking, 90 s runs): lcd1x+nds-color 0.02–0.09 dropped frames/s,
+  lcd3x 0.04, zero-copy 0.00. Before these changes shaders dropped 5–30/s.
 - **Cost:** with a shader the GPU stays at ROCKNIX's 800 MHz, where lcd1x+nds-color takes ~2.5 ms per screen.
   At the 200 MHz used in zero-copy mode it would take 16 ms. HeartGold at 2× with lcd3x: 4 dropped frames in
   60 s of walking, SoC ~60 °C.
