@@ -228,9 +228,29 @@ the top panel, the bottom panel, and an unused third.
 
 ## Credits
 
-[ROCKNIX](https://github.com/ROCKNIX/distribution) and its `drastic-sa` / `libdrastouch` ·
-[RetroAchievements / rcheevos](https://github.com/RetroAchievements/rcheevos) (MIT, vendored in `dsflip/third_party`) ·
-DraStic by Exophase · [beebono/dii-ess-aye](https://github.com/beebono/dii-ess-aye) ·
-GammaOS Nano's DraStic Nano, for showing the display path is where the time goes ·
-[DSperate](https://github.com/beebono/DSperate) for the RG DS measurements ·
-fonts: Press Start 2P (CodeMan38), Pixelify Sans (Stefie Justprince), both OFL.
+**DraStic at 2× / `libdsflip`**
+- [DraStic](https://drastic-ds.com) by **Exophase**: the emulator itself. `libdsflip` only changes how its frames
+  reach the screens.
+- [GammaOS Nano](https://github.com/TheGammaSqueeze/GammaOSNext)'s **DraStic Nano** by **TheGammaSqueeze**: the core
+  idea. It showed that DraStic's hires mode runs full speed on this hardware once GL and the compositor are out
+  of the way (direct DRM output, frame sync).
+- [DSperate](https://github.com/beebono/DSperate) by **beebono**: the RG DS measurements of SDL2's display-path cost,
+  and its KMS/dmabuf presentation as a reference on this exact device.
+- [ROCKNIX](https://github.com/ROCKNIX/distribution): the `drastic-sa` package, launch scripts and `libdrastouch`,
+  whose touch handling showed how DraStic expects stylus input (and which the fallback launcher still uses).
+
+**RetroAchievements**
+- [RetroAchievements](https://retroachievements.org) and [rcheevos](https://github.com/RetroAchievements/rcheevos)
+  (MIT): achievement logic, ROM hashing and the server API, vendored unmodified in `dsflip/third_party`.
+
+**Frontend**
+- [dii-ess-aye](https://github.com/beebono/dii-ess-aye) by **beebono**: the DSi-style dual-screen theme this reskin
+  builds on. The installer downloads it from upstream; this repo only carries our overlay.
+- [ROCKNIX's emulationstation-next](https://github.com/ROCKNIX/emulationstation-next): the EmulationStation the
+  patched build is based on.
+- **Press Start 2P** by **CodeMan38** and **Pixelify Sans** by **Stefie Justprince**: the pixel fonts, both under the
+  SIL Open Font License.
+- [libretro-thumbnails](https://github.com/libretro-thumbnails): box art and screenshots used for scraping.
+
+**Platform**
+- [ROCKNIX](https://rocknix.org) and its contributors: the OS everything runs on. **Anbernic**: the RG DS hardware.
