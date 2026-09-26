@@ -1,9 +1,9 @@
 #!/bin/sh
-# RG DS x ROCKNIX installer: dual-screen dii-ess-aye theme + patched EmulationStation + libdsflip (DraStic
+# ROCKNIXDS installer (Anbernic RG DS on ROCKNIX): dual-screen dii-ess-aye theme + patched EmulationStation + libdsflip (DraStic
 # straight to both panels) + hires 3D. Run ON the Anbernic RG DS as root (ssh in, default password: rocknix):
 #
-#   curl -fsSL https://raw.githubusercontent.com/JorreFog/rgds-rocknix/main/install.sh | sh
-#   curl -fsSL https://raw.githubusercontent.com/JorreFog/rgds-rocknix/main/install.sh | sh -s -- --with-60hz
+#   curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh | sh -s -- --with-60hz
 #
 # Options:
 #   --with-60hz     also retune both panels to 60.000 Hz (edits the device tree in /flash; backed up; reboot needed)
@@ -15,7 +15,7 @@
 # Everything it replaces is backed up under /storage/rgds-rocknix-backup/ first.
 set -e
 
-REPO=JorreFog/rgds-rocknix
+REPO=JorreFog/ROCKNIXDS
 BRANCH=${RGDS_BRANCH:-main}
 THEME_UPSTREAM=beebono/dii-ess-aye
 THEME_COMMIT=9fd5eee                     # the upstream commit the overlay was made against
@@ -24,7 +24,7 @@ THEME=$ES_THEMES/dii-ess-aye
 ES_SETTINGS=/storage/.config/emulationstation/es_settings.cfg
 SYSCFG=/storage/.config/system/configs/system.cfg
 DRASTIC=/storage/.config/drastic
-BACKUP=/storage/rgds-rocknix-backup
+BACKUP=/storage/rgds-rocknix-backup   # old project name, kept so earlier installs can still be undone
 WORK=/storage/.rgds-install
 
 WITH_60HZ=0 THEME_ON=1 DSFLIP_ON=1 HIRES_ON=1 UNINSTALL=0

@@ -1,28 +1,44 @@
-# RG DS × ROCKNIX
+<p align="center"><img src="docs/img/rocknixds-logo.svg" width="440" alt="ROCKNIXDS"></p>
 
-**Full-speed 2× DraStic and a dual-screen DSi-style frontend for the Anbernic RG DS.**
+<p align="center"><b>Full-speed 2× DraStic and a DSi-style dual-screen frontend for the Anbernic RG DS on ROCKNIX.</b></p>
+
+<p align="center">
+  <img src="docs/img/es-home-ds.png" width="265" alt="Main menu: clock and calendar card and the selected system on the top screen, system carousel on the bottom">
+  <img src="docs/img/es-games-ds.png" width="265" alt="Game list: 3D box, screenshot and RetroAchievements progress on top, real DS cartridges on the bottom">
+  <img src="docs/img/gameplay-hires-ds.png" width="265" alt="Pokémon HeartGold at 2x internal resolution on both panels">
+</p>
+<p align="center"><sub>The main menu, the game list, and Pokémon HeartGold at 2× internal resolution (captured from the panels' scanout buffers).</sub></p>
 
 The Anbernic RG DS is a clamshell handheld with two 640×480 touch panels and an RK3566 (4× Cortex-A55,
-Mali-G52). This repo holds everything I changed on its [ROCKNIX](https://rocknix.org) install:
+Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [ROCKNIX](https://rocknix.org) install:
 
 - **`libdsflip`**, a replacement display path for DraStic. It sends each DS screen straight to its own panel,
-  so 2× internal resolution runs at full speed, with frame pacing that doesn't stutter.
-- **`dii-ess-aye`**, a DSi-style EmulationStation theme spread across both screens, with a patched ES build.
+  so 2× internal resolution runs at full speed, with frame pacing that doesn't stutter. It also adds
+  shaders, the microphone and RetroAchievements to standalone DraStic.
+- **`dii-ess-aye`**, a DSi-style EmulationStation theme spread across both screens, with real DS cartridges,
+  3D boxes and RetroAchievements progress, and a patched ES build.
 - The **panel timing fix**, the older **vsync pacing shim**, and the measurement tools (including a DS
   stress-test ROM) behind all the numbers below.
 
-<p align="center">
-  <img src="docs/img/gameplay-hires.png" height="420" alt="HeartGold at 2x internal resolution on both panels">
-  &nbsp;&nbsp;
-  <img src="docs/img/stress-rom.png" height="420" alt="The dsstress ROM: 3D stress scene on top, level bar on the bottom">
-</p>
-<p align="center"><sub>Left: Pokémon HeartGold at 2× internal resolution, captured from the panels' scanout buffers.
-Right: <code>dsstress</code>, the stress ROM used for the benchmarks.</sub></p>
+### New in 1.2
+
+- **Shaders at full speed at 2×.** The old stutter came from DraStic's audio timing, not the GPU. A real-time
+  audio pump fixed it: under 0.1 dropped frames per second with a shader on.
+- **Sharp DS shaders:** ds-crisp and ds-grid, each also with the DS screen's colors, plus ds-grid-2x for
+  pixel-perfect 2×. They appear in ES's DraStic shader menu.
+- **Microphone** in libdsflip: blow or speak into the mic for games that use it, with an echo gate so the
+  speaker doesn't trigger it.
+- **Theme redesign:** real DS cartridge scans on the carousel, a game list top screen with a 3D box,
+  screenshot and RetroAchievements progress, a DSi-style home screen with clock and calendar, the DSi font
+  throughout, a new boot splash and the ROCKNIXDS logo.
+- **Smoother menus:** the selection frame no longer splits two items while the carousel scrolls, and short
+  game lists fill the row.
 
 <p align="center">
-  <img src="docs/img/es-home.png" width="760" alt="The dii-ess-aye EmulationStation theme across both panels">
+  <img src="docs/img/es-splash-ds.png" width="265" alt="The boot splash: ROCKNIXDS logo on top, a DS card and Loading on the bottom">
+  <img src="docs/img/stress-rom-ds.png" width="265" alt="The dsstress ROM: 3D stress scene on top, level bar on the bottom">
 </p>
-<p align="center"><sub>The dii-ess-aye theme: clock and logo on the top panel, system carousel on the bottom.</sub></p>
+<p align="center"><sub>Left: the boot splash while ES loads. Right: <code>dsstress</code>, the stress ROM used for the benchmarks.</sub></p>
 
 ---
 
@@ -32,12 +48,18 @@ On an Anbernic RG DS running ROCKNIX, ssh in as `root` (default password
 `rocknix`) and run:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/JorreFog/rgds-rocknix/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh | sh
 ```
 
 It installs the dii-ess-aye theme (downloaded from [upstream](https://github.com/beebono/dii-ess-aye) at the pinned
 commit, then this repo's overlay), the patched EmulationStation, `libdsflip` as the default DraStic launcher, and
-switches on 2× resolution for DS. Everything it replaces is backed up first under `/storage/rgds-rocknix-backup/`.
+switches on 2× resolution for DS. It also adds the ds-* shaders to ES's shader menu. Everything it replaces is
+backed up first under `/storage/rgds-rocknix-backup/` (the folder keeps its old name so earlier installs can still be undone).
+Running it again upgrades an earlier version in place.
+
+Cartridge scans, 3D boxes and the RetroAchievements strip are per-game media that the installer doesn't download.
+Until a game has them, the theme draws a card with the game's name or box art. [`dii-ess-aye/scrape/`](dii-ess-aye/scrape)
+has the tools that make them and push them into ES.
 
 | Option | |
 |---|---|
@@ -119,8 +141,12 @@ It's installed as the default DraStic launcher: start any DS game from Emulation
 Install from a checkout: copy `dsflip/libdsflip.so` plus `dsflip/device/{session.sh,drastic-wrapper.sh,install.sh}`
 to the device and run `sh install.sh`.
 
-Not in this mode yet: the microphone (it came from ROCKNIX's `libdrastouch`) and gptokeyb keyboard hotkeys.
-Everything DraStic maps to buttons itself works.
+**Microphone.** libdsflip captures the mic over ALSA and holds DraStic's own "fake mic" control while you blow or
+speak, like ROCKNIX's `libdrastouch` does: an RMS level per block against an adaptive noise floor, with ES's DraStic
+*microphone sensitivity* setting as the threshold. The mic also hears the speaker, so an echo gate fed by the audio
+pump's output level keeps game music from pressing it (0 false presses in testing, with music playing).
+
+Not in this mode yet: gptokeyb keyboard hotkeys. Everything DraStic maps to buttons itself works.
 
 ### Shaders
 
@@ -129,8 +155,20 @@ stock path uses:
 
 - **default (bilinear)** keeps the zero-copy path: no GPU work, the coolest and lowest-latency mode.
 - **Any other choice** (sharp-bilinear, sharp-shimmerless, quilez, scanlines, lcd3x, lcd1x+nds-color, and
-  `.frag` files in `/storage/.config/drastic/shaders/` such as ds-crisp and ds-grid) runs that shader on the GPU.
+  `.frag` files in `/storage/.config/drastic/shaders/`) runs that shader on the GPU.
   Each screen is drawn into a 640×480 buffer that is then scanned out, with the same inputs as stock.
+- **Our shaders** ([`dsflip/shaders/`](dsflip/shaders), installed and added to ES's menu by `install.sh`):
+
+  | Shader | Look |
+  |---|---|
+  | ds-crisp | sharp scaling with no blur and no shimmer, at 1× and 2× |
+  | ds-crisp + NDS color | the same with the DS screen's color profile |
+  | ds-grid | sharp, with an LCD pixel grid on the real DS pixels |
+  | ds-grid + NDS color | ds-grid with the DS color profile |
+  | ds-grid-2x | pixel-perfect at 2×, with an even DS-pixel grid |
+
+  The NDS color profile is the one ROCKNIX's lcd1x+nds-color uses, except that very saturated blues are clamped
+  (that shader's math is undefined there and bleeds red into them on this GPU).
 - ROCKNIX's built-in shaders are read out of `/usr/lib/libdrastouch.so` on the device at runtime, so they
   aren't copied into this repo and stay in step with ROCKNIX updates.
 - The GPU is ARM's libmali (`/dev/mali0`, no DRM render node). ROCKNIX exports `MALI_DEFAULT_DISPLAY=wayland`,
@@ -161,7 +199,7 @@ Standalone DraStic has no RetroAchievements support, so `libdsflip` brings its o
 - **Game detection** uses rcheevos' NDS hash of the ROM DraStic was started with.
 - **Memory:** the DS keeps a copy of the cartridge header at `0x027FFE00`, so matching the ROM's header
   inside DraStic's memory finds the emulated main RAM (RA addresses `0x000000–0x3FFFFF`) exactly.
-- **Pop-ups** (unlocks, game summary, offline/online) are drawn in the theme's pixel font on a spare hardware
+- **Pop-ups** (unlocks, game summary, offline/online) are drawn in an 8×8 pixel font (Press Start 2P) on a spare hardware
   overlay plane of the top panel, so they cost the game nothing.
 - **Softcore only.** Hardcore needs savestates, cheats and fast-forward locked, which can't be enforced
   from outside DraStic.
@@ -248,32 +286,48 @@ post-present sleep to the compositor's latch point (learned from `wp_presentatio
 Builds on [beebono/dii-ess-aye](https://github.com/beebono/dii-ess-aye). ES runs on a 1920×480 canvas:
 the top panel, the bottom panel, and an unused third.
 
-- **Dark vector reskin.** Every texture was redrawn as SVG by `gen_skin.py`, pixel-exact and crisp.
-  START/L2/R2 are glyph paths, and the ROCKNIX wordmark was traced into vectors (`trace_logo.py`).
-- **Top screen:** vector logo with a breathing glow, a big clock and date, and a drifting grid.
-- **Bottom screen:** DSi cartridge carousel (unscraped games get carts too), a pulsing START, a retro
-  pixel-art scroll bar bound to the list position with "N of M", and native 160×72 tabs.
-- **Retro fonts:** Press Start 2P for the clock, status and tabs, and Pixelify Sans for titles. Descriptions
-  stay readable in the DSi font.
+- **Main menu.** The top screen is a DSi-style home: a clock card with the date and a calendar tile, and a card for
+  the selected system (icon, games and played count, last played, time played). The bottom screen is the system
+  carousel with a text bubble.
+- **Game list.** Every game is a DS cartridge on the bottom screen: a real cart scan when it has one, otherwise a
+  card drawn with its label art or name. The top screen shows the 3D game case, the screenshot, genre and play
+  count, and RetroAchievements progress (badge, N of M achievements, progress bar, points).
+- **Selection frame.** The pulsing START frame rides with the selected cartridge and appears once the carousel has
+  stopped, so it never frames two half items mid-scroll. Short lists repeat to fill the row.
+- **Dark vector skin.** Every texture is SVG, generated by `gen_skin.py`, pixel-exact and crisp. All text uses the
+  DSi font from upstream.
+- **ROCKNIXDS logo** between the L2/R2 tabs and on the boot splash ([`logo/`](logo), see below).
 - **Patched ES** (`emulationstation-rgds`, ROCKNIX/emulationstation-next bccd715):
   - `es-rgds-uiwidth.patch`: popups, keyboard, sliders and game options sized to one 640 px screen
     (`ES_UI_WIDTH`) instead of the 1920 canvas. This fixes the hidden *Advanced Game Options*.
   - `es-rgds-bindings-clock.patch`: `{system:index}/{count}` and `{game:index}/{count}` bindings, and a
     strftime `<format>` on `clock`.
+  - `es-rgds-carousel-repeat.patch`: short game lists repeat to fill the carousel, and only the centred copy of
+    the selection shows its frame.
 - **Boot splash** across both panels while ES loads hidden, then the menu appears placed, with no jumps.
 - **Robust launcher** (`start_es_rgds.sh`): falls back to stock ES after 2 quick crashes, keeps ES floating
   at 0,0, and brings the menu back after a game.
-- **Scraping without an account** (`scrape/`): libretro-thumbnails art pushed through ES's local HTTP API.
-  DS snaps are converted to side-by-side to match the device.
+- **Scraping without an account** ([`scrape/`](dii-ess-aye/scrape)): cart scans from the LaunchBox Games Database,
+  3D boxes and label art made from covers, and the RetroAchievements strip, all pushed through ES's local HTTP API.
 
 | File | What it is |
 |---|---|
 | `0001-*.patch`, `0002-*.patch` | Theme changes against upstream @9fd5eee |
 | `overlay/` | Every file that differs from upstream: `theme-rgds.xml` (the layout), `scripts/start_es_rgds.sh` (launcher, bind-mounted over `/usr/bin/start_es.sh`), SVG skin, splash and fonts. The installer lays this over upstream |
-| `gen_skin.py`, `trace_logo.py`, `rocknix_logo.paths` | SVG skin and logo generators |
+| `gen_skin.py` | SVG skin and splash generator (run against a full theme copy: it reads upstream's DSi font) |
+| `trace_logo.py`, `rocknix_logo.paths` | the traced stock ROCKNIX wordmark, kept for reference |
 | `es-rgds-*.patch`, `emulationstation-rgds` | ES patches and the built binary (aarch64) |
 | `device/autostart-dii-ess-aye`, `device/sway-config.theme` | Boot hook: redoes the bind mount and restores the theme's sway config, which ROCKNIX's `111-sway-init` overwrites on every boot |
-| `scrape/` | The HTTP-API scraper |
+| `scrape/` | Media tools: cart scans, 3D boxes, label art, RetroAchievements strip, HTTP-API push |
+
+---
+
+## `logo/`: the ROCKNIXDS logo
+
+A wide ROCKNIX line over a big chrome "DS", after the Nintendo DS logo's layout. `make_logo.py` draws it from
+[Unbounded](https://github.com/googlefonts/unbounded) (SIL OFL 1.1) as plain paths, with a dark outline so it works
+on light and dark backgrounds. It writes the stacked logo, a one-line version for the theme's bottom bar, and
+fragments that `gen_skin.py` embeds. `docs/ds_frame.py` makes the clamshell screenshots from 1280×480 captures.
 
 ---
 
@@ -281,7 +335,6 @@ the top panel, the bottom panel, and an unused third.
 
 - **Touch in EmulationStation doesn't work** on this setup. The stock sway mapping puts both touch
   panels on the wrong outputs. Games are unaffected: `libdsflip` reads the touch panel itself.
-- **No microphone** under `libdsflip` yet. Use the `nodsflip` fallback for mic games.
 - **RetroAchievements:** softcore only, and achievements that read the DS's DTCM (rare) don't work yet.
 - **Heavy stretches at 2× can still drop frames** (up to ~10/s in one run). There, DraStic's own frame
   times vary so much that its frames arrive spread over the whole refresh cycle, and no latch position can
@@ -311,9 +364,14 @@ the top panel, the bottom panel, and an unused third.
   builds on. The installer downloads it from upstream; this repo only carries our overlay.
 - [ROCKNIX's emulationstation-next](https://github.com/ROCKNIX/emulationstation-next): the EmulationStation the
   patched build is based on.
-- **Press Start 2P** by **CodeMan38** and **Pixelify Sans** by **Stefie Justprince**: the pixel fonts, both under the
-  SIL Open Font License.
-- [libretro-thumbnails](https://github.com/libretro-thumbnails): box art and screenshots used for scraping.
+- **Unbounded** by **The Unbounded Project Authors**: the ROCKNIXDS logo's letters (SIL Open Font License).
+- **Press Start 2P** by **CodeMan38**: the RetroAchievements pop-up font in libdsflip (SIL Open Font License).
+- [LaunchBox Games Database](https://gamesdb.launchbox-app.com): the community-contributed DS cartridge scans.
+- [libretro-thumbnails](https://github.com/libretro-thumbnails): covers, screenshots and title screens used for scraping.
+- [RetroAchievements](https://retroachievements.org): achievement sets and badges for the game list's progress strip.
 
 **Platform**
 - [ROCKNIX](https://rocknix.org) and its contributors: the OS everything runs on. **Anbernic**: the RG DS hardware.
+
+ROCKNIXDS is a fan project. It isn't affiliated with or endorsed by Nintendo, ROCKNIX or Anbernic. Nintendo DS is a
+trademark of Nintendo.

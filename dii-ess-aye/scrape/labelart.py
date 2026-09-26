@@ -3,7 +3,7 @@
 
 Makes a game card label image from a DS box cover: removes the case's white NINTENDO DS strip down the left edge
 (found as the run of near-white columns from the left) and crops the rest to the label window's shape (76:66),
-keeping the most detailed band (title logo, character), so the theme can fill the whole label with it. Output: 304x264 PNG, for ES's "cartridge" media.
+keeping the most detailed band (title logo, character), so the theme can fill the whole label with it. Output: 304x264 PNG, for ES's "boxback" media (the theme's drawn-card fallback when there is no real cart scan).
 """
 import sys
 from PIL import Image, ImageFilter
