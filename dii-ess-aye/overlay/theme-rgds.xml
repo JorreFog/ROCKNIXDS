@@ -156,8 +156,13 @@
             <origin>0.5 0.5</origin>
             <maxSize>0.12 0.32</maxSize>
             <zIndex>55</zIndex>
-            <storyboard repeat="forever">
-                <animation property="scale" from="1" to="1.035" duration="900" autoReverse="true" repeat="forever" mode="easeInOut"/>
+            <opacity>0</opacity>
+            <!-- System menu: the carousel has no item templates, so the frame can't ride on the icon. Each system has
+                 its own copy of this extra, and ES restarts its default storyboard when that system gets selected.
+                 Invisible during the 500 ms slide (it framed two half icons mid-scroll), fades in once the icon arrives. -->
+            <storyboard>
+                <animation property="opacity" begin="450" from="0" to="1" duration="120"/>
+                <animation property="scale" begin="450" from="1" to="1.035" duration="900" autoReverse="true" repeat="forever" mode="easeInOut"/>
             </storyboard>
         </image>
 
@@ -262,6 +267,7 @@
             <zIndex>1</zIndex>
         </image>
         <image name="home_system_icon" extra="true">
+            <path>${themePath}/assets/images/systems/default.png</path><!-- fallback, like the carousel logo -->
             <path>${themePath}/assets/images/systems/${system.theme}.png</path>
             <pos>0.0453125 0.6958333</pos><!-- icon well centre 87,334 -->
             <origin>0.5 0.5</origin>
@@ -280,7 +286,7 @@
             <zIndex>2</zIndex>
         </text>
         <text name="home_system_counts" extra="true">
-            <text>{system:total} games  ·  {system:gamesPlayed} played</text>
+            <text>("{system:total}" == "1" ? "1 game" : "{system:total}" + " games") + "  ·  {system:gamesPlayed} played"</text>
             <pos>0.0791667 0.6541667</pos><!-- y314..338 -->
             <size>0.2354167 0.05</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
