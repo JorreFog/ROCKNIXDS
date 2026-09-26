@@ -116,6 +116,7 @@ int shader_draw(uint32_t sh, int sw, int shh, int sp, uint64_t sgen, uint32_t dh
 int shader_fence(void);
 int shader_imports(void);
 void audio_pump_log(void);
+void audio_mic_start(void);
 extern int shader_copy_mode;
 int shader_draw_mem(int panel, const void *px, int sw, int shh, int sp, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish);
 static const char *shader_nm;
@@ -707,7 +708,8 @@ static void *presenter(void *a) {
  * button {type,timestamp,windowID,which,u8 button,state,clicks,pad,x,y}. SDL_Event is 56 bytes. */
 typedef struct { uint32_t type, ts, win, which; uint8_t button, state, clicks, pad; int32_t x, y; } btn_ev;
 typedef struct { uint32_t type, ts, win, which, state; int32_t x, y, xrel, yrel; } mot_ev;
-typedef union { uint32_t type; btn_ev b; mot_ev m; uint8_t pad[56]; } sdl_ev;
+typedef struct { uint32_t type, ts, win; uint8_t state, repeat, p2, p3; uint32_t scancode; int32_t sym; uint16_t mod; uint32_t unused; } key_ev;
+typedef union { uint32_t type; btn_ev b; mot_ev m; key_ev k; uint8_t pad[56]; } sdl_ev;
 #define QN 128
 #define EV_BARRIER 0xFFFFu                 /* queue marker: SDL_PollEvent reports "no event" once (ends DraStic's poll loop) */
 static sdl_ev tq[QN]; static int tq_head, tq_tail;
@@ -721,6 +723,14 @@ static void push_ev(sdl_ev *e) {
     int n = (tq_head + 1) % QN;
     if (n != tq_tail) { tq[tq_head] = *e; tq_head = n; }
     unlock(&tmu);
+}
+
+/* microphone (audio.c): hold/release DraStic's fake-mic key, Scroll Lock (control 327 = 256 + scancode 71) */
+void dsflip_mic_key(int down) {
+    sdl_ev e; memset(&e, 0, sizeof e);
+    e.k.type = down ? 0x300 : 0x301; e.k.ts = SDL_GetTicks(); e.k.win = window ? SDL_GetWindowID(window) : 1;
+    e.k.state = down ? 1 : 0; e.k.scancode = 71; e.k.sym = 0x40000047;
+    push_ev(&e);
 }
 /* DraStic ignores the absolute x/y of mouse events: it moves its stylus by the RELATIVE deltas (xrel/yrel),
  * 1:1 in DS pixels, clamped to the bottom screen, starting from the centre (measured by logging where it
@@ -1003,6 +1013,8 @@ struct SDL_AudioSpec_ { int freq; unsigned short format; unsigned char channels,
 int SDL_OpenAudio(struct SDL_AudioSpec_ *want, struct SDL_AudioSpec_ *have) {
     REAL(int, SDL_OpenAudio, struct SDL_AudioSpec_ *, struct SDL_AudioSpec_ *);
     if (!ok || !want) return real(want, have);
+    static int mic_started;
+    if (!mic_started) { mic_started = 1; audio_mic_start(); }   /* after the pump exists: its output feeds the echo gate */
     if (!clock_lock && audio_pump_enabled()) { pump_on = 1; return audio_pump_open(want, have, real); }   /* audio.c */
     if (!clock_lock || !warp_on) {
         /* DSFLIP_AUDIO_SAMPLES=n: open DraStic's audio with n-sample chunks (experiment; default: DraStic's 1024) */

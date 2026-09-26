@@ -33,6 +33,7 @@
 #include <sched.h>
 #include <pthread.h>
 #include <dlfcn.h>
+#include <math.h>
 
 void dsflip_log(const char *fmt, ...);
 
@@ -50,6 +51,8 @@ static volatile int st_under, st_over, st_lmin = RING, st_lmax, st_pump, st_sdl;
 static volatile double st_ppm;
 static volatile long long st_drained, st_pumped, st_t0;   /* frames per log window, for measured rates */
 static unsigned char silence_byte;
+/* speaker output level per pump chunk (last 32 chunks = ~186 ms), for the mic's echo gate */
+static volatile float out_hist[32]; static volatile uint32_t out_pos;
 
 static long long mono_ns(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000000000LL + t.tv_nsec; }
 
@@ -87,6 +90,9 @@ static void *pump(void *a) {             /* steady calls into DraStic's callback
         }
         dcb(dud, tmp, chunk * fb);
         st_pump++; st_pumped += chunk;
+        { const int16_t *sm = (const int16_t *)tmp; int ns = chunk * fb / 2; double acc = 0;
+          for (int i = 0; i < ns; i++) { float v = sm[i] * (1.0f / 32768); acc += v * v; }
+          out_hist[out_pos++ & 31] = (float)sqrt(acc / ns); }
         int level = (int)(head - __atomic_load_n(&tail, __ATOMIC_ACQUIRE));
         if (level + chunk <= RING) {
             for (int i = 0; i < chunk; ) {
@@ -122,16 +128,21 @@ static void *pcm;
 static int (*a_open)(void **, const char *, int, int);
 static int (*a_set_params)(void *, int, int, unsigned, unsigned, int, unsigned);
 static long (*a_writei)(void *, const void *, unsigned long);
+static long (*a_readi)(void *, void *, unsigned long);
 static int (*a_recover)(void *, int, int);
 static const char *(*a_strerror)(int);
 static volatile int st_xrun;
-static int alsa_open(void) {
+static int alsa_syms(void) {
     void *h = dlopen("libasound.so.2", RTLD_NOW | RTLD_LOCAL);
     if (!h) return -1;
     *(void **)&a_open = dlsym(h, "snd_pcm_open"); *(void **)&a_set_params = dlsym(h, "snd_pcm_set_params");
     *(void **)&a_writei = dlsym(h, "snd_pcm_writei"); *(void **)&a_recover = dlsym(h, "snd_pcm_recover");
     *(void **)&a_strerror = dlsym(h, "snd_strerror");
-    if (!a_open || !a_set_params || !a_writei || !a_recover) return -1;
+    *(void **)&a_readi = dlsym(h, "snd_pcm_readi");
+    return a_open && a_set_params && a_writei && a_readi && a_recover ? 0 : -1;
+}
+static int alsa_open(void) {
+    if (alsa_syms()) return -1;
     int e = a_open(&pcm, "default", 0 /* SND_PCM_STREAM_PLAYBACK */, 0);
     if (e < 0) { dsflip_log("[audio] ALSA open: %s\n", a_strerror ? a_strerror(e) : "?"); return -1; }
     const char *l = getenv("DSFLIP_ALSA_LATENCY");
@@ -190,4 +201,63 @@ void audio_pump_log(void) {
     dsflip_log("[audio] pump %.1f Hz, drain %.1f Hz, ring %d..%d, underruns %d, overflows %d, xruns %d, trim %+.0f ppm\n",
                el > 0 ? st_pumped / el : 0, el > 0 ? st_drained / el : 0, st_lmin, st_lmax, st_under, st_over, st_xrun, st_ppm);
     st_pump = st_sdl = st_under = st_over = st_xrun = st_lmax = 0; st_lmin = RING; st_drained = st_pumped = 0; st_t0 = now;
+}
+
+/* ---- microphone ----
+ * DraStic has no mic input of its own here: its "fake microphone" control (Scroll Lock, control code 327) plays
+ * microphone.wav into the DS mic while held. ROCKNIX's libdrastouch turned the real mic into that key; this is
+ * the same logic, reverse-engineered from drastouch's mic_audio_callback: per block, the RMS level of the
+ * 16-bit samples (scaled to +-1.0); the first 60 blocks average a noise floor, which then keeps tracking slowly
+ * (floor = 0.999 floor + 0.001 level); level > floor + threshold holds the key, dropping below releases it.
+ * The threshold is ES's "microphone sensitivity" (DSHOOK_MIC_THRESH: high 0.03, medium 0.15, low 0.3; off 0).
+ * Capture goes straight through ALSA (PipeWire's mic source). */
+void dsflip_mic_key(int down);
+static void *mic_thread(void *a) {
+    float thresh = *(float *)a;
+    void *cap = 0;
+    for (int i = 0; i < 100 && !dcb && audio_pump_enabled(); i++) { struct timespec d = { 0, 20000000 }; nanosleep(&d, 0); }
+    if (alsa_syms() || a_open(&cap, "default", 1 /* SND_PCM_STREAM_CAPTURE */, 0) < 0 ||
+        a_set_params(cap, 2 /* S16_LE */, 3 /* RW_INTERLEAVED */, 1, 44100, 1, 100000) < 0) {
+        dsflip_log("[mic] no capture device\n");
+        return 0;
+    }
+    dsflip_log("[mic] listening, threshold %.3f, echo gate %s\n", thresh, dcb ? "on" : "off (no audio pump)");
+    float coup = 0; int coup_n = 0;     /* how much speaker output leaks into the mic (mic rms / output rms) */
+    int16_t buf[1024];
+    float floor_ = 0, peak = 0; int n = 0, down = 0, blocks = 0, presses = 0;
+    for (;;) {
+        long r = a_readi(cap, buf, 1024);
+        if (r < 0) { a_recover(cap, (int)r, 1); continue; }
+        if (r == 0) continue;
+        double acc = 0;
+        for (long i = 0; i < r; i++) { float v = buf[i] * (1.0f / 32768); acc += v * v; }
+        float level = (float)sqrt(acc / r);
+        if (n < 60) { floor_ = (floor_ * n + level) / (n + 1); n++; continue; }
+        floor_ = floor_ * 0.999f + level * 0.001f;
+        /* echo gate: the mic hears the game's own sound from the speaker (measured: bleed peaks 0.13-0.23, far
+         * above the "high" threshold 0.03, so the key fired constantly with nobody talking). The pump knows what
+         * is played: learn the leak (mic/output ratio while not triggered) and require the mic to be clearly above
+         * the expected bleed. out: the loudest output chunk of the last ~186 ms (covers the output latency). */
+        float out = 0; for (int i = 0; i < 32; i++) if (out_hist[i] > out) out = out_hist[i];
+        float bleed = coup * out;
+        int loud = level > floor_ + thresh && (!dcb || level > 3 * bleed + thresh);
+        if (!loud && out > 0.01f) {      /* learn the coupling only from blocks that aren't a real blow */
+            float r = level / out; if (r > 4) r = 4;
+            coup = coup_n < 50 ? (coup * coup_n + r) / (coup_n + 1) : coup * 0.99f + r * 0.01f; coup_n++;
+        }
+        if (loud != down) { down = loud; dsflip_mic_key(down); presses += down; }
+        if (level > peak) peak = level;
+        if (++blocks >= 431) {           /* ~10 s: levels for bug reports and tuning */
+            dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses\n", floor_, peak, coup, presses);
+            blocks = presses = 0; peak = 0;
+        }
+    }
+    return 0;
+}
+void audio_mic_start(void) {
+    const char *t = getenv("DSHOOK_MIC_THRESH");
+    static float thresh;
+    thresh = t ? (float)atof(t) : 0;
+    if (thresh <= 0) { dsflip_log("[mic] off (ES: microphone sensitivity)\n"); return; }
+    pthread_t th; pthread_create(&th, 0, mic_thread, &thresh);
 }
