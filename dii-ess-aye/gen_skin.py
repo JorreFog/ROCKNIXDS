@@ -83,33 +83,56 @@ write("background.svg", 1920, 480, f'''<defs>{grad("bg", [(0, BG_TOP), (1, BG_BO
 <rect width="1920" height="480" fill="url(#bg)"/>
 <path d="{' '.join(lines)}" stroke="{GRID}" stroke-opacity="0.035" stroke-width="1" fill="none"/>''')
 
-# --- game_slot: a Nintendo DS game card, label art window x13..107 y24..104 ---
-# Charcoal plastic with the chamfered top-right corner, a white paper label with the NINTENDO DS strip on top
-# and the art window below, an embossed insert arrow and grip ridges. The art is drawn under this (the window is
-# a hole); game_label.svg is the plain paper drawn behind the art, so unscaled/letterboxed art sits on paper.
-card = "M4,0 H105 L120,15 V136 A4,4 0 0 1 116,140 H4 A4,4 0 0 1 0,136 V4 A4,4 0 0 1 4,0 Z"
-label = rr(8.5, 7, 103, 104, 3.5)
-window = rr_ccw(13, 24, 94, 80, 1.5)
-write("game_slot.svg", 120, 140, f'''<defs>{grad("card", [(0, "#55585e"), (0.18, "#4a4d53"), (1, "#34363b")])}
-{grad("paper", [(0, "#f7f6f2"), (1, "#e4e2dc")])}
-{grad("ridge", [(0, "#2a2c30"), (1, "#56595f")])}</defs>
+# --- game_slot: a Nintendo DS Game Card seen from the label side, 100x104 ---
+# Modelled on photos of real cards: a thin charcoal plastic rim, the bottom-left corner chamfered, a small notch
+# in the left edge, and almost the whole front a white paper label with rounded corners: the NINTENDO DS logo on
+# the white top strip, the art below (window x12..88 y21..87 is a hole; the art is drawn under this), and a
+# small embossed arrow under the label. game_label.svg is the paper drawn behind the art, so art that keeps its
+# aspect ratio sits on white like a printed label. empty_slot.svg is the same outline, recessed and empty.
+# narrower than the real 35x33 mm on purpose: at true proportions it read as too wide on screen
+CARD_W, CARD_H = 100, 104
+CW = CARD_W
+card = (f"M5,0 H{CW - 5} A5,5 0 0 1 {CW},5 V99 A5,5 0 0 1 {CW - 5},104 H11 L0,93 V66 H1.6 V55 H0 V5 A5,5 0 0 1 5,0 Z")
+label = rr(6.5, 4.5, CW - 13, 86, 6)
+window = rr_ccw(12, 21, CW - 24, 66, 1)     # the art window: x12..CW-12, y21..87
+
+
+def ds_logo(x, base, h, color):
+    """NINTENDO + the two-screen mark + DS, left-aligned at x on baseline base (h = cap height of DS)."""
+    small = h * 0.52
+    out = [glyph_run("NINTENDO", x, base, small, color, anchor="start")]
+    # width of the small word, measured from the glyph advances
+    gs = FONT.getGlyphSet(); cmap = FONT.getBestCmap()
+    caps = BoundsPen(gs); gs[cmap[ord("H")]].draw(caps)
+    sc = small / caps.bounds[3]
+    wx = x + sum(gs[cmap[ord(c)]].width for c in "NINTENDO") * sc + small * 0.35
+    b = small * 0.42                                   # the two stacked screens
+    out.append(f'<rect x="{wx:.2f}" y="{base - small:.2f}" width="{b:.2f}" height="{b * 0.85:.2f}" rx="0.4" '
+               f'fill="none" stroke="{color}" stroke-width="0.6"/>')
+    out.append(f'<rect x="{wx:.2f}" y="{base - small + b:.2f}" width="{b:.2f}" height="{b * 0.85:.2f}" rx="0.4" '
+               f'fill="none" stroke="{color}" stroke-width="0.6"/>')
+    out.append(glyph_run("DS", wx + b + small * 0.3, base, h, color, anchor="start", stroke=0.9))
+    return "\n".join(out)
+
+
+write("game_slot.svg", CARD_W, CARD_H, f'''<defs>{grad("card", [(0, "#606166"), (0.5, "#525358"), (1, "#45464a")])}
+{grad("paper", [(0, "#fbfbf8"), (1, "#ecebe6")])}</defs>
 <path d="{card} {window}" fill="url(#card)" fill-rule="nonzero"/>
-<path d="M4.5,1.2 H104.5 L118.8,15.5" fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="1.4"/>
-<path d="M1.2,5 V135" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1.2"/>
-<path d="M2,138.8 H116" stroke="#000000" stroke-opacity="0.35" stroke-width="1.4"/>
-<path d="{card}" fill="none" stroke="{EDGE}" stroke-width="1.8" stroke-linejoin="round"/>
-<path d="{rr(7.5, 6, 105, 106, 4.2)}" fill="none" stroke="#000000" stroke-opacity="0.45" stroke-width="1.6"/>
+<path d="M5.5,1 H{CW - 5.5}" stroke="#ffffff" stroke-opacity="0.22" stroke-width="1.2"/>
+<path d="M1.1,6 V54 M1.1,67 V92" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1"/>
+<path d="{card}" fill="none" stroke="{EDGE}" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="{rr(5.2, 3.2, CW - 10.4, 88.6, 7)}" fill="none" stroke="#000000" stroke-opacity="0.35" stroke-width="1.3"/>
 <path d="{label} {window}" fill="url(#paper)" fill-rule="nonzero"/>
-<path d="{rr(12.5, 23.5, 95, 81, 2)}" fill="none" stroke="#000000" stroke-opacity="0.28" stroke-width="1"/>
-<rect x="11" y="9.5" width="98" height="11.5" rx="1.5" fill="#1f2125"/>
-{glyph_run("NINTENDO DS", 15, 18.3, 5.6, "#f2f3f5", anchor="start")}
-<path d="M52,117 H68 L60,127 Z" fill="#26282c"/>
-<path d="M53.5,118 H66.5" stroke="#000000" stroke-opacity="0.35" stroke-width="1"/>
-<path d="M68.4,117.6 L60.6,127.4" stroke="#ffffff" stroke-opacity="0.16" stroke-width="1"/>
-<path d="M8,120 V133 M11.5,120 V133 M15,120 V133 M105,120 V133 M108.5,120 V133 M112,120 V133"
-      stroke="url(#ridge)" stroke-width="1.6" stroke-linecap="round"/>''')
-write("game_label.svg", 94, 80, f'''<defs>{grad("gl", [(0, "#f7f6f2"), (1, "#e4e2dc")])}</defs>
-<rect width="94" height="80" fill="url(#gl)"/>''')
+<path d="{rr(11.6, 20.6, CW - 23.2, 66.8, 1.2)}" fill="none" stroke="#000000" stroke-opacity="0.18" stroke-width="0.8"/>
+{ds_logo(13, 16.3, 8.2, "#1c1d20")}
+<path d="M{CW / 2 - 4},94.5 H{CW / 2 + 4} L{CW / 2},99.5 Z" fill="#3a3b3f"/>
+<path d="M{CW / 2 + 4.2},94.8 L{CW / 2 + 0.3},99.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="0.8"/>''')
+write("game_label.svg", CW - 24, 66, f'''<defs>{grad("gl", [(0, "#fbfbf8"), (1, "#ecebe6")])}</defs>
+<rect width="{CW - 24}" height="66" fill="url(#gl)"/>''')
+write("empty_slot.svg", CARD_W, CARD_H, f'''<path d="{card}" fill="#000000" fill-opacity="0.22"/>
+<path d="{card}" fill="none" stroke="#000000" stroke-opacity="0.45" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="M5.5,103 H{CW - 5.5}" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1.2"/>
+<path d="{rr(6.5, 4.5, CW - 13, 86, 6)}" fill="none" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1"/>''')
 
 # --- menu_slot: rounded icon frame, window x25..99 y25..99 ---
 hole = rr_ccw(25, 25, 75, 75, 7)

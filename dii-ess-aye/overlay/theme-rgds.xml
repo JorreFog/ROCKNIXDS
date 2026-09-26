@@ -71,7 +71,7 @@
             <reverse>false</reverse>
             <clock name="system-clock">
                 <color>E8E9EBFF</color>
-                <fontPath>${themePath}/assets/fonts/PressStart2P-Regular.ttf</fontPath>
+                <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
                 <fontSize>0.0333333</fontSize><!-- 16px -->
                 <lineSpacing>1</lineSpacing>
             </clock>
@@ -81,7 +81,7 @@
             <reverse>true</reverse>
             <batteryText name="system-battery-text">
                 <color>E8E9EBFF</color>
-                <fontPath>${themePath}/assets/fonts/PressStart2P-Regular.ttf</fontPath>
+                <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
                 <fontSize>0.0333333</fontSize><!-- 16px -->
                 <lineSpacing>1</lineSpacing>
             </batteryText>
@@ -115,7 +115,7 @@
             <pos>0.0291667 0.8708333</pos><!-- box = visible tab body, 56..156 x 418..480 -->
             <size>0.0520833 0.1291667</size>
             <verticalAlignment>center</verticalAlignment>
-            <fontPath>${themePath}/assets/fonts/PressStart2P-Regular.ttf</fontPath>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0333333</fontSize><!-- 16px -->
             <color>E8E9EBFF</color>
             <alignment>left</alignment>
@@ -134,7 +134,7 @@
             <pos>0.2520833 0.8708333</pos><!-- 484..584 x 418..480 -->
             <size>0.0520833 0.1291667</size>
             <verticalAlignment>center</verticalAlignment>
-            <fontPath>${themePath}/assets/fonts/PressStart2P-Regular.ttf</fontPath>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0333333</fontSize><!-- 16px -->
             <color>E8E9EBFF</color>
             <alignment>right</alignment>
@@ -178,13 +178,14 @@
             <zIndex>2</zIndex>
         </image>
         <text name="scroll_label" extra="true">
+            <visible>false</visible>
             <text>{system:index} of {system:count}</text>
             <x>{system:count} &gt; 1 ? 0.365625 + ({system:index} - 1) / ({system:count} - 1) * 0.225 : 0.478125</x>
             <y>0.9208333</y>
             <w>0.04375</w>
             <h>0.0416667</h>
-            <fontPath>${themePath}/assets/fonts/PixelifySans-Medium.ttf</fontPath>
-            <fontSize>0.0333333</fontSize><!-- 16px -->
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.0291667</fontSize><!-- 14px: fits the 84x20 thumb in the DSi font -->
             <color>FFFFFFFF</color>
             <alignment>center</alignment>
             <verticalAlignment>center</verticalAlignment>
@@ -222,7 +223,7 @@
             <pos>0.1666667 0.5104167</pos><!-- 320,245 -->
             <origin>0.5 0.5</origin>
             <size>0.3 0.2</size>
-            <fontPath>${themePath}/assets/fonts/PressStart2P-Regular.ttf</fontPath>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.1333333</fontSize><!-- 64px -->
             <color>E8E9EBFF</color>
             <alignment>center</alignment>
@@ -233,7 +234,7 @@
             <pos>0.1666667 0.6458333</pos><!-- 320,310 -->
             <origin>0.5 0.5</origin>
             <size>0.3 0.0625</size>
-            <fontPath>${themePath}/assets/fonts/PressStart2P-Regular.ttf</fontPath>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0333333</fontSize><!-- 16px -->
             <color>8FC8FFFF</color>
             <alignment>center</alignment>
@@ -272,7 +273,7 @@
             <pos>0.5 0.15</pos>
             <origin>0.5 0.5</origin>
             <size>0.2333 0.1</size>
-            <fontPath>${themePath}/assets/fonts/PixelifySans-Medium.ttf</fontPath>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0500000</fontSize><!-- 24px -->
             <color>E8E9EBFF</color>
             <alignment>center</alignment>
@@ -284,7 +285,7 @@
             <pos>0.5 0.2291667</pos>
             <origin>0.5 0.5</origin>
             <size>0.2333 0.06</size>
-            <fontPath>${themePath}/assets/fonts/PixelifySans-Regular.ttf</fontPath>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0375000</fontSize><!-- 18px -->
             <color>A9AEB5FF</color>
             <alignment>center</alignment>
@@ -295,7 +296,7 @@
             <pos>0.5 0.3541667</pos>
             <origin>0.5 0.5</origin>
             <size>0.2333 0.06</size>
-            <fontPath>${themePath}/assets/fonts/PixelifySans-Regular.ttf</fontPath>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0375000</fontSize><!-- 18px -->
             <color>8FC8FFFF</color>
             <alignment>center</alignment>
@@ -357,7 +358,7 @@
             <pos>0.1666667 0.5416667</pos>
             <origin>0.5 0.5</origin>
             <size>0.2291667 0.1333333</size>
-            <fontPath>${themePath}/assets/fonts/PixelifySans-Medium.ttf</fontPath>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0458333</fontSize><!-- 22px -->
             <color>E8E9EBFF</color>
             <alignment>center</alignment>
@@ -370,7 +371,7 @@
             <pos>0.1666667 0.6666667</pos>
             <origin>0.5 0.5</origin>
             <size>0.2291667 0.05</size>
-            <fontPath>${themePath}/assets/fonts/PixelifySans-Regular.ttf</fontPath>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0375000</fontSize><!-- 18px -->
             <color>8FC8FFFF</color>
             <alignment>center</alignment>
@@ -399,7 +400,7 @@
             <origin>0.5 0.5</origin>
             <text>{game:system:collection} ? proper({game:system:fullName}) : {game:system:fullName}</text>
             <alignment>center</alignment>
-            <fontPath>${themePath}/assets/fonts/PixelifySans-Medium.ttf</fontPath>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0583333</fontSize><!-- 28px -->
             <color>E8E9EBFF</color>
         </text>
@@ -409,6 +410,7 @@
             <x>{game:count} &gt; 1 ? 0.365625 + ({game:index} - 1) / ({game:count} - 1) * 0.225 : 0.478125</x>
         </image>
         <text name="scroll_label" extra="true">
+            <visible>false</visible>
             <text>{game:index} of {game:count}</text>
             <x>{game:count} &gt; 1 ? 0.365625 + ({game:index} - 1) / ({game:count} - 1) * 0.225 : 0.478125</x>
         </text>
@@ -419,14 +421,52 @@
             <visible>false</visible>
         </image>
 
+        <!-- DSi-style empty slots at the five card positions: lists shorter than the row show them, longer
+             lists cover them with cards -->
+        <image name="empty_slot_0" extra="true">
+            <path>${themePath}/assets/images/common/empty_slot.svg</path>
+            <pos>0.3667 0.6292</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.05333 0.2219</size>
+            <zIndex>49</zIndex>
+        </image>
+        <image name="empty_slot_1" extra="true">
+            <path>${themePath}/assets/images/common/empty_slot.svg</path>
+            <pos>0.4333 0.6292</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.05333 0.2219</size>
+            <zIndex>49</zIndex>
+        </image>
+        <image name="empty_slot_2" extra="true">
+            <path>${themePath}/assets/images/common/empty_slot.svg</path>
+            <pos>0.5000 0.6292</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.05333 0.2219</size>
+            <zIndex>49</zIndex>
+        </image>
+        <image name="empty_slot_3" extra="true">
+            <path>${themePath}/assets/images/common/empty_slot.svg</path>
+            <pos>0.5667 0.6292</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.05333 0.2219</size>
+            <zIndex>49</zIndex>
+        </image>
+        <image name="empty_slot_4" extra="true">
+            <path>${themePath}/assets/images/common/empty_slot.svg</path>
+            <pos>0.6333 0.6292</pos>
+            <origin>0.5 0.5</origin>
+            <size>0.05333 0.2219</size>
+            <zIndex>49</zIndex>
+        </image>
+
         <gamecarousel name="gamecarousel">
             <type>horizontal</type>
-            <pos>0.5 0.68</pos>
+            <pos>0.5 0.66</pos>
             <origin>0.5 0.5</origin>
-            <!-- 0.07 taller than the carts (0.315) so the selected cart's START frame isn't clipped: ES clips the
-                 carousel to this box. The item height fraction keeps the carts at 0.315 (0.8182 x 0.385). -->
-            <size>0.3333 0.385</size>
-            <logoSize>0.2 0.8182</logoSize>
+            <!-- taller than the items (0.315) so the selected card's START frame isn't clipped: ES clips the
+                 carousel to this box. The item height fraction keeps the items at 0.315 (0.7326 x 0.43). -->
+            <size>0.3333 0.43</size>
+            <logoSize>0.2 0.7326</logoSize>
             <logoScale>1</logoScale>
             <color>00000000</color>
             <maxLogoCount>5</maxLogoCount>
@@ -437,43 +477,53 @@
             <!-- Every game is a cartridge: the name sits in the label window,
                  and the art (when scraped) is drawn over it. -->
             <itemTemplate>
-                <!-- label window of game_slot.svg (x13..107, y24..104 of 120x140, drawn at 0.06 0.03 / 0.88 0.94) -->
+                <!-- the card (game_slot.svg, 100x104) is drawn at 0.1 0.05 / 0.8 0.7053; its art window
+                     x12..88 y21..87 maps to 0.196 0.1924 / 0.608 0.4476 -->
                 <image name="cart_label">
-                    <pos>0.1553 0.1911</pos>
-                    <size>0.6893 0.5371</size>
+                    <pos>0.196 0.1924</pos>
+                    <size>0.608 0.4476</size>
                     <path>${themePath}/assets/images/common/game_label.svg</path>
                 </image>
                 <text name="cart_name">
-                    <pos>0.17 0.21</pos>
-                    <size>0.66 0.50</size>
+                    <pos>0.20 0.20</pos>
+                    <size>0.60 0.43</size>
                     <text>{game:name}</text>
                     <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-                    <fontSize>0.021</fontSize>
+                    <fontSize>0.019</fontSize>
                     <color>3A3C40FF</color>
                     <alignment>center</alignment>
                     <verticalAlignment>center</verticalAlignment>
                     <lineSpacing>1.05</lineSpacing>
                 </text>
-                <image name="cart_art">
-                    <pos>0.5 0.4597</pos>
+                <!-- the box art, scaled to cover the window and cropped; the label art (scrape/labelart.py: the cover
+                     without its NINTENDO DS strip, cropped to 76:66) is drawn over it when the game has one. No
+                     visible condition: bound paths contain "(USA)" etc., which ES's expression parser mangles. -->
+                <image name="cart_boxart">
+                    <pos>0.5 0.4162</pos>
                     <origin>0.5 0.5</origin>
-                    <maxSize>0.6893 0.5371</maxSize><!-- keeps the art's aspect: the paper shows around it, like a label -->
+                    <minSize>0.608 0.4476</minSize>
                     <path>{game:thumbnail}</path>
                     <linearSmooth>true</linearSmooth>
                 </image>
+                <image name="cart_art">
+                    <pos>0.196 0.1924</pos>
+                    <size>0.608 0.4476</size>
+                    <path>{game:cartridge}</path>
+                    <linearSmooth>true</linearSmooth>
+                </image>
                 <image name="cart_slot">
-                    <pos>0.06 0.03</pos>
-                    <size>0.88 0.94</size>
+                    <pos>0.1 0.05</pos>
+                    <size>0.8 0.7053</size>
                     <path>${themePath}/assets/images/common/game_slot.svg</path>
                 </image>
                 <!-- START frame, shown on the selected cart only (activate/deactivate storyboards), so it moves with it.
-                     Sized so its opening (120x120 of 160x200) fits the cart's paper label (98 px tall on a 151 px
-                     item) with a small margin, centred on the label. -->
+                     Sized so its opening (120x120 of 160x200) hugs the card (113x107 px on a 128x151 item),
+                     centred on it, like the DSi's frame. -->
                 <image name="cart_start">
                     <path>${themePath}/assets/images/common/start_window.svg</path>
-                    <pos>0.5 0.532</pos>
+                    <pos>0.5 0.5113</pos>
                     <origin>0.5 0.5</origin>
-                    <maxSize>1.084 1.146</maxSize>
+                    <maxSize>1.1094 1.1755</maxSize>
                     <opacity>0</opacity>
                     <storyboard event="activate">
                         <animation property="opacity" from="0" to="1" duration="120"/>
@@ -506,7 +556,7 @@
             <pos>0.5 0.15</pos>
             <origin>0.5 0.5</origin>
             <size>0.2333 0.1</size>
-            <fontPath>${themePath}/assets/fonts/PixelifySans-Medium.ttf</fontPath>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0500000</fontSize><!-- 24px -->
             <color>E8E9EBFF</color>
             <alignment>center</alignment>
