@@ -167,16 +167,15 @@ if [ $DSFLIP_ON = 1 ]; then
     [ -f $ESF ] || { [ -f /usr/config/emulationstation/es_features.cfg ] && cp /usr/config/emulationstation/es_features.cfg $ESF && touch $BACKUP/.esf-created; }
     if [ -f $ESF ]; then
         backup_once $ESF
-        sed -i -e 's|name="ds-crisp (exact 2.5x, 1x games)"|name="ds-crisp (sharp, 1x and 2x)"|' \
-               -e 's|name="ds-grid (exact 2.5x + DS grid)"|name="ds-grid (sharp + DS pixel grid)"|' \
-               -e 's|name="ds-grid-2x (integer 2x + even grid)"|name="ds-grid-2x (pixel-perfect + even DS grid)"|' $ESF
-        if ! grep -q 'value="ds-crisp"' $ESF; then      # add the entries after DraStic's lcd1x+nds-color choice
-            awk '{ print } /value="lcd1x-nds-color"/ && !done { sub(/<choice.*/, "", $0); i = $0;
-                   print i "<choice name=\"ds-crisp (sharp, 1x and 2x)\" value=\"ds-crisp\" />";
-                   print i "<choice name=\"ds-grid (sharp + DS pixel grid)\" value=\"ds-grid\" />";
-                   print i "<choice name=\"ds-grid-2x (pixel-perfect + even DS grid)\" value=\"ds-grid-2x\" />"; done = 1 }' \
-                $ESF > $ESF.new && mv $ESF.new $ESF
-        fi
+        # our entries (value = file name): drop any old ones, then insert the current set after lcd1x+nds-color
+        grep -vE 'value="ds-(crisp|grid|grid-2x|crisp-color|grid-color)"' $ESF > $ESF.new
+        awk '{ print } /value="lcd1x-nds-color"/ && !done { i = $0; sub(/<choice.*/, "", i);
+               print i "<choice name=\"ds-crisp (sharp, 1x and 2x)\" value=\"ds-crisp\" />";
+               print i "<choice name=\"ds-crisp + NDS color\" value=\"ds-crisp-color\" />";
+               print i "<choice name=\"ds-grid (sharp + DS pixel grid)\" value=\"ds-grid\" />";
+               print i "<choice name=\"ds-grid + NDS color\" value=\"ds-grid-color\" />";
+               print i "<choice name=\"ds-grid-2x (pixel-perfect + even DS grid)\" value=\"ds-grid-2x\" />"; done = 1 }' \
+            $ESF.new > $ESF && rm -f $ESF.new
     fi
 fi
 

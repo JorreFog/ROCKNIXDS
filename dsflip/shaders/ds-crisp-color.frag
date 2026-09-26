@@ -1,0 +1,68 @@
+// ds-crisp + NDS screen colour (generated from ds-crisp.frag by adding ndsColor(); edit ds-crisp.frag, then regenerate).
+// ds-crisp -- exact pixel-area resampling for DraStic at 1x on the RG DS.
+//
+// At 1x each DS screen is its own 256x192 texture drawn to 640x480, i.e. a uniform
+// 2.5x (5:2) upscale. For that ratio the mathematically exact reconstruction is
+// pixel-area (box) resampling: every source pixel covers exactly 2.5 output pixels,
+// two of them solid and one shared 50/50 with its neighbour.
+//
+// Measured against the alternatives at 2.5x (numerically, on a step edge and under
+// sub-pixel scrolling):
+//   nearest        wobble: pixels alternate 2px/3px wide; shimmer sigma 0.0155
+//   bilinear       soft: 2 intermediate pixels per edge; shimmer sigma 0.0017
+//   sharp-bilinear soft: 2 intermediate px (0.10/0.90); shimmer sigma 0.0025   <- the built-in
+//   this shader    sharp: <=1 intermediate px;          shimmer sigma 0.0000
+//
+// The built-in sharp-bilinear is softer than it needs to be because it snaps the
+// scale to floor(2.5)=2.0, widening the ramp to 1.25 output pixels instead of 1.0.
+// Using the true ratio makes the ramp exactly one output pixel, which is provably
+// identical to area resampling (verified to 1.4e-14 over 200 random rows x 4 phases).
+//
+// highp is required, not cosmetic: mediump on this Mali-G52 is fp16 (10 mantissa
+// bits), which quantises a texel coordinate near x=256 to 0.25 texels -- 0.6 output
+// pixels of positional error. The built-in and the older sb-rcas.frag both use
+// mediump.
+//
+// One texture fetch: the area weights are exactly what the hardware's own linear
+// filter computes, so we place the sample point instead of blending by hand.
+// No #version and no backslash continuations: the shim compiles this as ESSL 1.00.
+
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+
+varying vec2 v_texcoord;
+uniform sampler2D u_texture;
+uniform vec2 u_texture_size;
+uniform vec2 u_output_size;
+
+// NDS screen colour: the DS LCD's washed-out, channel-mixed look. The same profile ROCKNIX's lcd1x+nds-color
+// uses: linearise with gamma 1.91, 0.89 luminance, a 3x3 channel mix, back to gamma 1.91.
+vec3 ndsColor(vec3 c)
+{
+    vec3 lin = clamp(pow(c, vec3(1.91)) * 0.89, 0.0, 1.0);
+    lin = mat3( 0.87,  0.10,  0.10,
+                0.255, 0.645, 0.17,
+               -0.125, 0.255, 0.73) * lin;
+    return pow(clamp(lin, 0.0, 1.0), vec3(1.0 / 1.91));
+}
+
+
+void main()
+{
+    // Footprint of this output pixel, in texels.
+    vec2 invS = u_texture_size / u_output_size;
+    vec2 lo   = floor(v_texcoord * u_output_size) * invS;
+    vec2 i0   = floor(lo);
+
+    // Fraction of the footprint falling in texel i0+1. clamp() also makes this
+    // degrade gracefully to nearest if the scale ever drops below 1.
+    vec2 w = clamp(((lo + invS) - (i0 + 1.0)) / invS, 0.0, 1.0);
+
+    // Sampling at i0+0.5+w lets the hardware's linear filter produce exactly the
+    // area-weighted average, so this stays a single fetch.
+    vec4 c = SWIZ(texture2D(u_texture, (i0 + 0.5 + w) / u_texture_size));
+    gl_FragColor = vec4(ndsColor(c.rgb), c.a);
+}
