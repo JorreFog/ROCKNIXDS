@@ -6,14 +6,18 @@ D=/storage/.config/drastic
 LOG=$D/dsflip/last-session.log
 ROM="$1"
 {
-  echo "$(date) start: $ROM"
+  echo "$(date) start: $ROM (shader: ${DSHOOK_SHADER:-none})"
   systemctl stop essway.service; systemctl stop sway.service
   sleep 0.5
-  # the Mali GPU does nothing in this mode (the display controller scans out DraStic's buffers), so don't
-  # keep it at ROCKNIX's "performance" 800 MHz: that's only heat
+  # without a shader the Mali GPU does nothing in this mode (the display controller scans out DraStic's
+  # buffers), so don't keep it at ROCKNIX's "performance" 800 MHz: that's only heat. With a shader it draws
+  # every frame (lcd1x-nds-color: 2.5 ms per screen at 800 MHz, 16 ms at 200), so it keeps ROCKNIX's clock.
   GPU=/sys/class/devfreq/fde60000.gpu
-  GPU_GOV=$(cat $GPU/governor 2>/dev/null)
-  [ -n "$GPU_GOV" ] && echo powersave > $GPU/governor 2>/dev/null
+  GPU_GOV=
+  case "${DSHOOK_SHADER:-none}" in
+    none|bilinear) GPU_GOV=$(cat $GPU/governor 2>/dev/null)
+                   [ -n "$GPU_GOV" ] && echo powersave > $GPU/governor 2>/dev/null ;;
+  esac
   cd $D
   SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log \
     LD_PRELOAD=$D/dsflip/libdsflip.so $D/dsflip/drastic "$ROM" > $D/dsflip/drastic.out 2>&1 &

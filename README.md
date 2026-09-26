@@ -119,8 +119,31 @@ It's installed as the default DraStic launcher: start any DS game from Emulation
 Install from a checkout: copy `dsflip/libdsflip.so` plus `dsflip/device/{session.sh,drastic-wrapper.sh,install.sh}`
 to the device and run `sh install.sh`.
 
-Not in this mode yet: the microphone (it came from ROCKNIX's `libdrastouch`), an lcd3x-style sharp filter
-(the hardware scaler is bilinear), and gptokeyb keyboard hotkeys. Everything DraStic maps to buttons itself works.
+Not in this mode yet: the microphone (it came from ROCKNIX's `libdrastouch`) and gptokeyb keyboard hotkeys.
+Everything DraStic maps to buttons itself works.
+
+### Shaders
+
+libdsflip follows ES's existing DraStic **shader** option (per system or per game), the same setting the
+stock path uses:
+
+- **default (bilinear)** keeps the zero-copy path: no GPU work, the coolest and lowest-latency mode.
+- **Any other choice** (sharp-bilinear, sharp-shimmerless, quilez, scanlines, lcd3x, lcd1x+nds-color, and
+  `.frag` files in `/storage/.config/drastic/shaders/` such as ds-crisp and ds-grid) runs that shader on the GPU.
+  Each screen is drawn into a 640×480 buffer that is then scanned out, with the same inputs as stock.
+- ROCKNIX's built-in shaders are read out of `/usr/lib/libdrastouch.so` on the device at runtime, so they
+  aren't copied into this repo and stay in step with ROCKNIX updates.
+- The GPU is ARM's libmali (`/dev/mali0`, no DRM render node). ROCKNIX exports `MALI_DEFAULT_DISPLAY=wayland`,
+  which can't work with sway stopped, so libdsflip uses libmali's GBM display.
+- **No GPU wait on the timing path:** both screens are submitted together and their GPU fence goes to the
+  display controller with the commit (`IN_FENCE_FD`), so the flip happens as soon as the GPU is done. An
+  earlier version waited for the GPU on the presenter thread, and that caused multi-second stutter bursts
+  whenever the GPU time grew (2.5 → 5.7 ms).
+- **Cost:** with a shader the GPU stays at ROCKNIX's 800 MHz, where lcd1x+nds-color takes ~2.5 ms per screen.
+  At the 200 MHz used in zero-copy mode it would take 16 ms. HeartGold at 2× with lcd3x: 4 dropped frames in
+  60 s of walking, SoC ~60 °C.
+- At 2× (hires) the source is 512×384, so shaders written for integer scales ≥2× (sharp-bilinear, lcd3x) scale
+  unevenly (1.25×). ds-crisp is the sharp choice there.
 
 ### RetroAchievements
 
@@ -146,6 +169,7 @@ Standalone DraStic has no RetroAchievements support, so `libdsflip` brings its o
 | `kmstest.c` | KMS bring-up: both panels, triple-buffered flips, `TEST_ONLY` probes for plane scaling |
 | `touchcal.c` | Crosshair calibration on the bare panel, listening on both touch controllers |
 | `dsrun.sh`, `ramp.py`, `kmsrun.sh`, `padkey.py` | Run/benchmark harness. `padkey.py` presses buttons by writing into the gamepad's evdev node |
+| `shtest.c` | Runs the shader pass outside DraStic (no DRM master): a test pattern through any shader into a PPM, plus GPU timing (`REPS=100`) |
 
 Real games (HeartGold, Black 2, Platinum) already held 60 fps at 2× in normal play, which is why the stress ROM
 exists. It's what shows the headroom.
@@ -176,10 +200,10 @@ Logged every 10 s during real play (HeartGold at 2×, walking around, 5–6 min 
 - **CPU:** ROCKNIX runs DraStic with the `performance` governor, so all four cores sit at their 1992 MHz
   maximum the whole time. libdsflip doesn't change that. DraStic uses roughly 70% of one core in total: the
   main (emulation) thread at 36–41%, plus 3D/helper threads at ~13–15%, ~11–13% and ~5%.
-- **GPU:** with libdsflip, nothing is rendered on the GPU during play: no texture upload, no shader and no
+- **GPU:** with libdsflip and no shader, nothing is rendered on the GPU during play: no texture upload, no shader and no
   compositor. So `session.sh` switches the Mali's devfreq governor to `powersave` (200 MHz, its lowest step)
   while the game runs and restores the previous governor when you quit. Before that change it idled at
-  800 MHz for nothing.
+  800 MHz for nothing. With a shader selected it keeps ROCKNIX's clock (see *Shaders*).
 - **Temperature:** it levels off around 55–58 °C during 2× play. The runs were back to back, so each started
   from the previous run's heat. The 800 MHz figure is a single end-of-run reading. Stock ROCKNIX (sway + GL)
   hasn't been logged the same way yet, so there is no measured stock-vs-libdsflip temperature number.

@@ -22,6 +22,8 @@
 //   DSFLIP_TOUCH=fe5e0000.i2c      bottom touchscreen (i2c-5; calibrated: raw == panel pixels)
 //   DSFLIP_TOUCH_INVERT=x/y/xy     axes to invert (default none)
 //   DSFLIP_LOG=path                stats log (default /storage/dsflip/logs/dsflip.log)
+//   DSHOOK_SHADER=name             ES's DraStic "shader" setting; anything but bilinear/none runs that shader on the
+//                                  GPU (shader.c). DSFLIP_SHADER overrides it
 #define _GNU_SOURCE
 #include <stdint.h>
 #include <stdio.h>
@@ -57,7 +59,8 @@ typedef struct { int x, y, w, h; } SDL_Rect;
 enum { FREE, WRITING, WRITTEN, READY, QUEUED, SCANOUT };
 enum { K_SCREEN, K_MENU, K_BLACK };
 
-typedef struct { uint32_t fb, handle, pitch, w, h; uint64_t size; void *map; int state; } dbuf;
+typedef struct { uint32_t fb, handle, pitch, w, h; uint64_t size; void *map; int state; uint64_t gen;
+                 int fence; } dbuf;         /* fence: GPU "done" sync_file for a shaded frame, -1 if none */
 typedef struct {                        /* one DraStic texture we scan out */
     void *tex; int kind, w, h;
     dbuf b[NBUF]; int nb;
@@ -66,9 +69,11 @@ typedef struct {                        /* one DraStic texture we scan out */
 typedef struct {                        /* one panel */
     uint32_t conn, crtc, crtc_idx, plane, mode_blob;
     drmModeModeInfo mode;
-    uint32_t p_fb, p_crtc, p_sx, p_sy, p_sw, p_sh, p_cx, p_cy, p_cw, p_ch;
+    uint32_t p_fb, p_crtc, p_sx, p_sy, p_sw, p_sh, p_cx, p_cy, p_cw, p_ch, p_fence;
     dbuf *ready, *queued, *scan;
     long long last_flip;
+    dbuf *src;                          /* shader mode: DraStic's newest finished buffer, not yet shaded */
+    dbuf out[4];                        /* shader mode: panel-sized buffers the shader draws into */
 } panel;
 
 static int fd = -1, efd = -1, ok;
@@ -89,6 +94,14 @@ static void *window;
 static int cursor_log;                  /* DSFLIP_CURSOR_LOG=1: log where DraStic draws its 32x32 stylus cursor */
 /* stats */
 static int st_present, st_commit, st_drop, st_busy, st_flips[2], st_touch;
+/* shader pass (shader.c) */
+const char *shader_name(void);
+int shader_init(int fd, const char *name);
+int shader_draw(uint32_t sh, int sw, int shh, int sp, uint64_t sgen, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish);
+int shader_fence(void);
+static const char *shader_nm;
+static volatile int shader_on, shader_done;
+static long long st_shade_sum, st_shade_max; static int st_shade_n;
 static long long st_t0, st_iv_max[2];
 
 #define LOG(...) do { if (lg) fprintf(lg, __VA_ARGS__); } while (0)
@@ -130,18 +143,19 @@ static int mkbuf(dbuf *b, uint32_t w, uint32_t h, uint32_t fourcc, uint32_t bpp)
     if (b->map == MAP_FAILED) return -1;
     memset(b->map, 0, c.size);
     b->state = FREE;
+    static uint64_t gens; b->gen = ++gens; b->fence = -1;
     return 0;
 }
 static void freebuf(dbuf *b) {
     if (!b->map) return;
     munmap(b->map, b->size); drmModeRmFB(fd, b->fb);
     struct drm_mode_destroy_dumb d = { .handle = b->handle }; drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &d);
-    memset(b, 0, sizeof *b);
+    memset(b, 0, sizeof *b); b->fence = -1;
 }
 
 static void plane_props(panel *p) {
     uint32_t o = DRM_MODE_OBJECT_PLANE, id = p->plane;
-    p->p_fb = prop(id, o, "FB_ID"); p->p_crtc = prop(id, o, "CRTC_ID");
+    p->p_fb = prop(id, o, "FB_ID"); p->p_crtc = prop(id, o, "CRTC_ID"); p->p_fence = prop(id, o, "IN_FENCE_FD");
     p->p_sx = prop(id, o, "SRC_X"); p->p_sy = prop(id, o, "SRC_Y"); p->p_sw = prop(id, o, "SRC_W"); p->p_sh = prop(id, o, "SRC_H");
     p->p_cx = prop(id, o, "CRTC_X"); p->p_cy = prop(id, o, "CRTC_Y"); p->p_cw = prop(id, o, "CRTC_W"); p->p_ch = prop(id, o, "CRTC_H");
 }
@@ -156,6 +170,7 @@ static void add_fb(drmModeAtomicReq *r, panel *p, dbuf *b) {
     drmModeAtomicAddProperty(r, p->plane, p->p_cy, 0);
     drmModeAtomicAddProperty(r, p->plane, p->p_cw, p->mode.hdisplay);
     drmModeAtomicAddProperty(r, p->plane, p->p_ch, p->mode.vdisplay);
+    if (p->p_fence && b->fence >= 0) drmModeAtomicAddProperty(r, p->plane, p->p_fence, b->fence);  /* flip once the GPU is done */
 }
 
 #include "font8.h"
@@ -216,7 +231,8 @@ static int e_hist[64], e_ring[600], e_pos, e_cnt; /* E histogram in 0.5 ms bins 
 static double e_p95 = 8000;
 static int main_tid, want_wake;
 
-static void release(dbuf *b) { if (b && b != &blk.b[0]) b->state = FREE; }
+static void drop_fence(dbuf *b) { if (b && b->fence >= 0) { close(b->fence); b->fence = -1; } }
+static void release(dbuf *b) { if (b && b != &blk.b[0]) { b->state = FREE; drop_fence(b); } }
 
 /* toast: a small overlay plane on the top panel (RetroAchievements pop-ups), committed together with the
  * game frames. Rendered into one of two buffers, never the one being scanned out. */
@@ -266,7 +282,7 @@ static void try_commit(void) {         /* called with mu held */
         }
         return;
     }
-    for (int i = 0; i < 2; i++) if (P[i].ready) { P[i].queued = P[i].ready; P[i].queued->state = QUEUED; P[i].ready = 0; }
+    for (int i = 0; i < 2; i++) if (P[i].ready) { drop_fence(P[i].ready); P[i].queued = P[i].ready; P[i].queued->state = QUEUED; P[i].ready = 0; }
     if (with_toast) { toast_dirty = 0; toast_shown = toast_want; }
     commit_t = now_us(); commit_vref = vbl_ref;
     pending_mask = mask;                /* one flip event per CRTC in the commit */
@@ -434,8 +450,62 @@ static void arm_latch(void) {         /* with mu held: next latch point after no
     timerfd_settime(tfd, TFD_TIMER_ABSTIME, &its, 0);
 }
 
+/* shader mode: draw each panel's newest DraStic buffer into a free output buffer, then publish both together
+ * (one commit shows the same emulated frame on both screens). GL work happens with mu released. */
+static void note_phase(long long tp) {  /* with mu held: where in the refresh cycle a frame became ready */
+    if (!vbl_ref) return;
+    double ph = fmod((double)(tp - vbl_ref), period); if (ph < 0) ph += period;
+    double ang = ph / period * 2 * M_PI, a = ph_n < 120 ? 1.0 / (ph_n + 1) : 0.01;
+    ph_c += a * (cos(ang) - ph_c); ph_s += a * (sin(ang) - ph_s); ph_n++;
+    ph_hist[(int)(ph / period * 16) & 15]++;
+}
+
+static void shade_pending(void) {
+    dbuf *src[2] = { 0, 0 }, *dst[2] = { 0, 0 };
+    lock(&mu);
+    for (int i = 0; i < 2; i++) {
+        if (!(src[i] = P[i].src)) continue;
+        P[i].src = 0;
+        for (int k = 0; k < 4 && !dst[i]; k++) if (P[i].out[k].state == FREE) dst[i] = &P[i].out[k];
+        if (!dst[i] || !src[i]->handle) { release(src[i]); src[i] = 0; st_drop++; continue; }
+        dst[i]->state = WRITING;
+    }
+    unlock(&mu);
+    if (!src[0] && !src[1]) return;
+    /* both draws are queued, then one fence covers them: the display controller waits for the GPU (IN_FENCE_FD)
+     * instead of this thread, so the GPU time stays out of the pacing path. No fence support: wait here. */
+    int bad[2] = { 0, 0 }, last = src[1] ? 1 : 0, fence = -1;
+    long long t0 = now_us();
+    for (int i = 0; i < 2; i++) if (src[i]) {
+        dbuf *a = src[i], *b = dst[i];
+        bad[i] = shader_draw(a->handle, a->w, a->h, a->pitch, a->gen, b->handle, b->w, b->h, b->pitch, b->gen,
+                             i == last && !P[0].p_fence) != 0;
+    }
+    if (P[0].p_fence) fence = shader_fence();
+    for (int i = 0; i < 2; i++) if (src[i] && !bad[i] && fence >= 0) dst[i]->fence = dup(fence);
+    if (fence >= 0) close(fence);
+    long long dt = now_us() - t0;
+    st_shade_sum += dt; st_shade_n++; if (dt > st_shade_max) st_shade_max = dt;
+    lock(&mu);
+    note_phase(now_us());
+    for (int i = 0; i < 2; i++) if (src[i]) {
+        release(src[i]);
+        if (bad[i]) { dst[i]->state = FREE; st_drop++; continue; }
+        dst[i]->state = READY;
+        if (P[i].ready) { release(P[i].ready); st_drop++; }     /* mailbox: newest wins */
+        else if (!P[0].ready && !P[1].ready) ready_since = now_us();
+        P[i].ready = dst[i];
+    }
+    unlock(&mu);
+}
+
 static void *presenter(void *a) {
     (void)a;
+    if (shader_nm) {                    /* GL lives on this thread; init() waits for the verdict */
+        shader_on = shader_init(fd, shader_nm);
+        if (!shader_on) LOG("[dsflip] shader \"%s\" unavailable: zero-copy\n", shader_nm);
+    }
+    shader_done = 1;
     drmEventContext ev = { .version = 3, .page_flip_handler2 = on_flip };
     struct pollfd pf[3] = { { .fd = fd, .events = POLLIN }, { .fd = efd, .events = POLLIN }, { .fd = tfd, .events = POLLIN } };
     long long st10 = now_us();
@@ -444,6 +514,7 @@ static void *presenter(void *a) {
         if (pf[0].revents & POLLIN) drmHandleEvent(fd, &ev);
         if (pf[1].revents & POLLIN) {
             uint64_t v; if (read(efd, &v, 8) < 0) {}
+            if (shader_on) shade_pending();
             lock(&mu);
             if (!pacing_latch || ph_n < 120) try_commit();              /* immediate (and while learning) */
             else arm_latch();
@@ -482,6 +553,8 @@ static void *presenter(void *a) {
                 fmod(atan2(wk_s, wk_c) / (2 * M_PI) * period + period, period), e_p95 / 1000);
             LOG("mode=%s period=%.1f us, presents at %.0f us after vblank (spread R=%.2f) [%s], latch at %.0f us, margin %.0f us, bottom %+.0f us, late=%d missed=%d\n",
                 pacing_latch && ph_n >= 120 ? "latch" : "immediate", period, mean, sqrt(ph_c * ph_c + ph_s * ph_s), h, latch_off, latch_margin, bot_off, st_late, st_miss);
+            if (st_shade_n) LOG("[shader] submit %.2f ms avg, %.2f ms max per frame (both screens)\n", st_shade_sum / 1000.0 / st_shade_n, st_shade_max / 1000.0);
+            st_shade_sum = st_shade_max = 0; st_shade_n = 0;
             st_late = 0; st_miss = 0; st10 = t;
             { int fdab = open("/tmp/dsflip-ab", O_RDONLY); char c = '0';
               if (fdab >= 0) { if (read(fdab, &c, 1) < 0) {} close(fdab); }
@@ -755,7 +828,13 @@ __attribute__((constructor)) static void init(void) {
     tdump_x = -1; if (getenv("DSFLIP_TOUCH_DUMP")) touch_dumps = atoi(getenv("DSFLIP_TOUCH_DUMP"));
     efd = eventfd(0, EFD_CLOEXEC);
     st_t0 = now_us();
+    if ((shader_nm = shader_name()))
+        for (int i = 0; i < 2 && shader_nm; i++) for (int k = 0; k < 4; k++)
+            if (mkbuf(&P[i].out[k], P[i].mode.hdisplay, P[i].mode.vdisplay, DRM_FORMAT_XRGB8888, 32)) {
+                LOG("[dsflip] shader output buffers: alloc failed\n"); shader_nm = 0; break;
+            }
     pthread_t th; pthread_create(&th, 0, presenter, 0);
+    for (int k = 0; k < 300 && !shader_done; k++) usleep(10000);
     const char *inv = getenv("DSFLIP_TOUCH_INVERT");        /* "x", "y", "xy" or unset/"none" */
     if (inv) { touch_inv_x = strchr(inv, 'x') != 0; touch_inv_y = strchr(inv, 'y') != 0; }
     const char *tp = getenv("DSFLIP_TOUCH");
@@ -813,7 +892,7 @@ void *SDL_CreateTexture(void *rn, uint32_t fmt, int access, int w, int h) {
     if (s) {
         for (int k = 0; k < s->nb; k++)   /* recycled slot: free buffers that aren't on screen */
             if (s->b[k].state == FREE || s->b[k].state == WRITTEN || s->b[k].state == WRITING) freebuf(&s->b[k]);
-            else memset(&s->b[k], 0, sizeof s->b[k]);   /* still scanning out: leak it rather than tear it down */
+            else { memset(&s->b[k], 0, sizeof s->b[k]); s->b[k].fence = -1; }   /* still scanning out: leak it rather than tear it down */
         s->tex = t; s->kind = screen ? K_SCREEN : K_MENU; s->w = w; s->h = h; s->writing = s->written = -1;
         s->nb = screen ? NBUF : 3;
         int bw = w, bh = h;
@@ -927,10 +1006,7 @@ void SDL_RenderPresent(void *rn) {
     lock(&mu);
     st_present++;
     if (vbl_ref) {                       /* where in the refresh cycle did this frame arrive? */
-        double ph = fmod((double)(tp - vbl_ref), period); if (ph < 0) ph += period;
-        double ang = ph / period * 2 * M_PI, a = ph_n < 120 ? 1.0 / (ph_n + 1) : 0.01;
-        ph_c += a * (cos(ang) - ph_c); ph_s += a * (sin(ang) - ph_s); ph_n++;
-        ph_hist[(int)(ph / period * 16) & 15]++;
+        if (!shader_on) note_phase(tp);  /* shader mode: when the shaded frame is ready (shade_pending) */
         if (clock_lock && warp_on) {
             if (!main_tid) main_tid = (int)syscall(SYS_gettid);
             if (wake_t && tp > wake_t && tp - wake_t < 40000) {      /* E for this frame, and the wake's phase */
@@ -967,6 +1043,11 @@ void SDL_RenderPresent(void *rn) {
         } else {
             if (s->written < 0 || s->b[s->written].state != WRITTEN) continue;
             b = &s->b[s->written]; s->written = -1; b->state = READY;
+            if (shader_on && s->kind == K_SCREEN) {   /* the presenter shades it into a panel buffer */
+                if (P[i].src) { release(P[i].src); st_drop++; }
+                P[i].src = b;
+                continue;
+            }
         }
         if (P[i].ready) { release(P[i].ready); st_drop++; }     /* mailbox: newest wins */
         else if (!P[0].ready && !P[1].ready) ready_since = tp;
