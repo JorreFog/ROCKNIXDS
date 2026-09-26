@@ -185,7 +185,13 @@ static long long ready_since;           /* when the oldest uncommitted frame arr
 static long long commit_t, commit_vref; /* last commit time and the vblank reference at that moment */
 static int st_miss;                     /* commits that reached the screen a vblank later than intended */
 static double latch_fixed;              /* DSFLIP_LATCH_FIXED=<us after vblank>: test mode, no adaptation */
-#define LATCH_MARGIN 1300               /* commit >= this before vblank; measured: 600 us always makes it, 300 us doesn't */
+#define LATCH_MARGIN 1300               /* starting commit margin before vblank; measured on the top panel: 600 us always
+                                           makes it, 300 us doesn't. Grows on late commits (latch_margin) */
+static double latch_margin = LATCH_MARGIN;  /* adaptive: +400 us per latch that found the previous flip still pending */
+static double bot_off;                  /* bottom panel's vblank phase relative to the top's, us in (-P/2, P/2] */
+static int bot_n, latch_skipped;        /* bottom phase samples; a latch was skipped because a flip was pending */
+static int ab_legacy;                   /* A/B test (/tmp/dsflip-ab = "1"): the previous pacing, fixed 2.5 ms margin
+                                           before the top vblank only, no margin growth, no skip recovery */
 
 /* EXPERIMENTAL, off by default (DSFLIP_CLOCKLOCK=1): tested 2026-09-26 and it made pacing WORSE (924-1760 drops
  * per 90 s of the HeartGold intro vs 2 with the adaptive latch alone). With the lock, the latch is fixed, so the
@@ -283,6 +289,9 @@ static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned c
                 if (k >= 1 && k <= 4 && fabs(iv / k - period) < 300) period += 0.02 * (iv / k - period);
             }
             vbl_ref = t;
+        } else if (vbl_ref) {           /* bottom panel: learn its vblank phase relative to the top's */
+            double d = remainder((double)(t - vbl_ref), period);
+            bot_off = bot_n++ < 10 ? d : bot_off + 0.05 * (d - bot_off);
         }
         if (!P[i].queued) continue;     /* toast-only flip on this CRTC */
         if (P[i].last_flip && t - P[i].last_flip > st_iv_max[i]) st_iv_max[i] = t - P[i].last_flip;
@@ -290,7 +299,7 @@ static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned c
         if (P[i].scan != P[i].queued) release(P[i].scan);
         P[i].scan = P[i].queued; P[i].scan->state = SCANOUT; P[i].queued = 0;
     }
-    if (!pending_mask && (!pacing_latch || ph_n < 120)) try_commit();
+    if (!pending_mask && (!pacing_latch || ph_n < 120 || latch_skipped)) { latch_skipped = 0; try_commit(); }
     unlock(&mu);
 }
 
@@ -402,8 +411,12 @@ static void arm_latch(void) {         /* with mu held: next latch point after no
     else if (ph_n >= 120) {
         double mean = atan2(ph_s, ph_c) / (2 * M_PI) * period;          /* where presents cluster */
         double l = fmod(mean + period / 2 + 2 * period, period);        /* opposite phase */
-        /* forbidden: the last LATCH_MARGIN before vblank (the commit wouldn't make it) and a sliver after it */
-        double lo = 300, hi = period - LATCH_MARGIN;
+        /* forbidden: latch_margin before the earlier panel's vblank (the commit wouldn't make it on both CRTCs)
+         * to a sliver after the later one's. The bottom panel's vblank is ~0.8 ms off the top's; ignoring that made
+         * one panel miss every commit near the edge, which kept a flip pending at every latch: 30 fps bursts. */
+        /* lo: the previous flip's event must have arrived before the latch, or the latch counts as late */
+        double lo = fmax(0, bot_off) + 1000, hi = period + fmin(0, bot_off) - latch_margin;
+        if (ab_legacy) lo = 300, hi = period - 2500;
         if (l < lo || l > hi) {         /* pick the allowed edge that is farther (circularly) from the presents... */
             double m = fmod(mean + 2 * period, period);
             double dlo = fabs(remainder(lo - m, period)), dhi = fabs(remainder(hi - m, period));
@@ -439,7 +452,13 @@ static void *presenter(void *a) {
         if (tfd >= 0 && (pf[2].revents & POLLIN)) {                        /* latch point reached */
             uint64_t v; if (read(tfd, &v, 8) < 0) {}
             lock(&mu);
-            if (pending_mask) st_late++; else try_commit();
+            if (pending_mask) {                 /* the previous commit missed a vblank: commit as soon as its */
+                st_late++;                      /* flip lands (one repeat, not a 30 fps lock), and if the latch */
+                if (!ab_legacy) {               /* was near the vblank edge, widen the margin */
+                    latch_skipped = 1;
+                    if (latch_off > period / 2 && latch_margin < 5000) latch_margin += 400;
+                }
+            } else try_commit();
             if (P[0].ready || P[1].ready) arm_latch();
             unlock(&mu);
         }
@@ -461,9 +480,12 @@ static void *presenter(void *a) {
             double mean = fmod(atan2(ph_s, ph_c) / (2 * M_PI) * period + period, period);
             LOG("[pace] warp %+.0f ppm (base %+.0f), wake at %.0f us, E p95 %.1f ms | ", (warp - 1) * 1e6, (warp0 - 1) * 1e6,
                 fmod(atan2(wk_s, wk_c) / (2 * M_PI) * period + period, period), e_p95 / 1000);
-            LOG("mode=%s period=%.1f us, presents at %.0f us after vblank (spread R=%.2f) [%s], latch at %.0f us, late=%d missed=%d\n",
-                pacing_latch && ph_n >= 120 ? "latch" : "immediate", period, mean, sqrt(ph_c * ph_c + ph_s * ph_s), h, latch_off, st_late, st_miss);
+            LOG("mode=%s period=%.1f us, presents at %.0f us after vblank (spread R=%.2f) [%s], latch at %.0f us, margin %.0f us, bottom %+.0f us, late=%d missed=%d\n",
+                pacing_latch && ph_n >= 120 ? "latch" : "immediate", period, mean, sqrt(ph_c * ph_c + ph_s * ph_s), h, latch_off, latch_margin, bot_off, st_late, st_miss);
             st_late = 0; st_miss = 0; st10 = t;
+            { int fdab = open("/tmp/dsflip-ab", O_RDONLY); char c = '0';
+              if (fdab >= 0) { if (read(fdab, &c, 1) < 0) {} close(fdab); }
+              if ((c == '1') != ab_legacy) { ab_legacy = c == '1'; LOG("[pace] A/B: %s pacing\n", ab_legacy ? "legacy" : "new"); } }
             unlock(&mu);
         }
         if (t - st_t0 >= 1000000) {

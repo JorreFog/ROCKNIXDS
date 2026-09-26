@@ -57,7 +57,7 @@ To go back to the stock DraStic display path without uninstalling: `touch /stora
 | DraStic at 2× internal resolution, heavy 3D (stress ROM, 1920 polygons) | 39.0 fps | **50.4 fps (+29%)** |
 | Heaviest load that still holds 60 fps at 2× | ~576 polygons | **~1344 polygons** |
 | Display cost per frame on DraStic's main thread | ~3.6 ms (texture upload + GL + sway) | **0.07–0.29 ms** |
-| Frame pacing at 60 fps | a repeated frame every ~10 s (60.10 Hz panels), phase set by chance at each launch | **every frame on both screens in the same refresh, 0 drops/repeats** |
+| Frame pacing at 60 fps (HeartGold at 2×, walking) | 1550 dropped frames in 5 min (next-vblank presentation) | **~0.13 dropped frames/s (about 1 every 8 s); both screens always flip in the same refresh** |
 | Touch in DraStic | stock sway mapping lands on the wrong area | **calibrated to the pixel** |
 | Frontend | single-screen stock theme | **dual-screen DSi-style theme, patched ES, boot splash** |
 | RetroAchievements in standalone DraStic | not supported | **supported (softcore), pop-ups on the top screen** |
@@ -91,7 +91,13 @@ its measure-first phases are in [`docs/drastic-2x-plan.md`](docs/drastic-2x-plan
 - **Hardware scaling.** The VOP2 display controller scales 512×384 (or 256×192) to 640×480 on the
   primary planes, for free.
 - **Both screens in one atomic commit.** The top and bottom frames always change together. The panels are
-  phase-locked ~0.8 ms apart.
+  phase-locked, with the bottom panel's vblank **2.05 ms before** the top's (measured).
+- **Latch pacing.** DraStic runs on its own 60.000 Hz clock, which slowly drifts through the panels' refresh
+  cycle (one full sweep every ~3 min). Committing at the next vblank makes the vblank the cut-off, so jitter
+  puts two frames into one refresh and none into the next. Instead, libdsflip tracks where in the cycle the
+  frames arrive and commits the newest one at the opposite phase. The latch avoids a zone around *both*
+  panels' vblanks: a commit must land ≥1.3 ms before the earlier (bottom) one, and the margin grows if a
+  commit still misses. `DSFLIP_PACING=immediate` gives the old behaviour.
 - **Mailbox presenter thread.** `SDL_RenderPresent` never blocks, a superseded frame is dropped, and an
   unchanged panel keeps its buffer.
 - **DraStic's menu.** It's an 800×480 RGB565 texture, shown on the top panel with hardware scaling.
@@ -154,6 +160,30 @@ dsflip/build.sh /path/to/aarch64-sysroot   # libdsflip.so (display + touch + Ret
 `build.sh` explains how to make the sysroot: Debian trixie arm64 `libc6`/`libc6-dev`/`linux-libc-dev`/
 `libdrm-dev`/`libgcc-14-dev`, plus `libdrm.so.2` and `libgcc_s.so.1` from the device. A real aarch64 glibc
 sysroot matters: rcheevos uses pthread types whose size differs from x86's.
+
+### Clocks and temperature while playing
+
+Logged every 10 s during real play (HeartGold at 2×, walking around, 5–6 min per run) with
+`bench5.sh`, which only watches the running game and doesn't touch it:
+
+| | CPU (4 cores) | GPU (Mali) | SoC temp, start → end (`cpu-thermal`) | DraStic main thread |
+|---|---|---|---|---|
+| libdsflip, GPU left at ROCKNIX's setting | 1992 MHz | **800 MHz** | → 58.9 °C | 40% of a core |
+| libdsflip, GPU on `powersave` (run A) | 1992 MHz | **200 MHz** | 55.0 → 56.1 °C | 36% |
+| same, heavy stretch of the game (run B) | 1992 MHz | 200 MHz | 56.1 → 57.8 °C | 41% |
+| same, 6-min run (run C) | 1992 MHz | 200 MHz | 57.2 → 57.8 °C | 37% |
+
+- **CPU:** ROCKNIX runs DraStic with the `performance` governor, so all four cores sit at their 1992 MHz
+  maximum the whole time. libdsflip doesn't change that. DraStic uses roughly 70% of one core in total: the
+  main (emulation) thread at 36–41%, plus 3D/helper threads at ~13–15%, ~11–13% and ~5%.
+- **GPU:** with libdsflip, nothing is rendered on the GPU during play: no texture upload, no shader and no
+  compositor. So `session.sh` switches the Mali's devfreq governor to `powersave` (200 MHz, its lowest step)
+  while the game runs and restores the previous governor when you quit. Before that change it idled at
+  800 MHz for nothing.
+- **Temperature:** it levels off around 55–58 °C during 2× play. The runs were back to back, so each started
+  from the previous run's heat. The 800 MHz figure is a single end-of-run reading. Stock ROCKNIX (sway + GL)
+  hasn't been logged the same way yet, so there is no measured stock-vs-libdsflip temperature number.
+  In hands-on use the device clearly runs cooler.
 
 ---
 
@@ -223,6 +253,9 @@ the top panel, the bottom panel, and an unused third.
   panels on the wrong outputs. Games are unaffected: `libdsflip` reads the touch panel itself.
 - **No microphone** under `libdsflip` yet. Use the `nodsflip` fallback for mic games.
 - **RetroAchievements:** softcore only, and achievements that read the DS's DTCM (rare) don't work yet.
+- **Heavy stretches at 2× can still drop frames** (up to ~10/s in one run). There, DraStic's own frame
+  times vary so much that its frames arrive spread over the whole refresh cycle, and no latch position can
+  separate them. Calm stretches drop about one frame every 8 s.
 - `libdsflip` stops ES while a game runs, so switching takes ~5 s each way. A Wayland backend that keeps
   ES running is possible (see the plan).
 
