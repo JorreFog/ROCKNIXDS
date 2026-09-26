@@ -266,12 +266,15 @@ write("grid.svg", 1960, 520, f'<path d="{" ".join(lines)}" stroke="{GRID}" strok
 paths = open(os.path.join(HERE, "rocknix_logo.paths")).read()
 paths = paths.replace('fill="RED"', 'fill="url(#rk)"').replace('fill="GREY"', 'fill="url(#nx)"')
 shadow = paths.replace('fill="url(#rk)"', 'fill="#000000"').replace('fill="url(#nx)"', 'fill="#000000"')
-write("distro_logo.svg", 500, 95, f'''<defs>{grad("rk", [(0, "#ff6b6b"), (1, "#e8403f")])}
-{grad("nx", [(0, "#f2f3f5"), (1, "#c9ccd1")])}</defs>
-<g transform="translate(0 -53)">
-<g transform="translate(0 4)" opacity="0.35">{shadow}</g>
-{paths}
-</g>''')
+# The bar between the L2/R2 tabs shows the ROCKNIXDS mark (logo/make_logo.py), the old wordmark above stays for
+# reference. The .frag files start with a "<!-- W x H -->" comment giving their size.
+def logo_frag(name):
+    f = open(os.path.join(HERE, "..", "logo", name + ".frag")).read()
+    w, h = (float(v) for v in f.split("-->", 1)[0].strip("<!- \n").split(" x "))
+    return f, w, h
+WIDE, WW, WH = logo_frag("rocknixds-logo-wide")
+STACK, SW, SH = logo_frag("rocknixds-logo")
+write("distro_logo.svg", round(WW), round(WH), WIDE)
 
 # --- soft light behind the logo (the theme makes it breathe) ---
 write("logo_glow.svg", 560, 240, f'''<defs><radialGradient id="g" cx="0.5" cy="0.5" r="0.5">
@@ -348,13 +351,14 @@ logo_defs = f'<defs>{grad("rk", [(0, "#ff6b6b"), (1, "#e8403f")])}{grad("nx", [(
 # top: logo 400 px wide (native 500 x ~95) centred at y 205, device name, divider
 write("../splash/splash_top.svg", 640, 480, base + f'''
 {logo_defs}
-<ellipse cx="320" cy="205" rx="300" ry="130" fill="url(#glow)"/>
-<g transform="translate(120 {205 - 38}) scale(0.8) translate(0 -53)">{logo}</g>
-<path d="M200,268 H440" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
-{glyph_run("Anbernic RG DS", 320, 300, 15, "#a9afb8")}''')
+<ellipse cx="320" cy="190" rx="300" ry="150" fill="url(#glow)"/>
+<g transform="translate({320 - SW * 0.66 / 2:.2f} {186 - SH * 0.66 / 2:.2f}) scale(0.66)">{STACK}</g>
+<path d="M200,322 H440" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
+{glyph_run("Anbernic RG DS", 320, 354, 15, "#a9afb8")}''')
 # bottom: the DS card (100x104, drawn 1.6x) with the logo on its label, in the selection frame; Loading + dots
 card = open(os.path.join(OUT, "game_slot.svg")).read().split(">", 1)[1].rsplit("</svg>", 1)[0]
-lab = f'<rect x="12" y="21" width="76" height="66" fill="#fbfbf8"/><g transform="translate(18 {54 - 6}) scale(0.128) translate(0 -53)">{logo}</g>'
+ls = 64 / SW   # logo 64 px wide on the 76 px label
+lab = f'<rect x="12" y="21" width="76" height="66" fill="#fbfbf8"/><g transform="translate({50 - 32:.2f} {54 - SH * ls / 2:.2f}) scale({ls:.4f})">{STACK}</g>'
 cx, cy, sc = 320, 190, 1.6
 cw, ch = 100 * sc, 104 * sc
 fw, fh = cw + 26, ch + 26
