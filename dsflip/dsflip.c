@@ -42,6 +42,8 @@
 #include <sys/mman.h>
 #include <sys/eventfd.h>
 #include <sys/timerfd.h>
+#include <sys/time.h>
+#include <sys/syscall.h>
 #include <math.h>
 #include <sys/stat.h>
 #include <xf86drm.h>
@@ -180,6 +182,33 @@ static double ph_c, ph_s;               /* EMA of cos/sin of the present phase *
 static int ph_n, ph_hist[16], st_late;  /* samples; histogram of present phases (logged); commits that missed */
 static double latch_off = 14000;        /* current latch point, us after vblank */
 static long long ready_since;           /* when the oldest uncommitted frame arrived */
+static long long commit_t, commit_vref; /* last commit time and the vblank reference at that moment */
+static int st_miss;                     /* commits that reached the screen a vblank later than intended */
+static double latch_fixed;              /* DSFLIP_LATCH_FIXED=<us after vblank>: test mode, no adaptation */
+#define LATCH_MARGIN 1300               /* commit >= this before vblank; measured: 600 us always makes it, 300 us doesn't */
+
+/* EXPERIMENTAL, off by default (DSFLIP_CLOCKLOCK=1): tested 2026-09-26 and it made pacing WORSE (924-1760 drops
+ * per 90 s of the HeartGold intro vs 2 with the adaptive latch alone). With the lock, the latch is fixed, so the
+ * presents must be parked in front of it, and DraStic's emulation-time spikes (p95 up to 7.5 ms) keep crossing
+ * it; the adaptive latch keeps half a refresh of slack on both sides instead. Kept for future work.
+ *
+ * Clock lock. DraStic runs at exactly 60.000 fps on gettimeofday; the panels refresh at ~60.002-60.005 Hz, so
+ * DraStic's frames drift through the refresh cycle every few minutes. We stretch DraStic's gettimeofday by
+ * warp = (1/60 s) / panel period (and open its audio at the matching rate, +0.5% so audio never becomes the
+ * pacer, as the old dvsync shim did), which stops the drift, and a slow control loop on warp parks the
+ * presents half a refresh before the latch point: far from the cut-off, with low latency. DSFLIP_CLOCKLOCK=0 disables. */
+static int clock_lock = 0, warp_on, wmu, pll_on = 1;   /* experimental, off: see the note above */
+static double warp0 = 1.0, warp = 1.0, pll_i;
+static long long wr0, wv0, wlast;       /* real / virtual anchors (gettimeofday domain, us) */
+static int (*real_gtod)(struct timeval *, void *);
+/* what the loop steers: when DraStic WAKES to start a frame (the end of its post-present SDL_Delay(ms>0) on the
+ * main thread). That's timer-precise, unlike present times, which spread with emulation time E. The wake is parked
+ * so that wake + p95(E) + safety still lands before the latch. */
+static long long wake_t;                /* last frame-start wake (us, CLOCK_MONOTONIC), 0 if none since the present */
+static double wk_c, wk_s; static int wk_n;
+static int e_hist[64], e_ring[600], e_pos, e_cnt; /* E histogram in 0.5 ms bins over the last 600 frames */
+static double e_p95 = 8000;
+static int main_tid, want_wake;
 
 static void release(dbuf *b) { if (b && b != &blk.b[0]) b->state = FREE; }
 
@@ -233,6 +262,7 @@ static void try_commit(void) {         /* called with mu held */
     }
     for (int i = 0; i < 2; i++) if (P[i].ready) { P[i].queued = P[i].ready; P[i].queued->state = QUEUED; P[i].ready = 0; }
     if (with_toast) { toast_dirty = 0; toast_shown = toast_want; }
+    commit_t = now_us(); commit_vref = vbl_ref;
     pending_mask = mask;                /* one flip event per CRTC in the commit */
     st_commit++;
 }
@@ -244,6 +274,10 @@ static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned c
         pending_mask &= ~(1 << i);
         long long t = sec * 1000000LL + usec;
         if (i == 0) {
+            if (commit_t && commit_vref && P[0].queued) {  /* did the commit make the first vblank after it? */
+                double c = fmod((double)(commit_t - commit_vref), period); if (c < 0) c += period;
+                if ((double)(t - commit_t) > period - c + period / 2) st_miss++;
+            }
             if (vbl_ref) {
                 double iv = (double)(t - vbl_ref), k = floor(iv / period + 0.5);
                 if (k >= 1 && k <= 4 && fabs(iv / k - period) < 300) period += 0.02 * (iv / k - period);
@@ -329,16 +363,54 @@ static void dump_touch(void) {         /* bottom panel's scanout + the DS coordi
     fwrite(b->map, 1, (size_t)b->pitch * b->h, f); fclose(f);
 }
 
+int gettimeofday(struct timeval *tv, void *tz) {
+    if (!real_gtod) real_gtod = dlsym(RTLD_NEXT, "gettimeofday");
+    int r = real_gtod(tv, tz);
+    if (warp_on && r == 0) {
+        long long t = tv->tv_sec * 1000000LL + tv->tv_usec;
+        lock(&wmu);
+        long long v = wv0 + (long long)((double)(t - wr0) * warp);
+        if (v < wlast) v = wlast;       /* never let DraStic's clock run backwards */
+        wlast = v;
+        unlock(&wmu);
+        tv->tv_sec = v / 1000000; tv->tv_usec = v % 1000000;
+    }
+    return r;
+}
+void SDL_Delay(uint32_t ms) {
+    REAL(void, SDL_Delay, uint32_t);
+    real(ms);
+    if (ms > 0 && want_wake && (int)syscall(SYS_gettid) == main_tid) { wake_t = now_us(); want_wake = 0; }
+}
+
+static void set_warp(double w) {        /* rebase so DraStic's virtual time stays continuous */
+    struct timeval tv;
+    if (!real_gtod) real_gtod = dlsym(RTLD_NEXT, "gettimeofday");
+    real_gtod(&tv, 0);
+    long long t = tv.tv_sec * 1000000LL + tv.tv_usec;
+    lock(&wmu);
+    if (warp_on) { wv0 = wv0 + (long long)((double)(t - wr0) * warp); wr0 = t; }
+    else { wv0 = wr0 = t; warp_on = 1; }
+    warp = w;
+    unlock(&wmu);
+}
+
 static void arm_latch(void) {         /* with mu held: next latch point after now */
     if (tfd < 0 || !vbl_ref) return;
-    if (ph_n >= 120) {
+    if (latch_fixed > 0) latch_off = latch_fixed;
+    else if (clock_lock && warp_on) latch_off = period - LATCH_MARGIN;  /* locked: the latch never moves */
+    else if (ph_n >= 120) {
         double mean = atan2(ph_s, ph_c) / (2 * M_PI) * period;          /* where presents cluster */
         double l = fmod(mean + period / 2 + 2 * period, period);        /* opposite phase */
-        double lo = 800, hi = period - 2500;                             /* the commit must land before vblank */
-        if (l < lo || l > hi) {         /* pick the allowed edge that is farther (circularly) from the presents */
+        /* forbidden: the last LATCH_MARGIN before vblank (the commit wouldn't make it) and a sliver after it */
+        double lo = 300, hi = period - LATCH_MARGIN;
+        if (l < lo || l > hi) {         /* pick the allowed edge that is farther (circularly) from the presents... */
             double m = fmod(mean + 2 * period, period);
             double dlo = fabs(remainder(lo - m, period)), dhi = fabs(remainder(hi - m, period));
-            l = dlo > dhi ? lo : hi;
+            int at_lo = fabs(latch_off - lo) < 1, at_hi = fabs(latch_off - hi) < 1;
+            if (at_lo && dlo > dhi - 1500) l = lo;          /* ...with hysteresis: switching edges moves the cut-off */
+            else if (at_hi && dhi > dlo - 1500) l = hi;     /* across the vblank, so only do it when clearly better */
+            else l = dlo > dhi ? lo : hi;
         }
         latch_off = l;
     }
@@ -387,9 +459,11 @@ static void *presenter(void *a) {
             char h[64]; for (int i = 0; i < 16; i++) h[i] = ph_hist[i] > 99 ? '#' : ph_hist[i] > 30 ? '+' : ph_hist[i] > 5 ? '.' : ' ';
             h[16] = 0; memset(ph_hist, 0, sizeof ph_hist);
             double mean = fmod(atan2(ph_s, ph_c) / (2 * M_PI) * period + period, period);
-            LOG("[pace] mode=%s period=%.1f us, presents at %.0f us after vblank (spread R=%.2f) [%s], latch at %.0f us, late=%d\n",
-                pacing_latch && ph_n >= 120 ? "latch" : "immediate", period, mean, sqrt(ph_c * ph_c + ph_s * ph_s), h, latch_off, st_late);
-            st_late = 0; st10 = t;
+            LOG("[pace] warp %+.0f ppm (base %+.0f), wake at %.0f us, E p95 %.1f ms | ", (warp - 1) * 1e6, (warp0 - 1) * 1e6,
+                fmod(atan2(wk_s, wk_c) / (2 * M_PI) * period + period, period), e_p95 / 1000);
+            LOG("mode=%s period=%.1f us, presents at %.0f us after vblank (spread R=%.2f) [%s], latch at %.0f us, late=%d missed=%d\n",
+                pacing_latch && ph_n >= 120 ? "latch" : "immediate", period, mean, sqrt(ph_c * ph_c + ph_s * ph_s), h, latch_off, st_late, st_miss);
+            st_late = 0; st_miss = 0; st10 = t;
             unlock(&mu);
         }
         if (t - st_t0 >= 1000000) {
@@ -635,6 +709,26 @@ __attribute__((constructor)) static void init(void) {
     if (pm && !strcmp(pm, "immediate")) pacing_latch = 0;
     if (pacing_latch) tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
     if (tfd < 0) pacing_latch = 0;                                   /* no timer: never wait for a latch */
+    if (getenv("DSFLIP_LATCH_FIXED")) latch_fixed = atof(getenv("DSFLIP_LATCH_FIXED"));
+    { const char *cl = getenv("DSFLIP_CLOCKLOCK"); if (cl) clock_lock = *cl == '1'; }
+    { const char *pl = getenv("DSFLIP_PLL"); if (pl && *pl == '0') pll_on = 0; }
+    if (clock_lock && pacing_latch) {   /* measure the top panel's refresh period before DraStic opens audio */
+        long long t0 = 0, t1 = 0; int n = 0;
+        for (int k = 0; k < 25; k++) {
+            drmVBlank vb; memset(&vb, 0, sizeof vb);
+            vb.request.type = DRM_VBLANK_RELATIVE |
+                (P[0].crtc_idx == 1 ? DRM_VBLANK_SECONDARY : ((P[0].crtc_idx << DRM_VBLANK_HIGH_CRTC_SHIFT) & DRM_VBLANK_HIGH_CRTC_MASK));
+            vb.request.sequence = 1;
+            if (drmWaitVBlank(fd, &vb)) break;
+            long long t = vb.reply.tval_sec * 1000000LL + vb.reply.tval_usec;
+            if (!t0) t0 = t; else { t1 = t; n++; }
+        }
+        if (n >= 20 && t1 > t0) {
+            period = (double)(t1 - t0) / n; warp0 = (1000000.0 / 60.0) / period;
+            set_warp(warp0);
+            LOG("[dsflip] clock lock: panel period %.2f us (%.4f Hz), DraStic time x%.6f\n", period, 1e6 / period, warp0);
+        } else { clock_lock = 0; LOG("[dsflip] clock lock off: couldn't measure vblank\n"); }
+    }
     LOG("[dsflip] pacing: %s\n", pacing_latch ? "latch (adaptive)" : "immediate");
     tdump_x = -1; if (getenv("DSFLIP_TOUCH_DUMP")) touch_dumps = atoi(getenv("DSFLIP_TOUCH_DUMP"));
     efd = eventfd(0, EFD_CLOEXEC);
@@ -648,6 +742,25 @@ __attribute__((constructor)) static void init(void) {
     if (getenv("DSFLIP_TAP_FIFO")) pthread_create(&th, 0, tap_fifo_thread, 0);
     ok = 1;
     LOG("[dsflip] ready: top plane %u, bottom plane %u\n", P[0].plane, P[1].plane);
+}
+
+/* ---------- audio: consumed as fast as the clock-locked DraStic produces it ---------- */
+struct SDL_AudioSpec_ { int freq; unsigned short format; unsigned char channels, silence;
+    unsigned short samples, padding; uint32_t size; void (*callback)(void *, unsigned char *, int); void *userdata; };
+int SDL_OpenAudio(struct SDL_AudioSpec_ *want, struct SDL_AudioSpec_ *have) {
+    REAL(int, SDL_OpenAudio, struct SDL_AudioSpec_ *, struct SDL_AudioSpec_ *);
+    if (!ok || !clock_lock || !warp_on || !want) return real(want, have);
+    struct SDL_AudioSpec_ w = *want;
+    /* exactly the clock-lock rate: audio drains as fast as frames are produced, so DraStic's per-frame wait for
+     * the audio callback stays constant. (dvsync's 512-sample chunks at +0.5% beat against the frame period and
+     * made DraStic start frames late, then catch up with two presents in one refresh.) Chunk size unchanged. */
+    const char *as = getenv("DSFLIP_AUDIO_SAMPLES"), *ax = getenv("DSFLIP_AUDIO_EXTRA");
+    if (as) w.samples = (unsigned short)atoi(as);
+    w.freq = (int)(want->freq * warp0 * (ax ? atof(ax) : 1.0) + 0.5);
+    int r = real(&w, 0);                /* obtained=NULL: SDL converts to exactly what we asked */
+    if (r == 0 && have) { *have = *want; have->size = w.size; have->silence = w.silence; }
+    LOG("[dsflip] audio %d Hz -> %d Hz, %d samples (DraStic asked %d)\n", want->freq, w.freq, w.samples, want->samples);
+    return r;
 }
 
 /* ---------- SDL interception ---------- */
@@ -796,6 +909,29 @@ void SDL_RenderPresent(void *rn) {
         double ang = ph / period * 2 * M_PI, a = ph_n < 120 ? 1.0 / (ph_n + 1) : 0.01;
         ph_c += a * (cos(ang) - ph_c); ph_s += a * (sin(ang) - ph_s); ph_n++;
         ph_hist[(int)(ph / period * 16) & 15]++;
+        if (clock_lock && warp_on) {
+            if (!main_tid) main_tid = (int)syscall(SYS_gettid);
+            if (wake_t && tp > wake_t && tp - wake_t < 40000) {      /* E for this frame, and the wake's phase */
+                int e = (int)((tp - wake_t) / 500); if (e > 63) e = 63;
+                if (e_cnt == 600) e_hist[e_ring[e_pos]]--; else e_cnt++;
+                e_ring[e_pos] = e; e_hist[e]++; e_pos = (e_pos + 1) % 600;
+                double wp = fmod((double)(wake_t - vbl_ref), period); if (wp < 0) wp += period;
+                double wa = wp / period * 2 * M_PI, a = wk_n < 60 ? 1.0 / (wk_n + 1) : 0.02;
+                wk_c += a * (cos(wa) - wk_c); wk_s += a * (sin(wa) - wk_s); wk_n++;
+            }
+            if (wk_n >= 120 && ph_n % 30 == 0 && pll_on) {
+                int acc = 0, k = 0; for (; k < 64; k++) { acc += e_hist[k]; if (acc * 100 >= e_cnt * 95) break; }
+                e_p95 = (k + 1) * 500.0;
+                double latch = period - LATCH_MARGIN, target = latch - e_p95 - 1500;
+                double wmean = atan2(wk_s, wk_c) / (2 * M_PI) * period;
+                double err = remainder(wmean - target, period) / period; /* >0: waking late -> run DraStic's clock faster */
+                pll_i += err * 30; if (pll_i > 3000) pll_i = 3000; if (pll_i < -3000) pll_i = -3000;
+                double adj = 2e-3 * err + 1e-7 * pll_i;
+                if (adj > 5e-4) adj = 5e-4; if (adj < -5e-4) adj = -5e-4;
+                unlock(&mu); set_warp(warp0 * (1 + adj)); lock(&mu);
+            }
+            wake_t = 0; want_wake = 1;
+        }
     }
     touch_rect_ok = pending_route[1] && pending_route[1]->kind == K_SCREEN;
 
