@@ -66,7 +66,10 @@ GLFN(void, glDeleteFramebuffers, GLsizei, const GLuint *) GLFN(void, glBindFrame
 GLFN(void, glFramebufferTexture2D, GLenum, GLenum, GLenum, GLuint, GLint) GLFN(GLenum, glCheckFramebufferStatus, GLenum)
 GLFN(void, glViewport, GLint, GLint, GLsizei, GLsizei) GLFN(void, glVertexAttribPointer, GLuint, GLint, GLenum, unsigned char, GLsizei, const void *)
 GLFN(void, glEnableVertexAttribArray, GLuint) GLFN(void, glDrawArrays, GLenum, GLint, GLsizei)
-GLFN(void, glFinish, void) GLFN(void, glFlush, void) GLFN(GLenum, glGetError, void) GLFN(void, glDisable, GLenum)
+GLFN(void, glFinish, void) GLFN(void, glFlush, void)
+GLFN(const unsigned char *, glGetString, GLenum) GLFN(void, glPixelStorei, GLenum, GLint)
+GLFN(void, glTexImage2D, GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const void *)
+GLFN(void, glTexSubImage2D, GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void *) GLFN(GLenum, glGetError, void) GLFN(void, glDisable, GLenum)
 
 #define EGL_NONE 0x3038
 #define EGL_EXTENSIONS 0x3055
@@ -104,6 +107,8 @@ GLFN(void, glFinish, void) GLFN(void, glFlush, void) GLFN(GLenum, glGetError, vo
 #define GL_DITHER 0x0BD0
 
 static EGLDisplay dpy;
+static GLenum up_fmt; int shader_copy_mode;      /* set by the caller before shader_init */
+static GLuint up_tex[2]; static int up_w[2], up_h[2];
 static GLuint prog; static GLint u_tex, u_tsize, u_osize, u_fch;
 static int drm_fd;
 
@@ -170,11 +175,17 @@ static GLuint compile(GLenum type, const char *pre, const char *src) {
 
 /* ---- EGL images of dumb buffers ---- */
 typedef struct { uint32_t handle; int w, h, pitch; uint64_t gen; EGLImage img; GLuint tex, fbo; } gimg;
-static gimg cache[24]; static int ncache, cache_next;
+/* must hold every buffer that cycles (DraStic's 2x6 at 2x, our 2x6 outputs, plus the 1x ones from startup):
+ * an eviction means re-importing a dma-buf every frame, and the kernel's GPU IOMMU mapping then interrupts every
+ * CPU core (DraStic's too). shader_imports counts imports so a miss shows up in the log. */
+#define NCACHE 64
+static gimg cache[NCACHE]; static int ncache, cache_next, imports;
+int shader_imports(void) { int n = imports; imports = 0; return n; }
 
 static gimg *image_for(uint32_t handle, int w, int h, int pitch, uint64_t gen, int target) {
     for (int i = 0; i < ncache; i++) if (cache[i].gen == gen) return &cache[i];
-    gimg *g = ncache < 24 ? &cache[ncache++] : &cache[cache_next++ % 24];
+    gimg *g = ncache < NCACHE ? &cache[ncache++] : &cache[cache_next++ % NCACHE];
+    imports++;
     if (g->img) {                        /* evict */
         if (g->fbo) glDeleteFramebuffers(1, &g->fbo);
         glDeleteTextures(1, &g->tex); eglDestroyImageKHR(dpy, g->img);
@@ -235,7 +246,8 @@ int shader_init(int fd, const char *name) {
     G(glGetUniformLocation) G(glUniform1i) G(glUniform1f) G(glUniform2f) G(glGenTextures) G(glDeleteTextures)
     G(glBindTexture) G(glTexParameteri) G(glActiveTexture) G(glGenFramebuffers) G(glDeleteFramebuffers)
     G(glBindFramebuffer) G(glFramebufferTexture2D) G(glCheckFramebufferStatus) G(glViewport) G(glVertexAttribPointer)
-    G(glEnableVertexAttribArray) G(glDrawArrays) G(glFinish) G(glFlush) G(glGetError) G(glDisable)
+    G(glEnableVertexAttribArray) G(glDrawArrays) G(glFinish) G(glFlush)
+    G(glGetString) G(glPixelStorei) G(glTexImage2D) G(glTexSubImage2D) G(glGetError) G(glDisable)
 
     /* a display: libmali's default one (GBM, see above), else Mesa's surfaceless platform (needs a render node) */
     EGLint maj = 0, min = 0; const char *how = "default";
@@ -257,6 +269,9 @@ int shader_init(int fd, const char *name) {
     EGLContext ctx = eglCreateContext(dpy, cfg, 0, ca);
     if (!ctx || !eglMakeCurrent(dpy, 0, 0, ctx)) { SLOG("[shader] no surfaceless GLES2 context\n"); return 0; }
 
+    /* upload path: DraStic's XRGB8888 is B,G,R,X in memory; BGRA uploads need no swizzle in the shader */
+    const char *gx = (const char *)glGetString(0x1F03 /* GL_EXTENSIONS */);
+    up_fmt = gx && strstr(gx, "GL_EXT_texture_format_BGRA8888") ? 0x80E1 /* GL_BGRA_EXT */ : 0x1908 /* GL_RGBA */;
     char path[256]; size_t n;
     snprintf(path, sizeof path, "/storage/.config/drastic/shaders/%s.frag", name);
     char *fs = drastouch_source(name, 0), *vs = drastouch_source(name, 1);
@@ -264,7 +279,9 @@ int shader_init(int fd, const char *name) {
     if (!fs) { fs = slurp(path, &n); from = path; }
     if (!fs) { SLOG("[shader] unknown shader \"%s\" (not built into libdrastouch, no %s)\n", name, path); return 0; }
     char *ffs = flip_fragcoord(fs);
-    const char *pre = "#define SWIZ(c) (c)\nuniform highp float dsf_fch;\n"
+    const char *pre = up_fmt == 0x1908 && shader_copy_mode ? "#define SWIZ(c) (c).bgra\nuniform highp float dsf_fch;\n"
+                      "#define dsf_FragCoord() vec4(gl_FragCoord.x, dsf_fch - gl_FragCoord.y, gl_FragCoord.zw)\n"
+                    : "#define SWIZ(c) (c)\nuniform highp float dsf_fch;\n"
                       "#define dsf_FragCoord() vec4(gl_FragCoord.x, dsf_fch - gl_FragCoord.y, gl_FragCoord.zw)\n";
     GLuint v = compile(GL_VERTEX_SHADER, "", vs ? vs : default_vs), f = compile(GL_FRAGMENT_SHADER, pre, ffs);
     free(fs); free(ffs); free(vs);
@@ -311,4 +328,38 @@ int shader_fence(void) {
     if (sy) { f = eglDupNativeFenceFDANDROID(dpy, sy); eglDestroySyncKHR(dpy, sy); }
     if (f < 0) glFinish();
     return f;
+}
+
+/* copy path: upload a DraStic frame from ordinary (cached) memory into a GL-owned texture, then draw it into dst.
+ * Like stock SDL: nothing DraStic writes is imported into the GPU. GL copies the pixels before glTexSubImage2D
+ * returns, so the caller can hand the buffer back to DraStic right away. */
+int shader_draw_mem(int panel, const void *px, int sw, int shh, int sp, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish) {
+    gimg *d = image_for(dh, dw, dhh, dp, dgen, 1);
+    if (!d || panel < 0 || panel > 1) return -1;
+    glActiveTexture(GL_TEXTURE0);
+    if (!up_tex[panel]) glGenTextures(1, &up_tex[panel]);
+    glBindTexture(GL_TEXTURE_2D, up_tex[panel]);
+    glPixelStorei(0x0CF5 /* GL_UNPACK_ALIGNMENT */, 4);
+    if (up_w[panel] != sw || up_h[panel] != shh) {
+        glTexImage2D(GL_TEXTURE_2D, 0, up_fmt, sw, shh, 0, up_fmt, 0x1401 /* GL_UNSIGNED_BYTE */, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        up_w[panel] = sw; up_h[panel] = shh;
+    }
+    if (sp == sw * 4) glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sw, shh, up_fmt, 0x1401, px);
+    else for (int y = 0; y < shh; y++) glTexSubImage2D(GL_TEXTURE_2D, 0, 0, y, sw, 1, up_fmt, 0x1401, (const char *)px + (size_t)y * sp);
+    static const GLfloat pos[] = { -1, -1, 1, -1, -1, 1, 1, 1 };
+    static const GLfloat uv[] = { 0, 0, 1, 0, 0, 1, 1, 1 };
+    glBindFramebuffer(GL_FRAMEBUFFER, d->fbo);
+    glViewport(0, 0, dw, dhh);
+    glUniform2f(u_tsize, (GLfloat)sw, (GLfloat)shh);
+    glUniform2f(u_osize, (GLfloat)dw, (GLfloat)dhh);
+    glUniform1f(u_fch, (GLfloat)dhh);
+    glVertexAttribPointer(0, 2, GL_FLOAT, 0, 0, pos); glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, 0, 0, uv); glEnableVertexAttribArray(1);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    if (finish) glFinish();
+    return glGetError() ? -1 : 0;
 }

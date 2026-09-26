@@ -53,7 +53,7 @@
 #include <drm_fourcc.h>
 
 typedef struct { int x, y, w, h; } SDL_Rect;
-#define NBUF 4
+#define NBUF 6                          /* writing, written, 2 queued (see enqueue), committed, scanout */
 #define FMT_ARGB8888 0x16362004u         /* SDL_PIXELFORMAT_* */
 #define FMT_RGB565   0x15151002u
 enum { FREE, WRITING, WRITTEN, READY, QUEUED, SCANOUT };
@@ -73,7 +73,9 @@ typedef struct {                        /* one panel */
     dbuf *ready, *queued, *scan;
     long long last_flip;
     dbuf *src;                          /* shader mode: DraStic's newest finished buffer, not yet shaded */
-    dbuf out[4];                        /* shader mode: panel-sized buffers the shader draws into */
+    long long src_t;                    /* ...and when DraStic presented it */
+    dbuf out[6];                        /* shader mode: panel-sized buffers the shader draws into */
+    dbuf *ready2;                       /* frame queue: the frame after `ready` (see enqueue) */
 } panel;
 
 static int fd = -1, efd = -1, ok;
@@ -85,8 +87,19 @@ static int menu_hw;                     /* VOP2 scales the 800x480 menu itself *
 /* spinlock, not pthread_mutex_t: the desktop's x86 glibc headers give the mutex the wrong size for
  * aarch64. Critical sections are a few loads/stores (plus one non-blocking commit ioctl). */
 static int mu, tmu;
-static void lock(int *l) { while (__atomic_exchange_n(l, 1, __ATOMIC_ACQUIRE)) sched_yield(); }
-static void unlock(int *l) { __atomic_store_n(l, 0, __ATOMIC_RELEASE); }
+static long long now_us(void);
+static volatile long long lk_wait_us, lk_wait_max, lk_hold_max; static volatile int lk_waits;  /* diagnostics */
+static long long lk_t;                  /* when mu was taken (holder only) */
+static void lock(int *l) {
+    if (!__atomic_exchange_n(l, 1, __ATOMIC_ACQUIRE)) { if (l == &mu) lk_t = now_us(); return; }
+    long long t0 = now_us();
+    while (__atomic_exchange_n(l, 1, __ATOMIC_ACQUIRE)) sched_yield();
+    if (l == &mu) { long long w = now_us() - t0; lk_wait_us += w; lk_waits++; if (w > lk_wait_max) lk_wait_max = w; lk_t = now_us(); }
+}
+static void unlock_mu_stat(int *l) {
+    if (l == &mu && lk_t) { long long h = now_us() - lk_t; if (h > lk_hold_max) lk_hold_max = h; }
+}
+static void unlock(int *l) { unlock_mu_stat(l); __atomic_store_n(l, 0, __ATOMIC_RELEASE); }
 static int logical_w = 512, logical_h = 192;
 static stex *pending_route[2];          /* routes recorded by RenderCopy during this frame */
 static SDL_Rect route_dst[2]; static int touch_rect_ok;   /* touch only while a DS screen is on the bottom panel */
@@ -94,13 +107,36 @@ static void *window;
 static int cursor_log;                  /* DSFLIP_CURSOR_LOG=1: log where DraStic draws its 32x32 stylus cursor */
 /* stats */
 static int st_present, st_commit, st_drop, st_busy, st_flips[2], st_touch;
+static int st_drop_src, st_drop_q, st_drop_buf;
+static long long st_evt_max, st_c2f_max; static int st_c2f_long; /* vblank->event delivery; commit->flip (>1 refresh) */   /* drops by cause: replaced before shading, queue overflow, no buffer */
 /* shader pass (shader.c) */
 const char *shader_name(void);
 int shader_init(int fd, const char *name);
 int shader_draw(uint32_t sh, int sw, int shh, int sp, uint64_t sgen, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish);
 int shader_fence(void);
+int shader_imports(void);
+void audio_pump_log(void);
+extern int shader_copy_mode;
+int shader_draw_mem(int panel, const void *px, int sw, int shh, int sp, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish);
 static const char *shader_nm;
 static volatile int shader_on, shader_done;
+/* Shader mode: CPU 0 handles every display and GPU interrupt on the RG DS. With DraStic's threads free to run
+ * there too, the GPU interrupts, libmali's threads and the presenter preempted DraStic now and then (measured:
+ * 25-43 frame intervals >24 ms per 10 s, vs 1-3 in zero-copy mode), and each late frame + early next frame was a
+ * dropped frame. So DraStic (and every thread it creates) gets CPUs 1-3, the GPU side CPU 0. DSFLIP_PIN=0: off. */
+static int pin_cpus = 0;               /* measured: pinning HURT (DraStic needs all 4 cores); DSFLIP_PIN=1 to try */
+/* Scheduling. At 2x in heavy scenes DraStic's main thread and its three 3D render threads all run at the start of
+ * every frame: it needs all 4 cores for a few ms. Anything else runnable then (our presenter's upload + GPU driver
+ * work in shader mode, libmali's threads, any background process) delays a render thread and the frame slips
+ * (measured with a pure CPU spinner on one core: zero-copy went from ~0.1 to 7 drops/s; at nice 19 still 5/s).
+ * So DraStic's threads run SCHED_FIFO at a low RT priority: they preempt normal work at once, but PipeWire's
+ * audio threads (RT 84-89) and IRQs still come first, and the kernel's RT throttle guards against lockups. The
+ * presenter runs just above DraStic: its bursts are short and its commits are time-critical. DSFLIP_RT=0: off. */
+static int rt_prio = 0;                /* tested: didn't help (DraStic waits on audio, not the CPU); DSFLIP_RT=1 */
+static void set_fifo(int prio) {
+    struct sched_param sp = { .sched_priority = prio };
+    if (sched_setscheduler(0, SCHED_FIFO, &sp) && lg) fprintf(lg, "[dsflip] SCHED_FIFO %d failed: %s\n", prio, strerror(errno));
+}
 static long long st_shade_sum, st_shade_max; static int st_shade_n;
 static long long st_t0, st_iv_max[2];
 
@@ -131,6 +167,16 @@ static uint64_t propval(uint32_t obj, uint32_t type, const char *name) {
     drmModeFreeObjectProperties(pr);
     return v;
 }
+static uint64_t gens;                   /* buffer generations (the shader's image cache key) */
+/* shader copy mode: DraStic's screen buffers are plain cached memory (like SDL's), uploaded by the presenter */
+static int mkmem(dbuf *b, uint32_t w, uint32_t h) {
+    memset(b, 0, sizeof *b);
+    b->pitch = w * 4; b->w = w; b->h = h; b->size = (uint64_t)b->pitch * h;
+    if (!(b->map = aligned_alloc(64, b->size))) return -1;
+    memset(b->map, 0, b->size);
+    b->state = FREE; b->gen = ++gens; b->fence = -1;
+    return 0;
+}
 static int mkbuf(dbuf *b, uint32_t w, uint32_t h, uint32_t fourcc, uint32_t bpp) {
     struct drm_mode_create_dumb c = { .width = w, .height = h, .bpp = bpp };
     if (drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &c)) return -1;
@@ -143,11 +189,12 @@ static int mkbuf(dbuf *b, uint32_t w, uint32_t h, uint32_t fourcc, uint32_t bpp)
     if (b->map == MAP_FAILED) return -1;
     memset(b->map, 0, c.size);
     b->state = FREE;
-    static uint64_t gens; b->gen = ++gens; b->fence = -1;
+    b->gen = ++gens; b->fence = -1;
     return 0;
 }
 static void freebuf(dbuf *b) {
     if (!b->map) return;
+    if (!b->handle) { free(b->map); memset(b, 0, sizeof *b); b->fence = -1; return; }   /* mkmem buffer */
     munmap(b->map, b->size); drmModeRmFB(fd, b->fb);
     struct drm_mode_destroy_dumb d = { .handle = b->handle }; drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &d);
     memset(b, 0, sizeof *b); b->fence = -1;
@@ -202,7 +249,8 @@ static int st_miss;                     /* commits that reached the screen a vbl
 static double latch_fixed;              /* DSFLIP_LATCH_FIXED=<us after vblank>: test mode, no adaptation */
 #define LATCH_MARGIN 1300               /* starting commit margin before vblank; measured on the top panel: 600 us always
                                            makes it, 300 us doesn't. Grows on late commits (latch_margin) */
-static double latch_margin = LATCH_MARGIN;  /* adaptive: +400 us per latch that found the previous flip still pending */
+static double latch_margin = LATCH_MARGIN;  /* adaptive: +400 us per latch that found the previous flip still pending,
+                                               -400 us per clean 10 s */
 static double bot_off;                  /* bottom panel's vblank phase relative to the top's, us in (-P/2, P/2] */
 static int bot_n, latch_skipped;        /* bottom phase samples; a latch was skipped because a flip was pending */
 static int ab_legacy;                   /* A/B test (/tmp/dsflip-ab = "1"): the previous pacing, fixed 2.5 ms margin
@@ -278,11 +326,15 @@ static void try_commit(void) {         /* called with mu held */
         if (ret != -EBUSY) {           /* rejected config: drop the frame rather than retry forever */
             LOG("[dsflip] commit rejected: %s%s\n", strerror(-ret), with_toast ? " (toasts disabled)" : "");
             if (with_toast) { tp_plane = 0; toast_dirty = 0; }
-            for (int i = 0; i < 2; i++) if (P[i].ready) { release(P[i].ready); P[i].ready = 0; }
+            for (int i = 0; i < 2; i++) { release(P[i].ready); release(P[i].ready2); P[i].ready = P[i].ready2 = 0; }
         }
         return;
     }
-    for (int i = 0; i < 2; i++) if (P[i].ready) { drop_fence(P[i].ready); P[i].queued = P[i].ready; P[i].queued->state = QUEUED; P[i].ready = 0; }
+    for (int i = 0; i < 2; i++) if (P[i].ready) {
+        drop_fence(P[i].ready); P[i].queued = P[i].ready; P[i].queued->state = QUEUED;
+        P[i].ready = P[i].ready2; P[i].ready2 = 0;   /* the queued frame is next */
+    }
+    if (P[0].ready || P[1].ready) ready_since = now_us();
     if (with_toast) { toast_dirty = 0; toast_shown = toast_want; }
     commit_t = now_us(); commit_vref = vbl_ref;
     pending_mask = mask;                /* one flip event per CRTC in the commit */
@@ -295,6 +347,8 @@ static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned c
     for (int i = 0; i < 2; i++) if (P[i].crtc == crtc) {
         pending_mask &= ~(1 << i);
         long long t = sec * 1000000LL + usec;
+        { long long e = now_us() - t; if (e > st_evt_max) st_evt_max = e; }
+        if (i == 0 && commit_t) { long long c = t - commit_t; if (c > st_c2f_max) st_c2f_max = c; if (c > (long long)period) st_c2f_long++; }
         if (i == 0) {
             if (commit_t && commit_vref && P[0].queued) {  /* did the commit make the first vblank after it? */
                 double c = fmod((double)(commit_t - commit_vref), period); if (c < 0) c += period;
@@ -452,6 +506,19 @@ static void arm_latch(void) {         /* with mu held: next latch point after no
 
 /* shader mode: draw each panel's newest DraStic buffer into a free output buffer, then publish both together
  * (one commit shows the same emulated frame on both screens). GL work happens with mu released. */
+/* diagnostics: DraStic's raw present timing (before any shading), and present -> ready delay in shader mode */
+static double raw_c, raw_s; static int raw_hist[16], iv_hist[7]; static long long last_present;
+static long long lat_sum, lat_max; static int lat_n;
+static void note_raw(long long tp) {    /* with mu held */
+    if (last_present) { long long iv = tp - last_present; int b = (int)(iv / 4000); iv_hist[b > 6 ? 6 : b]++; }
+    last_present = tp;
+    if (!vbl_ref) return;
+    double ph = fmod((double)(tp - vbl_ref), period); if (ph < 0) ph += period;
+    double ang = ph / period * 2 * M_PI;
+    raw_c += 0.01 * (cos(ang) - raw_c); raw_s += 0.01 * (sin(ang) - raw_s);
+    raw_hist[(int)(ph / period * 16) & 15]++;
+}
+
 static void note_phase(long long tp) {  /* with mu held: where in the refresh cycle a frame became ready */
     if (!vbl_ref) return;
     double ph = fmod((double)(tp - vbl_ref), period); if (ph < 0) ph += period;
@@ -460,14 +527,28 @@ static void note_phase(long long tp) {  /* with mu held: where in the refresh cy
     ph_hist[(int)(ph / period * 16) & 15]++;
 }
 
+/* frame queue (DSFLIP_QUEUE=0: mailbox). DraStic's frame times are uneven at 2x (measured: intervals alternate
+ * ~13 / ~21 ms), so two frames can arrive between two commits. A mailbox shows only the newest and drops the
+ * other (a visible hitch); the queue keeps one more frame and shows them in order, one per refresh, which turns
+ * uneven arrival into even display at the cost of up to one refresh of latency while a frame waits. A third
+ * frame drops the oldest, so latency never grows beyond that. With mu held. */
+static int queue_on = 1;
+static void enqueue(int i, dbuf *b, long long t) {
+    if (!P[i].ready) { if (!P[0].ready && !P[1].ready) ready_since = t; P[i].ready = b; return; }
+    if (queue_on && !P[i].ready2) { P[i].ready2 = b; return; }
+    release(P[i].ready); st_drop++; st_drop_q++;
+    if (queue_on) { P[i].ready = P[i].ready2; P[i].ready2 = b; } else P[i].ready = b;
+}
+
 static void shade_pending(void) {
-    dbuf *src[2] = { 0, 0 }, *dst[2] = { 0, 0 };
+    dbuf *src[2] = { 0, 0 }, *dst[2] = { 0, 0 }; long long st[2] = { 0, 0 };
     lock(&mu);
     for (int i = 0; i < 2; i++) {
         if (!(src[i] = P[i].src)) continue;
+        st[i] = P[i].src_t;
         P[i].src = 0;
-        for (int k = 0; k < 4 && !dst[i]; k++) if (P[i].out[k].state == FREE) dst[i] = &P[i].out[k];
-        if (!dst[i] || !src[i]->handle) { release(src[i]); src[i] = 0; st_drop++; continue; }
+        for (int k = 0; k < 6 && !dst[i]; k++) if (P[i].out[k].state == FREE) dst[i] = &P[i].out[k];
+        if (!dst[i] || !src[i]->map) { release(src[i]); src[i] = 0; st_drop++; st_drop_buf++; continue; }
         dst[i]->state = WRITING;
     }
     unlock(&mu);
@@ -478,8 +559,10 @@ static void shade_pending(void) {
     long long t0 = now_us();
     for (int i = 0; i < 2; i++) if (src[i]) {
         dbuf *a = src[i], *b = dst[i];
-        bad[i] = shader_draw(a->handle, a->w, a->h, a->pitch, a->gen, b->handle, b->w, b->h, b->pitch, b->gen,
-                             i == last && !P[0].p_fence) != 0;
+        bad[i] = (a->handle ? shader_draw(a->handle, a->w, a->h, a->pitch, a->gen, b->handle, b->w, b->h, b->pitch, b->gen,
+                                          i == last && !P[0].p_fence)
+                            : shader_draw_mem(i, a->map, a->w, a->h, a->pitch, b->handle, b->w, b->h, b->pitch, b->gen,
+                                              i == last && !P[0].p_fence)) != 0;
     }
     if (P[0].p_fence) fence = shader_fence();
     for (int i = 0; i < 2; i++) if (src[i] && !bad[i] && fence >= 0) dst[i]->fence = dup(fence);
@@ -487,20 +570,26 @@ static void shade_pending(void) {
     long long dt = now_us() - t0;
     st_shade_sum += dt; st_shade_n++; if (dt > st_shade_max) st_shade_max = dt;
     lock(&mu);
-    note_phase(now_us());
+    long long tr = now_us();
+    note_phase(tr);
+    for (int i = 0; i < 2; i++) if (src[i] && st[i]) {
+        long long l = tr - st[i]; lat_sum += l; lat_n++; if (l > lat_max) lat_max = l;
+    }
     for (int i = 0; i < 2; i++) if (src[i]) {
         release(src[i]);
         if (bad[i]) { dst[i]->state = FREE; st_drop++; continue; }
         dst[i]->state = READY;
-        if (P[i].ready) { release(P[i].ready); st_drop++; }     /* mailbox: newest wins */
-        else if (!P[0].ready && !P[1].ready) ready_since = now_us();
-        P[i].ready = dst[i];
+        enqueue(i, dst[i], tr);
     }
     unlock(&mu);
 }
 
 static void *presenter(void *a) {
     (void)a;
+    if (rt_prio) set_fifo(2);           /* above DraStic's threads (see rt_prio); libmali's threads inherit it */
+    if (shader_nm && pin_cpus) {        /* the GPU side lives on CPU 0 (see init); libmali's threads inherit it */
+        cpu_set_t c; CPU_ZERO(&c); CPU_SET(0, &c); sched_setaffinity(0, sizeof c, &c);
+    }
     if (shader_nm) {                    /* GL lives on this thread; init() waits for the verdict */
         shader_on = shader_init(fd, shader_nm);
         if (!shader_on) LOG("[dsflip] shader \"%s\" unavailable: zero-copy\n", shader_nm);
@@ -527,7 +616,8 @@ static void *presenter(void *a) {
                 st_late++;                      /* flip lands (one repeat, not a 30 fps lock), and if the latch */
                 if (!ab_legacy) {               /* was near the vblank edge, widen the margin */
                     latch_skipped = 1;
-                    if (latch_off > period / 2 && latch_margin < 5000) latch_margin += 400;
+                    /* not during warm-up: a shader's first frames are slow and would pin the margin at max */
+                    if (latch_off > period / 2 && latch_margin < 5000 && ph_n >= 600) latch_margin += 400;
                 }
             } else try_commit();
             if (P[0].ready || P[1].ready) arm_latch();
@@ -553,8 +643,24 @@ static void *presenter(void *a) {
                 fmod(atan2(wk_s, wk_c) / (2 * M_PI) * period + period, period), e_p95 / 1000);
             LOG("mode=%s period=%.1f us, presents at %.0f us after vblank (spread R=%.2f) [%s], latch at %.0f us, margin %.0f us, bottom %+.0f us, late=%d missed=%d\n",
                 pacing_latch && ph_n >= 120 ? "latch" : "immediate", period, mean, sqrt(ph_c * ph_c + ph_s * ph_s), h, latch_off, latch_margin, bot_off, st_late, st_miss);
-            if (st_shade_n) LOG("[shader] submit %.2f ms avg, %.2f ms max per frame (both screens)\n", st_shade_sum / 1000.0 / st_shade_n, st_shade_max / 1000.0);
+            audio_pump_log();
+            LOG("[flip] event delivery max %.2f ms, commit->flip max %.2f ms, %d flips >1 refresh after their commit\n",
+                st_evt_max / 1000.0, st_c2f_max / 1000.0, st_c2f_long);
+            st_evt_max = st_c2f_max = 0; st_c2f_long = 0;
+            LOG("[lock] mu contended %d times, %.1f ms waiting in total, max wait %.2f ms, max hold %.2f ms\n",
+                lk_waits, lk_wait_us / 1000.0, lk_wait_max / 1000.0, lk_hold_max / 1000.0);
+            lk_waits = 0; lk_wait_us = lk_wait_max = lk_hold_max = 0;
+            if (st_shade_n) LOG("[shader] submit %.2f ms avg, %.2f ms max per frame (both screens), %d buffer imports\n",
+                                st_shade_sum / 1000.0 / st_shade_n, st_shade_max / 1000.0, shader_imports());
             st_shade_sum = st_shade_max = 0; st_shade_n = 0;
+            { char rh[17]; for (int i = 0; i < 16; i++) rh[i] = raw_hist[i] > 99 ? '#' : raw_hist[i] > 30 ? '+' : raw_hist[i] > 5 ? '.' : ' ';
+              rh[16] = 0; memset(raw_hist, 0, sizeof raw_hist);
+              LOG("[raw] DraStic presents R=%.2f [%s] intervals(ms) 0-4:%d 4-8:%d 8-12:%d 12-16:%d 16-20:%d 20-24:%d 24+:%d",
+                  sqrt(raw_c * raw_c + raw_s * raw_s), rh, iv_hist[0], iv_hist[1], iv_hist[2], iv_hist[3], iv_hist[4], iv_hist[5], iv_hist[6]);
+              if (lat_n) LOG(" | present->ready %.2f ms avg, %.2f max", lat_sum / 1000.0 / lat_n, lat_max / 1000.0);
+              LOG("\n"); memset(iv_hist, 0, sizeof iv_hist); lat_sum = lat_max = 0; lat_n = 0; }
+            /* the margin shrinks back after a clean 10 s, so one bad moment doesn't narrow the latch zone forever */
+            if (!st_late && latch_margin > LATCH_MARGIN) latch_margin = fmax(LATCH_MARGIN, latch_margin - 400);
             st_late = 0; st_miss = 0; st10 = t;
             { int fdab = open("/tmp/dsflip-ab", O_RDONLY); char c = '0';
               if (fdab >= 0) { if (read(fdab, &c, 1) < 0) {} close(fdab); }
@@ -563,8 +669,10 @@ static void *presenter(void *a) {
         }
         if (t - st_t0 >= 1000000) {
             lock(&mu);
-            LOG("[dsflip] present/s=%.1f commits=%d dropped=%d busy=%d flips top=%d bot=%d max-iv top=%lld bot=%lld us touch=%d\n",
-                st_present * 1e6 / (t - st_t0), st_commit, st_drop, st_busy, st_flips[0], st_flips[1], st_iv_max[0], st_iv_max[1], st_touch);
+            LOG("[dsflip] present/s=%.1f commits=%d dropped=%d busy=%d flips top=%d bot=%d max-iv top=%lld bot=%lld us touch=%d drop-src=%d drop-q=%d drop-buf=%d\n",
+                st_present * 1e6 / (t - st_t0), st_commit, st_drop, st_busy, st_flips[0], st_flips[1], st_iv_max[0], st_iv_max[1], st_touch,
+                st_drop_src, st_drop_q, st_drop_buf);
+            st_drop_src = st_drop_q = st_drop_buf = 0;
             st_present = st_commit = st_drop = st_busy = st_flips[0] = st_flips[1] = st_touch = 0; st_iv_max[0] = st_iv_max[1] = 0; st_t0 = t;
             unlock(&mu);
         }
@@ -800,6 +908,7 @@ __attribute__((constructor)) static void init(void) {
     }
     LOG("[dsflip] toast plane: %u\n", tp_plane);
     signal(SIGUSR2, on_usr2);
+    { const char *q = getenv("DSFLIP_QUEUE"); if (q && *q == '0') queue_on = 0; }
     const char *pm = getenv("DSFLIP_PACING");
     if (pm && !strcmp(pm, "immediate")) pacing_latch = 0;
     if (pacing_latch) tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
@@ -824,17 +933,28 @@ __attribute__((constructor)) static void init(void) {
             LOG("[dsflip] clock lock: panel period %.2f us (%.4f Hz), DraStic time x%.6f\n", period, 1e6 / period, warp0);
         } else { clock_lock = 0; LOG("[dsflip] clock lock off: couldn't measure vblank\n"); }
     }
-    LOG("[dsflip] pacing: %s\n", pacing_latch ? "latch (adaptive)" : "immediate");
+    LOG("[dsflip] pacing: %s, %s\n", pacing_latch ? "latch (adaptive)" : "immediate", queue_on ? "1-frame queue" : "mailbox");
     tdump_x = -1; if (getenv("DSFLIP_TOUCH_DUMP")) touch_dumps = atoi(getenv("DSFLIP_TOUCH_DUMP"));
     efd = eventfd(0, EFD_CLOEXEC);
     st_t0 = now_us();
     if ((shader_nm = shader_name()))
-        for (int i = 0; i < 2 && shader_nm; i++) for (int k = 0; k < 4; k++)
+        for (int i = 0; i < 2 && shader_nm; i++) for (int k = 0; k < 6; k++)
             if (mkbuf(&P[i].out[k], P[i].mode.hdisplay, P[i].mode.vdisplay, DRM_FORMAT_XRGB8888, 32)) {
                 LOG("[dsflip] shader output buffers: alloc failed\n"); shader_nm = 0; break;
             }
+    { const char *pn = getenv("DSFLIP_PIN"); if (pn) pin_cpus = *pn == '1'; }
+    { const char *rt = getenv("DSFLIP_RT"); if (rt) rt_prio = *rt == '1'; }
+    { const char *sc = getenv("DSFLIP_SHADER_COPY"); shader_copy_mode = !(sc && *sc == '0'); }   /* 0: import DraStic's buffers */
+    if (shader_nm && pin_cpus) {        /* this is DraStic's main thread, before main(): its threads inherit this */
+        cpu_set_t c; CPU_ZERO(&c); for (int k = 1; k < 4; k++) CPU_SET(k, &c);
+        if (sched_setaffinity(0, sizeof c, &c)) pin_cpus = 0;
+    }
     pthread_t th; pthread_create(&th, 0, presenter, 0);
     for (int k = 0; k < 300 && !shader_done; k++) usleep(10000);
+    if (rt_prio) set_fifo(1);           /* DraStic's main thread, before main(): every thread it creates inherits it */
+    LOG("[dsflip] scheduling: %s\n", rt_prio ? "DraStic SCHED_FIFO 1, presenter 2" : "normal");
+    if (shader_nm) LOG("[dsflip] cpus: %s; shader input: %s\n", pin_cpus ? "DraStic 1-3, GPU side 0" : "not pinned",
+                       shader_copy_mode ? "upload from memory" : "dma-buf import");
     const char *inv = getenv("DSFLIP_TOUCH_INVERT");        /* "x", "y", "xy" or unset/"none" */
     if (inv) { touch_inv_x = strchr(inv, 'x') != 0; touch_inv_y = strchr(inv, 'y') != 0; }
     const char *tp = getenv("DSFLIP_TOUCH");
@@ -845,12 +965,34 @@ __attribute__((constructor)) static void init(void) {
     LOG("[dsflip] ready: top plane %u, bottom plane %u\n", P[0].plane, P[1].plane);
 }
 
-/* ---------- audio: consumed as fast as the clock-locked DraStic produces it ---------- */
+/* ---------- audio: the pump (audio.c), or the clock-lock experiment ---------- */
+struct SDL_AudioSpec_;
+int audio_pump_enabled(void);
+int audio_pump_open(struct SDL_AudioSpec_ *want, struct SDL_AudioSpec_ *have, int (*real)(struct SDL_AudioSpec_ *, struct SDL_AudioSpec_ *));
+void audio_pump_pause(int on);
+static int pump_on;
+void SDL_PauseAudio(int on) {
+    REAL(void, SDL_PauseAudio, int);
+    if (pump_on) audio_pump_pause(on);
+    real(on);
+}
 struct SDL_AudioSpec_ { int freq; unsigned short format; unsigned char channels, silence;
     unsigned short samples, padding; uint32_t size; void (*callback)(void *, unsigned char *, int); void *userdata; };
 int SDL_OpenAudio(struct SDL_AudioSpec_ *want, struct SDL_AudioSpec_ *have) {
     REAL(int, SDL_OpenAudio, struct SDL_AudioSpec_ *, struct SDL_AudioSpec_ *);
-    if (!ok || !clock_lock || !warp_on || !want) return real(want, have);
+    if (!ok || !want) return real(want, have);
+    if (!clock_lock && audio_pump_enabled()) { pump_on = 1; return audio_pump_open(want, have, real); }   /* audio.c */
+    if (!clock_lock || !warp_on) {
+        /* DSFLIP_AUDIO_SAMPLES=n: open DraStic's audio with n-sample chunks (experiment; default: DraStic's 1024) */
+        const char *as = getenv("DSFLIP_AUDIO_SAMPLES");
+        int n = as ? atoi(as) : 0;     /* tested 256 by default: made the spread WORSE (more 24+ ms gaps) */
+        if (n <= 0 || n >= want->samples) return real(want, have);
+        struct SDL_AudioSpec_ w = *want; w.samples = (unsigned short)n;
+        int r = real(&w, 0);            /* obtained=NULL: SDL converts to exactly what we asked */
+        if (r == 0 && have) { *have = *want; have->size = w.size; have->silence = w.silence; }
+        LOG("[dsflip] audio %d Hz, %d samples per chunk (DraStic asked %d)\n", want->freq, n, want->samples);
+        return r;
+    }
     struct SDL_AudioSpec_ w = *want;
     /* exactly the clock-lock rate: audio drains as fast as frames are produced, so DraStic's per-frame wait for
      * the audio callback stays constant. (dvsync's 512-sample chunks at +0.5% beat against the frame period and
@@ -897,11 +1039,12 @@ void *SDL_CreateTexture(void *rn, uint32_t fmt, int access, int w, int h) {
         s->nb = screen ? NBUF : 3;
         int bw = w, bh = h;
         if (!screen && !menu_hw) { bw = P[0].mode.hdisplay; bh = P[0].mode.vdisplay; }
+        int mem = screen && shader_on && shader_copy_mode;
         for (int k = 0; k < s->nb; k++)
-            if (mkbuf(&s->b[k], bw, bh, screen ? DRM_FORMAT_XRGB8888 : DRM_FORMAT_RGB565, screen ? 32 : 16)) {
+            if (mem ? mkmem(&s->b[k], bw, bh) : mkbuf(&s->b[k], bw, bh, screen ? DRM_FORMAT_XRGB8888 : DRM_FORMAT_RGB565, screen ? 32 : 16)) {
                 LOG("[dsflip] alloc %dx%d failed\n", bw, bh); s->tex = 0; break;
             }
-        LOG("[dsflip] %s texture %p %dx%d -> %d dumb buffers %dx%d\n", screen ? "screen" : "menu", t, w, h, s->nb, bw, bh);
+        LOG("[dsflip] %s texture %p %dx%d -> %d %s buffers %dx%d\n", screen ? "screen" : "menu", t, w, h, s->nb, mem ? "memory" : "dumb", bw, bh);
     }
     unlock(&mu);
     return t;
@@ -1006,6 +1149,7 @@ void SDL_RenderPresent(void *rn) {
     lock(&mu);
     st_present++;
     if (vbl_ref) {                       /* where in the refresh cycle did this frame arrive? */
+        note_raw(tp);
         if (!shader_on) note_phase(tp);  /* shader mode: when the shaded frame is ready (shade_pending) */
         if (clock_lock && warp_on) {
             if (!main_tid) main_tid = (int)syscall(SYS_gettid);
@@ -1039,19 +1183,17 @@ void SDL_RenderPresent(void *rn) {
         dbuf *b;
         if (s->kind == K_BLACK) {
             b = &blk.b[0];
-            if (P[i].scan == b || P[i].queued == b || P[i].ready == b) continue;
+            if (P[i].scan == b || P[i].queued == b || P[i].ready == b || P[i].ready2 == b) continue;
         } else {
             if (s->written < 0 || s->b[s->written].state != WRITTEN) continue;
             b = &s->b[s->written]; s->written = -1; b->state = READY;
             if (shader_on && s->kind == K_SCREEN) {   /* the presenter shades it into a panel buffer */
-                if (P[i].src) { release(P[i].src); st_drop++; }
-                P[i].src = b;
+                if (P[i].src) { release(P[i].src); st_drop++; st_drop_src++; }
+                P[i].src = b; P[i].src_t = tp;
                 continue;
             }
         }
-        if (P[i].ready) { release(P[i].ready); st_drop++; }     /* mailbox: newest wins */
-        else if (!P[0].ready && !P[1].ready) ready_since = tp;
-        P[i].ready = b;
+        enqueue(i, b, tp);
     }
     unlock(&mu);
     uint64_t one = 1; if (write(efd, &one, 8) < 0) {}

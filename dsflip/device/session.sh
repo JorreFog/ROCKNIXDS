@@ -10,14 +10,16 @@ ROM="$1"
   systemctl stop essway.service; systemctl stop sway.service
   sleep 0.5
   # without a shader the Mali GPU does nothing in this mode (the display controller scans out DraStic's
-  # buffers), so don't keep it at ROCKNIX's "performance" 800 MHz: that's only heat. With a shader it draws
-  # every frame (lcd1x-nds-color: 2.5 ms per screen at 800 MHz, 16 ms at 200), so it keeps ROCKNIX's clock.
+  # buffers), so it goes to powersave (200 MHz): anything more is only heat. With a shader it draws every
+  # frame (lcd1x-nds-color: 2.5 ms per screen at 800 MHz, 16 ms at 200), so it's pinned to performance:
+  # simple_ondemand drops to 200 MHz between frames and the frames then miss their vblank.
   GPU=/sys/class/devfreq/fde60000.gpu
-  GPU_GOV=
+  GPU_GOV=$(cat $GPU/governor 2>/dev/null)
   case "${DSHOOK_SHADER:-none}" in
-    none|bilinear) GPU_GOV=$(cat $GPU/governor 2>/dev/null)
-                   [ -n "$GPU_GOV" ] && echo powersave > $GPU/governor 2>/dev/null ;;
+    none|bilinear) GOV=powersave ;;
+    *) GOV=performance ;;
   esac
+  [ -n "$GPU_GOV" ] && echo $GOV > $GPU/governor 2>/dev/null
   cd $D
   SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log \
     LD_PRELOAD=$D/dsflip/libdsflip.so $D/dsflip/drastic "$ROM" > $D/dsflip/drastic.out 2>&1 &
