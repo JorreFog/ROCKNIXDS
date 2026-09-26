@@ -1,4 +1,4 @@
-// libdsflip.so v1: DraStic's two DS screens scanned out directly on the RG DS's two DSI panels.
+// libdsflip.so: DraStic's two DS screens scanned out directly on the RG DS's two DSI panels.
 //
 // DraStic renders each DS screen into an SDL streaming texture (ARGB8888, 256x192 or 512x384)
 // via SDL_LockTexture/UnlockTexture, draws both with SDL_RenderCopy, then SDL_RenderPresent.
@@ -6,13 +6,22 @@
 // SDL's ARGB8888), so DraStic writes straight into scanout memory: no upload, no GL, no copy.
 // The VOP2 display controller scales each buffer to 640x480 in hardware.
 //
+// DraStic's menu is one 800x480 RGB565 streaming texture filled with SDL_UpdateTexture; it is
+// copied into an RGB565 dumb buffer and shown on the top panel (bottom panel black).
+//
 // A presenter thread owns the atomic commits: both panels' new framebuffers go in ONE commit
 // (same emulated frame on both screens), mailbox-style: RenderPresent never blocks, a frame that
 // is superseded before the next vblank is dropped, and a panel with no new frame keeps its buffer.
 //
+// Touch: with SDL's dummy video driver nothing delivers the touchscreen, so a thread reads the
+// bottom panel's evdev node and injects mouse events (in DraStic's logical coordinates, inside
+// the rectangle the bottom screen was last drawn to) through SDL_PollEvent.
+//
 // Requirements: DRM master (sway stopped), SDL_VIDEODRIVER=dummy. Env:
-//   DSFLIP_TOP=DSI-2        connector that shows DraStic's left half (the DS top screen)
-//   DSFLIP_LOG=path         stats log (default /storage/dsflip/logs/dsflip.log)
+//   DSFLIP_TOP=DSI-2               connector that shows the DS top screen
+//   DSFLIP_TOUCH=fe5e0000.i2c      bottom touchscreen (i2c-5; calibrated: raw == panel pixels)
+//   DSFLIP_TOUCH_INVERT=x/y/xy     axes to invert (default none)
+//   DSFLIP_LOG=path                stats log (default /storage/dsflip/logs/dsflip.log)
 #define _GNU_SOURCE
 #include <stdint.h>
 #include <stdio.h>
@@ -23,8 +32,12 @@
 #include <unistd.h>
 #include <time.h>
 #include <dlfcn.h>
+#include <errno.h>
+#include <glob.h>
+#include <signal.h>
 #include <pthread.h>
 #include <sched.h>
+#include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/eventfd.h>
 #include <xf86drm.h>
@@ -33,36 +46,42 @@
 
 typedef struct { int x, y, w, h; } SDL_Rect;
 #define NBUF 4
+#define FMT_ARGB8888 0x16362004u         /* SDL_PIXELFORMAT_* */
+#define FMT_RGB565   0x15151002u
 enum { FREE, WRITING, WRITTEN, READY, QUEUED, SCANOUT };
+enum { K_SCREEN, K_MENU, K_BLACK };
 
-typedef struct { uint32_t fb, handle, pitch; uint64_t size; void *map; int state; } dbuf;
-typedef struct {                        /* one DraStic screen texture */
-    void *tex; int w, h;
-    dbuf b[NBUF];
+typedef struct { uint32_t fb, handle, pitch, w, h; uint64_t size; void *map; int state; } dbuf;
+typedef struct {                        /* one DraStic texture we scan out */
+    void *tex; int kind, w, h;
+    dbuf b[NBUF]; int nb;
     int writing, written;               /* index being written / last completed write, -1 if none */
 } stex;
 typedef struct {                        /* one panel */
     uint32_t conn, crtc, crtc_idx, plane, mode_blob;
     drmModeModeInfo mode;
     uint32_t p_fb, p_crtc, p_sx, p_sy, p_sw, p_sh, p_cx, p_cy, p_cw, p_ch;
-    stex *src;                          /* texture currently routed here */
     dbuf *ready, *queued, *scan;
     long long last_flip;
 } panel;
 
 static int fd = -1, efd = -1, ok;
 static FILE *lg;
-static panel P[2];                      /* [0] = top (DraStic's left half), [1] = bottom */
-static stex T[4]; static int nt;
+static panel P[2];                      /* [0] = top, [1] = bottom */
+static stex T[6]; static int nt;
+static stex blk;                        /* black 640x480 buffer for an unused panel */
+static int menu_hw;                     /* VOP2 scales the 800x480 menu itself */
 /* spinlock, not pthread_mutex_t: the desktop's x86 glibc headers give the mutex the wrong size for
  * aarch64. Critical sections are a few loads/stores (plus one non-blocking commit ioctl). */
-static int mu;
+static int mu, tmu;
 static void lock(int *l) { while (__atomic_exchange_n(l, 1, __ATOMIC_ACQUIRE)) sched_yield(); }
 static void unlock(int *l) { __atomic_store_n(l, 0, __ATOMIC_RELEASE); }
-static int logical_w = 512;
+static int logical_w = 512, logical_h = 192;
 static stex *pending_route[2];          /* routes recorded by RenderCopy during this frame */
+static SDL_Rect route_dst[2]; static int touch_rect_ok;   /* touch only while a DS screen is on the bottom panel */
+static void *window;
 /* stats */
-static int st_present, st_commit, st_drop, st_busy, st_flips[2];
+static int st_present, st_commit, st_drop, st_busy, st_flips[2], st_touch;
 static long long st_t0, st_iv_max[2];
 
 #define LOG(...) do { if (lg) fprintf(lg, __VA_ARGS__); } while (0)
@@ -92,12 +111,12 @@ static uint64_t propval(uint32_t obj, uint32_t type, const char *name) {
     drmModeFreeObjectProperties(pr);
     return v;
 }
-static int mkbuf(dbuf *b, uint32_t w, uint32_t h) {
-    struct drm_mode_create_dumb c = { .width = w, .height = h, .bpp = 32 };
+static int mkbuf(dbuf *b, uint32_t w, uint32_t h, uint32_t fourcc, uint32_t bpp) {
+    struct drm_mode_create_dumb c = { .width = w, .height = h, .bpp = bpp };
     if (drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &c)) return -1;
-    b->handle = c.handle; b->pitch = c.pitch; b->size = c.size;
+    b->handle = c.handle; b->pitch = c.pitch; b->size = c.size; b->w = w; b->h = h;
     uint32_t hs[4] = { c.handle }, ps[4] = { c.pitch }, os[4] = { 0 };
-    if (drmModeAddFB2(fd, w, h, DRM_FORMAT_XRGB8888, hs, ps, os, &b->fb, 0)) return -1;
+    if (drmModeAddFB2(fd, w, h, fourcc, hs, ps, os, &b->fb, 0)) return -1;
     struct drm_mode_map_dumb m = { .handle = c.handle };
     if (drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &m)) return -1;
     b->map = mmap(0, c.size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, m.offset);
@@ -106,6 +125,12 @@ static int mkbuf(dbuf *b, uint32_t w, uint32_t h) {
     b->state = FREE;
     return 0;
 }
+static void freebuf(dbuf *b) {
+    if (!b->map) return;
+    munmap(b->map, b->size); drmModeRmFB(fd, b->fb);
+    struct drm_mode_destroy_dumb d = { .handle = b->handle }; drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &d);
+    memset(b, 0, sizeof *b);
+}
 
 static void plane_props(panel *p) {
     uint32_t o = DRM_MODE_OBJECT_PLANE, id = p->plane;
@@ -113,13 +138,13 @@ static void plane_props(panel *p) {
     p->p_sx = prop(id, o, "SRC_X"); p->p_sy = prop(id, o, "SRC_Y"); p->p_sw = prop(id, o, "SRC_W"); p->p_sh = prop(id, o, "SRC_H");
     p->p_cx = prop(id, o, "CRTC_X"); p->p_cy = prop(id, o, "CRTC_Y"); p->p_cw = prop(id, o, "CRTC_W"); p->p_ch = prop(id, o, "CRTC_H");
 }
-static void add_fb(drmModeAtomicReq *r, panel *p, dbuf *b, int w, int h) {
+static void add_fb(drmModeAtomicReq *r, panel *p, dbuf *b) {
     drmModeAtomicAddProperty(r, p->plane, p->p_fb, b->fb);
     drmModeAtomicAddProperty(r, p->plane, p->p_crtc, p->crtc);
     drmModeAtomicAddProperty(r, p->plane, p->p_sx, 0);
     drmModeAtomicAddProperty(r, p->plane, p->p_sy, 0);
-    drmModeAtomicAddProperty(r, p->plane, p->p_sw, (uint64_t)w << 16);
-    drmModeAtomicAddProperty(r, p->plane, p->p_sh, (uint64_t)h << 16);
+    drmModeAtomicAddProperty(r, p->plane, p->p_sw, (uint64_t)b->w << 16);
+    drmModeAtomicAddProperty(r, p->plane, p->p_sh, (uint64_t)b->h << 16);
     drmModeAtomicAddProperty(r, p->plane, p->p_cx, 0);
     drmModeAtomicAddProperty(r, p->plane, p->p_cy, 0);
     drmModeAtomicAddProperty(r, p->plane, p->p_cw, p->mode.hdisplay);
@@ -129,19 +154,27 @@ static void add_fb(drmModeAtomicReq *r, panel *p, dbuf *b, int w, int h) {
 /* ---------- presenter ---------- */
 static int commit_pending;
 
+static void release(dbuf *b) { if (b && b != &blk.b[0]) b->state = FREE; }
+
 static void try_commit(void) {         /* called with mu held */
     if (commit_pending) return;
-    int any = 0;
-    for (int i = 0; i < 2; i++) if (P[i].ready) any = 1;
-    if (!any) return;
+    int n = 0;
+    for (int i = 0; i < 2; i++) if (P[i].ready) n++;
+    if (!n) return;
     drmModeAtomicReq *r = drmModeAtomicAlloc();
-    for (int i = 0; i < 2; i++) if (P[i].ready) add_fb(r, &P[i], P[i].ready, P[i].src->w, P[i].src->h);
+    for (int i = 0; i < 2; i++) if (P[i].ready) add_fb(r, &P[i], P[i].ready);
     int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, P);
     drmModeAtomicFree(r);
-    if (ret) { st_busy++; return; }
+    if (ret) {
+        st_busy++;
+        if (ret != -EBUSY) {           /* rejected config: drop the frame rather than retry forever */
+            LOG("[dsflip] commit rejected: %s\n", strerror(-ret));
+            for (int i = 0; i < 2; i++) if (P[i].ready) { release(P[i].ready); P[i].ready = 0; }
+        }
+        return;
+    }
     for (int i = 0; i < 2; i++) if (P[i].ready) { P[i].queued = P[i].ready; P[i].queued->state = QUEUED; P[i].ready = 0; }
-    int n = 0; for (int i = 0; i < 2; i++) if (P[i].queued) n++;
-    commit_pending = n;
+    commit_pending = n;                 /* one flip event per CRTC in the commit */
     st_commit++;
 }
 
@@ -152,12 +185,35 @@ static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned c
         long long t = sec * 1000000LL + usec;
         if (P[i].last_flip && t - P[i].last_flip > st_iv_max[i]) st_iv_max[i] = t - P[i].last_flip;
         P[i].last_flip = t; st_flips[i]++;
-        if (P[i].scan) P[i].scan->state = FREE;
+        if (P[i].scan != P[i].queued) release(P[i].scan);
         P[i].scan = P[i].queued; P[i].scan->state = SCANOUT; P[i].queued = 0;
         if (commit_pending > 0) commit_pending--;
     }
     if (!commit_pending) try_commit();
     unlock(&mu);
+}
+
+/* SIGUSR2: dump what each panel scans out to <logdir>/scan<i>.raw (header "w h pitch bpp\n" + pixels) */
+static volatile int want_dump, touch_dumps;   /* DSFLIP_TOUCH_DUMP=N: dump the bottom screen at the first N touch-downs */
+static int tdump_x, tdump_y, tdump_n;
+static void on_usr2(int sig) { (void)sig; want_dump = 1; }
+static void dump_scan(void) {
+    for (int i = 0; i < 2; i++) {
+        dbuf *b = P[i].scan; if (!b || !b->map) continue;
+        char fn[96]; snprintf(fn, sizeof fn, "/storage/dsflip/logs/scan%d.raw", i);
+        FILE *f = fopen(fn, "wb"); if (!f) continue;
+        fprintf(f, "%u %u %u %u\n", b->w, b->h, b->pitch, (uint32_t)(b->pitch / b->w * 8));
+        fwrite(b->map, 1, (size_t)b->pitch * b->h, f); fclose(f);
+    }
+    LOG("[dsflip] dumped scanout buffers\n");
+}
+
+static void dump_touch(void) {         /* bottom panel's scanout + the DS coordinate we sent */
+    dbuf *b = P[1].scan; if (!b || !b->map) return;
+    char fn[96]; snprintf(fn, sizeof fn, "/storage/dsflip/logs/touch%d.raw", tdump_n);
+    FILE *f = fopen(fn, "wb"); if (!f) return;
+    fprintf(f, "%u %u %u %u %d %d\n", b->w, b->h, b->pitch, (uint32_t)(b->pitch / b->w * 8), tdump_x, tdump_y);
+    fwrite(b->map, 1, (size_t)b->pitch * b->h, f); fclose(f);
 }
 
 static void *presenter(void *a) {
@@ -171,16 +227,115 @@ static void *presenter(void *a) {
             uint64_t v; if (read(efd, &v, 8) < 0) {}
             lock(&mu); try_commit(); unlock(&mu);
         }
+        if (want_dump) { want_dump = 0; lock(&mu); dump_scan(); unlock(&mu); }
+        if (tdump_n < touch_dumps && tdump_x >= 0) { lock(&mu); dump_touch(); unlock(&mu); tdump_n++; tdump_x = -1; }
         long long t = now_us();
         if (t - st_t0 >= 1000000) {
             lock(&mu);
-            LOG("[dsflip] present/s=%.1f commits=%d dropped=%d busy=%d flips top=%d bot=%d max-iv top=%lld bot=%lld us\n",
-                st_present * 1e6 / (t - st_t0), st_commit, st_drop, st_busy, st_flips[0], st_flips[1], st_iv_max[0], st_iv_max[1]);
-            st_present = st_commit = st_drop = st_busy = st_flips[0] = st_flips[1] = 0; st_iv_max[0] = st_iv_max[1] = 0; st_t0 = t;
+            LOG("[dsflip] present/s=%.1f commits=%d dropped=%d busy=%d flips top=%d bot=%d max-iv top=%lld bot=%lld us touch=%d\n",
+                st_present * 1e6 / (t - st_t0), st_commit, st_drop, st_busy, st_flips[0], st_flips[1], st_iv_max[0], st_iv_max[1], st_touch);
+            st_present = st_commit = st_drop = st_busy = st_flips[0] = st_flips[1] = st_touch = 0; st_iv_max[0] = st_iv_max[1] = 0; st_t0 = t;
             unlock(&mu);
         }
     }
     return 0;
+}
+
+/* ---------- touch ---------- */
+/* SDL2 event layouts (SDL_events.h): motion {type,timestamp,windowID,which,state,x,y,xrel,yrel},
+ * button {type,timestamp,windowID,which,u8 button,state,clicks,pad,x,y}. SDL_Event is 56 bytes. */
+typedef struct { uint32_t type, ts, win, which; uint8_t button, state, clicks, pad; int32_t x, y; } btn_ev;
+typedef struct { uint32_t type, ts, win, which, state; int32_t x, y, xrel, yrel; } mot_ev;
+typedef union { uint32_t type; btn_ev b; mot_ev m; uint8_t pad[56]; } sdl_ev;
+#define QN 128
+static sdl_ev tq[QN]; static int tq_head, tq_tail;
+static int last_lx = -1, last_ly = -1, touch_inv_x = 0, touch_inv_y = 0;
+
+extern uint32_t SDL_GetTicks(void);
+extern uint32_t SDL_GetWindowID(void *);
+
+static void push_ev(sdl_ev *e) {
+    lock(&tmu);
+    int n = (tq_head + 1) % QN;
+    if (n != tq_tail) { tq[tq_head] = *e; tq_head = n; }
+    unlock(&tmu);
+}
+static void touch_emit(int down_change, int down, int x, int y, int xmax, int ymax) {
+    /* DraStic takes stylus positions as mouse events in DS touchscreen pixels (0..255, 0..191),
+     * not window/logical coordinates (ROCKNIX's libdrastouch does the same). The bottom panel
+     * shows exactly the bottom DS screen, so it's a straight rescale. */
+    if (!touch_rect_ok) return;
+    int rx = x, ry = y;
+    if (touch_inv_x) x = xmax - x;      /* raw touch is already aligned with the panel on the RG DS */
+    if (touch_inv_y) y = ymax - y;
+    int lx = (int)((long long)x * 256 / (xmax + 1));
+    int ly = (int)((long long)y * 192 / (ymax + 1));
+    sdl_ev e; memset(&e, 0, sizeof e);
+    uint32_t wid = window ? SDL_GetWindowID(window) : 1, ts = SDL_GetTicks();
+    if (lx != last_lx || ly != last_ly || down_change) {
+        e.m.type = 0x400; e.m.ts = ts; e.m.win = wid; e.m.state = down ? 1 : 0;
+        e.m.x = lx; e.m.y = ly; e.m.xrel = last_lx < 0 ? 0 : lx - last_lx; e.m.yrel = last_ly < 0 ? 0 : ly - last_ly;
+        push_ev(&e); last_lx = lx; last_ly = ly;
+    }
+    if (down_change && down) {
+        LOG("[touch] down raw %d,%d -> ds %d,%d\n", rx, ry, lx, ly);
+        if (tdump_n < touch_dumps) { tdump_y = ly; tdump_x = lx; }
+    }
+    if (down_change) {
+        memset(&e, 0, sizeof e);
+        e.b.type = down ? 0x401 : 0x402; e.b.ts = ts; e.b.win = wid; e.b.button = 1; e.b.state = down ? 1 : 0; e.b.clicks = 1;
+        e.b.x = lx; e.b.y = ly;
+        push_ev(&e);
+    }
+    st_touch++;
+}
+
+static void *touch_thread(void *a) {
+    const char *want = a;
+    glob_t g; char path[64] = "";
+    if (glob("/sys/class/input/event*", 0, 0, &g)) return 0;
+    for (size_t i = 0; i < g.gl_pathc && !*path; i++) {
+        char dev[300], real_[512]; snprintf(dev, sizeof dev, "%s/device", g.gl_pathv[i]);
+        if (realpath(dev, real_) && strstr(real_, want)) snprintf(path, sizeof path, "/dev/input/%s", strrchr(g.gl_pathv[i], '/') + 1);
+    }
+    globfree(&g);
+    int tfd = *path ? open(path, O_RDONLY | O_CLOEXEC) : -1;
+    if (tfd < 0) { LOG("[dsflip] no touchscreen matching %s\n", want); return 0; }
+    int ax[6] = { 0 }, ay[6] = { 0 };
+    ioctl(tfd, 0x80184540 + 0x35, ax); ioctl(tfd, 0x80184540 + 0x36, ay);   /* EVIOCGABS(ABS_MT_POSITION_X/Y) */
+    int xmax = ax[2] > 0 ? ax[2] : 639, ymax = ay[2] > 0 ? ay[2] : 479;
+    LOG("[dsflip] touch %s range %dx%d\n", path, xmax + 1, ymax + 1);
+    struct { long s, us; uint16_t type, code; int32_t value; } ev[32];
+    int x = 0, y = 0, down = 0, was_down = 0;
+    for (;;) {
+        ssize_t n = read(tfd, ev, sizeof ev);
+        if (n <= 0) break;
+        for (int i = 0; i < (int)(n / sizeof ev[0]); i++) {
+            if (ev[i].type == 3 && (ev[i].code == 0x35 || ev[i].code == 0)) x = ev[i].value;
+            else if (ev[i].type == 3 && (ev[i].code == 0x36 || ev[i].code == 1)) y = ev[i].value;
+            else if (ev[i].type == 1 && ev[i].code == 0x14a) down = ev[i].value != 0;   /* BTN_TOUCH */
+            else if (ev[i].type == 0 && ev[i].code == 0) {                                /* SYN_REPORT */
+                if (down || was_down) touch_emit(down != was_down, down, x, y, xmax, ymax);
+                was_down = down;
+            }
+        }
+    }
+    LOG("[dsflip] touch read ended\n");
+    return 0;
+}
+
+int SDL_PollEvent(void *e) {
+    REAL(int, SDL_PollEvent, void *);
+    if (tq_head != tq_tail) {
+        lock(&tmu);
+        if (tq_head != tq_tail) {
+            if (e) { memcpy(e, &tq[tq_tail], sizeof tq[0]); tq_tail = (tq_tail + 1) % QN; }
+            unlock(&tmu);
+            return 1;
+        }
+        unlock(&tmu);
+    }
+    return real(e);
 }
 
 /* ---------- init ---------- */
@@ -223,8 +378,9 @@ __attribute__((constructor)) static void init(void) {
     if (np < 2 || !P[0].plane || !P[1].plane) { LOG("[dsflip] need 2 panels with primary planes -> passthrough\n"); return; }
     for (int i = 0; i < 2; i++) plane_props(&P[i]);
 
-    /* modeset both with a black 640x480 buffer; other planes off */
-    static dbuf black[2];
+    /* modeset both with the black buffer; other planes off */
+    blk.kind = K_BLACK; blk.nb = 1; blk.w = P[1].mode.hdisplay; blk.h = P[1].mode.vdisplay;
+    if (mkbuf(&blk.b[0], blk.w, blk.h, DRM_FORMAT_XRGB8888, 32)) { LOG("[dsflip] dumb alloc failed\n"); return; }
     drmModeAtomicReq *r = drmModeAtomicAlloc();
     for (uint32_t k = 0; k < pres->count_planes; k++) {
         uint32_t id = pres->planes[k];
@@ -234,18 +390,34 @@ __attribute__((constructor)) static void init(void) {
     }
     for (int i = 0; i < 2; i++) {
         panel *p = &P[i];
-        if (mkbuf(&black[i], p->mode.hdisplay, p->mode.vdisplay)) { LOG("[dsflip] dumb alloc failed\n"); return; }
         drmModeAtomicAddProperty(r, p->conn, prop(p->conn, DRM_MODE_OBJECT_CONNECTOR, "CRTC_ID"), p->crtc);
         drmModeAtomicAddProperty(r, p->crtc, prop(p->crtc, DRM_MODE_OBJECT_CRTC, "MODE_ID"), p->mode_blob);
         drmModeAtomicAddProperty(r, p->crtc, prop(p->crtc, DRM_MODE_OBJECT_CRTC, "ACTIVE"), 1);
-        add_fb(r, p, &black[i], p->mode.hdisplay, p->mode.vdisplay);
+        add_fb(r, p, &blk.b[0]);
+        p->scan = &blk.b[0];
     }
     int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_ALLOW_MODESET, 0);
     drmModeAtomicFree(r);
     if (ret) { LOG("[dsflip] modeset failed: %s -> passthrough\n", strerror(-ret)); return; }
+
+    /* can the top plane scale the 800x480 menu down itself? */
+    dbuf t; memset(&t, 0, sizeof t);
+    if (!mkbuf(&t, 800, 480, DRM_FORMAT_RGB565, 16)) {
+        r = drmModeAtomicAlloc(); add_fb(r, &P[0], &t);
+        menu_hw = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_TEST_ONLY, 0) == 0;
+        drmModeAtomicFree(r); freebuf(&t);
+    }
+    LOG("[dsflip] menu scaling: %s\n", menu_hw ? "hardware" : "CPU nearest");
+
+    signal(SIGUSR2, on_usr2);
+    tdump_x = -1; if (getenv("DSFLIP_TOUCH_DUMP")) touch_dumps = atoi(getenv("DSFLIP_TOUCH_DUMP"));
     efd = eventfd(0, EFD_CLOEXEC);
     st_t0 = now_us();
     pthread_t th; pthread_create(&th, 0, presenter, 0);
+    const char *inv = getenv("DSFLIP_TOUCH_INVERT");        /* "x", "y", "xy" or unset/"none" */
+    if (inv) { touch_inv_x = strchr(inv, 'x') != 0; touch_inv_y = strchr(inv, 'y') != 0; }
+    const char *tp = getenv("DSFLIP_TOUCH");
+    pthread_create(&th, 0, touch_thread, (void *)(tp ? tp : "fe5e0000.i2c"));
     ok = 1;
     LOG("[dsflip] ready: top plane %u, bottom plane %u\n", P[0].plane, P[1].plane);
 }
@@ -253,29 +425,38 @@ __attribute__((constructor)) static void init(void) {
 /* ---------- SDL interception ---------- */
 static stex *find(void *t) { for (int i = 0; i < nt; i++) if (T[i].tex == t) return &T[i]; return 0; }
 
+void *SDL_CreateWindow(const char *title, int x, int y, int w, int h, uint32_t flags) {
+    REAL(void *, SDL_CreateWindow, const char *, int, int, int, int, uint32_t);
+    void *win = real(title, x, y, w, h, flags);
+    if (!window) window = win;
+    return win;
+}
+
 void *SDL_CreateTexture(void *rn, uint32_t fmt, int access, int w, int h) {
     REAL(void *, SDL_CreateTexture, void *, uint32_t, int, int, int);
     void *t = real(rn, fmt, access, w, h);
-    /* SDL_PIXELFORMAT_ARGB8888 = 0x16362004, streaming access = 1, DS screen sizes only */
-    if (ok && t && access == 1 && fmt == 0x16362004 && ((w == 256 && h == 192) || (w == 512 && h == 384))) {
-        lock(&mu);
-        stex *s = find(t);
-        if (!s) {                       /* reuse a slot of a destroyed texture, else a new one */
-            for (int i = 0; i < nt && !s; i++) if (!T[i].tex) s = &T[i];
-            if (!s && nt < 4) s = &T[nt++];
-        }
-        if (s) {
-            for (int k = 0; k < NBUF; k++) if (s->b[k].map && (s->w != w || s->h != h)) {
-                /* size changed (hires toggle): old buffers leak on purpose if still on screen */
-                if (s->b[k].state == FREE) { munmap(s->b[k].map, s->b[k].size); drmModeRmFB(fd, s->b[k].fb); }
-                memset(&s->b[k], 0, sizeof s->b[k]);
+    int screen = fmt == FMT_ARGB8888 && ((w == 256 && h == 192) || (w == 512 && h == 384));
+    int menu = fmt == FMT_RGB565 && w >= 256 && h >= 192;
+    if (!ok || !t || access != 1 || !(screen || menu)) return t;
+    lock(&mu);
+    stex *s = find(t);
+    if (!s) for (int i = 0; i < nt && !s; i++) if (!T[i].tex) s = &T[i];
+    if (!s && nt < 6) s = &T[nt++];
+    if (s) {
+        for (int k = 0; k < s->nb; k++)   /* recycled slot: free buffers that aren't on screen */
+            if (s->b[k].state == FREE || s->b[k].state == WRITTEN || s->b[k].state == WRITING) freebuf(&s->b[k]);
+            else memset(&s->b[k], 0, sizeof s->b[k]);   /* still scanning out: leak it rather than tear it down */
+        s->tex = t; s->kind = screen ? K_SCREEN : K_MENU; s->w = w; s->h = h; s->writing = s->written = -1;
+        s->nb = screen ? NBUF : 3;
+        int bw = w, bh = h;
+        if (!screen && !menu_hw) { bw = P[0].mode.hdisplay; bh = P[0].mode.vdisplay; }
+        for (int k = 0; k < s->nb; k++)
+            if (mkbuf(&s->b[k], bw, bh, screen ? DRM_FORMAT_XRGB8888 : DRM_FORMAT_RGB565, screen ? 32 : 16)) {
+                LOG("[dsflip] alloc %dx%d failed\n", bw, bh); s->tex = 0; break;
             }
-            s->tex = t; s->w = w; s->h = h; s->writing = s->written = -1;
-            for (int k = 0; k < NBUF; k++) if (!s->b[k].map && mkbuf(&s->b[k], w, h)) { LOG("[dsflip] alloc %dx%d failed\n", w, h); s->tex = 0; break; }
-            LOG("[dsflip] screen texture %p %dx%d -> %d dumb buffers\n", t, w, h, NBUF);
-        }
-        unlock(&mu);
+        LOG("[dsflip] %s texture %p %dx%d -> %d dumb buffers %dx%d\n", screen ? "screen" : "menu", t, w, h, s->nb, bw, bh);
     }
+    unlock(&mu);
     return t;
 }
 
@@ -283,49 +464,80 @@ void SDL_DestroyTexture(void *t) {
     REAL(void, SDL_DestroyTexture, void *);
     lock(&mu);
     stex *s = find(t);
-    if (s) { s->tex = 0; for (int i = 0; i < 2; i++) if (P[i].src == s) P[i].src = 0; }
+    if (s) s->tex = 0;
     unlock(&mu);
     real(t);
+}
+
+static int take_free(stex *s) {        /* with mu held */
+    for (int k = 0; k < s->nb; k++) if (s->b[k].state == FREE) return k;
+    return s->written >= 0 ? s->written : 0;   /* can't happen with enough buffers */
 }
 
 int SDL_LockTexture(void *t, const SDL_Rect *rc, void **px, int *pitch) {
     REAL(int, SDL_LockTexture, void *, const SDL_Rect *, void **, int *);
     stex *s = ok ? find(t) : 0;
-    if (!s || rc) return real(t, rc, px, pitch);
+    if (!s || s->kind != K_SCREEN || rc) return real(t, rc, px, pitch);
     lock(&mu);
-    int k;
-    for (k = 0; k < NBUF; k++) if (s->b[k].state == FREE) break;
-    if (k == NBUF) {                    /* can't happen with 4 buffers; recycle the oldest written */
-        k = s->written >= 0 ? s->written : 0;
-    }
+    int k = take_free(s);
     s->b[k].state = WRITING; s->writing = k;
     unlock(&mu);
     *px = s->b[k].map; *pitch = (int)s->b[k].pitch;
     return 0;
 }
 
+static void finish_write(stex *s) {    /* with mu held */
+    if (s->written >= 0 && s->b[s->written].state == WRITTEN) s->b[s->written].state = FREE;  /* never presented */
+    s->b[s->writing].state = WRITTEN; s->written = s->writing; s->writing = -1;
+}
+
 void SDL_UnlockTexture(void *t) {
     REAL(void, SDL_UnlockTexture, void *);
     stex *s = ok ? find(t) : 0;
     if (!s || s->writing < 0) { real(t); return; }
+    lock(&mu); finish_write(s); unlock(&mu);
+}
+
+int SDL_UpdateTexture(void *t, const SDL_Rect *rc, const void *pixels, int pitch) {
+    REAL(int, SDL_UpdateTexture, void *, const SDL_Rect *, const void *, int);
+    stex *s = ok ? find(t) : 0;
+    if (!s || s->kind != K_MENU || rc) return real(t, rc, pixels, pitch);
     lock(&mu);
-    if (s->written >= 0 && s->b[s->written].state == WRITTEN) s->b[s->written].state = FREE;  /* never presented */
-    s->b[s->writing].state = WRITTEN; s->written = s->writing; s->writing = -1;
+    int k = take_free(s);
+    s->b[k].state = WRITING; s->writing = k;
     unlock(&mu);
+    dbuf *b = &s->b[k];
+    const uint8_t *src = pixels;
+    if (b->w == (uint32_t)s->w && b->h == (uint32_t)s->h) {
+        for (int y = 0; y < s->h; y++) memcpy((uint8_t *)b->map + y * b->pitch, src + y * pitch, s->w * 2);
+    } else {                            /* nearest-neighbour downscale into the panel-sized buffer */
+        static int xmap[2048];
+        for (uint32_t x = 0; x < b->w; x++) xmap[x] = (int)(x * s->w / b->w);
+        uint16_t row[2048];
+        for (uint32_t y = 0; y < b->h; y++) {
+            const uint16_t *sr = (const uint16_t *)(src + (y * s->h / b->h) * pitch);
+            for (uint32_t x = 0; x < b->w; x++) row[x] = sr[xmap[x]];
+            memcpy((uint8_t *)b->map + y * b->pitch, row, b->w * 2);
+        }
+    }
+    lock(&mu); finish_write(s); unlock(&mu);
+    return 0;
 }
 
 int SDL_RenderSetLogicalSize(void *rn, int w, int h) {
     REAL(int, SDL_RenderSetLogicalSize, void *, int, int);
-    if (w > 0) logical_w = w;
+    if (w > 0 && h > 0) { logical_w = w; logical_h = h; }
     return real(rn, w, h);
 }
 
 int SDL_RenderCopy(void *rn, void *t, const SDL_Rect *src, const SDL_Rect *dst) {
     REAL(int, SDL_RenderCopy, void *, void *, const SDL_Rect *, const SDL_Rect *);
     stex *s = ok ? find(t) : 0;
-    if (!s) return ok ? 0 : real(rn, t, src, dst);   /* v1: other draws (menus/overlays) are not shown */
-    int half = dst && dst->x >= logical_w / 2;
-    pending_route[half] = s;
+    if (!s) return ok ? 0 : real(rn, t, src, dst);   /* other draws (overlays) are not shown */
+    if (s->kind == K_MENU) { pending_route[0] = s; pending_route[1] = &blk; return 0; }
+    SDL_Rect d = dst ? *dst : (SDL_Rect){ 0, 0, logical_w, logical_h };
+    int bottom = logical_w > logical_h ? d.x >= logical_w / 2 : d.y >= logical_h / 2;
+    pending_route[bottom] = s; route_dst[bottom] = d;
     return 0;
 }
 
@@ -339,14 +551,21 @@ void SDL_RenderPresent(void *rn) {
     if (!ok) { real(rn); return; }
     lock(&mu);
     st_present++;
+    touch_rect_ok = pending_route[1] && pending_route[1]->kind == K_SCREEN;
+
     for (int i = 0; i < 2; i++) {
         stex *s = pending_route[i]; pending_route[i] = 0;
-        if (!s || s->written < 0) continue;
-        dbuf *b = &s->b[s->written];
-        if (b->state != WRITTEN) continue;
-        if (P[i].ready) { P[i].ready->state = FREE; st_drop++; }     /* mailbox: newest wins */
-        P[i].ready = b; b->state = READY; P[i].src = s;
-        s->written = -1;
+        if (!s) continue;
+        dbuf *b;
+        if (s->kind == K_BLACK) {
+            b = &blk.b[0];
+            if (P[i].scan == b || P[i].queued == b || P[i].ready == b) continue;
+        } else {
+            if (s->written < 0 || s->b[s->written].state != WRITTEN) continue;
+            b = &s->b[s->written]; s->written = -1; b->state = READY;
+        }
+        if (P[i].ready) { release(P[i].ready); st_drop++; }     /* mailbox: newest wins */
+        P[i].ready = b;
     }
     unlock(&mu);
     uint64_t one = 1; if (write(efd, &one, 8) < 0) {}

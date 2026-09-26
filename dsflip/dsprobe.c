@@ -118,9 +118,15 @@ int SDL_RenderClear(void *r) {
     if (nul) return 0;
     long t0 = now_us(); int ret = real(r); c_clear += now_us() - t0; return ret;
 }
+static void *seen[64]; static int nseen;
+static int first_seen(void *t) {            /* 1 the first time a texture is drawn */
+    for (int i = 0; i < nseen; i++) if (seen[i] == t) return 0;
+    if (nseen < 64) seen[nseen++] = t;
+    return 1;
+}
 int SDL_RenderCopy(void *r, void *t, const SDL_Rect *s, const SDL_Rect *d) {
     REAL(int, SDL_RenderCopy, void *, void *, const SDL_Rect *, const SDL_Rect *);
-    if (n_tot_copy++ < 16) { char sb[40], db[40]; rect(sb, s); rect(db, d); LOG("[copy] tex=%p src=%s dst=%s\n", t, sb, db); }
+    if (n_tot_copy++ < 16 || first_seen(t)) { char sb[40], db[40]; rect(sb, s); rect(db, d); LOG("[copy] tex=%p src=%s dst=%s\n", t, sb, db); }
     n_copy++;
     if (nul) return 0;
     long t0 = now_us(); int ret = real(r, t, s, d); c_copy += now_us() - t0; return ret;
@@ -171,10 +177,32 @@ int SDL_PollEvent(void *e) {
     REAL(int, SDL_PollEvent, void *);
     int r = real(e);
     static int n;
-    if (r && e && n < 40) {
+    if (r && e && (n < 40 || *(Uint32 *)e == 0x401)) {
         Uint32 ty = *(Uint32 *)e;
         if (ty == 0x300 || ty == 0x301) { n++; LOG("[ev] key %s scancode=%d sym=%d win=%u\n", ty == 0x300 ? "down" : "up", ((int *)e)[4], ((int *)e)[5], ((Uint32 *)e)[2]); }
-        else if (ty == 0x200 || ty == 0x202) { n++; LOG("[ev] type=0x%x\n", ty); }
+        else if (ty == 0x401) { LOG("[ev] mousedown x=%d y=%d t=%ld\n", ((int *)e)[5], ((int *)e)[6], now_us()); }
     }
     return r;
+}
+
+/* other draw calls a menu might use: log the first few of each */
+int SDL_RenderFillRect(void *r, const SDL_Rect *rc) {
+    REAL(int, SDL_RenderFillRect, void *, const SDL_Rect *);
+    static int n; if (n++ < 8) { char b[40]; rect(b, rc); LOG("[fill] %s\n", b); }
+    return real(r, rc);
+}
+int SDL_SetRenderDrawColor(void *r, unsigned char cr, unsigned char cg, unsigned char cb, unsigned char ca) {
+    REAL(int, SDL_SetRenderDrawColor, void *, unsigned char, unsigned char, unsigned char, unsigned char);
+    static int n; if (n++ < 8) LOG("[color] %d,%d,%d,%d\n", cr, cg, cb, ca);
+    return real(r, cr, cg, cb, ca);
+}
+int SDL_SetTextureBlendMode(void *t, int m) {
+    REAL(int, SDL_SetTextureBlendMode, void *, int);
+    static int n; if (n++ < 12) LOG("[blend] tex=%p mode=%d\n", t, m);
+    return real(t, m);
+}
+int SDL_SetTextureAlphaMod(void *t, unsigned char a) {
+    REAL(int, SDL_SetTextureAlphaMod, void *, unsigned char);
+    static int n; if (n++ < 12) LOG("[alpha] tex=%p %d\n", t, a);
+    return real(t, a);
 }
