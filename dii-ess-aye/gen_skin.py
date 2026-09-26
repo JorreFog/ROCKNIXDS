@@ -183,6 +183,30 @@ write("info_panel.svg", 608, 360, f'''<defs>{grad("ip", [(0, "#43474e"), (1, "#2
 <path d="M22,250 H586" stroke="#000000" stroke-opacity="0.45" stroke-width="1.5"/>
 <path d="M22,251.5 H586" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1"/>''')
 
+# --- home panels (main menu top screen) ---
+# home_clock_panel: 608x190 card for the clock and date (left) and a DSi-style calendar tile (right, x432..588
+# y16..174: red month band y16..58 with binder rings, white page below)
+write("home_clock_panel.svg", 608, 190, f'''<defs>{grad("hp", [(0, "#43474e"), (1, "#2f3136")])}
+{grad("calr", [(0, "#f0605f"), (1, "#c7302f")])}{grad("calp", [(0, "#fbfbf8"), (1, "#e2e1dc")])}</defs>
+<path d="{rr(2, 6, 604, 182, 18)}" fill="#000000" fill-opacity="0.4"/>
+<path d="{rr(2, 2, 604, 182, 18)}" fill="url(#hp)" stroke="{EDGE}" stroke-width="2"/>
+<path d="{rr(4, 4, 600, 178, 16)}" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
+<path d="{rr(432, 20, 156, 158, 10)}" fill="#000000" fill-opacity="0.35"/>
+<path d="{rr(432, 16, 156, 158, 10)}" fill="url(#calp)" stroke="{EDGE}" stroke-width="1.5"/>
+<path d="M442,16 H578 A10,10 0 0 1 588,26 V58 H432 V26 A10,10 0 0 1 442,16 Z" fill="url(#calr)"/>
+<path d="M433,58 H587" stroke="#8e1f1f" stroke-width="1.5"/>
+<circle cx="470" cy="16" r="5.5" fill="#2b2d31" stroke="{EDGE}" stroke-width="1"/>
+<circle cx="550" cy="16" r="5.5" fill="#2b2d31" stroke="{EDGE}" stroke-width="1"/>
+<path d="M470,6 V16 M550,6 V16" stroke="#9aa0a8" stroke-width="3" stroke-linecap="round"/>''')
+# home_system_panel: 608x150 card for the selected system: icon well x20..130 y20..130, details to the right
+write("home_system_panel.svg", 608, 150, f'''<defs>{grad("hs", [(0, "#43474e"), (1, "#2f3136")])}
+{grad("well", [(0, "#1d1f23"), (1, "#15171a")])}</defs>
+<path d="{rr(2, 6, 604, 142, 18)}" fill="#000000" fill-opacity="0.4"/>
+<path d="{rr(2, 2, 604, 142, 18)}" fill="url(#hs)" stroke="{EDGE}" stroke-width="2"/>
+<path d="{rr(4, 4, 600, 138, 16)}" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
+<path d="{rr(18, 18, 110, 110, 14)}" fill="url(#well)" stroke="{EDGE}" stroke-width="2"/>
+<path d="{rr(19.5, 19.5, 107, 107, 13)}" fill="none" stroke="{ACCENT}" stroke-opacity="0.25" stroke-width="1"/>''')
+
 # --- tabs (108x56, opaque x0..100 / x8..108, y8..56) with L2/R2 badge ---
 def tab(name, flip, label):
     """160x72, drawn at the size the theme shows it (no stretching). The visible tab body is
@@ -306,34 +330,45 @@ write("scroll_track.svg", W, H, "\n".join(track) + "\n"
 grips = [px(x, 6, 1, 8, c) for x0 in (6, 75) for x, c in ((x0, BLUE_HI), (x0 + 1, BLUE_EDGE), (x0 + 3, BLUE_HI), (x0 + 4, BLUE_EDGE))]
 write("scroll_thumb.svg", 84, 20, px_box(0, 0, 84, 20, BLUE, BLUE_HI, BLUE_LO, BLUE_EDGE) + "\n" + "\n".join(grips))
 
-# --- boot splash (640x480 per panel), shown as the sway background while ES loads hidden ---
+# --- boot splash (640x480 per panel), shown by swayimg while ES loads hidden (rendered to rgds-splash.png) ---
+# DSi-style, in the system font: top = the ROCKNIX logo with a soft glow and the device name; bottom = a DS game
+# card with a ROCKNIX label in the blue selection frame, and "Loading" with progress dots.
 SPLASH = os.path.join(THEME, "assets/images/splash")
 os.makedirs(SPLASH, exist_ok=True)
-PS2P_PATH = os.path.join(THEME, "assets/fonts/PressStart2P-Regular.ttf")
-if os.path.exists(PS2P_PATH):
-    PS2P = TTFont(PS2P_PATH)
-    grid640 = " ".join([f"M{x},0 V480" for x in range(0, 641, 20)] + [f"M0,{y} H640" for y in range(0, 481, 20)])
-    base = f'''<defs>{grad("bg", [(0, BG_TOP), (1, BG_BOT)])}
+grid640 = " ".join([f"M{x},0 V480" for x in range(0, 641, 20)] + [f"M0,{y} H640" for y in range(0, 481, 20)])
+base = f'''<defs>{grad("bg", [(0, BG_TOP), (1, BG_BOT)])}
 <radialGradient id="vig" cx="0.5" cy="0.45" r="0.75"><stop offset="0.55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.35"/></radialGradient>
-<radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="{ACCENT_HI}" stop-opacity="0.22"/><stop offset="0.45" stop-color="{ACCENT}" stop-opacity="0.08"/><stop offset="1" stop-color="{ACCENT}" stop-opacity="0"/></radialGradient></defs>
+<radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="{ACCENT_HI}" stop-opacity="0.24"/><stop offset="0.45" stop-color="{ACCENT}" stop-opacity="0.09"/><stop offset="1" stop-color="{ACCENT}" stop-opacity="0"/></radialGradient></defs>
 <rect width="640" height="480" fill="url(#bg)"/>
 <path d="{grid640}" stroke="#ffffff" stroke-opacity="0.04" stroke-width="1" fill="none"/>
 <rect width="640" height="480" fill="url(#vig)"/>'''
-    logo = open(os.path.join(HERE, "rocknix_logo.paths")).read()
-    logo = logo.replace('fill="RED"', 'fill="url(#rk)"').replace('fill="GREY"', 'fill="url(#nx)"')
-    # top: logo (300px wide, like the menu) + PLEASE WAIT
-    write("../splash/splash_top.svg", 640, 480, base + f'''
-<defs>{grad("rk", [(0, "#ff6b6b"), (1, "#e8403f")])}{grad("nx", [(0, "#f2f3f5"), (1, "#c9ccd1")])}</defs>
-<ellipse cx="320" cy="200" rx="280" ry="120" fill="url(#glow)"/>
-<g transform="translate(170 {200 - 28.5}) scale(0.6) translate(0 -53)">{logo}</g>
-{glyph_run("PLEASE WAIT", 320, 312, 16, "#8fc8ff", font=PS2P)}''')
-    # bottom: a cartridge in the blue START-style frame + NOW LOADING
-    cart = open(os.path.join(OUT, "game_slot.svg")).read().split(">", 1)[1].rsplit("</svg>", 1)[0]
-    write("../splash/splash_bottom.svg", 640, 480, base + f'''
-<ellipse cx="320" cy="200" rx="200" ry="150" fill="url(#glow)"/>
-{px_box(252, 110, 136, 168, BLUE, BLUE_HI, BLUE_LO, BLUE_EDGE, bevel=3)}
-<rect x="262" y="120" width="116" height="148" fill="#14161a"/>
-<g transform="translate(260 128) scale(1)">{cart}</g>
-{glyph_run("NOW LOADING", 320, 336, 16, "#e8e9eb", font=PS2P)}''')
+logo = open(os.path.join(HERE, "rocknix_logo.paths")).read()
+logo = logo.replace('fill="RED"', 'fill="url(#rk)"').replace('fill="GREY"', 'fill="url(#nx)"')
+logo_defs = f'<defs>{grad("rk", [(0, "#ff6b6b"), (1, "#e8403f")])}{grad("nx", [(0, "#f2f3f5"), (1, "#c9ccd1")])}</defs>'
+# top: logo 400 px wide (native 500 x ~95) centred at y 205, device name, divider
+write("../splash/splash_top.svg", 640, 480, base + f'''
+{logo_defs}
+<ellipse cx="320" cy="205" rx="300" ry="130" fill="url(#glow)"/>
+<g transform="translate(120 {205 - 38}) scale(0.8) translate(0 -53)">{logo}</g>
+<path d="M200,268 H440" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
+{glyph_run("Anbernic RG DS", 320, 300, 15, "#a9afb8")}''')
+# bottom: the DS card (100x104, drawn 1.6x) with the logo on its label, in the selection frame; Loading + dots
+card = open(os.path.join(OUT, "game_slot.svg")).read().split(">", 1)[1].rsplit("</svg>", 1)[0]
+lab = f'<rect x="12" y="21" width="76" height="66" fill="#fbfbf8"/><g transform="translate(18 {54 - 6}) scale(0.128) translate(0 -53)">{logo}</g>'
+cx, cy, sc = 320, 190, 1.6
+cw, ch = 100 * sc, 104 * sc
+fw, fh = cw + 26, ch + 26
+write("../splash/splash_bottom.svg", 640, 480, base + f'''
+{logo_defs}{grad("sw", [(0, ACCENT_HI), (0.45, ACCENT), (1, ACCENT_LO)])}
+<ellipse cx="{cx}" cy="{cy}" rx="220" ry="160" fill="url(#glow)"/>
+<path d="{rr(cx - fw / 2, cy - fh / 2 + 4, fw, fh, 16)}" fill="#000000" fill-opacity="0.35"/>
+<path d="{rr(cx - fw / 2, cy - fh / 2, fw, fh, 16)}" fill="url(#sw)" stroke="#0d3a6b" stroke-width="2.5"/>
+<path d="{rr(cx - fw / 2 + 3, cy - fh / 2 + 3, fw - 6, fh - 6, 13)}" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1.5"/>
+<path d="{rr(cx - cw / 2 - 5, cy - ch / 2 - 5, cw + 10, ch + 10, 9)}" fill="#14161a"/>
+<g transform="translate({cx - cw / 2} {cy - ch / 2}) scale({sc})">{lab}{card}</g>
+{glyph_run("Loading", 320, 345, 17, "#e8e9eb")}
+<circle cx="296" cy="372" r="5" fill="{ACCENT_HI}"/>
+<circle cx="320" cy="372" r="5" fill="{ACCENT_HI}" fill-opacity="0.6"/>
+<circle cx="344" cy="372" r="5" fill="{ACCENT_HI}" fill-opacity="0.3"/>''')
 
 print("polish ok")
