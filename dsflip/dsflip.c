@@ -41,6 +41,8 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/eventfd.h>
+#include <sys/timerfd.h>
+#include <math.h>
 #include <sys/stat.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
@@ -165,6 +167,20 @@ void dsflip_log(const char *fmt, ...) {
 /* ---------- presenter ---------- */
 static int pending_mask;                /* bit i: a flip event is still due for panel i's CRTC */
 
+/* Pacing. DraStic finishes frames on its own 60.000 Hz clock, not in step with the panels' vblank. Showing each
+ * frame at the very next vblank ("immediate") makes the vblank itself the cut-off: when DraStic's presents drift
+ * into that phase, per-frame timing jitter puts two frames into one refresh (one dropped) and none into the next
+ * (one repeated). "latch" mode instead measures where in the refresh cycle presents arrive (circular average,
+ * tracking the slow drift between the two clocks) and commits the newest frame at the opposite phase, so the
+ * cut-off sits as far from the presents as possible. DSFLIP_PACING=immediate restores the old behaviour. */
+static int pacing_latch = 1, tfd = -1;
+static long long vbl_ref;               /* a recent top-panel vblank (flip timestamp, CLOCK_MONOTONIC us) */
+static double period = 16666.7;         /* measured refresh period, us */
+static double ph_c, ph_s;               /* EMA of cos/sin of the present phase */
+static int ph_n, ph_hist[16], st_late;  /* samples; histogram of present phases (logged); commits that missed */
+static double latch_off = 14000;        /* current latch point, us after vblank */
+static long long ready_since;           /* when the oldest uncommitted frame arrived */
+
 static void release(dbuf *b) { if (b && b != &blk.b[0]) b->state = FREE; }
 
 /* toast: a small overlay plane on the top panel (RetroAchievements pop-ups), committed together with the
@@ -226,14 +242,21 @@ static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned c
     lock(&mu);
     for (int i = 0; i < 2; i++) if (P[i].crtc == crtc) {
         pending_mask &= ~(1 << i);
-        if (!P[i].queued) continue;     /* toast-only flip on this CRTC */
         long long t = sec * 1000000LL + usec;
+        if (i == 0) {
+            if (vbl_ref) {
+                double iv = (double)(t - vbl_ref), k = floor(iv / period + 0.5);
+                if (k >= 1 && k <= 4 && fabs(iv / k - period) < 300) period += 0.02 * (iv / k - period);
+            }
+            vbl_ref = t;
+        }
+        if (!P[i].queued) continue;     /* toast-only flip on this CRTC */
         if (P[i].last_flip && t - P[i].last_flip > st_iv_max[i]) st_iv_max[i] = t - P[i].last_flip;
         P[i].last_flip = t; st_flips[i]++;
         if (P[i].scan != P[i].queued) release(P[i].scan);
         P[i].scan = P[i].queued; P[i].scan->state = SCANOUT; P[i].queued = 0;
     }
-    if (!pending_mask) try_commit();
+    if (!pending_mask && (!pacing_latch || ph_n < 120)) try_commit();
     unlock(&mu);
 }
 
@@ -306,16 +329,52 @@ static void dump_touch(void) {         /* bottom panel's scanout + the DS coordi
     fwrite(b->map, 1, (size_t)b->pitch * b->h, f); fclose(f);
 }
 
+static void arm_latch(void) {         /* with mu held: next latch point after now */
+    if (tfd < 0 || !vbl_ref) return;
+    if (ph_n >= 120) {
+        double mean = atan2(ph_s, ph_c) / (2 * M_PI) * period;          /* where presents cluster */
+        double l = fmod(mean + period / 2 + 2 * period, period);        /* opposite phase */
+        double lo = 800, hi = period - 2500;                             /* the commit must land before vblank */
+        if (l < lo || l > hi) {         /* pick the allowed edge that is farther (circularly) from the presents */
+            double m = fmod(mean + 2 * period, period);
+            double dlo = fabs(remainder(lo - m, period)), dhi = fabs(remainder(hi - m, period));
+            l = dlo > dhi ? lo : hi;
+        }
+        latch_off = l;
+    }
+    long long now = now_us();
+    double k = ceil(((double)(now - vbl_ref) - latch_off + 300) / period);
+    long long at = vbl_ref + (long long)(k * period + latch_off);
+    struct itimerspec its = { { 0, 0 }, { at / 1000000, (at % 1000000) * 1000 } };
+    timerfd_settime(tfd, TFD_TIMER_ABSTIME, &its, 0);
+}
+
 static void *presenter(void *a) {
     (void)a;
     drmEventContext ev = { .version = 3, .page_flip_handler2 = on_flip };
-    struct pollfd pf[2] = { { .fd = fd, .events = POLLIN }, { .fd = efd, .events = POLLIN } };
+    struct pollfd pf[3] = { { .fd = fd, .events = POLLIN }, { .fd = efd, .events = POLLIN }, { .fd = tfd, .events = POLLIN } };
+    long long st10 = now_us();
     for (;;) {
-        if (poll(pf, 2, 50) < 0) continue;
+        if (poll(pf, tfd >= 0 ? 3 : 2, 50) < 0) continue;
         if (pf[0].revents & POLLIN) drmHandleEvent(fd, &ev);
         if (pf[1].revents & POLLIN) {
             uint64_t v; if (read(efd, &v, 8) < 0) {}
-            lock(&mu); try_commit(); unlock(&mu);
+            lock(&mu);
+            if (!pacing_latch || ph_n < 120) try_commit();              /* immediate (and while learning) */
+            else arm_latch();
+            unlock(&mu);
+        }
+        if (tfd >= 0 && (pf[2].revents & POLLIN)) {                        /* latch point reached */
+            uint64_t v; if (read(tfd, &v, 8) < 0) {}
+            lock(&mu);
+            if (pending_mask) st_late++; else try_commit();
+            if (P[0].ready || P[1].ready) arm_latch();
+            unlock(&mu);
+        }
+        if (pacing_latch && ph_n >= 120) {                                /* safety net: never sit on a frame */
+            lock(&mu);
+            if ((P[0].ready || P[1].ready) && !pending_mask && now_us() - ready_since > 2 * (long long)period) { st_late++; try_commit(); }
+            unlock(&mu);
         }
         if (toast_want && now_us() > toast_until) {   /* hide an expired toast (commits even without a new frame) */
             lock(&mu); toast_want = 0; toast_dirty = 1; try_commit(); unlock(&mu);
@@ -323,6 +382,16 @@ static void *presenter(void *a) {
         if (want_dump) { want_dump = 0; lock(&mu); dump_scan(); unlock(&mu); }
         if (tdump_n < touch_dumps && tdump_x >= 0) { lock(&mu); dump_touch(); unlock(&mu); tdump_n++; tdump_x = -1; }
         long long t = now_us();
+        if (t - st10 >= 10000000) {                                        /* pacing summary every 10 s */
+            lock(&mu);
+            char h[64]; for (int i = 0; i < 16; i++) h[i] = ph_hist[i] > 99 ? '#' : ph_hist[i] > 30 ? '+' : ph_hist[i] > 5 ? '.' : ' ';
+            h[16] = 0; memset(ph_hist, 0, sizeof ph_hist);
+            double mean = fmod(atan2(ph_s, ph_c) / (2 * M_PI) * period + period, period);
+            LOG("[pace] mode=%s period=%.1f us, presents at %.0f us after vblank (spread R=%.2f) [%s], latch at %.0f us, late=%d\n",
+                pacing_latch && ph_n >= 120 ? "latch" : "immediate", period, mean, sqrt(ph_c * ph_c + ph_s * ph_s), h, latch_off, st_late);
+            st_late = 0; st10 = t;
+            unlock(&mu);
+        }
         if (t - st_t0 >= 1000000) {
             lock(&mu);
             LOG("[dsflip] present/s=%.1f commits=%d dropped=%d busy=%d flips top=%d bot=%d max-iv top=%lld bot=%lld us touch=%d\n",
@@ -562,6 +631,11 @@ __attribute__((constructor)) static void init(void) {
     }
     LOG("[dsflip] toast plane: %u\n", tp_plane);
     signal(SIGUSR2, on_usr2);
+    const char *pm = getenv("DSFLIP_PACING");
+    if (pm && !strcmp(pm, "immediate")) pacing_latch = 0;
+    if (pacing_latch) tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
+    if (tfd < 0) pacing_latch = 0;                                   /* no timer: never wait for a latch */
+    LOG("[dsflip] pacing: %s\n", pacing_latch ? "latch (adaptive)" : "immediate");
     tdump_x = -1; if (getenv("DSFLIP_TOUCH_DUMP")) touch_dumps = atoi(getenv("DSFLIP_TOUCH_DUMP"));
     efd = eventfd(0, EFD_CLOEXEC);
     st_t0 = now_us();
@@ -714,8 +788,15 @@ int SDL_RenderClear(void *rn) {
 void SDL_RenderPresent(void *rn) {
     REAL(void, SDL_RenderPresent, void *);
     if (!ok) { real(rn); return; }
+    long long tp = now_us();
     lock(&mu);
     st_present++;
+    if (vbl_ref) {                       /* where in the refresh cycle did this frame arrive? */
+        double ph = fmod((double)(tp - vbl_ref), period); if (ph < 0) ph += period;
+        double ang = ph / period * 2 * M_PI, a = ph_n < 120 ? 1.0 / (ph_n + 1) : 0.01;
+        ph_c += a * (cos(ang) - ph_c); ph_s += a * (sin(ang) - ph_s); ph_n++;
+        ph_hist[(int)(ph / period * 16) & 15]++;
+    }
     touch_rect_ok = pending_route[1] && pending_route[1]->kind == K_SCREEN;
 
     for (int i = 0; i < 2; i++) {
@@ -730,6 +811,7 @@ void SDL_RenderPresent(void *rn) {
             b = &s->b[s->written]; s->written = -1; b->state = READY;
         }
         if (P[i].ready) { release(P[i].ready); st_drop++; }     /* mailbox: newest wins */
+        else if (!P[0].ready && !P[1].ready) ready_since = tp;
         P[i].ready = b;
     }
     unlock(&mu);
