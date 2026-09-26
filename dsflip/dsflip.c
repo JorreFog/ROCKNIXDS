@@ -584,17 +584,40 @@ static void shade_pending(void) {
     unlock(&mu);
 }
 
+/* shader mode: the GL work runs on its own thread. Measured: with it on the presenter, flip events waited
+ * behind uploads and draws (vblank -> event handled up to 47 ms late), latches then found the previous flip
+ * "still pending" and the display fell into 30 fps bursts. The presenter now only handles DRM events, the latch
+ * timer and commits; this worker shades each frame DraStic presents (woken via wfd) and then wakes the presenter. */
+static int wfd = -1;
+static void *shader_worker(void *a) {
+    (void)a;
+    if (rt_prio) set_fifo(2);
+    if (pin_cpus) { cpu_set_t c; CPU_ZERO(&c); CPU_SET(0, &c); sched_setaffinity(0, sizeof c, &c); }
+    shader_on = shader_init(fd, shader_nm);        /* GL lives on this thread; init() waits for the verdict */
+    if (!shader_on) LOG("[dsflip] shader \"%s\" unavailable: zero-copy\n", shader_nm);
+    shader_done = 1;
+    if (!shader_on) return 0;
+    struct pollfd pw = { .fd = wfd, .events = POLLIN };
+    for (;;) {
+        if (poll(&pw, 1, 100) <= 0) continue;
+        uint64_t v; if (read(wfd, &v, 8) < 0) {}
+        shade_pending();
+        uint64_t one = 1; if (write(efd, &one, 8) < 0) {}
+    }
+    return 0;
+}
+
 static void *presenter(void *a) {
     (void)a;
-    if (rt_prio) set_fifo(2);           /* above DraStic's threads (see rt_prio); libmali's threads inherit it */
+    /* the presenter reacts to vblank events and the latch timer; its work per wake-up is tiny, but a late wake-up
+     * makes the next latch find the previous flip "pending" (measured: events handled up to 7-9 ms late in shader
+     * mode at normal priority). So it always runs SCHED_FIFO, below the audio pump (20). DSFLIP_PRESENTER_RT=0: off */
+    { const char *pr = getenv("DSFLIP_PRESENTER_RT"); if (!(pr && *pr == '0')) set_fifo(rt_prio ? 2 : 10); }
     if (shader_nm && pin_cpus) {        /* the GPU side lives on CPU 0 (see init); libmali's threads inherit it */
         cpu_set_t c; CPU_ZERO(&c); CPU_SET(0, &c); sched_setaffinity(0, sizeof c, &c);
     }
-    if (shader_nm) {                    /* GL lives on this thread; init() waits for the verdict */
-        shader_on = shader_init(fd, shader_nm);
-        if (!shader_on) LOG("[dsflip] shader \"%s\" unavailable: zero-copy\n", shader_nm);
-    }
-    shader_done = 1;
+    if (shader_nm) { pthread_t th; pthread_create(&th, 0, shader_worker, 0); }   /* it sets shader_done */
+    else shader_done = 1;
     drmEventContext ev = { .version = 3, .page_flip_handler2 = on_flip };
     struct pollfd pf[3] = { { .fd = fd, .events = POLLIN }, { .fd = efd, .events = POLLIN }, { .fd = tfd, .events = POLLIN } };
     long long st10 = now_us();
@@ -603,7 +626,6 @@ static void *presenter(void *a) {
         if (pf[0].revents & POLLIN) drmHandleEvent(fd, &ev);
         if (pf[1].revents & POLLIN) {
             uint64_t v; if (read(efd, &v, 8) < 0) {}
-            if (shader_on) shade_pending();
             lock(&mu);
             if (!pacing_latch || ph_n < 120) try_commit();              /* immediate (and while learning) */
             else arm_latch();
@@ -935,7 +957,7 @@ __attribute__((constructor)) static void init(void) {
     }
     LOG("[dsflip] pacing: %s, %s\n", pacing_latch ? "latch (adaptive)" : "immediate", queue_on ? "1-frame queue" : "mailbox");
     tdump_x = -1; if (getenv("DSFLIP_TOUCH_DUMP")) touch_dumps = atoi(getenv("DSFLIP_TOUCH_DUMP"));
-    efd = eventfd(0, EFD_CLOEXEC);
+    efd = eventfd(0, EFD_CLOEXEC); wfd = eventfd(0, EFD_CLOEXEC);
     st_t0 = now_us();
     if ((shader_nm = shader_name()))
         for (int i = 0; i < 2 && shader_nm; i++) for (int k = 0; k < 6; k++)
@@ -1196,6 +1218,6 @@ void SDL_RenderPresent(void *rn) {
         enqueue(i, b, tp);
     }
     unlock(&mu);
-    uint64_t one = 1; if (write(efd, &one, 8) < 0) {}
+    uint64_t one = 1; if (write(shader_on ? wfd : efd, &one, 8) < 0) {}   /* shader mode: the worker shades first */
     ra_frame();
 }
