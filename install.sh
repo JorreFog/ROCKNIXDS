@@ -206,7 +206,7 @@ if [ $DSFLIP_ON = 1 ]; then
     mkdir -p $WORK/dsflip
     cp "$SRC/dsflip/libdsflip.so" "$SRC/dsflip/device/session.sh" "$SRC/dsflip/device/restore.sh" \
        "$SRC/dsflip/device/drastic-wrapper.sh" "$SRC/dsflip/device/install.sh" "$SRC/dsflip/device/es-features.sh" \
-       "$SRC/dsflip/device/fast-switch" $WORK/dsflip/
+       "$SRC/dsflip/device/fast-switch" "$SRC/dsflip/device/playstats.py" $WORK/dsflip/
     sh $WORK/dsflip/install.sh
 
     # DS-pixel-aware shaders for DraStic (sharp and LCD-grid looks that work at 1x and 2x) + their ES entries

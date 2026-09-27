@@ -21,6 +21,7 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
     # VT mode: sway and ES stay up. Switching the console away from sway's VT makes seatd disable sway's session,
     # which releases the display (DRM master) in ~80 ms; restore.sh switches back. tty12 is unused; graphics mode
     # keeps the kernel console from drawing on it in between.
+    VT=1
     fgconsole > /tmp/dsflip-vt 2>/dev/null || echo 1 > /tmp/dsflip-vt
     python3 -c 'import fcntl, os; fcntl.ioctl(os.open("/dev/tty12", os.O_RDWR), 0x4B3A, 0)' 2>/dev/null   # KDSETMODE KD_TEXT
     chvt 12
@@ -53,12 +54,15 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
   # no wait for the display: libdsflip retries DRM master itself while seatd lets go of it (~0.4 s after sway)
   SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log \
     LD_PRELOAD=$D/dsflip/libdsflip.so $D/dsflip/drastic "$ROM" > $D/dsflip/drastic.out 2>&1 &
-  P=$!
+  P=$!; TG=$(date +%s)
+  # ES is stopped, so it can't record the session (play count, last played, time played): do what ES does after a
+  # game. In VT mode ES is only waiting, and records it itself.
+  record() { [ -z "$VT" ] && [ "$v" = ready ] && python3 $D/dsflip/playstats.py "$ROM" $(( $(date +%s) - TG )); }
   # `systemctl stop dsflip-game` sends TERM to everything here; DraStic ignores it and would be SIGKILLed only at
   # the unit's timeout. Kill it at once (what the exit hotkey does), put the governor back and leave: starting
   # sway/ES from inside a unit that systemd is stopping waits behind that stop (measured: 40 s), so the unit's
   # ExecStopPost (restore.sh) brings them back instead.
-  trap 'kill -9 $P 2>/dev/null; wait $P; [ -n "$GPU_GOV" ] && { echo "$GPU_GOV" > $GPU/governor 2>/dev/null; rm -f /tmp/dsflip-gpu-governor; }; echo "$(date) stopped by the unit: restore.sh brings sway + ES back"; exit 0' TERM INT
+  trap 'kill -9 $P 2>/dev/null; wait $P; record; [ -n "$GPU_GOV" ] && { echo "$GPU_GOV" > $GPU/governor 2>/dev/null; rm -f /tmp/dsflip-gpu-governor; }; echo "$(date) stopped by the unit: restore.sh brings sway + ES back"; exit 0' TERM INT
   # libdsflip couldn't take the display: don't leave black panels. It decides within ~6 s at worst (3 s for DRM
   # master, 3 s for the shader); no verdict in 10 s means it isn't loaded or hangs.
   v=; i=0
@@ -92,7 +96,7 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
     esac
     [ -n "$why" ] && echo "DraStic stopped unexpectedly ($why). Logs: $D/dsflip" > $NOTICE
   fi
-  [ -s $NOTICE ] && echo "notice: $(cat $NOTICE)"
+  [ -s $NOTICE ] && echo "notice: $(cat $NOTICE)" || record
   $D/dsflip/restore.sh        # governor back, sway (checked for outputs), ES, then the notice
   echo "$(date) restored"
 } >> $LOG 2>&1
