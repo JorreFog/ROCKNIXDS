@@ -169,6 +169,24 @@ bubble = ("M10,1 H240 A9,9 0 0 1 249,10 V67 A9,9 0 0 1 240,76 H134 L125,84 L116,
 write("text_bubble.svg", 250, 85, f'''<defs>{grad("tb", [(0, "#42464d"), (1, "#34373c")])}</defs>
 <path d="{bubble}" fill="url(#tb)" stroke="{RIM}" stroke-width="1.6" stroke-linejoin="round"/>''')
 
+# --- bubble_fade: hides the partly visible last line of the game description (it autoscrolls) over the bottom
+#     28 px of the text box (y187..215 on screen). nanosvg ignores gradient stop-opacity, so it is 2 px rows with
+#     fill-opacity; the colours are the bubble's on-screen colours there (sampled), not its SVG gradient's ---
+_top, _bot = (0x3f, 0x42, 0x48), (0x3d, 0x40, 0x46)
+_rows = []
+for _i in range(14):
+    _t = _i / 13; _a = _t * _t * (3 - 2 * _t)
+    _c = tuple(int(_top[k] + (_bot[k] - _top[k]) * _t + 0.5) for k in range(3))
+    _rows.append(f'<rect x="0" y="{_i * 2}" width="448" height="2" fill="#%02x%02x%02x" fill-opacity="{_a:.3f}"/>' % _c)
+write("bubble_fade.svg", 448, 28, "\n".join(_rows))
+# the same upside down, under the title: hides the first line as it scrolls out at the top
+_rows_top = []
+for _i in range(14):
+    _t = _i / 13; _a = (1 - _t) * (1 - _t) * (3 - 2 * (1 - _t))
+    _c = tuple(int(0x3d + (0x34 - 0x3d) * _t + 0.5) + d for d in (0, 3, 8))   # the bubble is lighter near its top (sampled)
+    _rows_top.append(f'<rect x="0" y="{_i * 2}" width="448" height="2" fill="#%02x%02x%02x" fill-opacity="{_a:.3f}"/>' % _c)
+write("bubble_fade_top.svg", 448, 28, "\n".join(_rows_top))
+
 # --- preview_panel: dark bevelled screen for box art / video ---
 write("preview_panel.svg", 492, 369, f'''<defs>{grad("pp", [(0, "#454950"), (1, "#2e3035")])}
 {grad("scr", [(0, "#1d1f23"), (1, "#15171a")])}</defs>

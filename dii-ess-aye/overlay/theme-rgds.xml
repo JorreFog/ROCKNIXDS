@@ -686,6 +686,26 @@
             <zIndex>57</zIndex>
         </text>
 
+        <!-- the shared bubble is the main menu's small one; the game list needs the tall one for the description -->
+        <image name="text_bubble" extra="true">
+            <pos>0.5 0.3</pos><!-- y84..300 -->
+            <size>0.2667 0.45</size><!-- 512x216 -->
+        </image>
+        <!-- fades out the partly visible last line of the description (bubble_fade.svg matches the bubble there) -->
+        <image name="bubble_fade" extra="true">
+            <path>${themePath}/assets/images/common/bubble_fade.svg</path>
+            <pos>0.5 0.41875</pos><!-- y187..215 -->
+            <origin>0.5 0.5</origin>
+            <size>0.2333333 0.0583333</size><!-- 448x28 -->
+            <zIndex>58</zIndex>
+        </image>
+        <image name="bubble_fade_top" extra="true">
+            <path>${themePath}/assets/images/common/bubble_fade_top.svg</path>
+            <pos>0.5 0.2270833</pos><!-- y95..123: the first line scrolling out under the title -->
+            <origin>0.5 0.5</origin>
+            <size>0.2333333 0.0583333</size>
+            <zIndex>58</zIndex>
+        </image>
         <text name="md_description">
             <pos>0.5 0.3229167</pos><!-- y 95..215, inside the bubble below the title -->
             <origin>0.5 0.5</origin>
