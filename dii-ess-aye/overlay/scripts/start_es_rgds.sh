@@ -81,8 +81,15 @@ if [ -x "$ES_BIN" ] && [ "$(cat $FAILS 2>/dev/null || echo 0)" -lt 2 ]; then
     START=$(date +%s)
     "$ES_BIN" --log-path /var/log --no-splash --resolution 1920 480
     RC=$?
-    if [ $RC -ne 0 ] && [ $(( $(date +%s) - START )) -lt 30 ]; then
+    DUR=$(( $(date +%s) - START ))
+    # Only two quick crashes in a row fall back to stock ES (a genuinely broken patched binary). A session that
+    # ran a while is proof the binary is fine, so forget earlier counts -- otherwise a one-off early crash (e.g.
+    # sway came up with no outputs) stuck us on stock ES until reboot, which drops theme features like the
+    # clock <format> (the date then shows as the time).
+    if [ $RC -ne 0 ] && [ $DUR -lt 30 ]; then
         echo $(( $(cat $FAILS 2>/dev/null || echo 0) + 1 )) > $FAILS
+    elif [ $DUR -ge 120 ]; then
+        rm -f $FAILS
     fi
     exit $RC
 fi

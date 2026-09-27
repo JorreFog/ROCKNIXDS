@@ -143,6 +143,17 @@ covered their last game, so the RetroAchievements question in #1 couldn't be ans
 exit code to a `sessions.log` that is never overwritten. The README's reporting instructions then just say
 "attach `dsflip.log*`".
 
+### B17. A transient crash sticks the device on stock ES until reboot (medium) — DONE 2026-09-27
+
+Found while testing: `start_es_rgds.sh` counts crashes in `/tmp/es-rgds-fails` and falls back to stock ES at 2, but
+never resets the count, so two quick crashes from a one-off cause (here: sway came up with no outputs during
+testing, so ES crash-looped for a few seconds) left the device on stock ES until reboot. Stock ES ignores the
+theme's patched features, most visibly the clock `<format>`, so the main menu's date rendered as the time.
+
+**Fixed:** the launcher resets the counter after a session that ran at least 120 s (proof the patched binary is
+fine); two genuinely quick crashes in a row still fall back. Verified: after clearing the stale count the patched
+ES runs and the date shows again.
+
 ### B13. The patched ES fails to load an embedded image (low, verify)
 
 ES's log shows once per start: `Could not initialize texture from memory, invalid data! (file path:
@@ -302,7 +313,8 @@ Done on `beta` (2026-09-27): B1, B2, B3, B4, B5, B8 (docs), B11, B12, B15; `tool
 exists and passes on the device: 60 presents/s, ~0.07 drops/s, audio verified at the sink monitor and through the
 speaker via the mic, and the game-launch/quit cycle. **B16** (RetroAchievements disabled at load, the likely cause
 of the tester's report) was found and fixed the same day. I6 (cooler shaders) is now tunable by env; choosing a
-lower default needs a heavy-gameplay temperature sweep.
+lower default needs a heavy-gameplay temperature sweep. **B17** (a transient crash stuck the device on stock ES,
+which dropped the patched clock format so the date showed as the time) was found and fixed too.
 
 ## Suggested order
 
