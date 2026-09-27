@@ -118,6 +118,11 @@ static void unlock(int *l) { unlock_mu_stat(l); pthread_mutex_unlock(&mtx[l == &
 static int logical_w = 512, logical_h = 192;
 static stex *pending_route[2];          /* routes recorded by RenderCopy during this frame */
 static SDL_Rect route_dst[2]; static int touch_rect_ok;   /* touch only while a DS screen is on the bottom panel */
+static int menu_touch;                                     /* DraStic's menu is on the bottom panel */
+/* how a tap reaches the menu (DSFLIP_MENU_MOUSE): "stylus" = like a game (relative stylus deltas in DS space);
+ * "menu" = absolute mouse events in the menu texture's 800x480 space; "ds" = absolute in 256x192. The absolute
+ * modes also answer SDL_GetMouseState with the injected position (SDL's own touch->mouse emulation would). */
+static int menu_mode, menu_w = 800, menu_h = 480, mm_x, mm_y, mm_down;
 static void *window;
 static int cursor_log;                  /* DSFLIP_CURSOR_LOG=1: log where DraStic draws its 32x32 stylus cursor */
 /* stats */
@@ -781,11 +786,31 @@ static void stylus_move(int tx, int ty, int down, int resync) {
 }
 
 static void touch_emit(int down_change, int down, int x, int y, int xmax, int ymax) {
-    /* the bottom panel shows exactly the bottom DS screen: panel pixels -> DS pixels is a straight rescale */
-    if (!touch_rect_ok) return;
     int rx = x, ry = y;
     if (touch_inv_x) x = xmax - x;      /* raw touch is already aligned with the panel on the RG DS */
     if (touch_inv_y) y = ymax - y;
+    if (menu_touch && menu_mode) {      /* absolute mouse events for the menu */
+        int mw = menu_mode == 1 ? menu_w : 256, mh = menu_mode == 1 ? menu_h : 192;
+        int mx = (int)((long long)x * mw / (xmax + 1)), my = (int)((long long)y * mh / (ymax + 1));
+        sdl_ev e; uint32_t wid = window ? SDL_GetWindowID(window) : 1, ts = SDL_GetTicks();
+        memset(&e, 0, sizeof e);
+        e.m.type = 0x400; e.m.ts = ts; e.m.win = wid; e.m.state = down ? 1 : 0;
+        e.m.x = mx; e.m.y = my; e.m.xrel = mx - mm_x; e.m.yrel = my - mm_y;
+        push_ev(&e);
+        if (down_change) {
+            memset(&e, 0, sizeof e);
+            e.b.type = down ? 0x401 : 0x402; e.b.ts = ts; e.b.win = wid; e.b.button = 1; e.b.state = down ? 1 : 0; e.b.clicks = 1;
+            e.b.x = mx; e.b.y = my;
+            push_ev(&e);
+            if (down) LOG("[touch] menu tap raw %d,%d -> %d,%d (%s space)\n", rx, ry, mx, my, menu_mode == 1 ? "menu" : "ds");
+        }
+        mm_x = mx; mm_y = my; mm_down = down;
+        st_touch++;
+        return;
+    }
+    /* the bottom panel shows exactly the bottom DS screen (or DraStic's menu, which reads the same stylus
+     * position and maps it onto itself): panel pixels -> DS pixels is a straight rescale */
+    if (!touch_rect_ok && !menu_touch) return;
     int lx = (int)((long long)x * 256 / (xmax + 1));
     int ly = (int)((long long)y * 192 / (ymax + 1));
     sdl_ev e;
@@ -806,7 +831,8 @@ static void touch_emit(int down_change, int down, int x, int y, int xmax, int ym
     st_touch++;
 }
 
-/* test hook: lines "x y" written to /tmp/dsflip-tap inject a tap with exactly those mouse coordinates */
+/* test hook: lines "x y" written to /tmp/dsflip-tap inject a tap at those bottom-PANEL pixels, through the same
+ * path as a real touch (DS stylus in a game, mouse in DraStic's menu) */
 static void *tap_fifo_thread(void *a) {
     (void)a;
     unlink("/tmp/dsflip-tap"); mkfifo("/tmp/dsflip-tap", 0600);
@@ -814,12 +840,10 @@ static void *tap_fifo_thread(void *a) {
         FILE *f = fopen("/tmp/dsflip-tap", "r"); if (!f) return 0;
         int x, y;
         while (fscanf(f, "%d %d", &x, &y) == 2) {
-            sdl_ev e; uint32_t wid = window ? SDL_GetWindowID(window) : 1;
-            stylus_move(x, y, 1, 1);
-            memset(&e, 0, sizeof e); e.b.type = 0x401; e.b.ts = SDL_GetTicks(); e.b.win = wid; e.b.button = 1; e.b.state = 1; e.b.clicks = 1; e.b.x = x; e.b.y = y; push_ev(&e);
+            touch_emit(1, 1, x, y, 639, 479);
             usleep(150000);
-            memset(&e, 0, sizeof e); e.b.type = 0x402; e.b.ts = SDL_GetTicks(); e.b.win = wid; e.b.button = 1; e.b.x = x; e.b.y = y; push_ev(&e);
-            LOG("[tap] injected %d,%d\n", x, y);
+            touch_emit(1, 0, x, y, 639, 479);
+            LOG("[tap] injected panel %d,%d (%s)\n", x, y, menu_touch ? "menu" : "game");
         }
         fclose(f);
     }
@@ -858,6 +882,14 @@ static void *touch_thread(void *a) {
     }
     LOG("[dsflip] touch read ended\n");
     return 0;
+}
+
+uint32_t SDL_GetMouseState(int *x, int *y) {
+    REAL(uint32_t, SDL_GetMouseState, int *, int *);
+    if (!(menu_touch && menu_mode)) return real(x, y);
+    if (x) *x = mm_x;
+    if (y) *y = mm_y;
+    return mm_down ? 1u : 0u;           /* SDL_BUTTON_LMASK */
 }
 
 int SDL_PollEvent(void *e) {
@@ -951,7 +983,7 @@ __attribute__((constructor)) static void init(void) {
     /* can the top plane scale the 800x480 menu down itself? */
     dbuf t; memset(&t, 0, sizeof t);
     if (!mkbuf(&t, 800, 480, DRM_FORMAT_RGB565, 16)) {
-        r = drmModeAtomicAlloc(); add_fb(r, &P[0], &t);
+        r = drmModeAtomicAlloc(); add_fb(r, &P[1], &t);
         menu_hw = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_TEST_ONLY, 0) == 0;
         drmModeAtomicFree(r); freebuf(&t);
     }
@@ -1030,6 +1062,7 @@ __attribute__((constructor)) static void init(void) {
     const char *tp = getenv("DSFLIP_TOUCH");
     pthread_create(&th, 0, touch_thread, (void *)(tp ? tp : "fe5e0000.i2c"));
     cursor_log = getenv("DSFLIP_CURSOR_LOG") != 0;
+    { const char *mm = getenv("DSFLIP_MENU_MOUSE"); menu_mode = !mm || !strcmp(mm, "stylus") ? 0 : !strcmp(mm, "ds") ? 2 : 1; }
     if (getenv("DSFLIP_TAP_FIFO")) pthread_create(&th, 0, tap_fifo_thread, 0);
     ok = 1;
     LOG("[dsflip] ready: top plane %u, bottom plane %u\n", P[0].plane, P[1].plane);
@@ -1124,7 +1157,7 @@ void *SDL_CreateTexture(void *rn, uint32_t fmt, int access, int w, int h) {
         s->tex = t; s->kind = screen ? K_SCREEN : K_MENU; s->w = w; s->h = h; s->writing = s->written = -1;
         s->nb = screen ? NBUF : 3;
         int bw = w, bh = h;
-        if (!screen && !menu_hw) { bw = P[0].mode.hdisplay; bh = P[0].mode.vdisplay; }
+        if (!screen && !menu_hw) { bw = P[1].mode.hdisplay; bh = P[1].mode.vdisplay; }
         int mem = screen && shader_on && shader_copy_mode;
         for (int k = 0; k < s->nb; k++)
             if (mem ? mkmem(&s->b[k], bw, bh) : mkbuf(&s->b[k], bw, bh, screen ? DRM_FORMAT_XRGB8888 : DRM_FORMAT_RGB565, screen ? 32 : 16)) {
@@ -1216,7 +1249,7 @@ int SDL_RenderCopy(void *rn, void *t, const SDL_Rect *src, const SDL_Rect *dst) 
             }
         return ok ? 0 : real(rn, t, src, dst);
     }
-    if (s->kind == K_MENU) { pending_route[0] = s; pending_route[1] = &blk; return 0; }
+    if (s->kind == K_MENU) { pending_route[1] = s; pending_route[0] = 0; return 0; }   /* bottom = touch screen; top keeps the game */
     SDL_Rect d = dst ? *dst : (SDL_Rect){ 0, 0, logical_w, logical_h };
     int bottom = logical_w > logical_h ? d.x >= logical_w / 2 : d.y >= logical_h / 2;
     pending_route[bottom] = s; route_dst[bottom] = d;
@@ -1262,6 +1295,7 @@ void SDL_RenderPresent(void *rn) {
         }
     }
     touch_rect_ok = pending_route[1] && pending_route[1]->kind == K_SCREEN;
+    if (pending_route[1]) { menu_touch = pending_route[1]->kind == K_MENU; if (menu_touch) { menu_w = pending_route[1]->w; menu_h = pending_route[1]->h; } }
 
     for (int i = 0; i < 2; i++) {
         stex *s = pending_route[i]; pending_route[i] = 0;
