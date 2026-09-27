@@ -288,19 +288,39 @@ static void release(dbuf *b) {
 static uint32_t tp_plane, tp_fb, tp_crtc, tp_sx, tp_sy, tp_sw, tp_sh, tp_cx, tp_cy, tp_cw, tp_ch;
 static dbuf toast[2];
 static int toast_cur, toast_shown, toast_want, toast_dirty;
+/* the overlay drops in from the top edge and slides back up: each commit shows the card's bottom `rows` rows at the
+ * top of the panel (SRC_Y/SRC_H and CRTC_H change, no scaling), eased over TOAST_IN_US / TOAST_OUT_US */
+#define TOAST_IN_US 280000
+#define TOAST_OUT_US 200000
+static int anim_dir;                    /* +1 dropping in, -1 sliding out, 0 still */
+static int anim_log;                    /* DSFLIP_UI_DEMO: log the rows of every animated commit */
+static long long anim_t0;
+static long long now_us(void);
+static int toast_rows(long long t) {    /* with mu held; ends the animation when it's done */
+    if (!anim_dir) return TOAST_H;
+    double e = (double)(t - anim_t0) / (anim_dir > 0 ? TOAST_IN_US : TOAST_OUT_US);
+    if (e >= 1.0) { int out = anim_dir < 0; if (out) toast_want = 0; anim_dir = 0; return out ? 0 : TOAST_H; }
+    if (e < 0) e = 0;
+    double v = anim_dir > 0 ? 1.0 - (1.0 - e) * (1.0 - e) * (1.0 - e) : 1.0 - e * e;   /* ease out / ease in */
+    return (int)(v * TOAST_H + 0.5);
+}
 
 static void add_toast(drmModeAtomicReq *r) {
+    int rows = toast_want ? toast_rows(now_us()) : 0;
+    if (rows < 4 && anim_dir < 0) { toast_want = 0; anim_dir = 0; }         /* too thin to show: slid out */
+    if (rows < 4) rows = 4;
+    if (anim_log && (anim_dir || rows != TOAST_H)) LOG("[ui] overlay rows %d%s\n", rows, toast_want ? "" : " (off)");
     if (toast_want) {
         drmModeAtomicAddProperty(r, tp_plane, tp_fb, toast[toast_cur].fb);
         drmModeAtomicAddProperty(r, tp_plane, tp_crtc, P[0].crtc);
         drmModeAtomicAddProperty(r, tp_plane, tp_sx, 0);
-        drmModeAtomicAddProperty(r, tp_plane, tp_sy, 0);
+        drmModeAtomicAddProperty(r, tp_plane, tp_sy, (uint64_t)(TOAST_H - rows) << 16);
         drmModeAtomicAddProperty(r, tp_plane, tp_sw, (uint64_t)TOAST_W << 16);
-        drmModeAtomicAddProperty(r, tp_plane, tp_sh, (uint64_t)TOAST_H << 16);
+        drmModeAtomicAddProperty(r, tp_plane, tp_sh, (uint64_t)rows << 16);
         drmModeAtomicAddProperty(r, tp_plane, tp_cx, 0);
         drmModeAtomicAddProperty(r, tp_plane, tp_cy, 0);
         drmModeAtomicAddProperty(r, tp_plane, tp_cw, TOAST_W);
-        drmModeAtomicAddProperty(r, tp_plane, tp_ch, TOAST_H);
+        drmModeAtomicAddProperty(r, tp_plane, tp_ch, rows);
     } else {
         drmModeAtomicAddProperty(r, tp_plane, tp_fb, 0);
         drmModeAtomicAddProperty(r, tp_plane, tp_crtc, 0);
@@ -383,8 +403,16 @@ uint32_t *dsflip_overlay_begin(int *pitch, int *w, int *h) {
 }
 void dsflip_overlay_end(int show) {
     lock(&mu);
-    if (show) toast_cur = ov_next;
-    toast_want = show; toast_dirty = 1;
+    if (show) {
+        toast_cur = ov_next;
+        if (!toast_want || anim_dir < 0) {  /* not on screen (or leaving): drop in, from where it is if it was leaving */
+            long long t = now_us(), from = 0;
+            if (anim_dir < 0 && toast_want) { double v = (double)toast_rows(t) / TOAST_H; from = (long long)((1.0 - cbrt(1.0 - v)) * TOAST_IN_US); }
+            anim_dir = 1; anim_t0 = t - from;
+        }
+        toast_want = 1;
+    } else if (toast_want && anim_dir >= 0) { anim_dir = -1; anim_t0 = now_us(); }   /* slide out; off when done */
+    toast_dirty = 1;
     unlock(&mu);
     uint64_t one = 1; if (write(efd, &one, 8) < 0) {}
 }
@@ -590,6 +618,7 @@ static void *presenter(void *a) {
             if ((P[0].ready || P[1].ready) && !pending_mask && now_us() - ready_since > 2 * (long long)period) { st_late++; try_commit(); }
             unlock(&mu);
         }
+        if (anim_dir) { lock(&mu); toast_dirty = 1; unlock(&mu); }       /* the overlay is moving: every commit carries it */
         if (toast_dirty && !pending_mask && !P[0].ready && !P[1].ready) {   /* an overlay change with no frame coming */
             lock(&mu); try_commit(); unlock(&mu);
         }
@@ -950,6 +979,7 @@ __attribute__((constructor)) static void init(void) {
     pthread_t th; pthread_create(&th, 0, presenter, 0);
     for (int k = 0; k < 300 && !shader_done; k++) usleep(10000);
     if (shader_nm) LOG("[dsflip] shader input: %s\n", shader_copy_mode ? "upload from memory" : "dma-buf import");
+    anim_log = getenv("DSFLIP_UI_DEMO") != 0;
     { int v[4]; if (shader_on && shader_viewport(v)) { vp_x = v[0]; vp_y = v[1]; vp_w = v[2]; vp_h = v[3]; } }
     const char *inv = getenv("DSFLIP_TOUCH_INVERT");        /* "x", "y", "xy" or unset/"none" */
     if (inv) { touch_inv_x = strchr(inv, 'x') != 0; touch_inv_y = strchr(inv, 'y') != 0; }

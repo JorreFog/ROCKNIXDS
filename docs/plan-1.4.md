@@ -47,4 +47,8 @@ Games are unaffected (sway is stopped; libdsflip reads the touchscreen itself).
   plane, on its own thread; pop-ups queue. Badges are prefetched after the game loads (HeartGold: 137 of 137 in a
   few seconds) and cached, so an unlock shows its badge at once. rc_client's PROGRESS_INDICATOR_SHOW/UPDATE/HIDE
   drive the pill. Checked on the device with `DSFLIP_UI_DEMO=1` and scanout + overlay dumps.
+- **Drop-in animation:** each commit shows the card's bottom rows at the panel's top edge (SRC_Y/SRC_H and CRTC_H
+  change, no scaling), eased out over 280 ms in and eased in over 200 ms out; the presenter commits the overlay every
+  frame while it moves. Logged on the device: 4, 12, 23, 32 ... 71, 72 rows in; 72 ... 21, 10, 4, off out; no commit
+  rejected, 60 fps.
 - **Hardcore:** not possible, DraStic's savestates, cheats and fast-forward can't be locked from outside.
