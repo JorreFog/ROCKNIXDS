@@ -321,6 +321,12 @@ lcd1x+nds-color; pick the lowest that holds 0.1 drops/s.
 - **`dsflip.c` carries dead experiments:** the clock lock, PLL, `SDL_Delay` wake tracking, A/B legacy pacing,
   CPU pinning and RT scheduling are all off by default and documented as worse. Move them behind
   `#ifdef DSFLIP_EXPERIMENTS` (history keeps them) so the pacing code that ships is the ~400 lines that matter.
+  **DONE 2026-09-27:** removed rather than `#ifdef`'d (history keeps them; the header names 5d67d79 as the last
+  commit with them): the clock lock + PLL with its `gettimeofday`/`SDL_Delay` hooks, wake tracking and audio
+  rate branch, CPU pinning, SCHED_FIFO for DraStic's threads, A/B legacy pacing (it re-read a /tmp file every
+  10 s), the fixed-latch test mode and the audio chunk-size experiment. dsflip.c 1307 -> 1156 lines. Every
+  removed path was off by default, so behaviour is unchanged: smoke test in shader and zero-copy mode, 60.0
+  presents/s and 0 drops each, the latch still settling opposite the presents.
 - **`es-rgds-uiwidth.patch` is 209 KB over 60+ files**, which makes rebasing onto a newer ROCKNIX ES a chore.
   Investigate a one-point change: every GUI reads its width through `Renderer::getScreenWidth()`; an
   `ES_UI_WIDTH` override in that helper (with the carousel views exempt) may replace most of the patch.

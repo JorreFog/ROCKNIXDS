@@ -7,11 +7,17 @@
 // The VOP2 display controller scales each buffer to 640x480 in hardware.
 //
 // DraStic's menu is one 800x480 RGB565 streaming texture filled with SDL_UpdateTexture; it is
-// copied into an RGB565 dumb buffer and shown on the top panel (bottom panel black).
+// copied into an RGB565 dumb buffer and shown on the bottom panel (the top keeps the game frame).
 //
-// A presenter thread owns the atomic commits: both panels' new framebuffers go in ONE commit
-// (same emulated frame on both screens), mailbox-style: RenderPresent never blocks, a frame that
-// is superseded before the next vblank is dropped, and a panel with no new frame keeps its buffer.
+// A presenter thread (SCHED_FIFO) owns the atomic commits: both panels' new framebuffers go in ONE
+// commit (same emulated frame on both screens). RenderPresent never blocks. Frames wait in a
+// one-frame queue and are committed at an adaptive "latch" point in the refresh cycle, opposite
+// where DraStic's presents arrive (see arm_latch). With a shader, a worker thread draws each frame
+// on the GPU first (shader.c). Audio goes through a pump that paces DraStic exactly (audio.c).
+//
+// Experiments that measured worse were removed in 1.3 (clock lock + PLL on DraStic's gettimeofday,
+// CPU pinning, SCHED_FIFO for DraStic's threads, A/B legacy pacing, fixed latch, audio chunk size);
+// the last commit that has them is 5d67d79.
 //
 // Touch: with SDL's dummy video driver nothing delivers the touchscreen, so a thread reads the
 // bottom panel's evdev node and injects mouse events (in DraStic's logical coordinates, inside
@@ -137,19 +143,6 @@ extern int shader_copy_mode;
 int shader_draw_mem(int panel, const void *px, int sw, int shh, int sp, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish);
 static const char *shader_nm;
 static volatile int shader_on, shader_done;
-/* Shader mode: CPU 0 handles every display and GPU interrupt on the RG DS. With DraStic's threads free to run
- * there too, the GPU interrupts, libmali's threads and the presenter preempted DraStic now and then (measured:
- * 25-43 frame intervals >24 ms per 10 s, vs 1-3 in zero-copy mode), and each late frame + early next frame was a
- * dropped frame. So DraStic (and every thread it creates) gets CPUs 1-3, the GPU side CPU 0. DSFLIP_PIN=0: off. */
-static int pin_cpus = 0;               /* measured: pinning HURT (DraStic needs all 4 cores); DSFLIP_PIN=1 to try */
-/* Scheduling. At 2x in heavy scenes DraStic's main thread and its three 3D render threads all run at the start of
- * every frame: it needs all 4 cores for a few ms. Anything else runnable then (our presenter's upload + GPU driver
- * work in shader mode, libmali's threads, any background process) delays a render thread and the frame slips
- * (measured with a pure CPU spinner on one core: zero-copy went from ~0.1 to 7 drops/s; at nice 19 still 5/s).
- * So DraStic's threads run SCHED_FIFO at a low RT priority: they preempt normal work at once, but PipeWire's
- * audio threads (RT 84-89) and IRQs still come first, and the kernel's RT throttle guards against lockups. The
- * presenter runs just above DraStic: its bursts are short and its commits are time-critical. DSFLIP_RT=0: off. */
-static int rt_prio = 0;                /* tested: didn't help (DraStic waits on audio, not the CPU); DSFLIP_RT=1 */
 static void set_fifo(int prio) {
     struct sched_param sp = { .sched_priority = prio };
     if (sched_setscheduler(0, SCHED_FIFO, &sp) && lg) fprintf(lg, "[dsflip] SCHED_FIFO %d failed: %s\n", prio, strerror(errno));
@@ -263,38 +256,13 @@ static double latch_off = 14000;        /* current latch point, us after vblank 
 static long long ready_since;           /* when the oldest uncommitted frame arrived */
 static long long commit_t, commit_vref; /* last commit time and the vblank reference at that moment */
 static int st_miss;                     /* commits that reached the screen a vblank later than intended */
-static double latch_fixed;              /* DSFLIP_LATCH_FIXED=<us after vblank>: test mode, no adaptation */
 #define LATCH_MARGIN 1300               /* starting commit margin before vblank; measured on the top panel: 600 us always
                                            makes it, 300 us doesn't. Grows on late commits (latch_margin) */
 static double latch_margin = LATCH_MARGIN;  /* adaptive: +400 us per latch that found the previous flip still pending,
                                                -400 us per clean 10 s */
 static double bot_off;                  /* bottom panel's vblank phase relative to the top's, us in (-P/2, P/2] */
 static int bot_n, latch_skipped;        /* bottom phase samples; a latch was skipped because a flip was pending */
-static int ab_legacy;                   /* A/B test (/tmp/dsflip-ab = "1"): the previous pacing, fixed 2.5 ms margin
-                                           before the top vblank only, no margin growth, no skip recovery */
 
-/* EXPERIMENTAL, off by default (DSFLIP_CLOCKLOCK=1): tested 2026-09-26 and it made pacing WORSE (924-1760 drops
- * per 90 s of the HeartGold intro vs 2 with the adaptive latch alone). With the lock, the latch is fixed, so the
- * presents must be parked in front of it, and DraStic's emulation-time spikes (p95 up to 7.5 ms) keep crossing
- * it; the adaptive latch keeps half a refresh of slack on both sides instead. Kept for future work.
- *
- * Clock lock. DraStic runs at exactly 60.000 fps on gettimeofday; the panels refresh at ~60.002-60.005 Hz, so
- * DraStic's frames drift through the refresh cycle every few minutes. We stretch DraStic's gettimeofday by
- * warp = (1/60 s) / panel period (and open its audio at the matching rate, +0.5% so audio never becomes the
- * pacer, as the old dvsync shim did), which stops the drift, and a slow control loop on warp parks the
- * presents half a refresh before the latch point: far from the cut-off, with low latency. DSFLIP_CLOCKLOCK=0 disables. */
-static int clock_lock = 0, warp_on, wmu, pll_on = 1;   /* experimental, off: see the note above */
-static double warp0 = 1.0, warp = 1.0, pll_i;
-static long long wr0, wv0, wlast;       /* real / virtual anchors (gettimeofday domain, us) */
-static int (*real_gtod)(struct timeval *, void *);
-/* what the loop steers: when DraStic WAKES to start a frame (the end of its post-present SDL_Delay(ms>0) on the
- * main thread). That's timer-precise, unlike present times, which spread with emulation time E. The wake is parked
- * so that wake + p95(E) + safety still lands before the latch. */
-static long long wake_t;                /* last frame-start wake (us, CLOCK_MONOTONIC), 0 if none since the present */
-static double wk_c, wk_s; static int wk_n;
-static int e_hist[64], e_ring[600], e_pos, e_cnt; /* E histogram in 0.5 ms bins over the last 600 frames */
-static double e_p95 = 8000;
-static int main_tid, want_wake;
 
 static void drop_fence(dbuf *b) { if (b && b->fence >= 0) { close(b->fence); b->fence = -1; } }
 static void freebuf(dbuf *b);
@@ -471,43 +439,10 @@ static void dump_touch(void) {         /* bottom panel's scanout + the DS coordi
     fwrite(b->map, 1, (size_t)b->pitch * b->h, f); fclose(f);
 }
 
-int gettimeofday(struct timeval *tv, void *tz) {
-    if (!real_gtod) real_gtod = dlsym(RTLD_NEXT, "gettimeofday");
-    int r = real_gtod(tv, tz);
-    if (warp_on && r == 0) {
-        long long t = tv->tv_sec * 1000000LL + tv->tv_usec;
-        lock(&wmu);
-        long long v = wv0 + (long long)((double)(t - wr0) * warp);
-        if (v < wlast) v = wlast;       /* never let DraStic's clock run backwards */
-        wlast = v;
-        unlock(&wmu);
-        tv->tv_sec = v / 1000000; tv->tv_usec = v % 1000000;
-    }
-    return r;
-}
-void SDL_Delay(uint32_t ms) {
-    REAL(void, SDL_Delay, uint32_t);
-    real(ms);
-    if (ms > 0 && want_wake && (int)syscall(SYS_gettid) == main_tid) { wake_t = now_us(); want_wake = 0; }
-}
-
-static void set_warp(double w) {        /* rebase so DraStic's virtual time stays continuous */
-    struct timeval tv;
-    if (!real_gtod) real_gtod = dlsym(RTLD_NEXT, "gettimeofday");
-    real_gtod(&tv, 0);
-    long long t = tv.tv_sec * 1000000LL + tv.tv_usec;
-    lock(&wmu);
-    if (warp_on) { wv0 = wv0 + (long long)((double)(t - wr0) * warp); wr0 = t; }
-    else { wv0 = wr0 = t; warp_on = 1; }
-    warp = w;
-    unlock(&wmu);
-}
 
 static void arm_latch(void) {         /* with mu held: next latch point after now */
     if (tfd < 0 || !vbl_ref) return;
-    if (latch_fixed > 0) latch_off = latch_fixed;
-    else if (clock_lock && warp_on) latch_off = period - LATCH_MARGIN;  /* locked: the latch never moves */
-    else if (ph_n >= 120) {
+    if (ph_n >= 120) {
         double mean = atan2(ph_s, ph_c) / (2 * M_PI) * period;          /* where presents cluster */
         double l = fmod(mean + period / 2 + 2 * period, period);        /* opposite phase */
         /* forbidden: latch_margin before the earlier panel's vblank (the commit wouldn't make it on both CRTCs)
@@ -515,7 +450,6 @@ static void arm_latch(void) {         /* with mu held: next latch point after no
          * one panel miss every commit near the edge, which kept a flip pending at every latch: 30 fps bursts. */
         /* lo: the previous flip's event must have arrived before the latch, or the latch counts as late */
         double lo = fmax(0, bot_off) + 1000, hi = period + fmin(0, bot_off) - latch_margin;
-        if (ab_legacy) lo = 300, hi = period - 2500;
         if (l < lo || l > hi) {         /* pick the allowed edge that is farther (circularly) from the presents... */
             double m = fmod(mean + 2 * period, period);
             double dlo = fabs(remainder(lo - m, period)), dhi = fabs(remainder(hi - m, period));
@@ -620,8 +554,6 @@ static void shade_pending(void) {
 static int wfd = -1;
 static void *shader_worker(void *a) {
     (void)a;
-    if (rt_prio) set_fifo(2);
-    if (pin_cpus) { cpu_set_t c; CPU_ZERO(&c); CPU_SET(0, &c); sched_setaffinity(0, sizeof c, &c); }
     shader_on = shader_init(fd, shader_nm);        /* GL lives on this thread; init() waits for the verdict */
     if (!shader_on) LOG("[dsflip] shader \"%s\" unavailable: zero-copy\n", shader_nm);
     shader_done = 1;
@@ -641,10 +573,7 @@ static void *presenter(void *a) {
     /* the presenter reacts to vblank events and the latch timer; its work per wake-up is tiny, but a late wake-up
      * makes the next latch find the previous flip "pending" (measured: events handled up to 7-9 ms late in shader
      * mode at normal priority). So it always runs SCHED_FIFO, below the audio pump (20). DSFLIP_PRESENTER_RT=0: off */
-    { const char *pr = getenv("DSFLIP_PRESENTER_RT"); if (!(pr && *pr == '0')) set_fifo(rt_prio ? 2 : 10); }
-    if (shader_nm && pin_cpus) {        /* the GPU side lives on CPU 0 (see init); libmali's threads inherit it */
-        cpu_set_t c; CPU_ZERO(&c); CPU_SET(0, &c); sched_setaffinity(0, sizeof c, &c);
-    }
+    { const char *pr = getenv("DSFLIP_PRESENTER_RT"); if (!(pr && *pr == '0')) set_fifo(10); }
     if (shader_nm) { pthread_t th; pthread_create(&th, 0, shader_worker, 0); }   /* it sets shader_done */
     else shader_done = 1;
     drmEventContext ev = { .version = 3, .page_flip_handler2 = on_flip };
@@ -665,11 +594,9 @@ static void *presenter(void *a) {
             lock(&mu);
             if (pending_mask) {                 /* the previous commit missed a vblank: commit as soon as its */
                 st_late++;                      /* flip lands (one repeat, not a 30 fps lock), and if the latch */
-                if (!ab_legacy) {               /* was near the vblank edge, widen the margin */
-                    latch_skipped = 1;
-                    /* not during warm-up: a shader's first frames are slow and would pin the margin at max */
-                    if (latch_off > period / 2 && latch_margin < 5000 && ph_n >= 600) latch_margin += 400;
-                }
+                latch_skipped = 1;              /* was near the vblank edge, widen the margin */
+                /* not during warm-up: a shader's first frames are slow and would pin the margin at max */
+                if (latch_off > period / 2 && latch_margin < 5000 && ph_n >= 600) latch_margin += 400;
             } else try_commit();
             if (P[0].ready || P[1].ready) arm_latch();
             unlock(&mu);
@@ -690,9 +617,7 @@ static void *presenter(void *a) {
             char h[64]; for (int i = 0; i < 16; i++) h[i] = ph_hist[i] > 99 ? '#' : ph_hist[i] > 30 ? '+' : ph_hist[i] > 5 ? '.' : ' ';
             h[16] = 0; memset(ph_hist, 0, sizeof ph_hist);
             double mean = fmod(atan2(ph_s, ph_c) / (2 * M_PI) * period + period, period);
-            LOG("[pace] warp %+.0f ppm (base %+.0f), wake at %.0f us, E p95 %.1f ms | ", (warp - 1) * 1e6, (warp0 - 1) * 1e6,
-                fmod(atan2(wk_s, wk_c) / (2 * M_PI) * period + period, period), e_p95 / 1000);
-            LOG("mode=%s period=%.1f us, presents at %.0f us after vblank (spread R=%.2f) [%s], latch at %.0f us, margin %.0f us, bottom %+.0f us, late=%d missed=%d\n",
+            LOG("[pace] mode=%s period=%.1f us, presents at %.0f us after vblank (spread R=%.2f) [%s], latch at %.0f us, margin %.0f us, bottom %+.0f us, late=%d missed=%d\n",
                 pacing_latch && ph_n >= 120 ? "latch" : "immediate", period, mean, sqrt(ph_c * ph_c + ph_s * ph_s), h, latch_off, latch_margin, bot_off, st_late, st_miss);
             audio_pump_log();
             LOG("[flip] event delivery max %.2f ms, commit->flip max %.2f ms, %d flips >1 refresh after their commit\n",
@@ -713,9 +638,6 @@ static void *presenter(void *a) {
             /* the margin shrinks back after a clean 10 s, so one bad moment doesn't narrow the latch zone forever */
             if (!st_late && latch_margin > LATCH_MARGIN) latch_margin = fmax(LATCH_MARGIN, latch_margin - 400);
             st_late = 0; st_miss = 0; st10 = t;
-            { int fdab = open("/tmp/dsflip-ab", O_RDONLY); char c = '0';
-              if (fdab >= 0) { if (read(fdab, &c, 1) < 0) {} close(fdab); }
-              if ((c == '1') != ab_legacy) { ab_legacy = c == '1'; LOG("[pace] A/B: %s pacing\n", ab_legacy ? "legacy" : "new"); } }
             unlock(&mu);
         }
         if (t - st_t0 >= 1000000) {
@@ -1001,26 +923,6 @@ __attribute__((constructor)) static void init(void) {
     if (pm && !strcmp(pm, "immediate")) pacing_latch = 0;
     if (pacing_latch) tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
     if (tfd < 0) pacing_latch = 0;                                   /* no timer: never wait for a latch */
-    if (getenv("DSFLIP_LATCH_FIXED")) latch_fixed = atof(getenv("DSFLIP_LATCH_FIXED"));
-    { const char *cl = getenv("DSFLIP_CLOCKLOCK"); if (cl) clock_lock = *cl == '1'; }
-    { const char *pl = getenv("DSFLIP_PLL"); if (pl && *pl == '0') pll_on = 0; }
-    if (clock_lock && pacing_latch) {   /* measure the top panel's refresh period before DraStic opens audio */
-        long long t0 = 0, t1 = 0; int n = 0;
-        for (int k = 0; k < 25; k++) {
-            drmVBlank vb; memset(&vb, 0, sizeof vb);
-            vb.request.type = DRM_VBLANK_RELATIVE |
-                (P[0].crtc_idx == 1 ? DRM_VBLANK_SECONDARY : ((P[0].crtc_idx << DRM_VBLANK_HIGH_CRTC_SHIFT) & DRM_VBLANK_HIGH_CRTC_MASK));
-            vb.request.sequence = 1;
-            if (drmWaitVBlank(fd, &vb)) break;
-            long long t = vb.reply.tval_sec * 1000000LL + vb.reply.tval_usec;
-            if (!t0) t0 = t; else { t1 = t; n++; }
-        }
-        if (n >= 20 && t1 > t0) {
-            period = (double)(t1 - t0) / n; warp0 = (1000000.0 / 60.0) / period;
-            set_warp(warp0);
-            LOG("[dsflip] clock lock: panel period %.2f us (%.4f Hz), DraStic time x%.6f\n", period, 1e6 / period, warp0);
-        } else { clock_lock = 0; LOG("[dsflip] clock lock off: couldn't measure vblank\n"); }
-    }
     LOG("[dsflip] pacing: %s, %s\n", pacing_latch ? "latch (adaptive)" : "immediate", queue_on ? "1-frame queue" : "mailbox");
     tdump_x = -1; if (getenv("DSFLIP_TOUCH_DUMP")) touch_dumps = atoi(getenv("DSFLIP_TOUCH_DUMP"));
     efd = eventfd(0, EFD_CLOEXEC); wfd = eventfd(0, EFD_CLOEXEC);
@@ -1030,19 +932,10 @@ __attribute__((constructor)) static void init(void) {
             if (mkbuf(&P[i].out[k], P[i].mode.hdisplay, P[i].mode.vdisplay, DRM_FORMAT_XRGB8888, 32)) {
                 LOG("[dsflip] shader output buffers: alloc failed\n"); shader_nm = 0; break;
             }
-    { const char *pn = getenv("DSFLIP_PIN"); if (pn) pin_cpus = *pn == '1'; }
-    { const char *rt = getenv("DSFLIP_RT"); if (rt) rt_prio = *rt == '1'; }
     { const char *sc = getenv("DSFLIP_SHADER_COPY"); shader_copy_mode = !(sc && *sc == '0'); }   /* 0: import DraStic's buffers */
-    if (shader_nm && pin_cpus) {        /* this is DraStic's main thread, before main(): its threads inherit this */
-        cpu_set_t c; CPU_ZERO(&c); for (int k = 1; k < 4; k++) CPU_SET(k, &c);
-        if (sched_setaffinity(0, sizeof c, &c)) pin_cpus = 0;
-    }
     pthread_t th; pthread_create(&th, 0, presenter, 0);
     for (int k = 0; k < 300 && !shader_done; k++) usleep(10000);
-    if (rt_prio) set_fifo(1);           /* DraStic's main thread, before main(): every thread it creates inherits it */
-    LOG("[dsflip] scheduling: %s\n", rt_prio ? "DraStic SCHED_FIFO 1, presenter 2" : "normal");
-    if (shader_nm) LOG("[dsflip] cpus: %s; shader input: %s\n", pin_cpus ? "DraStic 1-3, GPU side 0" : "not pinned",
-                       shader_copy_mode ? "upload from memory" : "dma-buf import");
+    if (shader_nm) LOG("[dsflip] shader input: %s\n", shader_copy_mode ? "upload from memory" : "dma-buf import");
     const char *inv = getenv("DSFLIP_TOUCH_INVERT");        /* "x", "y", "xy" or unset/"none" */
     if (inv) { touch_inv_x = strchr(inv, 'x') != 0; touch_inv_y = strchr(inv, 'y') != 0; }
     const char *tp = getenv("DSFLIP_TOUCH");
@@ -1054,7 +947,7 @@ __attribute__((constructor)) static void init(void) {
     verdict("ready");
 }
 
-/* ---------- audio: the pump (audio.c), or the clock-lock experiment ---------- */
+/* ---------- audio: the pump (audio.c); DSFLIP_AUDIO_PUMP=0 leaves DraStic's audio to SDL ---------- */
 struct SDL_AudioSpec_;
 int audio_pump_enabled(void);
 int audio_pump_open(struct SDL_AudioSpec_ *want, struct SDL_AudioSpec_ *have, int (*real)(struct SDL_AudioSpec_ *, struct SDL_AudioSpec_ *));
@@ -1072,29 +965,8 @@ int SDL_OpenAudio(struct SDL_AudioSpec_ *want, struct SDL_AudioSpec_ *have) {
     if (!ok || !want) return real(want, have);
     static int mic_started;
     if (!mic_started) { mic_started = 1; audio_mic_start(); }   /* after the pump exists: its output feeds the echo gate */
-    if (!clock_lock && audio_pump_enabled()) { pump_on = 1; return audio_pump_open(want, have, real); }   /* audio.c */
-    if (!clock_lock || !warp_on) {
-        /* DSFLIP_AUDIO_SAMPLES=n: open DraStic's audio with n-sample chunks (experiment; default: DraStic's 1024) */
-        const char *as = getenv("DSFLIP_AUDIO_SAMPLES");
-        int n = as ? atoi(as) : 0;     /* tested 256 by default: made the spread WORSE (more 24+ ms gaps) */
-        if (n <= 0 || n >= want->samples) return real(want, have);
-        struct SDL_AudioSpec_ w = *want; w.samples = (unsigned short)n;
-        int r = real(&w, 0);            /* obtained=NULL: SDL converts to exactly what we asked */
-        if (r == 0 && have) { *have = *want; have->size = w.size; have->silence = w.silence; }
-        LOG("[dsflip] audio %d Hz, %d samples per chunk (DraStic asked %d)\n", want->freq, n, want->samples);
-        return r;
-    }
-    struct SDL_AudioSpec_ w = *want;
-    /* exactly the clock-lock rate: audio drains as fast as frames are produced, so DraStic's per-frame wait for
-     * the audio callback stays constant. (dvsync's 512-sample chunks at +0.5% beat against the frame period and
-     * made DraStic start frames late, then catch up with two presents in one refresh.) Chunk size unchanged. */
-    const char *as = getenv("DSFLIP_AUDIO_SAMPLES"), *ax = getenv("DSFLIP_AUDIO_EXTRA");
-    if (as) w.samples = (unsigned short)atoi(as);
-    w.freq = (int)(want->freq * warp0 * (ax ? atof(ax) : 1.0) + 0.5);
-    int r = real(&w, 0);                /* obtained=NULL: SDL converts to exactly what we asked */
-    if (r == 0 && have) { *have = *want; have->size = w.size; have->silence = w.silence; }
-    LOG("[dsflip] audio %d Hz -> %d Hz, %d samples (DraStic asked %d)\n", want->freq, w.freq, w.samples, want->samples);
-    return r;
+    if (audio_pump_enabled()) { pump_on = 1; return audio_pump_open(want, have, real); }   /* audio.c */
+    return real(want, have);
 }
 
 /* ---------- SDL interception ---------- */
@@ -1256,29 +1128,6 @@ void SDL_RenderPresent(void *rn) {
     if (vbl_ref) {                       /* where in the refresh cycle did this frame arrive? */
         note_raw(tp);
         if (!shader_on) note_phase(tp);  /* shader mode: when the shaded frame is ready (shade_pending) */
-        if (clock_lock && warp_on) {
-            if (!main_tid) main_tid = (int)syscall(SYS_gettid);
-            if (wake_t && tp > wake_t && tp - wake_t < 40000) {      /* E for this frame, and the wake's phase */
-                int e = (int)((tp - wake_t) / 500); if (e > 63) e = 63;
-                if (e_cnt == 600) e_hist[e_ring[e_pos]]--; else e_cnt++;
-                e_ring[e_pos] = e; e_hist[e]++; e_pos = (e_pos + 1) % 600;
-                double wp = fmod((double)(wake_t - vbl_ref), period); if (wp < 0) wp += period;
-                double wa = wp / period * 2 * M_PI, a = wk_n < 60 ? 1.0 / (wk_n + 1) : 0.02;
-                wk_c += a * (cos(wa) - wk_c); wk_s += a * (sin(wa) - wk_s); wk_n++;
-            }
-            if (wk_n >= 120 && ph_n % 30 == 0 && pll_on) {
-                int acc = 0, k = 0; for (; k < 64; k++) { acc += e_hist[k]; if (acc * 100 >= e_cnt * 95) break; }
-                e_p95 = (k + 1) * 500.0;
-                double latch = period - LATCH_MARGIN, target = latch - e_p95 - 1500;
-                double wmean = atan2(wk_s, wk_c) / (2 * M_PI) * period;
-                double err = remainder(wmean - target, period) / period; /* >0: waking late -> run DraStic's clock faster */
-                pll_i += err * 30; if (pll_i > 3000) pll_i = 3000; if (pll_i < -3000) pll_i = -3000;
-                double adj = 2e-3 * err + 1e-7 * pll_i;
-                if (adj > 5e-4) adj = 5e-4; if (adj < -5e-4) adj = -5e-4;
-                unlock(&mu); set_warp(warp0 * (1 + adj)); lock(&mu);
-            }
-            wake_t = 0; want_wake = 1;
-        }
     }
     touch_rect_ok = pending_route[1] && pending_route[1]->kind == K_SCREEN;
     if (pending_route[1]) menu_touch = pending_route[1]->kind == K_MENU;
