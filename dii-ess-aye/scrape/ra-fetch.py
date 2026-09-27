@@ -12,6 +12,7 @@ import json, os, sys, urllib.parse, urllib.request
 CFG = "/storage/.config/system/configs/system.cfg"
 API = "https://retroachievements.org/dorequest.php"
 UA = "rgds-theme/1.0 (ROCKNIX; RG DS) ra-fetch"
+WARNING_ID = 101000001                      # RC_CLIENT_ACHIEVEMENT_WARNING_ID in rcheevos
 
 
 def cfg(key):
@@ -43,7 +44,10 @@ def main():
             continue
         patch = call(r="patch", u=user, t=token, g=gid)
         pd = patch.get("PatchData") or {}
-        core = [a for a in pd.get("Achievements", []) if a.get("Flags") == 3]
+        # core achievements (Flags 3), minus RA's warning pseudo-achievements (id >= 101000001, e.g. "Warning:
+        # Unknown Emulator", which the server adds for clients it doesn't know, like this script, and reports as
+        # unlocked even for a game never played; rcheevos skips them the same way)
+        core = [a for a in pd.get("Achievements", []) if a.get("Flags") == 3 and a["ID"] < WARNING_ID]
         unl = call(r="unlocks", u=user, t=token, g=gid, h=0)
         got = set(unl.get("UserUnlocks") or [])
         info = {"name": g["name"], "ra": gid, "title": pd.get("Title", ""),

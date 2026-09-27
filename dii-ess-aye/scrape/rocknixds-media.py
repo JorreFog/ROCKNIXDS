@@ -273,12 +273,9 @@ def main():
                 push("cartridge", img)
             else:
                 results["cartridge"] = "none"
-        # RetroAchievements strip
+        # RetroAchievements strip: always pushed, it shows progress, which changes between runs
         if gid in ra and os.path.exists(ra[gid]):
-            if have("wheel"):
-                results["wheel"] = "kept"
-            else:
-                results["wheel"] = dev.push_media(gid, "wheel", open(ra[gid], "rb").read())
+            results["wheel"] = dev.push_media(gid, "wheel", open(ra[gid], "rb").read())
         # text, only for fields ES has empty
         match, _ = best_match(name, list(meta_db))
         if match:
