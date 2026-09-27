@@ -393,3 +393,5 @@ Later the same day: **I1** (`dii-ess-aye/scrape/rocknixds-media.py`, every DS ga
 - 90 s HeartGold at 2× with lcd1x+nds-color: ≤ 0.1 drops/s, SoC temperature logged (I6).
 - `dsflip.log` starts with the version line and the previous session's log still exists (B11, B12).
 - README: microphone sensitivity note (B8), the media tool (I1), updated known issues.
+- Microphone in a game that uses it, sensitivity medium in ES: **deferred** (2026-09-27: no mic game on hand; the
+  mic path is verified by the smoke test's speaker-to-mic check, not in a game).
