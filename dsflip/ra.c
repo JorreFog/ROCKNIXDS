@@ -39,7 +39,7 @@ void dsflip_log(const char *fmt, ...);
 
 static rc_client_t *rc;
 static volatile uint8_t *ram;           /* DS main RAM inside DraStic, once found */
-static volatile int game_loaded, scanning;
+static volatile int game_loaded, scanning, logged_in, load_started;
 static char rom_path[1024], user[128], pass[256];
 static uint8_t rom_hdr[0x160];
 static int frames;
@@ -248,7 +248,7 @@ static void start_load(void) {
 }
 static void on_login_token(int result, const char *err, rc_client_t *c, void *u) {
     (void)c; (void)u;
-    if (result == RC_OK) { dsflip_log("[ra] logged in with token as %s\n", user); start_load(); return; }
+    if (result == RC_OK) { dsflip_log("[ra] logged in with token as %s\n", user); logged_in = 1; return; }
     dsflip_log("[ra] token login failed (%s)%s\n", err ? err : "?", *pass ? ", trying the password" : "");
     unlink(TOKEN_FILE);
     if (*pass) rc_client_begin_login_with_password(rc, user, pass, on_login_password, 0);
@@ -263,7 +263,7 @@ static void on_login_password(int result, const char *err, rc_client_t *c, void 
     }
     dsflip_log("[ra] logged in as %s\n", user);
     save_token();
-    start_load();
+    logged_in = 1;
 }
 
 static void on_rc_log(const char *msg, const rc_client_t *c) { (void)c; dsflip_log("[rc] %s\n", msg); }
@@ -324,6 +324,14 @@ void ra_frame(void) {
         pthread_t t; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
         if (pthread_create(&t, &at, scan_thread, 0)) scanning = 0;
         pthread_attr_destroy(&at);
+    }
+    /* load the game only once DS RAM is found, so rc_client validates the achievement set against real memory
+     * (loading before the async scan finished disabled every achievement with "Invalid address"). Fall back to
+     * loading anyway after ~15 s so a game whose RAM we never find at least identifies. */
+    if (logged_in && !load_started && (ram || frames > 900)) {
+        load_started = 1;
+        if (!ram) dsflip_log("[ra] RAM not found after 15 s; loading anyway (achievements may not work)\n");
+        start_load();
     }
     /* RAM moved (reset / new game)? */
     if (ram && frames % 600 == 0 && memcmp((const void *)(ram + HDR_OFF), rom_hdr, 0x40)) {

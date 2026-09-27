@@ -209,7 +209,7 @@ The 800×480 menu goes to the top panel and the bottom panel is black; touch is 
 **Plan:** show the menu on the bottom panel (hardware-scaled, as today) and map touch to menu coordinates
 (`x * 800/640`), keep the top panel showing the last game frame. Test with the load/save state dialogs.
 
-### B16. Achievements are disabled at load because the RAM scan hasn't finished (high) — FOUND 2026-09-27
+### B16. Achievements are disabled at load because the RAM scan hasn't finished (high) — DONE 2026-09-27
 
 Confirmed on the device with Pokémon Black 2: the log fills with `[rc] Disabled achievement NNN. Invalid address
 000BA8` right after login. rc_client validates every achievement's memory addresses when the game loads
@@ -219,10 +219,9 @@ the set. This is almost certainly the tester's "achievements were not able to be
 [#1](https://github.com/JorreFog/ROCKNIXDS/issues/1): RetroAchievements looks logged in and identifies the game,
 but nothing can ever unlock.
 
-**Plan:** find the RAM before loading the game. Do the scan (it already tolerates retries) as soon as rc_client
-identifies the ROM, and call `rc_client_begin_load_game` only once `ram` is set (or block the load callback until
-then). If the RAM genuinely can't be found in a few seconds, load anyway and re-validate. Add a smoke-test check
-that the log has no `Disabled achievement` lines for a game with a known set.
+**Fixed:** login now only marks the client logged in; `ra_frame` starts the game load once the RAM scan has found
+main memory (or after a ~15 s fallback), so rc_client validates against real memory. Verified on Black 2: 0 disabled
+achievements, "1 of 187 unlocked" read from memory, where before the whole set was disabled.
 
 ### I4. RetroAchievements: the DTCM region and progress indicators
 
@@ -301,8 +300,8 @@ lcd1x+nds-color; pick the lowest that holds 0.1 drops/s.
 
 Done on `beta` (2026-09-27): B1, B2, B3, B4, B5, B8 (docs), B11, B12, B15; `tools/smoke.sh` (I9's smoke test)
 exists and passes on the device: 60 presents/s, ~0.07 drops/s, audio verified at the sink monitor and through the
-speaker via the mic, and the game-launch/quit cycle. Found while testing: **B16** (RetroAchievements disabled at
-load), the likely cause of the tester's report; queued next.
+speaker via the mic, and the game-launch/quit cycle. **B16** (RetroAchievements disabled at load, the likely cause
+of the tester's report) was found and fixed the same day.
 
 ## Suggested order
 
