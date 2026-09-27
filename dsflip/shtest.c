@@ -14,6 +14,7 @@
 int shader_init(int fd, const char *name);
 int shader_draw(uint32_t sh, int sw, int shh, int sp, uint64_t sgen, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish);
 extern int shader_copy_mode;
+int shader_fence(void);
 int shader_draw_mem(int panel, const void *px, int sw, int shh, int sp, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish);
 void dsflip_log(const char *fmt, ...) { va_list ap; va_start(ap, fmt); vfprintf(stderr, fmt, ap); va_end(ap); }
 static int fd;
@@ -40,6 +41,13 @@ int main(int argc, char **argv) {
         else { uint32_t g = x * 255 / (sw - 1); v = g << 16 | g << 8 | g; }
         s.map[y * (s.pitch / 4) + x] = 0xff000000 | v;
     }
+    const char *src = getenv("SRC");   /* a real frame instead: a libdsflip scanout dump ("w h pitch bpp\n" + XRGB rows) */
+    if (src) {
+        FILE *f = fopen(src, "rb"); int w, h, p, bpp;
+        if (!f || fscanf(f, "%d %d %d %d", &w, &h, &p, &bpp) != 4 || fgetc(f) != '\n' || w != sw || h != sh || bpp != 32) { fprintf(stderr, "bad SRC %s\n", src); return 1; }
+        for (int y = 0; y < sh; y++) if (fread((char *)s.map + (size_t)y * s.pitch, 1, (size_t)p, f) != (size_t)p) { fprintf(stderr, "short SRC\n"); return 1; }
+        fclose(f);
+    }
     void *mem = 0;                      /* copy mode: the source is plain cached memory, like DraStic's there */
     if (shader_copy_mode) { mem = aligned_alloc(64, (size_t)s.pitch * sh); memcpy(mem, s.map, (size_t)s.pitch * sh); s.map = mem; }
     int r = shader_copy_mode ? shader_draw_mem(0, s.map, sw, sh, s.pitch, d.handle, dw, dh, d.pitch, 2, 1)
@@ -48,8 +56,11 @@ int main(int argc, char **argv) {
     int reps = getenv("REPS") ? atoi(getenv("REPS")) : 0;
     if (reps) {
         struct timespec a, b; clock_gettime(CLOCK_MONOTONIC, &a);
-        for (int k = 0; k < reps; k++) if (shader_copy_mode) shader_draw_mem(0, s.map, sw, sh, s.pitch, d.handle, dw, dh, d.pitch, 2, 1);
-                                        else shader_draw(s.handle, sw, sh, s.pitch, 1, d.handle, dw, dh, d.pitch, 2, 1);
+        int fin = !getenv("PIPE");      /* PIPE=1: queue the draws back to back and wait once (like libdsflip: GPU throughput) */
+        for (int k = 0; k < reps; k++) { int f = fin || k == reps - 1;
+                                         if (shader_copy_mode) shader_draw_mem(0, s.map, sw, sh, s.pitch, d.handle, dw, dh, d.pitch, 2, f);
+                                         else shader_draw(s.handle, sw, sh, s.pitch, 1, d.handle, dw, dh, d.pitch, 2, f);
+                                         if (!f) { int fe = shader_fence(); if (fe >= 0) close(fe); } }   /* submit each, like a frame */
         clock_gettime(CLOCK_MONOTONIC, &b);
         fprintf(stderr, "avg %.2f ms per draw\n", ((b.tv_sec - a.tv_sec) * 1e3 + (b.tv_nsec - a.tv_nsec) / 1e6) / reps);
     }

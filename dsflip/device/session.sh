@@ -31,6 +31,9 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
   GPU_MIN=$(cat $GPU/min_freq 2>/dev/null)
   case "${DSHOOK_SHADER:-none}" in
     none|bilinear) GOV=powersave; MIN= ;;
+    # ds-fsr (FSR 1.0) needs ~9.5 ms of GPU per frame: under simple_ondemand it sat at 800 MHz 97% of the time
+    # and dropped frames while ramping up from the floor at the start, so it gets the full clock from the start
+    ds-fsr) GOV=${DSFLIP_SHADER_GOV:-performance}; MIN=$DSFLIP_SHADER_GPU_MIN ;;
     *) GOV=${DSFLIP_SHADER_GOV:-simple_ondemand}; MIN=${DSFLIP_SHADER_GPU_MIN:-400000000} ;;
   esac
   [ -n "$GPU_GOV" ] && { echo "$GPU_GOV" > /tmp/dsflip-gpu-governor; echo "$GPU_MIN" > /tmp/dsflip-gpu-min; echo $GOV > $GPU/governor 2>/dev/null; [ -n "$MIN" ] && echo $MIN > $GPU/min_freq 2>/dev/null; }

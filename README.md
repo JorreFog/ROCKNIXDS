@@ -208,6 +208,7 @@ stock path uses:
   | ds-grid | sharp, with an LCD pixel grid on the real DS pixels |
   | ds-grid + NDS color | ds-grid with the DS color profile |
   | ds-grid-2x | pixel-perfect at 2×, with an even DS-pixel grid |
+  | ds-fsr | AMD FSR 1.0 (EASU): smooth, edge-aware upscaling instead of sharp pixels. Heavier: it runs the GPU at 800 MHz |
 
   The NDS color profile is the one ROCKNIX's lcd1x+nds-color uses, except that very saturated blues are clamped
   (that shader's math is undefined there and bleeds red into them on this GPU).
@@ -228,7 +229,9 @@ stock path uses:
 - **Cost:** lcd1x+nds-color takes ~2.5 ms per screen at 800 MHz. With a shader the GPU runs `simple_ondemand`
   with a 400 MHz floor, averaging ~500 MHz: in a 2× Pokémon Black 2 session that dropped 0.05 frames/s against
   0.11 with the clock pinned at 800 MHz (`DSFLIP_SHADER_GOV=performance` restores that).
-  At the 200 MHz used in zero-copy mode it would take 16 ms. HeartGold at 2× with lcd3x: 4 dropped frames in
+  At the 200 MHz used in zero-copy mode it would take 16 ms. ds-fsr takes ~4.8 ms per screen (~9.5 ms of the
+  16.7 ms frame for both), so it pins the GPU at 800 MHz; a straight port of FSR took 9.7 ms per screen and
+  dropped every other frame (see the shader's header for how it was made twice as fast). HeartGold at 2× with lcd3x: 4 dropped frames in
   60 s of walking, SoC ~60 °C.
 - At 2× (hires) the source is 512×384, so shaders written for integer scales ≥2× (sharp-bilinear, lcd3x) scale
   unevenly (1.25×). ds-crisp is the sharp choice there.

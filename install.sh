@@ -109,7 +109,7 @@ if [ $UNINSTALL = 1 ]; then
                 if [ -n "$old" ]; then es_set $k "$old"; else es_del $k; fi
             done
         fi
-        [ -f $ESF ] && sed -i -E '/value="ds-(crisp|grid|grid-2x|crisp-color|grid-color)"/d' $ESF   # our shader entries
+        [ -f $ESF ] && sed -i -E '/value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr)"/d' $ESF   # our shader entries
     fi
     rm -f $VERSION_FILE /storage/.config/rocknixds-es-notice
     if [ -e $BACKUP/.had-no-launcher-wrapper ] && [ -e $DRASTIC/drastic.real ]; then
