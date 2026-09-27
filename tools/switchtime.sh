@@ -42,7 +42,7 @@ while [ $k -le $N ]; do
     T0=$(now)
     curl -s -X POST --data-binary "$ROM" localhost:1234/launch >/dev/null
     a=$(until_ 'systemctl is-active -q dsflip-game')
-    b=$(until_ '! pidof sway >/dev/null')
+    b=$(until_ '! pidof sway >/dev/null || [ "$(cat /sys/class/tty/tty0/active)" != tty1 ]')   # sway stopped, or (VT mode) the console left its VT
     c=$(until_ 'grep -q . /tmp/dsflip-state 2>/dev/null')
     d=$(until_ 'grep -q "screen texture" $D/dsflip.log 2>/dev/null')
     sleep 6

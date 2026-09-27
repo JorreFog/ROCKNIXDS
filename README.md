@@ -170,6 +170,11 @@ It's installed as the default DraStic launcher: start any DS game from Emulation
   DraStic DRM master, and brings them back when you quit. The game's first frame comes about 3.5 s after you
   start it (2.3 s of that is ROCKNIX's own launch scripts), and the menu is back about 4.3 s after you quit
   (`tools/switchtime.sh <device-ip>` measures each step).
+- **Fast switching (experimental, since 1.4):** `/storage/.config/drastic/dsflip/fast-switch on` keeps ES and sway
+  running during DS games: the game switches the console to another VT so seatd hands it the display, and back
+  afterwards. The menu is back ~1.7 s after you quit instead of ~4.3 s. It turns off ES's *HideWindow* setting,
+  which applies to every system, so other emulators may show ES's loading screen on their unused screen.
+  `fast-switch off` undoes it; uninstalling does too.
 - If a game ends abnormally, ES says why once it's back: DraStic crashed, or libdsflip couldn't take over the
   screens (then the session stops at once instead of leaving them black).
 - To quit, use the ROCKNIX exit hotkey or *Exit DraStic* in DraStic's menu (MODE button). Stopping the unit

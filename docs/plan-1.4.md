@@ -59,3 +59,22 @@ Games are unaffected (sway is stopped; libdsflip reads the touchscreen itself).
   and serves RA 0x1000000-0x1003FFF from it (`DSFLIP_RA_TEST` logs live DTCM reads through `read_memory`). Not yet
   seen: an actual unlock of a DTCM achievement (no such set at hand).
 - **Hardcore:** not possible, DraStic's savestates, cheats and fast-forward can't be locked from outside.
+
+## 4. Near-instant switching — opt-in `fast-switch` (2026-09-27)
+
+A VT switch instead of stopping ES and sway: `chvt 12` makes seatd disable sway's session, which releases DRM
+master in ~80 ms (verified with a SET_MASTER probe); `chvt` back gives it to sway again in ~7 ms, and ES, which
+was waiting for the launch command, carries on. What it took:
+- **The console blanks the panels** on the new VT: in KD_GRAPHICS the framebuffer console reports blank=4 and the
+  panels stay dark although libdsflip flips at 60 fps (confirmed by eye). Keeping tty12 in text mode and writing 0
+  to `/sys/class/graphics/fb0/blank` after the switch keeps them lit.
+- **ES must keep its window** (`HideWindow=false`): with the default, ES tears its renderer down for the game, and
+  its GL re-init after the VT round trip failed (`glGenTextures failed`, SIGSEGV, systemd restart). With the window
+  kept: 0 restarts over 5 games. After the switch back, sway may have shrunk ES's floating window to 640x480;
+  restore.sh sets it to 1920x480 at 0,0 again.
+- **Buttons pressed during the game don't replay in ES** (tested: 3x right and 2x A mid-game, ES unchanged after).
+- **Result** (`tools/switchtime.sh`, 3 cycles): quit → ES answering 1.2 s, visible 1.6-1.8 s (was 4.3 s); launch
+  unchanged (3.4 s, ROCKNIX's scripts dominate).
+
+Opt-in because HideWindow is global: with it off, other systems' emulators may show ES's loading screen on the
+screen they don't use (untested). `fast-switch on|off|status` sets both; uninstall undoes it.

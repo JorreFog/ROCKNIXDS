@@ -17,8 +17,19 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
   # own), so kill it outright, as start_drastic.sh itself does after a game. One stop for both units: systemd
   # orders it (ES first) without a second round trip.
   kill -9 $(pidof gptokeyb) 2>/dev/null
-  systemctl stop essway.service sway.service
-  echo "$(ms) ms: ES and sway stopped"
+  if [ -e $D/dsflip/vt-switch ] && systemctl is-active -q sway.service; then
+    # VT mode: sway and ES stay up. Switching the console away from sway's VT makes seatd disable sway's session,
+    # which releases the display (DRM master) in ~80 ms; restore.sh switches back. tty12 is unused; graphics mode
+    # keeps the kernel console from drawing on it in between.
+    fgconsole > /tmp/dsflip-vt 2>/dev/null || echo 1 > /tmp/dsflip-vt
+    python3 -c 'import fcntl, os; fcntl.ioctl(os.open("/dev/tty12", os.O_RDWR), 0x4B3A, 0)' 2>/dev/null   # KDSETMODE KD_TEXT
+    chvt 12
+    echo 0 > /sys/class/graphics/fb0/blank 2>/dev/null   # a blanked console powers the panels down under us
+    echo "$(ms) ms: display released by VT switch (sway on tty$(cat /tmp/dsflip-vt) stays up)"
+  else
+    systemctl stop essway.service sway.service
+    echo "$(ms) ms: ES and sway stopped"
+  fi
   # without a shader the Mali GPU does nothing in this mode (the display controller scans out DraStic's
   # buffers), so it goes to powersave (200 MHz): anything more is only heat. With a shader it draws every frame
   # (lcd1x-nds-color: ~3 ms per screen at 800 MHz), under simple_ondemand with a 400 MHz floor. Measured

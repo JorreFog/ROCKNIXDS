@@ -20,6 +20,20 @@ sway_has_outputs() {
 wait_outputs() {                # up to 3 s
     i=0; while [ $i -lt 60 ]; do sway_has_outputs && return 0; sleep 0.05; i=$((i + 1)); done; return 1
 }
+# VT mode (session.sh switched the console away from sway): switch back, sway takes the display again and ES,
+# which kept running, carries on (it makes a new window after a game; its launcher places it).
+if [ -f /tmp/dsflip-vt ]; then
+    VT=$(cat /tmp/dsflip-vt); rm -f /tmp/dsflip-vt
+    chvt "${VT:-1}"
+    if wait_outputs; then
+        S=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
+        [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" '[app_id="emulationstation"] floating enable, fullscreen disable, resize set 1920 480, move absolute position 0 0' >/dev/null 2>&1
+    else
+        echo "$(date) sway has no outputs after the VT switch: restarting it"
+        systemctl restart sway.service; wait_outputs
+        systemctl is-active -q essway.service || systemctl start essway.service
+    fi
+fi
 # ES's launcher waits for sway's outputs itself (the theme's start_es_rgds.sh; stock ROCKNIX starts both together at
 # boot too), so start both at once and let ES's settings script run while sway comes up. If sway comes up without
 # outputs, restarting it restarts ES as well (Requires=).

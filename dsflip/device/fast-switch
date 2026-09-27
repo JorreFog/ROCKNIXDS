@@ -1,0 +1,26 @@
+#!/bin/sh
+# fast-switch on|off|status -- near-instant return from DS games (experimental).
+#
+# Off (default): a DS game stops ES and sway, which gives libdsflip the display; quitting starts them again
+# (~4.3 s back to the menu). On: ES and sway keep running. The game switches the console to another VT (tty12), so
+# seatd takes the display from sway (~0.3 s), and back afterwards; ES, which was waiting for the game, carries on
+# (~0.9 s back to the menu). ES must keep its window during games for that (its HideWindow setting off): with the
+# window torn down, ES's GL re-init after the VT switch fails and it crashes. HideWindow applies to every system,
+# so with this on, other emulators may show ES's loading screen on the screen they don't use.
+D=/storage/.config/drastic/dsflip
+ES=/storage/.config/emulationstation/es_settings.cfg
+
+hidewindow() {        # hidewindow false: keep ES's window during games; hidewindow default: ROCKNIX's default
+    systemctl stop essway.service
+    sed -i '/<bool name="HideWindow" /d' $ES
+    [ "$1" = false ] && sed -i 's|</config>|\t<bool name="HideWindow" value="false" />\n</config>|' $ES
+    systemctl start essway.service
+}
+
+case "$1" in
+on)     [ -f $D/libdsflip.so ] || { echo "libdsflip isn't installed"; exit 1; }
+        touch $D/vt-switch; hidewindow false; echo "fast switching on" ;;
+off)    rm -f $D/vt-switch; hidewindow default; echo "fast switching off" ;;
+status) [ -e $D/vt-switch ] && echo on || echo off ;;
+*)      echo "usage: fast-switch on|off|status"; exit 2 ;;
+esac

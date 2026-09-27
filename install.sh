@@ -119,6 +119,7 @@ if [ $UNINSTALL = 1 ]; then
         if [ -e $DRASTIC/drastic.dvsync ]; then cp -p $DRASTIC/drastic.dvsync $DRASTIC/drastic
         else printf '#!/bin/sh\nexec /storage/.config/drastic/drastic.real "$@"\n' > $DRASTIC/drastic; chmod +x $DRASTIC/drastic; fi
     fi
+    [ -e $DRASTIC/dsflip/vt-switch ] && es_del HideWindow      # fast-switch on set it; ROCKNIX's default again
     rm -rf $DRASTIC/dsflip
     [ -f $BACKUP/.shaders-added ] && while read -r b; do rm -f "$DRASTIC/shaders/$b"; done < $BACKUP/.shaders-added
     [ -e $BACKUP/.esf-created ] && rm -f $ESF $ESF.rocknixds-old
@@ -198,7 +199,8 @@ if [ $DSFLIP_ON = 1 ]; then
     [ -e $DRASTIC/drastic.real ] || touch $BACKUP/.had-no-launcher-wrapper
     mkdir -p $WORK/dsflip
     cp "$SRC/dsflip/libdsflip.so" "$SRC/dsflip/device/session.sh" "$SRC/dsflip/device/restore.sh" \
-       "$SRC/dsflip/device/drastic-wrapper.sh" "$SRC/dsflip/device/install.sh" "$SRC/dsflip/device/es-features.sh" $WORK/dsflip/
+       "$SRC/dsflip/device/drastic-wrapper.sh" "$SRC/dsflip/device/install.sh" "$SRC/dsflip/device/es-features.sh" \
+       "$SRC/dsflip/device/fast-switch" $WORK/dsflip/
     sh $WORK/dsflip/install.sh
 
     # DS-pixel-aware shaders for DraStic (sharp and LCD-grid looks that work at 1x and 2x) + their ES entries
