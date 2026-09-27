@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build dsstress .nds ROMs: a tunable 3D stress load for DraStic (see main9.c).
 
-    build.py                      -> out/dsstress-ramp.nds, out/dsstress-L1..L10.nds
+    build.py                      -> out/dsstress-ramp.nds, out/dsstress-L1..L10.nds, out/dsswap.nds
 Needs clang + ld.lld (targets armv5te for the ARM9; the ARM7 is a 4-byte halt stub).
 Header layout mirrors the minimal ROM DraStic is known to boot: ARM9 at 0x8000, no logo.
 """
@@ -80,4 +80,5 @@ def rom(name, mode, level, ramp=300, maxl=10, cpu=0):
 
 names = [rom("dsstress-ramp.nds", 1, 1)]
 names += [rom(f"dsstress-L{l}.nds", 0, l) for l in range(1, 11)]
+names += [rom("dsswap.nds", 2, 1, ramp=120)]            # screen swap (POWCNT1 bit 15) every 2 s, like DQ4's battles
 print("arm9 %d bytes ->" % len(arm9), " ".join(names))

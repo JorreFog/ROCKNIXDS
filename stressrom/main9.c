@@ -8,7 +8,8 @@
 // DS 2048-polygon / 6144-vertex limits).
 //
 // The config block at the start of the ARM9 binary (crt9.s) is patched by build.py:
-//   mode 0 = fixed level, 1 = ramp 1..max, advancing every `ramp` frames, then holding max
+//   mode 0 = fixed level, 1 = ramp 1..max, advancing every `ramp` frames, then holding max, 2 = fixed level with
+//   the screens swapped (POWCNT1 bit 15) every `ramp` frames
 //   cpu  = extra ARM9 work per frame (iterations of an integer hash loop), to add CPU load
 // Top screen: the 3D scene. Bottom screen: the current level as a bar of blocks, and a block
 // that steps one position per emulated frame (a visible frame-drop indicator).
@@ -190,6 +191,9 @@ int main(void) {
         if (cfg.mode == 1) {
             if (++ramp_count > cfg.ramp) { ramp_count = 1; if (ramp_level < cfg.max) ramp_level++; }
             level = ramp_level;
+        }
+        if (cfg.mode == 2 && ++ramp_count >= cfg.ramp) {     /* swap test: flip which LCD shows engine A */
+            ramp_count = 0; POWCNT1 ^= 0x8000;
         }
         if (level > 10) level = 10;
 
