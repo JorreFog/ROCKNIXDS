@@ -147,7 +147,11 @@ its measure-first phases are in [`docs/drastic-2x-plan.md`](docs/drastic-2x-plan
 It's installed as the default DraStic launcher: start any DS game from EmulationStation as usual.
 
 - The game runs in a detached systemd unit (`dsflip-game`). The unit stops ES and sway, which gives
-  DraStic DRM master, and brings them back when you quit. Switching takes about 5 seconds each way.
+  DraStic DRM master, and brings them back when you quit. The game's first frame comes about 3.5 s after you
+  start it (2.3 s of that is ROCKNIX's own launch scripts), and the menu is back about 4.3 s after you quit
+  (`tools/switchtime.sh <device-ip>` measures each step).
+- If a game ends abnormally, ES says why once it's back: DraStic crashed, or libdsflip couldn't take over the
+  screens (then the session stops at once instead of leaving them black).
 - To quit, use the ROCKNIX exit hotkey or *Exit DraStic* in DraStic's menu (MODE button). Stopping the unit
   (`systemctl stop dsflip-game`) also works: the unit's stop hook always brings sway and ES back.
 - `dsflip.log` in `/storage/.config/drastic/dsflip/` covers the last session, and `.1` to `.3` the three before it;
@@ -324,7 +328,11 @@ the top panel, the bottom panel, and an unused third.
     the selection shows its frame.
 - **Boot splash** across both panels while ES loads hidden, then the menu appears placed, with no jumps.
 - **Robust launcher** (`start_es_rgds.sh`): falls back to stock ES after 2 quick crashes, keeps ES floating
-  at 0,0, and brings the menu back after a game.
+  at 0,0, and brings the menu back after a game. The patched ES is built for one ROCKNIX release
+  (`emulationstation-rgds.rocknix`, today 20260901); on any other the launcher runs stock ES and says so once
+  (`touch /storage/.config/rocknixds-any-rocknix` runs the patched one anyway). It also batches ROCKNIX's 64
+  `systemctl import-environment` calls into one (1.35 s saved on every ES start) and applies the sway seat
+  setup directly instead of a `swaymsg reload`, which froze the panels for over 2 s as the menu appeared.
 - **Game art without an account** ([`scrape/rocknixds-media.py`](dii-ess-aye/scrape)): one command fetches covers,
   screenshots and titles from libretro-thumbnails, real cart scans from the LaunchBox Games Database, renders the
   3D boxes, label art and the RetroAchievements strip, fills empty descriptions, and pushes it all through ES's
@@ -359,8 +367,8 @@ dark-background and a light-background version, a stacked version for small squa
 - **Heavy stretches at 2× can still drop frames** (up to ~10/s in one run). There, DraStic's own frame
   times vary so much that its frames arrive spread over the whole refresh cycle, and no latch position can
   separate them. Calm stretches drop about one frame every 8 s.
-- `libdsflip` stops ES while a game runs, so switching takes ~5 s each way. A Wayland backend that keeps
-  ES running is possible (see the plan).
+- `libdsflip` stops ES while a game runs, so switching takes ~3.5 s in and ~4.3 s out. Keeping ES running
+  across a game is possible (see the plan).
 
 ## Credits
 

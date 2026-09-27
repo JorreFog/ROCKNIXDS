@@ -17,14 +17,25 @@ sway_has_outputs() {
     SOCK=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
     [ -n "$SOCK" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$SOCK" -t get_outputs 2>/dev/null | grep -q '"active": true'
 }
-sway_up() {
-    systemctl is-active -q sway.service || systemctl start sway.service
-    for i in 1 2 3 4 5 6 7 8 9 10; do sway_has_outputs && return 0; sleep 0.3; done
+wait_outputs() {                # up to 3 s
+    i=0; while [ $i -lt 60 ]; do sway_has_outputs && return 0; sleep 0.05; i=$((i + 1)); done; return 1
+}
+# ES's launcher waits for sway's outputs itself (the theme's start_es_rgds.sh; stock ROCKNIX starts both together at
+# boot too), so start both at once and let ES's settings script run while sway comes up. If sway comes up without
+# outputs, restarting it restarts ES as well (Requires=).
+systemctl is-active -q sway.service || systemctl start sway.service
+systemctl is-active -q essway.service || systemctl start essway.service
+if ! wait_outputs; then
     echo "$(date) sway has no outputs: restarting it"
     systemctl restart sway.service
-    for i in 1 2 3 4 5 6 7 8 9 10; do sway_has_outputs && return 0; sleep 0.3; done
-    return 1
-}
-sway_up
-systemctl is-active -q essway.service || systemctl start essway.service
+    wait_outputs
+    systemctl is-active -q essway.service || systemctl start essway.service
+fi
+# session.sh's message about why the game ended early: show it in ES once ES answers. From a transient unit of its
+# own, because this script may be running as dsflip-game's ExecStopPost, whose processes die when it finishes.
+# The mv makes it show once even though this script runs twice after a normal exit (session.sh + ExecStopPost).
+N=/tmp/dsflip-notice.$$
+if [ -s /tmp/dsflip-notice ] && mv /tmp/dsflip-notice $N 2>/dev/null; then
+    systemd-run --collect --quiet sh -c "for i in \$(seq 1 120); do curl -s -m 1 localhost:1234/isIdle 2>/dev/null | grep -q true && break; sleep 0.5; done; sleep 1; curl -s -m 5 -X POST --data-binary @$N localhost:1234/messagebox >/dev/null; rm -f $N" >/dev/null 2>&1 || rm -f $N
+fi
 exit 0

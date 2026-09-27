@@ -111,7 +111,7 @@ if [ $UNINSTALL = 1 ]; then
         fi
         [ -f $ESF ] && sed -i -E '/value="ds-(crisp|grid|grid-2x|crisp-color|grid-color)"/d' $ESF   # our shader entries
     fi
-    rm -f $VERSION_FILE
+    rm -f $VERSION_FILE /storage/.config/rocknixds-es-notice
     if [ -e $BACKUP/.had-no-launcher-wrapper ] && [ -e $DRASTIC/drastic.real ]; then
         rm -f $DRASTIC/drastic $DRASTIC/drastic.dvsync; mv $DRASTIC/drastic.real $DRASTIC/drastic   # stock layout again
     elif grep -q dsflip $DRASTIC/drastic 2>/dev/null; then
@@ -160,6 +160,14 @@ if [ $THEME_ON = 1 ]; then
     cp -a "$SRC/dii-ess-aye/overlay/." $THEME/
     mkdir -p $THEME/bin
     cp "$SRC/dii-ess-aye/emulationstation-rgds" $THEME/bin/emulationstation
+    # the ROCKNIX build (OS_VERSION) the patched ES was compiled against: the launcher runs stock ES on any other
+    cp "$SRC/dii-ess-aye/emulationstation-rgds.rocknix" $THEME/bin/rocknix-version
+    ES_FOR=$(cat $THEME/bin/rocknix-version); OS_VER=$(. /etc/os-release; echo "$OS_VERSION")
+    if [ "$ES_FOR" != "$OS_VER" ]; then
+        say "Note: the patched EmulationStation is built for ROCKNIX $ES_FOR and this is ROCKNIX $OS_VER."
+        say "      The theme runs on stock EmulationStation instead (menus and popups span both screens) until a"
+        say "      ROCKNIXDS release for this ROCKNIX. To try the patched one anyway: touch /storage/.config/rocknixds-any-rocknix"
+    fi
     chmod +x $THEME/bin/emulationstation $THEME/scripts/*.sh
     touch $BACKUP/.theme-installed-by-us
 

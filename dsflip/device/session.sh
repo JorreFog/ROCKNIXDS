@@ -5,11 +5,20 @@
 # The exit hotkey (killall -9 drastic) works because DraStic runs through a symlink named "drastic".
 D=/storage/.config/drastic
 LOG=$D/dsflip/last-session.log
+STATE=/tmp/dsflip-state          # libdsflip's verdict: "ready" or "passthrough: <why>"
+NOTICE=/tmp/dsflip-notice        # why the game ended early; restore.sh shows it in ES once ES is back
 ROM="$1"
+T0=$(date +%s%N)
+ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
 {
   echo "$(date) start: $ROM (shader: ${DSHOOK_SHADER:-none})"
-  systemctl stop essway.service; systemctl stop sway.service
-  sleep 0.5
+  # gptokeyb (start_drastic.sh starts it inside ES's unit) takes ~1.1 s to die on the stop's TERM, and the stop
+  # waits for it: that was most of the switch. Nothing uses it in this session (the exit hotkey is ROCKNIX's
+  # own), so kill it outright, as start_drastic.sh itself does after a game. One stop for both units: systemd
+  # orders it (ES first) without a second round trip.
+  kill -9 $(pidof gptokeyb) 2>/dev/null
+  systemctl stop essway.service sway.service
+  echo "$(ms) ms: ES and sway stopped"
   # without a shader the Mali GPU does nothing in this mode (the display controller scans out DraStic's
   # buffers), so it goes to powersave (200 MHz): anything more is only heat. With a shader it draws every frame
   # (lcd1x-nds-color: ~3 ms per screen at 800 MHz) and is pinned to performance by default. That is safe but runs
@@ -25,7 +34,9 @@ ROM="$1"
     *) GOV=${DSFLIP_SHADER_GOV:-performance}; MIN=$DSFLIP_SHADER_GPU_MIN ;;
   esac
   [ -n "$GPU_GOV" ] && { echo "$GPU_GOV" > /tmp/dsflip-gpu-governor; echo "$GPU_MIN" > /tmp/dsflip-gpu-min; echo $GOV > $GPU/governor 2>/dev/null; [ -n "$MIN" ] && echo $MIN > $GPU/min_freq 2>/dev/null; }
+  rm -f $STATE $NOTICE
   cd $D
+  # no wait for the display: libdsflip retries DRM master itself while seatd lets go of it (~0.4 s after sway)
   SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log \
     LD_PRELOAD=$D/dsflip/libdsflip.so $D/dsflip/drastic "$ROM" > $D/dsflip/drastic.out 2>&1 &
   P=$!
@@ -34,10 +45,40 @@ ROM="$1"
   # sway/ES from inside a unit that systemd is stopping waits behind that stop (measured: 40 s), so the unit's
   # ExecStopPost (restore.sh) brings them back instead.
   trap 'kill -9 $P 2>/dev/null; wait $P; [ -n "$GPU_GOV" ] && { echo "$GPU_GOV" > $GPU/governor 2>/dev/null; rm -f /tmp/dsflip-gpu-governor; }; echo "$(date) stopped by the unit: restore.sh brings sway + ES back"; exit 0' TERM INT
-  # libdsflip couldn't take the display (no DRM master etc.): don't leave a black screen
-  sleep 3
-  if grep -q passthrough $D/dsflip/dsflip.log 2>/dev/null; then echo "passthrough -> abort"; kill -9 $P; fi
-  wait $P; echo "drastic exited: $?"
-  $D/dsflip/restore.sh        # governor back, sway (checked for outputs), ES
+  # libdsflip couldn't take the display: don't leave black panels. It decides within ~6 s at worst (3 s for DRM
+  # master, 3 s for the shader); no verdict in 10 s means it isn't loaded or hangs.
+  v=; i=0
+  while [ $i -lt 200 ] && kill -0 $P 2>/dev/null; do
+    v=$(cat $STATE 2>/dev/null); [ -n "$v" ] && break
+    sleep 0.05; i=$((i + 1))
+  done
+  echo "$(ms) ms: libdsflip: ${v:-no verdict}"
+  case "$v" in
+    ready) ;;
+    passthrough*)
+      echo "abort"; kill -9 $P
+      echo "The game couldn't take over the screens: ${v#passthrough: }. If this keeps happening, create the file $D/nodsflip to use the previous DraStic launcher. Logs: $D/dsflip" > $NOTICE ;;
+    *)
+      if kill -0 $P 2>/dev/null; then
+        echo "abort"; kill -9 $P
+        echo "The game didn't take over the screens within 10 seconds, so it was stopped. Logs: $D/dsflip" > $NOTICE
+      fi ;;
+  esac
+  wait $P; rc=$?
+  echo "drastic exited: $rc"
+  if [ ! -s $NOTICE ]; then
+    case $rc in
+      0|137|143) why= ;;              # Exit DraStic in its menu; ROCKNIX's exit hotkey (kill -9); a stop
+      132) why="illegal instruction" ;;
+      134) why="it aborted" ;;
+      135) why="bus error" ;;
+      136) why="arithmetic error" ;;
+      139) why="segmentation fault" ;;
+      *) why="exit status $rc" ;;
+    esac
+    [ -n "$why" ] && echo "DraStic stopped unexpectedly ($why). Logs: $D/dsflip" > $NOTICE
+  fi
+  [ -s $NOTICE ] && echo "notice: $(cat $NOTICE)"
+  $D/dsflip/restore.sh        # governor back, sway (checked for outputs), ES, then the notice
   echo "$(date) restored"
 } >> $LOG 2>&1

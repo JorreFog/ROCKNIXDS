@@ -878,6 +878,19 @@ int SDL_PollEvent(void *e) {
 }
 
 /* ---------- init ---------- */
+/* The verdict for session.sh: DSFLIP_STATE (default /tmp/dsflip-state) gets "ready" once libdsflip has both panels,
+ * or "passthrough: <reason>" when it gives up. session.sh deletes the file before starting DraStic and waits for
+ * one of the two, so it never reads the previous session's log (which libdsflip rotates only once it runs). */
+static void verdict(const char *v) {
+    const char *sp = getenv("DSFLIP_STATE"); if (!sp) sp = "/tmp/dsflip-state";
+    FILE *f = fopen(sp, "w"); if (f) { fprintf(f, "%s\n", v); fclose(f); }
+}
+static void give_up(const char *why) {
+    char v[160]; snprintf(v, sizeof v, "passthrough: %s", why);
+    LOG("[dsflip] %s -> passthrough\n", why);
+    verdict(v);
+}
+
 __attribute__((constructor)) static void init(void) {
     const char *lp = getenv("DSFLIP_LOG"); if (!lp) lp = "/storage/dsflip/logs/dsflip.log";
     {   /* keep the previous three sessions' logs (.1 = the last one): testers lost evidence to the overwrite */
@@ -894,13 +907,16 @@ __attribute__((constructor)) static void init(void) {
     const char *top = getenv("DSFLIP_TOP"); if (!top) top = "DSI-2";
 
     fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
-    int master = -1;                    /* sway may still be letting go of the device: retry for up to 2 s */
-    for (int k = 0; fd >= 0 && k < 40 && (master = drmSetMaster(fd)) != 0; k++) usleep(50000);
-    if (fd < 0 || master) { LOG("[dsflip] no DRM master after 2 s (sway running?) -> passthrough\n"); return; }
+    long long t_init = now_us();
+    int master = -1;                    /* sway/seatd may still be letting go of the device: retry for up to 3 s */
+    for (int k = 0; fd >= 0 && k < 300 && (master = drmSetMaster(fd)) != 0; k++) usleep(10000);
+    if (fd < 0 || master) { give_up(fd < 0 ? "can't open the display device" : "the display stayed busy for 3 s"); return; }
+    if (now_us() - t_init > 1000) LOG("[dsflip] DRM master after %lld ms\n", (now_us() - t_init) / 1000);
     drmSetClientCap(fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
-    if (drmSetClientCap(fd, DRM_CLIENT_CAP_ATOMIC, 1)) { LOG("[dsflip] no atomic -> passthrough\n"); return; }
+    if (drmSetClientCap(fd, DRM_CLIENT_CAP_ATOMIC, 1)) { give_up("no atomic modesetting"); return; }
     drmModeRes *res = drmModeGetResources(fd);
     drmModePlaneRes *pres = drmModeGetPlaneResources(fd);
+    if (!res || !pres) { give_up("no DRM resources"); return; }
     int np = 0; uint32_t used_crtc = 0;
     for (int i = 0; i < res->count_connectors; i++) {
         drmModeConnector *c = drmModeGetConnector(fd, res->connectors[i]);
@@ -925,12 +941,12 @@ __attribute__((constructor)) static void init(void) {
                 P[i].plane = pl->plane_id;
             drmModeFreePlane(pl);
         }
-    if (np < 2 || !P[0].plane || !P[1].plane) { LOG("[dsflip] need 2 panels with primary planes -> passthrough\n"); return; }
+    if (np < 2 || !P[0].plane || !P[1].plane) { give_up("need 2 panels with primary planes"); return; }
     for (int i = 0; i < 2; i++) plane_props(&P[i]);
 
     /* modeset both with the black buffer; other planes off */
     blk.kind = K_BLACK; blk.nb = 1; blk.w = P[1].mode.hdisplay; blk.h = P[1].mode.vdisplay;
-    if (mkbuf(&blk.b[0], blk.w, blk.h, DRM_FORMAT_XRGB8888, 32)) { LOG("[dsflip] dumb alloc failed\n"); return; }
+    if (mkbuf(&blk.b[0], blk.w, blk.h, DRM_FORMAT_XRGB8888, 32)) { give_up("dumb buffer alloc failed"); return; }
     drmModeAtomicReq *r = drmModeAtomicAlloc();
     for (uint32_t k = 0; k < pres->count_planes; k++) {
         uint32_t id = pres->planes[k];
@@ -948,7 +964,7 @@ __attribute__((constructor)) static void init(void) {
     }
     int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_ALLOW_MODESET, 0);
     drmModeAtomicFree(r);
-    if (ret) { LOG("[dsflip] modeset failed: %s -> passthrough\n", strerror(-ret)); return; }
+    if (ret) { char w[96]; snprintf(w, sizeof w, "modeset failed: %s", strerror(-ret)); give_up(w); return; }
 
     /* can the top plane scale the 800x480 menu down itself? */
     dbuf t; memset(&t, 0, sizeof t);
@@ -1034,7 +1050,8 @@ __attribute__((constructor)) static void init(void) {
     cursor_log = getenv("DSFLIP_CURSOR_LOG") != 0;
     if (getenv("DSFLIP_TAP_FIFO")) pthread_create(&th, 0, tap_fifo_thread, 0);
     ok = 1;
-    LOG("[dsflip] ready: top plane %u, bottom plane %u\n", P[0].plane, P[1].plane);
+    LOG("[dsflip] ready: top plane %u, bottom plane %u (init %lld ms)\n", P[0].plane, P[1].plane, (now_us() - t_init) / 1000);
+    verdict("ready");
 }
 
 /* ---------- audio: the pump (audio.c), or the clock-lock experiment ---------- */

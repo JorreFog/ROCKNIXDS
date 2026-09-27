@@ -198,7 +198,7 @@ downloads the 108 MB zip), renders box3d/labelart/ra_panel, and uploads everythi
 a pure-Python PNG writer (zlib is there) so the strip can refresh after each session without a PC. Stretch:
 call the refresh from `session.sh` when a game exits, so the "N of M" is always current.
 
-### I2. Faster switch into and out of a game
+### I2. Faster switch into and out of a game — step 1 DONE 2026-09-27
 
 Today about 5 s each way, mostly fixed sleeps and ES's own startup. Plan in three steps, measure each:
 
@@ -207,6 +207,23 @@ Today about 5 s each way, mostly fixed sleeps and ES's own startup. Plan in thre
 2. Keep ES's process alive across the game: it already destroys and recreates its window, so the cost is the
    window and theme reload, not the process. Check whether `essway.service` can stay up while sway is restarted
    underneath it (SDL's Wayland backend reconnect), or whether ES must be stopped.
+**Step 1 result (2026-09-27, `tools/switchtime.sh`, 3 cycles each):**
+
+| | before | after |
+|---|---|---|
+| launch request → DraStic's first frame | ~4.8 s | 3.5 s |
+| exit hotkey → ES menu visible | ~6 s, then the panels froze 2+ s | 4.3 s |
+
+What the time was: gptokeyb (in ES's unit) took 1.1 s to die on the stop's TERM, and the stop waited for it:
+`session.sh` now kills it first (it's unused in a session). The 0.5 s sleep became libdsflip's own 10 ms master
+retry. ROCKNIX's `es_settings` spent 1.35 s on 64 single-variable `systemctl import-environment` calls: the
+launcher batches them into one (identical environment, 27 ms). The launcher's `swaymsg reload` after revealing
+ES blocked sway for 2.1-2.5 s: it now runs the config's ES `exec_always` lines directly. Polls went from 0.5 to
+0.1 s, and `restore.sh` starts sway and ES together (the launcher waits for sway's outputs). The 1 s wait between
+ES's API answering and the reveal stays: at 0-0.3 s its top panel is still black (screenshots). The rest of the
+launch, 2.3 s from the request to our unit, is ES and ROCKNIX's `runemu.sh`/`start_drastic.sh` (~140 awk/sed
+forks for settings), outside this project.
+
 3. Stretch: don't stop sway at all. wlroots can lease outputs to a DRM client (`wlr-drm-lease-v1`) but only
    outputs marked non-desktop; a small sway patch that flips both DSI outputs to non-desktop while a game runs
    would let libdsflip take a lease in ~100 ms and hand it back on exit. Prototype on the device before
@@ -288,11 +305,11 @@ lcd1x+nds-color; pick the lowest that holds 0.1 drops/s.
 ### I8. Installer and upgrades
 
 - B1, B10, B15 above.
-- **Pre-flight check:** compare `/etc/os-release` `OS_VERSION` with the ROCKNIX build the patched ES was made
+- **Pre-flight check (DONE 2026-09-27, at run time in the launcher, so a later ROCKNIX update is covered too):** compare `/etc/os-release` `OS_VERSION` with the ROCKNIX build the patched ES was made
   against (`20260901` today). On a mismatch, skip the patched ES with a clear message instead of letting the
   launcher discover two crashes at boot; the theme still works on stock ES.
 - **`--no-dsflip` with hires on** makes the stock path slow: warn, or turn hires off unless `--hires` is given.
-- **Report problems from the launcher:** when `last-session.log` ends with an abort (B3) or a DraStic crash,
+- **Report problems from the launcher (DONE 2026-09-27, from `restore.sh` so it works without the theme too):** when `last-session.log` ends with an abort (B3) or a DraStic crash,
   `start_es_rgds.sh` shows an ES popup (`curl localhost:1234/messagebox`) with the reason.
 - **Release assets instead of binaries in git:** `emulationstation-rgds` (10 MB) and `libdsflip.so` are
   committed on every rebuild. Publish them as release assets and have `install.sh` download the tagged release
