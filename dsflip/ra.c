@@ -58,6 +58,9 @@ static char rom_path[1024], user[128], pass[256];
 static uint8_t rom_hdr[0x160];
 static int frames;
 
+int audio_sfx_load(const char *path);   /* audio.c */
+void audio_sfx_play(void);
+
 /* ---------- settings ---------- */
 static int cfg_get(const char *key, char *out, size_t n) {
     FILE *f = fopen(SYSCFG, "r"); if (!f) return 0;
@@ -281,7 +284,7 @@ static void *prefetch_thread(void *a) {
             const rc_client_achievement_t *a = d->buckets[0].achievements[0];
             char path[600], l1[64]; badge_file(a, path, sizeof path);
             snprintf(l1, sizeof l1, "Achievement unlocked \xc2\xb7 %u points", a->points);
-            sleep(6); ui_popup(l1, a->title, path, 0xffd84a, 5000);
+            sleep(6); audio_sfx_play(); ui_popup(l1, a->title, path, 0xffd84a, 5000);
             sleep(7); ui_progress("3/5", path);
             sleep(5); ui_progress(0, 0);
         }
@@ -310,6 +313,7 @@ static void on_event(const rc_client_event_t *e, rc_client_t *c) {
         snprintf(m->l1, sizeof m->l1, "Achievement unlocked \xc2\xb7 %u points", e->achievement->points);
         snprintf(m->l2, sizeof m->l2, "%s", e->achievement->title);
         m->a = e->achievement;
+        audio_sfx_play();
         detach(unlock_thread, m);
         break;
     }
@@ -396,6 +400,27 @@ static void on_login_password(int result, const char *err, rc_client_t *c, void 
     logged_in = 1;
 }
 
+/* ---------- unlock sound ----------
+ * The one chosen in ES > RetroAchievements > Unlock sound (system.cfg retroachievements.sound; "none" or unset: no
+ * sound), looked up like ROCKNIX's setsettings.sh does for RetroArch: this game, then the nds system, then global.
+ * The files are ES's list: /storage/roms/music/retroachievements/<name>.ogg, then /usr/share/libretro/sounds. */
+static char sound_path[600];
+static void *sound_load_thread(void *a) { (void)a; audio_sfx_load(sound_path); return 0; }
+static void sound_setup(void) {
+    char key[700], name[128] = "";
+    const char *base = strrchr(rom_path, '/'); base = base ? base + 1 : rom_path;
+    snprintf(key, sizeof key, "nds[\"%s\"].retroachievements.sound", base);
+    if (!cfg_get(key, name, sizeof name) && !cfg_get("nds.retroachievements.sound", name, sizeof name))
+        cfg_get("global.retroachievements.sound", name, sizeof name);
+    if (!*name || !strcmp(name, "none") || strchr(name, '/')) { dsflip_log("[ra] unlock sound: none\n"); return; }
+    const char *dirs[] = { "/storage/roms/music/retroachievements", "/usr/share/libretro/sounds" };
+    for (int i = 0; i < 2; i++) {
+        snprintf(sound_path, sizeof sound_path, "%s/%s.ogg", dirs[i], name);
+        if (access(sound_path, R_OK) == 0) { detach(sound_load_thread, 0); return; }
+    }
+    dsflip_log("[ra] unlock sound '%s' not found\n", name);
+}
+
 static void on_rc_log(const char *msg, const rc_client_t *c) { (void)c; dsflip_log("[rc] %s\n", msg); }
 
 /* called once, from the first SDL_RenderPresent (DraStic's main thread) */
@@ -425,6 +450,7 @@ static void ra_start(void) {
     }
     if (strcmp(v, "1") || !*user) { dsflip_log("[ra] RetroAchievements off (ES: RetroAchievements settings)\n"); return; }
 
+    sound_setup();
     rc = rc_client_create(read_memory, server_call);
     rc_client_enable_logging(rc, RC_CLIENT_LOG_LEVEL_WARN, on_rc_log);
     rc_client_set_event_handler(rc, on_event);

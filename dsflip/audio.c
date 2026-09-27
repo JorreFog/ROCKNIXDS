@@ -76,6 +76,68 @@ static void sdl_cb(void *u, unsigned char *out, int len) {   /* SDL's audio thre
     if (k < n) { memset(out + (size_t)k * fb, silence_byte, (size_t)(n - k) * fb); st_under++; primed = 0; }
 }
 
+/* ---- one sound effect (the RetroAchievements unlock sound), mixed over DraStic's output in the pump ---- */
+#define STB_VORBIS_NO_PUSHDATA_API
+#define STB_VORBIS_NO_STDIO_WRITE
+#include <assert.h>                   /* stb_vorbis's own includes, first: they must stay default-visible */
+#include <limits.h>
+#include <malloc.h>
+#include <alloca.h>
+#pragma GCC visibility push(hidden)   /* a preloaded library must not export these over anyone else's */
+#include "stb_vorbis.c"
+#pragma GCC visibility pop
+static short *sfx_raw; static int sfx_raw_frames, sfx_raw_ch, sfx_raw_rate;   /* as decoded */
+static int16_t *sfx; static int sfx_frames;                                    /* at the pump's rate and channels */
+static volatile int sfx_pos = -1;                                              /* next frame to mix; -1: idle */
+
+/* decode an Ogg Vorbis file (any thread). 0 on success. */
+int audio_sfx_load(const char *path) {
+    int ch, rate; short *pcm;
+    int n = stb_vorbis_decode_filename(path, &ch, &rate, &pcm);
+    if (n < 2 || ch < 1 || rate < 8000) { dsflip_log("[audio] can't decode %s\n", path); return -1; }
+    sfx_raw = pcm; sfx_raw_frames = n; sfx_raw_ch = ch; sfx_raw_rate = rate;
+    dsflip_log("[audio] sound effect %s: %.2f s, %d Hz, %d ch\n", path, (double)n / rate, rate, ch);
+    return 0;
+}
+
+/* start the sound effect (restarts it if it is playing). Converts it to the pump's format on first use. */
+void audio_sfx_play(void) {
+    if (!sfx_raw || !dcb) return;        /* nothing loaded, or no pump (DSFLIP_AUDIO_PUMP=0) */
+    if (!sfx) {
+        int och = fb / 2, n = (int)((long long)sfx_raw_frames * freq / sfx_raw_rate);
+        int16_t *o = malloc((size_t)n * och * sizeof *o);
+        if (!o) return;
+        for (int i = 0; i < n; i++) {    /* linear resampling; mono -> both channels, stereo -> mono by averaging */
+            double x = (double)i * sfx_raw_rate / freq; int j = (int)x; double f = x - j;
+            if (j + 1 >= sfx_raw_frames) { j = sfx_raw_frames - 2; f = 1; }
+            for (int c = 0; c < och; c++) {
+                double v = 0; int k = 0;
+                for (int sc = 0; sc < sfx_raw_ch; sc++) {
+                    if (och == 2 && sfx_raw_ch >= 2 && sc != c) continue;
+                    v += sfx_raw[j * sfx_raw_ch + sc] * (1 - f) + sfx_raw[(j + 1) * sfx_raw_ch + sc] * f; k++;
+                }
+                o[i * och + c] = (int16_t)(v / k);
+            }
+        }
+        sfx_frames = n; __atomic_store_n(&sfx, o, __ATOMIC_RELEASE);
+    }
+    __atomic_store_n(&sfx_pos, 0, __ATOMIC_RELEASE);
+    dsflip_log("[audio] sound effect: playing (%d frames at %d Hz)\n", sfx_frames, freq);
+}
+
+static void sfx_mix(unsigned char *buf, int frames) {
+    int p = __atomic_load_n(&sfx_pos, __ATOMIC_ACQUIRE);
+    if (p < 0) return;
+    int16_t *d = (int16_t *)buf; const int och = fb / 2;
+    int n = sfx_frames - p < frames ? sfx_frames - p : frames;
+    for (int i = 0; i < n * och; i++) {
+        int v = d[i] + sfx[p * och + i] * 3 / 4;   /* a little under full level: the unlock sounds are loud */
+        d[i] = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
+    }
+    int next = p + n >= sfx_frames ? -1 : p + n;
+    __atomic_compare_exchange_n(&sfx_pos, &p, next, 0, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED);   /* unless restarted */
+}
+
 static void *pump(void *a) {             /* steady calls into DraStic's callback */
     (void)a;
     struct sched_param sp = { .sched_priority = 20 };   /* above DraStic (and its presenter), below PipeWire */
@@ -89,6 +151,7 @@ static void *pump(void *a) {             /* steady calls into DraStic's callback
             next = mono_ns(); continue;
         }
         dcb(dud, tmp, chunk * fb);
+        sfx_mix(tmp, chunk);
         st_pump++; st_pumped += chunk;
         { const int16_t *sm = (const int16_t *)tmp; int ns = chunk * fb / 2; double acc = 0;
           for (int i = 0; i < ns; i++) { float v = sm[i] * (1.0f / 32768); acc += v * v; }

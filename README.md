@@ -263,6 +263,9 @@ Standalone DraStic has no RetroAchievements support, so `libdsflip` brings its o
   downloaded once per game into `/storage/.config/drastic/dsflip/badges/`. `dsflip/ui.c` draws them on a thread of
   its own (stb_truetype, stb_image) into a spare hardware overlay plane of the top panel, so they cost the game
   nothing. `DSFLIP_UI_DEMO=1` shows a sample unlock and progress pill after a game loads.
+- **Unlock sound** (since 1.4): the one picked in ES > Game settings > RetroAchievements settings > Unlock sound
+  (the same setting RetroArch uses; "none" by default), mixed into DraStic's audio. `.ogg` files in
+  `/storage/roms/music/retroachievements/` show up in that list too. Decoded with stb_vorbis.
 - **Softcore only.** Hardcore needs savestates, cheats and fast-forward locked, which can't be enforced
   from outside DraStic.
 
