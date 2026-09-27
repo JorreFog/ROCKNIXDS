@@ -366,6 +366,9 @@ the top panel, the bottom panel, and an unused third.
     strftime `<format>` on `clock`.
   - `es-rgds-carousel-repeat.patch`: short game lists repeat to fill the carousel, and only the centred copy of
     the selection shows its frame.
+  - `es-rgds-devkeys.patch` (1.4): the build carries no RetroAchievements or ScreenScraper developer keys. It reads
+    them at run time from ROCKNIX's own ES (`/usr/bin/emulationstation`), so the RetroAchievements menu and the
+    ScreenScraper scraper work as in stock ES (1.3's menu showed "Unauthenticated", 401).
 - **Boot splash** across both panels while ES loads hidden, then the menu appears placed, with no jumps.
 - **Touch in ES** (since 1.4): swipe to scroll the carousels, tap to open the selection, tap menu rows. ROCKNIX's
   sway config left ES with no touch events; `sway-config.theme` attaches the touchscreens to ES's seat too.

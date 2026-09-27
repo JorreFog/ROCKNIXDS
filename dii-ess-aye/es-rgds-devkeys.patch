@@ -1,0 +1,106 @@
+diff --git a/es-app/src/ApiSystem.cpp b/es-app/src/ApiSystem.cpp
+index 441e8cc98..0d465f18d 100644
+--- a/es-app/src/ApiSystem.cpp
++++ b/es-app/src/ApiSystem.cpp
+@@ -2161,7 +2161,7 @@ bool ApiSystem::isScriptingSupported(ScriptId script)
+ 		return true;
+ 	case ApiSystem::RETROACHIVEMENTS:
+ #ifdef CHEEVOS_DEV_LOGIN
+-		return true;
++		return *CHEEVOS_DEV_LOGIN != '\0';   // ROCKNIXDS: empty when read at run time and not found
+ #endif
+ 		break;
+ 	case ApiSystem::KODI:
+diff --git a/es-app/src/DevKeys.h b/es-app/src/DevKeys.h
+new file mode 100644
+index 000000000..4d56b96ab
+--- /dev/null
++++ b/es-app/src/DevKeys.h
+@@ -0,0 +1,66 @@
++#pragma once
++// ROCKNIXDS: this build carries no developer keys of its own. When the build doesn't define them, the
++// RetroAchievements and ScreenScraper developer logins are read at run time from the stock ES binary that ships
++// with ROCKNIX (/usr/bin/emulationstation, or $RGDS_ES_KEYS_FROM), which has them compiled in. Without a stock
++// binary (or without the keys in it) they are empty: the RetroAchievements menu stays hidden and ScreenScraper
++// requests fail, as in a keyless build.
++#include <string>
++#include <fstream>
++#include <iterator>
++#include <cstdlib>
++#include <cstring>
++
++namespace RgdsDevKeys
++{
++	struct Keys { std::string cheevos, screenscraper; };
++
++	inline bool keyChar(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.'; }
++
++	// "<k1>=<v1>&<k2>=<v2>" with non-empty values of key characters only
++	inline bool matches(const std::string& s, const char* k1, const char* k2)
++	{
++		std::string a = std::string(k1) + "=", b = std::string("&") + k2 + "=";
++		if (s.compare(0, a.size(), a) != 0) return false;
++		size_t amp = s.find('&');
++		if (amp == std::string::npos || amp == a.size() || s.compare(amp, b.size(), b) != 0 || amp + b.size() == s.size()) return false;
++		for (size_t i = a.size(); i < s.size(); i++)                      // both values: key characters only
++			if (i == amp) i += b.size() - 1;
++			else if (!keyChar(s[i])) return false;
++		return true;
++	}
++
++	inline const Keys& get()
++	{
++		static Keys keys = []
++		{
++			Keys k;
++			const char* path = getenv("RGDS_ES_KEYS_FROM");
++			std::ifstream f(path && *path ? path : "/usr/bin/emulationstation", std::ios::binary);
++			if (!f) return k;
++			std::string data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
++			size_t i = 0, n = data.size();
++			while (i < n)
++			{
++				size_t j = i;
++				while (j < n && data[j] >= 0x20 && data[j] < 0x7f) j++;
++				if (j - i >= 8 && j < n && data[j] == '\0')         // a NUL-terminated string literal
++				{
++					std::string s = data.substr(i, j - i);
++					if (k.cheevos.empty() && matches(s, "z", "y")) k.cheevos = s;
++					else if (k.screenscraper.empty() && matches(s, "devid", "devpassword")) k.screenscraper = s;
++				}
++				i = j + 1;
++			}
++			return k;
++		}();
++		return keys;
++	}
++}
++
++#ifndef CHEEVOS_DEV_LOGIN
++#define CHEEVOS_DEV_LOGIN (RgdsDevKeys::get().cheevos.c_str())
++#define RGDS_RUNTIME_CHEEVOS 1
++#endif
++#ifndef SCREENSCRAPER_DEV_LOGIN
++#define SCREENSCRAPER_DEV_LOGIN (RgdsDevKeys::get().screenscraper.c_str())
++#endif
+diff --git a/es-app/src/EmulationStation.h b/es-app/src/EmulationStation.h
+index e460f06e7..684e1e40f 100644
+--- a/es-app/src/EmulationStation.h
++++ b/es-app/src/EmulationStation.h
+@@ -28,4 +28,6 @@
+ 
+ #endif
+ 
++#include "DevKeys.h"
++
+ #endif // ES_APP_EMULATION_STATION_H
+diff --git a/es-app/src/scrapers/Scraper.cpp b/es-app/src/scrapers/Scraper.cpp
+index 5691f112d..8a55edf1d 100644
+--- a/es-app/src/scrapers/Scraper.cpp
++++ b/es-app/src/scrapers/Scraper.cpp
+@@ -1,4 +1,5 @@
+ #include "scrapers/Scraper.h"
++#include "EmulationStation.h"
+ 
+ #include "FileData.h"
+ #include "ArcadeDBJSONScraper.h"
