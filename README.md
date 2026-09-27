@@ -353,6 +353,8 @@ the top panel, the bottom panel, and an unused third.
   - `es-rgds-carousel-repeat.patch`: short game lists repeat to fill the carousel, and only the centred copy of
     the selection shows its frame.
 - **Boot splash** across both panels while ES loads hidden, then the menu appears placed, with no jumps.
+- **Touch in ES** (since 1.4): swipe to scroll the carousels, tap to open the selection, tap menu rows. ROCKNIX's
+  sway config left ES with no touch events; `sway-config.theme` attaches the touchscreens to ES's seat too.
 - **Robust launcher** (`start_es_rgds.sh`): falls back to stock ES after 2 quick crashes, keeps ES floating
   at 0,0, and brings the menu back after a game. The patched ES is built for one ROCKNIX release
   (`emulationstation-rgds.rocknix`, today 20260901); on any other the launcher runs stock ES and says so once
@@ -387,8 +389,6 @@ dark-background and a light-background version, a stacked version for small squa
 
 ## Known issues
 
-- **Touch in EmulationStation doesn't work** on this setup. The stock sway mapping puts both touch
-  panels on the wrong outputs. Games are unaffected: `libdsflip` reads the touch panel itself.
 - **RetroAchievements:** softcore only, and achievements that read the DS's DTCM (rare) don't work yet.
 - **Heavy stretches at 2× can still drop frames** (up to ~10/s in one run). There, DraStic's own frame
   times vary so much that its frames arrive spread over the whole refresh cycle, and no latch position can

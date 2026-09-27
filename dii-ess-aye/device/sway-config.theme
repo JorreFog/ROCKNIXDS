@@ -21,3 +21,7 @@ exec_always swaymsg '[app_id="emulationstation"]' floating enable, fullscreen di
 exec_always swaymsg '[app_id="emulationstation"]' focus
 exec_always swaymsg '[app_id="emulationstation"]' seat seat1 attach "1046:911:Goodix_Capacitive_TouchScreen"
 exec_always swaymsg '[app_id="emulationstation"]' seat seat1 fallback yes
+# Touch in ES: ROCKNIX's lines above put the touchscreens on seat1 only, and ES then gets no touch at all (traced:
+# its wl_touch on seat1 receives nothing). With them on seat0 as well, ES gets every touch at the right position:
+# swipe scrolls a carousel, tap opens the selection, taps pick menu rows (verified with injected touches).
+seat seat0 attach "1046:911:Goodix_Capacitive_TouchScreen"

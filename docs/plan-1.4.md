@@ -27,3 +27,14 @@ milliseconds apart. The mali_kbase stack trace in dmesg comes from an idle suspe
   screen (`// dsflip-viewport: 64 48 512 384`), `shader.c` reads it, and libdsflip maps touch into that rectangle:
   tested with the tap hook, (64,48)→DS 0,0, (575,431)→255,191, (320,240)→128,96; taps on the bezel (even 1 px
   outside) are ignored, a touch that slides off the screen is clamped to its edge.
+
+## 2b. Touch in ES's menus — works (2026-09-27)
+
+ROCKNIX's dual-screen sway lines attach both Goodix touchscreens to seat1 (and make seat1 the fallback) once ES's
+window exists. ES (SDL2 Wayland) binds wl_touch on both seats, but with the devices only on seat1 it received no
+touch events at all (WAYLAND_DEBUG=client); with them only on seat0, none either; attached to both, every touch
+arrives, at the right position (the bottom panel is x 640..1280 of ES's 1920 canvas via ROCKNIX's calibration
+matrix). So `sway-config.theme` keeps ROCKNIX's seat1 lines and adds `seat seat0 attach` for the touchscreens.
+ES's own touch model then works: swipe scrolls the carousel, a tap opens the current selection (anywhere, by ES's
+design), taps pick menu rows. Tested with `touchtap.py`, which writes a real touch into the evdev node.
+Games are unaffected (sway is stopped; libdsflip reads the touchscreen itself).
