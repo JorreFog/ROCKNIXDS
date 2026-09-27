@@ -301,7 +301,8 @@ lcd1x+nds-color; pick the lowest that holds 0.1 drops/s.
 Done on `beta` (2026-09-27): B1, B2, B3, B4, B5, B8 (docs), B11, B12, B15; `tools/smoke.sh` (I9's smoke test)
 exists and passes on the device: 60 presents/s, ~0.07 drops/s, audio verified at the sink monitor and through the
 speaker via the mic, and the game-launch/quit cycle. **B16** (RetroAchievements disabled at load, the likely cause
-of the tester's report) was found and fixed the same day.
+of the tester's report) was found and fixed the same day. I6 (cooler shaders) is now tunable by env; choosing a
+lower default needs a heavy-gameplay temperature sweep.
 
 ## Suggested order
 

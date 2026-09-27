@@ -10,7 +10,8 @@ GPU=/sys/class/devfreq/fde60000.gpu
 RT=/var/run/0-runtime-dir
 if [ -f /tmp/dsflip-gpu-governor ]; then
     cat /tmp/dsflip-gpu-governor > $GPU/governor 2>/dev/null
-    rm -f /tmp/dsflip-gpu-governor
+    [ -s /tmp/dsflip-gpu-min ] && cat /tmp/dsflip-gpu-min > $GPU/min_freq 2>/dev/null
+    rm -f /tmp/dsflip-gpu-governor /tmp/dsflip-gpu-min
 fi
 sway_has_outputs() {
     SOCK=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
