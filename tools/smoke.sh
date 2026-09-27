@@ -31,8 +31,9 @@ ROM=$($SSH "ls /storage/roms/nds/*.nds 2>/dev/null | grep -i -- \"${ROMPAT}\" | 
 [ -n "$ROM" ] || { bad "no .nds ROM matching '$ROMPAT' in /storage/roms/nds"; exit 1; }
 info "ROM: $ROM"
 
-# quiet reference: the mic in the menu
-$SSH 'arecord -q -D default -d 2 -f S16_LE -r 44100 -c 1 /tmp/smoke-quiet.wav 2>/dev/null; echo' >/dev/null
+# quiet reference: the mic in the menu (PipeWire needs the session's runtime dir)
+RT='XDG_RUNTIME_DIR=/var/run/0-runtime-dir'
+$SSH "$RT arecord -q -D default -d 2 -f S16_LE -r 44100 -c 1 /tmp/smoke-quiet.wav 2>/dev/null; echo" >/dev/null
 $SSH "curl -s -X POST --data-binary '$ROM' localhost:1234/launch" >/dev/null
 sleep 12
 $SSH 'systemctl is-active -q dsflip-game' && ok "game unit is running" || bad "game unit didn't start"
@@ -43,7 +44,7 @@ grep -m1 '^\[shader\]' "$OUT/start.log" | sed 's/^/  ..   /'
 grep -m1 '^\[audio\] pump' "$OUT/start.log" | sed 's/^/  ..   /'
 
 # let it run, sampling the per-second lines; record the speaker through the mic meanwhile
-$SSH "arecord -q -D default -d 4 -f S16_LE -r 44100 -c 1 /tmp/smoke-game.wav 2>/dev/null" &
+$SSH "$RT arecord -q -D default -d 4 -f S16_LE -r 44100 -c 1 /tmp/smoke-game.wav 2>/dev/null; $RT timeout 4 pw-record -P '{ stream.capture.sink = true }' --rate 44100 --channels 1 --format s16 /tmp/smoke-mon.wav >/dev/null 2>&1" &
 sleep $SECS
 wait
 $SSH "grep '^\[dsflip\] present/s' $D/dsflip.log | tail -n $SECS" > "$OUT/present.log"
@@ -65,18 +66,24 @@ case "$AUD" in *"underruns 0,"*) ok "no audio underruns" ;; "") ;; *) bad "audio
 RA=$($SSH "grep -E '^\[ra\] (game |logged|RetroAchievements off|login|game load)' $D/dsflip.log | tail -n1")
 info "RetroAchievements: ${RA:-nothing logged}"
 
-# mic levels: the game's audio through the speaker vs the quiet menu
+# audio: the sink monitor is what DraStic actually plays (must have signal); the mic hears the speaker (advisory:
+# a muted or quiet mic is not a game fault)
 $SSH 'cat /tmp/smoke-quiet.wav' > "$OUT/quiet.wav"; $SSH 'cat /tmp/smoke-game.wav' > "$OUT/game.wav"
-python3 - "$OUT/quiet.wav" "$OUT/game.wav" <<'EOF' || fail=1
-import wave, struct, math, sys
+$SSH 'cat /tmp/smoke-mon.wav 2>/dev/null' > "$OUT/monitor.wav"
+python3 - "$OUT/quiet.wav" "$OUT/game.wav" "$OUT/monitor.wav" <<'EOF' || fail=1
+import wave, struct, math, sys, os
 def rms(p):
-    w = wave.open(p); d = w.readframes(w.getnframes()); w.close()
+    try:
+        w = wave.open(p); d = w.readframes(w.getnframes()); w.close()
+    except Exception:
+        return -1
     s = struct.unpack("<%dh" % (len(d) // 2), d)
-    return math.sqrt(sum(v * v for v in s) / max(1, len(s))) / 32768
-q, g = rms(sys.argv[1]), rms(sys.argv[2])
-loud = g > max(0.01, 3 * q)
-print(f"  {'ok  ' if loud else 'FAIL'} speaker heard by the mic: game {g:.4f} rms vs menu {q:.4f}")
-sys.exit(0 if loud else 1)
+    return math.sqrt(sum(v * v for v in s) / max(1, len(s))) / 32768 if s else -1
+q, g, m = (rms(p) for p in sys.argv[1:4])
+if m < 0: print("  FAIL sink monitor capture failed (pw-record)"); sys.exit(1)
+print(f"  {'ok  ' if m > 0.005 else 'FAIL'} audio reaches the sink: monitor {m:.4f} rms")
+print(f"  {'ok  ' if g > max(0.01, 3 * q) else 'warn'} speaker heard by the mic: game {g:.4f} rms vs menu {q:.4f}")
+sys.exit(0 if m > 0.005 else 1)
 EOF
 
 # what's on the panels

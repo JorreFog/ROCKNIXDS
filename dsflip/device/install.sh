@@ -14,10 +14,10 @@ if [ ! -e $D/drastic.real ]; then
     chmod +x $D/drastic
 fi
 mkdir -p $D/dsflip
-cp "$HERE/libdsflip.so" "$HERE/session.sh" $D/dsflip/
-chmod +x $D/dsflip/session.sh
+cp "$HERE/libdsflip.so" "$HERE/session.sh" "$HERE/restore.sh" $D/dsflip/
+chmod +x $D/dsflip/session.sh $D/dsflip/restore.sh
 ln -sf ../drastic.real $D/dsflip/drastic          # named 'drastic' so the exit hotkey (killall drastic) matches
 [ -e $D/drastic.dvsync ] || cp -p $D/drastic $D/drastic.dvsync
-cp $D/drastic $D/drastic.pre-dsflip.bak
+[ -e $D/drastic.pre-dsflip.bak ] || cp $D/drastic $D/drastic.pre-dsflip.bak   # once: on an upgrade it's our own wrapper
 cp "$HERE/drastic-wrapper.sh" $D/drastic; chmod +x $D/drastic
 echo "libdsflip installed. Fallback: touch $D/nodsflip"

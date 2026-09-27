@@ -10,6 +10,7 @@ D=/storage/.config/drastic
 if [ "${DSFLIP:-1}" != "0" ] && [ ! -e $D/nodsflip ] && [ -f $D/dsflip/libdsflip.so ] && \
    systemd-run --unit=dsflip-game --collect --setenv=DSHOOK_SHADER="${DSHOOK_SHADER:-none}" \
      --setenv=DSHOOK_MIC_THRESH="${DSHOOK_MIC_THRESH:-0}" \
+     -p ExecStopPost=$D/dsflip/restore.sh -p TimeoutStopSec=10 \
      $D/dsflip/session.sh "$@" >/dev/null 2>&1; then
     exec sleep 86400        # stopping ES (from the unit) ends this, start_drastic.sh and gptokeyb too
 fi

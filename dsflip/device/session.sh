@@ -1,6 +1,7 @@
 #!/bin/sh
 # libdsflip game session (runs as systemd unit dsflip-game, outside ES's process tree).
-# Stops ES + sway, runs DraStic with libdsflip on the bare panels, then always brings sway + ES back.
+# Stops ES + sway, runs DraStic with libdsflip on the bare panels, then brings sway + ES back. If this script is
+# killed with the unit (systemctl stop dsflip-game), the unit's ExecStopPost (restore.sh) does that instead.
 # The exit hotkey (killall -9 drastic) works because DraStic runs through a symlink named "drastic".
 D=/storage/.config/drastic
 LOG=$D/dsflip/last-session.log
@@ -19,18 +20,20 @@ ROM="$1"
     none|bilinear) GOV=powersave ;;
     *) GOV=performance ;;
   esac
-  [ -n "$GPU_GOV" ] && echo $GOV > $GPU/governor 2>/dev/null
+  [ -n "$GPU_GOV" ] && { echo "$GPU_GOV" > /tmp/dsflip-gpu-governor; echo $GOV > $GPU/governor 2>/dev/null; }
   cd $D
   SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log \
     LD_PRELOAD=$D/dsflip/libdsflip.so $D/dsflip/drastic "$ROM" > $D/dsflip/drastic.out 2>&1 &
   P=$!
+  # `systemctl stop dsflip-game` sends TERM to everything here; DraStic ignores it and would be SIGKILLed only at
+  # the unit's timeout. Kill it at once (what the exit hotkey does), put the governor back and leave: starting
+  # sway/ES from inside a unit that systemd is stopping waits behind that stop (measured: 40 s), so the unit's
+  # ExecStopPost (restore.sh) brings them back instead.
+  trap 'kill -9 $P 2>/dev/null; wait $P; [ -n "$GPU_GOV" ] && { echo "$GPU_GOV" > $GPU/governor 2>/dev/null; rm -f /tmp/dsflip-gpu-governor; }; echo "$(date) stopped by the unit: restore.sh brings sway + ES back"; exit 0' TERM INT
   # libdsflip couldn't take the display (no DRM master etc.): don't leave a black screen
   sleep 3
   if grep -q passthrough $D/dsflip/dsflip.log 2>/dev/null; then echo "passthrough -> abort"; kill -9 $P; fi
   wait $P; echo "drastic exited: $?"
-  [ -n "$GPU_GOV" ] && echo "$GPU_GOV" > $GPU/governor 2>/dev/null
-  systemctl start sway.service
-  sleep 2
-  systemctl start essway.service
+  $D/dsflip/restore.sh        # governor back, sway (checked for outputs), ES
   echo "$(date) restored"
 } >> $LOG 2>&1

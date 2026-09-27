@@ -9,8 +9,9 @@ cd "$(dirname "$0")"
 RC=third_party/rcheevos
 SRCS="dsflip.c shader.c audio.c ra.c $(ls $RC/src/rc_client.c $RC/src/rc_compat.c $RC/src/rc_util.c $RC/src/rc_version.c \
       $RC/src/rcheevos/*.c $RC/src/rapi/*.c $RC/src/rhash/*.c)"
+V=$(cat ../VERSION 2>/dev/null || echo dev)
 clang --target=aarch64-linux-gnu --sysroot="$SR" -fuse-ld=lld -shared -fPIC -O2 -Wall -Wno-unused-function \
-      -DRC_DISABLE_LUA -DRC_CLIENT_SUPPORTS_HASH -I"$SR/usr/include/libdrm" -I$RC/include -I$RC/src \
+      -DDSFLIP_VERSION="\"$V\"" -DRC_DISABLE_LUA -DRC_CLIENT_SUPPORTS_HASH -I"$SR/usr/include/libdrm" -I$RC/include -I$RC/src \
       -o libdsflip.so $SRCS -ldrm -lpthread -lm
 llvm-strip --strip-unneeded libdsflip.so
 ls -l libdsflip.so

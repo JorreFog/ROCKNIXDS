@@ -10,7 +10,9 @@
 #   --no-theme      skip the theme + patched ES
 #   --no-dsflip     skip libdsflip (keep the stock DraStic display path)
 #   --no-hires      don't switch on hires 3D for Nintendo DS
-#   --uninstall     undo everything this installer changed (restores the backups it made)
+#   --uninstall     undo what this installer changed, leaving settings made since the install alone
+#   --restore-files with --uninstall: put back whole config files from the install-time backups instead
+#   --version       print the ROCKNIXDS version this installer belongs to
 # Env: RGDS_SRC=/path/to/checkout installs from a local copy instead of downloading.
 # Everything it replaces is backed up under /storage/rgds-rocknix-backup/ first.
 set -e
@@ -26,8 +28,10 @@ SYSCFG=/storage/.config/system/configs/system.cfg
 DRASTIC=/storage/.config/drastic
 BACKUP=/storage/rgds-rocknix-backup   # old project name, kept so earlier installs can still be undone
 WORK=/storage/.rgds-install
+ESF=/storage/.config/emulationstation/es_features.cfg
+VERSION_FILE=/storage/.config/rocknixds-version
 
-WITH_60HZ=0 THEME_ON=1 DSFLIP_ON=1 HIRES_ON=1 UNINSTALL=0
+WITH_60HZ=0 THEME_ON=1 DSFLIP_ON=1 HIRES_ON=1 UNINSTALL=0 RESTORE_FILES=0
 for a in "$@"; do
     case $a in
     --with-60hz) WITH_60HZ=1 ;;
@@ -35,6 +39,8 @@ for a in "$@"; do
     --no-dsflip) DSFLIP_ON=0 ;;
     --no-hires) HIRES_ON=0 ;;
     --uninstall) UNINSTALL=1 ;;
+    --restore-files) RESTORE_FILES=1 ;;
+    --version) echo "ROCKNIXDS installer ${RGDS_VERSION:-$(cat $VERSION_FILE 2>/dev/null || echo unknown)} ($REPO $BRANCH)"; exit 0 ;;
     *) echo "unknown option: $a"; exit 1 ;;
     esac
 done
@@ -61,6 +67,15 @@ backup_once() {   # backup_once <file>: keep the first (pre-install) copy only
 set_cfg() {       # set_cfg <key> <value> in system.cfg
     if grep -q "^$1=" $SYSCFG; then sed -i "s|^$1=.*|$1=$2|" $SYSCFG; else echo "$1=$2" >> $SYSCFG; fi
 }
+es_get() {        # es_get <key> <es_settings file>: the value of a <string name=...> setting, empty if absent
+    sed -n 's|.*<string name="'"$1"'" value="\([^"]*\)" />.*|\1|p' "$2" 2>/dev/null | head -n1
+}
+es_set() {        # es_set <key> <value> in the live es_settings.cfg
+    if grep -q "<string name=\"$1\"" $ES_SETTINGS 2>/dev/null; then
+        sed -i "s|<string name=\"$1\" value=\"[^\"]*\" />|<string name=\"$1\" value=\"$2\" />|" $ES_SETTINGS
+    else sed -i "s|</config>|\t<string name=\"$1\" value=\"$2\" />\n</config>|" $ES_SETTINGS; fi
+}
+es_del() { sed -i "/<string name=\"$1\" /d" $ES_SETTINGS 2>/dev/null; }
 
 # ---- uninstall ---------------------------------------------------------------------------------------
 if [ $UNINSTALL = 1 ]; then
@@ -70,11 +85,33 @@ if [ $UNINSTALL = 1 ]; then
     es_stop
     grep -q " /usr/bin/start_es.sh " /proc/mounts && umount /usr/bin/start_es.sh || true
     rm -f /storage/.config/autostart/dii-ess-aye
-    # restore every backed-up file (sway config, es_settings, system.cfg, drastic launcher)
-    [ -d $BACKUP/storage ] && ( cd $BACKUP && find ./storage -type f ) | while read -r f; do
-        p=${f#.}
-        mkdir -p "$(dirname "$p")"; cp -a "$BACKUP$p" "$p"
-    done
+    B=$BACKUP/storage
+    if [ $RESTORE_FILES = 1 ]; then
+        # whole files from the install-time copies (what 1.2 always did): also undoes settings made since
+        [ -d $B ] && ( cd $BACKUP && find ./storage -type f ) | while read -r f; do
+            p=${f#.}
+            mkdir -p "$(dirname "$p")"; cp -a "$BACKUP$p" "$p"
+        done
+    else
+        # only what the installer changed, read out of the install-time copies, so everything else the user set
+        # since then (RetroAchievements login, other emulators' options, ES settings) survives
+        [ -f $B/.config/drastic/drastic ] && cp -a $B/.config/drastic/drastic $DRASTIC/drastic
+        [ -f $B/.config/sway/config ] && cp -a $B/.config/sway/config /storage/.config/sway/config    # ROCKNIX regenerates it at boot anyway
+        [ -f $B/dii-ess-aye-backup/sway-config.theme ] && cp -a $B/dii-ess-aye-backup/sway-config.theme /storage/dii-ess-aye-backup/sway-config.theme
+        [ -f $B/.config/autostart/dii-ess-aye ] && cp -a $B/.config/autostart/dii-ess-aye /storage/.config/autostart/dii-ess-aye
+        if [ -f $B/.config/system/configs/system.cfg ] && [ -f $SYSCFG ]; then      # nds.hires_3d only
+            old=$(sed -n 's/^nds\.hires_3d=//p' $B/.config/system/configs/system.cfg | head -n1)
+            if [ -n "$old" ]; then set_cfg nds.hires_3d "$old"; else sed -i '/^nds\.hires_3d=/d' $SYSCFG; fi
+        fi
+        if [ -f $B/.config/emulationstation/es_settings.cfg ] && [ -f $ES_SETTINGS ]; then   # the theme's three keys only
+            for k in ThemeSet FullScreenMenu GameTransitionStyle; do
+                old=$(es_get $k $B/.config/emulationstation/es_settings.cfg)
+                if [ -n "$old" ]; then es_set $k "$old"; else es_del $k; fi
+            done
+        fi
+        [ -f $ESF ] && sed -i -E '/value="ds-(crisp|grid|grid-2x|crisp-color|grid-color)"/d' $ESF   # our shader entries
+    fi
+    rm -f $VERSION_FILE
     if [ -e $BACKUP/.had-no-launcher-wrapper ] && [ -e $DRASTIC/drastic.real ]; then
         rm -f $DRASTIC/drastic $DRASTIC/drastic.dvsync; mv $DRASTIC/drastic.real $DRASTIC/drastic   # stock layout again
     elif grep -q dsflip $DRASTIC/drastic 2>/dev/null; then
@@ -84,7 +121,7 @@ if [ $UNINSTALL = 1 ]; then
     fi
     rm -rf $DRASTIC/dsflip
     [ -f $BACKUP/.shaders-added ] && while read -r b; do rm -f "$DRASTIC/shaders/$b"; done < $BACKUP/.shaders-added
-    [ -e $BACKUP/.esf-created ] && rm -f /storage/.config/emulationstation/es_features.cfg
+    [ -e $BACKUP/.esf-created ] && rm -f $ESF
     [ -e $BACKUP/.theme-installed-by-us ] && rm -rf $THEME
     [ -d $BACKUP/theme-previous ] && mv $BACKUP/theme-previous $THEME
     systemctl restart sway.service 2>/dev/null || true; sleep 2
@@ -151,8 +188,8 @@ if [ $DSFLIP_ON = 1 ]; then
     backup_once $DRASTIC/drastic
     [ -e $DRASTIC/drastic.real ] || touch $BACKUP/.had-no-launcher-wrapper
     mkdir -p $WORK/dsflip
-    cp "$SRC/dsflip/libdsflip.so" "$SRC/dsflip/device/session.sh" "$SRC/dsflip/device/drastic-wrapper.sh" \
-       "$SRC/dsflip/device/install.sh" $WORK/dsflip/
+    cp "$SRC/dsflip/libdsflip.so" "$SRC/dsflip/device/session.sh" "$SRC/dsflip/device/restore.sh" \
+       "$SRC/dsflip/device/drastic-wrapper.sh" "$SRC/dsflip/device/install.sh" $WORK/dsflip/
     sh $WORK/dsflip/install.sh
 
     # DS-pixel-aware shaders for DraStic (sharp and LCD-grid looks that work at 1x and 2x) + their ES entries
@@ -163,7 +200,6 @@ if [ $DSFLIP_ON = 1 ]; then
         else grep -qx "$b" $BACKUP/.shaders-added 2>/dev/null || echo "$b" >> $BACKUP/.shaders-added; fi
         cp "$f" $DRASTIC/shaders/
     done
-    ESF=/storage/.config/emulationstation/es_features.cfg
     [ -f $ESF ] || { [ -f /usr/config/emulationstation/es_features.cfg ] && cp /usr/config/emulationstation/es_features.cfg $ESF && touch $BACKUP/.esf-created; }
     if [ -f $ESF ]; then
         backup_once $ESF
@@ -193,8 +229,10 @@ if [ $WITH_60HZ = 1 ]; then
     NEED_REBOOT=1
 fi
 
+RGDS_VERSION=$(cat "$SRC/VERSION" 2>/dev/null || echo unknown)
+echo "$RGDS_VERSION" > $VERSION_FILE
 rm -rf $WORK
 es_start
-say "Installed. Start a DS game from EmulationStation as usual."
+say "Installed ROCKNIXDS $RGDS_VERSION. Start a DS game from EmulationStation as usual."
 say "Undo: curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | sh -s -- --uninstall"
 [ -n "$NEED_REBOOT" ] && say "Reboot for the 60 Hz panel timing to take effect." || true

@@ -52,6 +52,10 @@
 #include <xf86drmMode.h>
 #include <drm_fourcc.h>
 
+#ifndef DSFLIP_VERSION
+#define DSFLIP_VERSION "dev"            /* build.sh passes the repo's VERSION file */
+#endif
+
 typedef struct { int x, y, w, h; } SDL_Rect;
 #define NBUF 6                          /* writing, written, 2 queued (see enqueue), committed, scanout */
 #define FMT_ARGB8888 0x16362004u         /* SDL_PIXELFORMAT_* */
@@ -84,22 +88,33 @@ static panel P[2];                      /* [0] = top, [1] = bottom */
 static stex T[6]; static int nt;
 static stex blk;                        /* black 640x480 buffer for an unused panel */
 static int menu_hw;                     /* VOP2 scales the 800x480 menu itself */
-/* spinlock, not pthread_mutex_t: the desktop's x86 glibc headers give the mutex the wrong size for
- * aarch64. Critical sections are a few loads/stores (plus one non-blocking commit ioctl). */
+/* mu (buffers, panels, pacing) and tmu (the touch/event queue) are priority-inheriting mutexes: the presenter and
+ * the audio pump run SCHED_FIFO while DraStic's threads and the RetroAchievements HTTP threads don't, and the old
+ * spin lock (sched_yield) could spin above a preempted normal-priority holder until the kernel's RT throttle let
+ * it run (up to ~1 s). The int tags only name the lock; the mutexes live in mtx[]. Critical sections are still a
+ * few loads/stores plus one non-blocking commit ioctl. */
 static int mu, tmu;
+static pthread_mutex_t mtx[2];          /* [0] = mu, [1] = tmu */
+__attribute__((constructor(101))) static void init_locks(void) {   /* before init() and any hook */
+    pthread_mutexattr_t a; pthread_mutexattr_init(&a);
+    pthread_mutexattr_setprotocol(&a, PTHREAD_PRIO_INHERIT);
+    for (int i = 0; i < 2; i++) pthread_mutex_init(&mtx[i], &a);
+    pthread_mutexattr_destroy(&a);
+}
 static long long now_us(void);
 static volatile long long lk_wait_us, lk_wait_max, lk_hold_max; static volatile int lk_waits;  /* diagnostics */
 static long long lk_t;                  /* when mu was taken (holder only) */
 static void lock(int *l) {
-    if (!__atomic_exchange_n(l, 1, __ATOMIC_ACQUIRE)) { if (l == &mu) lk_t = now_us(); return; }
+    pthread_mutex_t *m = &mtx[l == &tmu];
+    if (pthread_mutex_trylock(m) == 0) { if (l == &mu) lk_t = now_us(); return; }
     long long t0 = now_us();
-    while (__atomic_exchange_n(l, 1, __ATOMIC_ACQUIRE)) sched_yield();
+    pthread_mutex_lock(m);
     if (l == &mu) { long long w = now_us() - t0; lk_wait_us += w; lk_waits++; if (w > lk_wait_max) lk_wait_max = w; lk_t = now_us(); }
 }
 static void unlock_mu_stat(int *l) {
     if (l == &mu && lk_t) { long long h = now_us() - lk_t; if (h > lk_hold_max) lk_hold_max = h; }
 }
-static void unlock(int *l) { unlock_mu_stat(l); __atomic_store_n(l, 0, __ATOMIC_RELEASE); }
+static void unlock(int *l) { unlock_mu_stat(l); pthread_mutex_unlock(&mtx[l == &tmu]); }
 static int logical_w = 512, logical_h = 192;
 static stex *pending_route[2];          /* routes recorded by RenderCopy during this frame */
 static SDL_Rect route_dst[2]; static int touch_rect_ok;   /* touch only while a DS screen is on the bottom panel */
@@ -281,7 +296,19 @@ static double e_p95 = 8000;
 static int main_tid, want_wake;
 
 static void drop_fence(dbuf *b) { if (b && b->fence >= 0) { close(b->fence); b->fence = -1; } }
-static void release(dbuf *b) { if (b && b != &blk.b[0]) { b->state = FREE; drop_fence(b); } }
+static void freebuf(dbuf *b);
+/* graveyard: buffers whose texture slot was recycled while a panel still held them (ready/queued/on screen).
+ * They move here, the panel pointers follow, and the flip that retires them frees them. Without this the slot's
+ * struct was zeroed and re-allocated under the panel's pointer: a commit with fb 0, or a buffer marked FREE while
+ * DraStic was already writing into its replacement. */
+#define NGRAVE 24
+static dbuf grave[NGRAVE];
+static int is_grave(dbuf *b) { return b >= grave && b < grave + NGRAVE; }
+static void release(dbuf *b) {
+    if (!b || b == &blk.b[0]) return;
+    b->state = FREE; drop_fence(b);
+    if (is_grave(b)) freebuf(b);        /* retired: nothing points at it any more */
+}
 
 /* toast: a small overlay plane on the top panel (RetroAchievements pop-ups), committed together with the
  * game frames. Rendered into one of two buffers, never the one being scanned out. */
@@ -850,13 +877,24 @@ int SDL_PollEvent(void *e) {
 
 /* ---------- init ---------- */
 __attribute__((constructor)) static void init(void) {
-    const char *lp = getenv("DSFLIP_LOG");
-    lg = fopen(lp ? lp : "/storage/dsflip/logs/dsflip.log", "w");
+    const char *lp = getenv("DSFLIP_LOG"); if (!lp) lp = "/storage/dsflip/logs/dsflip.log";
+    {   /* keep the previous three sessions' logs (.1 = the last one): testers lost evidence to the overwrite */
+        char a[512], b[512];
+        for (int k = 3; k >= 1; k--) {
+            if (k == 1) snprintf(a, sizeof a, "%s", lp); else snprintf(a, sizeof a, "%s.%d", lp, k - 1);
+            snprintf(b, sizeof b, "%s.%d", lp, k);
+            rename(a, b);
+        }
+    }
+    lg = fopen(lp, "w");
     if (lg) setvbuf(lg, 0, _IOLBF, 0);
+    LOG("[dsflip] libdsflip %s\n", DSFLIP_VERSION);
     const char *top = getenv("DSFLIP_TOP"); if (!top) top = "DSI-2";
 
     fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
-    if (fd < 0 || drmSetMaster(fd)) { LOG("[dsflip] no DRM master (sway running?) -> passthrough\n"); return; }
+    int master = -1;                    /* sway may still be letting go of the device: retry for up to 2 s */
+    for (int k = 0; fd >= 0 && k < 40 && (master = drmSetMaster(fd)) != 0; k++) usleep(50000);
+    if (fd < 0 || master) { LOG("[dsflip] no DRM master after 2 s (sway running?) -> passthrough\n"); return; }
     drmSetClientCap(fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
     if (drmSetClientCap(fd, DRM_CLIENT_CAP_ATOMIC, 1)) { LOG("[dsflip] no atomic -> passthrough\n"); return; }
     drmModeRes *res = drmModeGetResources(fd);
@@ -1066,9 +1104,23 @@ void *SDL_CreateTexture(void *rn, uint32_t fmt, int access, int w, int h) {
     if (!s) for (int i = 0; i < nt && !s; i++) if (!T[i].tex) s = &T[i];
     if (!s && nt < 6) s = &T[nt++];
     if (s) {
-        for (int k = 0; k < s->nb; k++)   /* recycled slot: free buffers that aren't on screen */
-            if (s->b[k].state == FREE || s->b[k].state == WRITTEN || s->b[k].state == WRITING) freebuf(&s->b[k]);
-            else { memset(&s->b[k], 0, sizeof s->b[k]); s->b[k].fence = -1; }   /* still scanning out: leak it rather than tear it down */
+        for (int k = 0; k < s->nb; k++) {  /* recycled slot: free buffers no panel holds, park the others */
+            dbuf *b = &s->b[k];
+            if (b->state == FREE || b->state == WRITTEN || b->state == WRITING) { freebuf(b); continue; }
+            dbuf *g = 0;
+            for (int j = 0; j < NGRAVE && !g; j++) if (!grave[j].map) g = &grave[j];
+            if (g) {
+                *g = *b;                /* the panel pointers follow the buffer to its new home */
+                for (int i = 0; i < 2; i++) {
+                    if (P[i].ready == b) P[i].ready = g;
+                    if (P[i].ready2 == b) P[i].ready2 = g;
+                    if (P[i].queued == b) P[i].queued = g;
+                    if (P[i].scan == b) P[i].scan = g;
+                    if (P[i].src == b) P[i].src = g;
+                }
+            } else LOG("[dsflip] graveyard full: leaking a buffer\n");
+            memset(b, 0, sizeof *b); b->fence = -1;
+        }
         s->tex = t; s->kind = screen ? K_SCREEN : K_MENU; s->w = w; s->h = h; s->writing = s->written = -1;
         s->nb = screen ? NBUF : 3;
         int bw = w, bh = h;

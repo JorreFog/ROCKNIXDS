@@ -12,7 +12,7 @@ Severity: **high** = users hit it or lose data, **medium** = real but rare or co
 
 ## Part 1: bugs in 1.2
 
-### B1. Uninstall throws away settings changed after the install (high)
+### B1. Uninstall throws away settings changed after the install (high) — DONE
 
 `install.sh --uninstall` copies back **every** file it backed up at install time
 ([`install.sh:74`](../install.sh)): `es_settings.cfg`, `system.cfg`, the sway config and the DraStic launcher,
@@ -25,7 +25,7 @@ options, the ES theme choice for other themes. Found by reading the uninstall bl
 Uninstall puts those keys back and leaves the rest of each file alone. Keep the whole-file copies as a last
 resort (`--uninstall --restore-files`). Test: install, change an unrelated setting, uninstall, check it survived.
 
-### B2. Stopping the game unit leaves both screens black (high)
+### B2. Stopping the game unit leaves both screens black (high) — DONE
 
 `session.sh` runs in `systemd-run --unit=dsflip-game` with the default `KillMode=control-group`
 ([`drastic-wrapper.sh:11`](../dsflip/device/drastic-wrapper.sh)). `systemctl stop dsflip-game` kills the shell
@@ -96,7 +96,7 @@ avoid (the GPU IOMMU mapping interrupts every core), and the log still says "upl
 **Plan:** make the wait bounded but authoritative (`SDL_CreateTexture` waits for `shader_done`), and log which
 path each texture actually got.
 
-### B8. The microphone is off unless the ES setting is changed (medium, documentation)
+### B8. The microphone is off unless the ES setting is changed (medium, documentation) — DONE (README)
 
 `DSHOOK_MIC_THRESH` comes from ES's *Nintendo DS › microphone sensitivity*; its default is unset, so the
 wrapper passes 0 and the log says `[mic] off`. That is stock ROCKNIX behaviour, but the 1.2 README and release
@@ -125,7 +125,7 @@ On the reviewer's device the copies already differ only by our five lines. Verif
 **Plan:** if ES supports a user overlay file, use it; otherwise regenerate the user copy at every boot from the
 current system file plus our entries (in the autostart hook), so a ROCKNIX update flows through.
 
-### B11. No version in the logs or the RetroAchievements user agent (low)
+### B11. No version in the logs or the RetroAchievements user agent (low) — DONE
 
 `ra.c` still reports `dsflip/1.0` ([`ra.c:299`](../dsflip/ra.c)) and `dsflip.log` has no header line, so a bug
 report can't tell which build produced it. Tester reports in #1 needed exactly this.
@@ -134,7 +134,7 @@ report can't tell which build produced it. Tester reports in #1 needed exactly t
 first log line and into the user agent; `install.sh` writes it to `/storage/.config/rocknixds-version` and
 prints it with `--version`.
 
-### B12. `dsflip.log` is overwritten every launch (medium, the tester lost their evidence)
+### B12. `dsflip.log` is overwritten every launch (medium, the tester lost their evidence) — DONE
 
 The log opens with `"w"` ([`dsflip.c:854`](../dsflip/dsflip.c)). The beta tester attached a log that only
 covered their last game, so the RetroAchievements question in #1 couldn't be answered.
@@ -150,16 +150,18 @@ ES's log shows once per start: `Could not initialize texture from memory, invali
 text lists on screen, but ES's own menus may lose the list fade. Check whether stock ES logs the same; if it is
 our build, the resource blob was miscompiled.
 
-### B14. "Last played Unknown" / "Time played Unknown" (low, visible)
+### B14. "Last played Unknown" / "Time played Unknown" (low, visible) — tried, see note
 
 The home card prints ES's literal "Unknown" for a system never played
 ([`theme-rgds.xml:298`](../dii-ess-aye/overlay/theme-rgds.xml), `:308`). Also "0 played" and "None played" are
 both possible depending on the binding.
 
 **Plan:** hide the two lines when the value is "Unknown" (`<visible>` on the binding) and print "Not played
-yet" once instead.
+yet" once instead. **Note (2026-09-27):** wrapping either binding in an expression, even quoted, makes ES print
+the expression text literally; the fix needs an ES-side binding (e.g. `{system:lastPlayedDate:short}` or a
+`played` boolean in `es-rgds-bindings-clock.patch`).
 
-### B15. Upgrades overwrite the pre-dsflip launcher backup (low)
+### B15. Upgrades overwrite the pre-dsflip launcher backup (low) — DONE
 
 `dsflip/device/install.sh:21` copies the current launcher to `drastic.pre-dsflip.bak` on every run; after the
 first upgrade the "backup" is our own wrapper. The top-level installer's `backup_once` keeps the real original,
@@ -206,6 +208,21 @@ The 800×480 menu goes to the top panel and the bottom panel is black; touch is 
 
 **Plan:** show the menu on the bottom panel (hardware-scaled, as today) and map touch to menu coordinates
 (`x * 800/640`), keep the top panel showing the last game frame. Test with the load/save state dialogs.
+
+### B16. Achievements are disabled at load because the RAM scan hasn't finished (high) — FOUND 2026-09-27
+
+Confirmed on the device with Pokémon Black 2: the log fills with `[rc] Disabled achievement NNN. Invalid address
+000BA8` right after login. rc_client validates every achievement's memory addresses when the game loads
+(`begin_identify_and_load_game`), but libdsflip finds DS main RAM on a separate thread that only starts at frame
+90 and can finish after the load, so `read_memory` returns 0 for all of them and rc_client permanently disables
+the set. This is almost certainly the tester's "achievements were not able to be achieved" in
+[#1](https://github.com/JorreFog/ROCKNIXDS/issues/1): RetroAchievements looks logged in and identifies the game,
+but nothing can ever unlock.
+
+**Plan:** find the RAM before loading the game. Do the scan (it already tolerates retries) as soon as rc_client
+identifies the ROM, and call `rc_client_begin_load_game` only once `ram` is set (or block the load callback until
+then). If the RAM genuinely can't be found in a few seconds, load anyway and re-validate. Add a smoke-test check
+that the log has no `Disabled achievement` lines for a game with a known set.
 
 ### I4. RetroAchievements: the DTCM region and progress indicators
 
@@ -279,6 +296,13 @@ lcd1x+nds-color; pick the lowest that holds 0.1 drops/s.
   what the 1.2 release was verified with by hand; make it one command and run it before every release.
 
 ---
+
+## Status
+
+Done on `beta` (2026-09-27): B1, B2, B3, B4, B5, B8 (docs), B11, B12, B15; `tools/smoke.sh` (I9's smoke test)
+exists and passes on the device: 60 presents/s, ~0.07 drops/s, audio verified at the sink monitor and through the
+speaker via the mic, and the game-launch/quit cycle. Found while testing: **B16** (RetroAchievements disabled at
+load), the likely cause of the tester's report; queued next.
 
 ## Suggested order
 

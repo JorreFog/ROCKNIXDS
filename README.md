@@ -32,7 +32,7 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 - **Sharp DS shaders:** ds-crisp and ds-grid, each also with the DS screen's colors, plus ds-grid-2x for
   pixel-perfect 2×. They appear in ES's DraStic shader menu.
 - **Microphone** in libdsflip: blow or speak into the mic for games that use it, with an echo gate so the
-  speaker doesn't trigger it.
+  speaker doesn't trigger it (turn on *microphone sensitivity* in ES's DS options).
 - **Theme redesign:** real DS cartridge scans on the carousel, a game list top screen with a 3D box,
   screenshot and RetroAchievements progress, a DSi-style home screen with clock and calendar, the DSi font
   throughout, a new boot splash and the ROCKNIXDS logo.
@@ -70,7 +70,8 @@ has the tools that make them and push them into ES.
 |---|---|
 | `--with-60hz` | also retune both panels to 60.000 Hz (edits the device tree in `/flash`, backed up; needs a reboot) |
 | `--no-theme` / `--no-dsflip` / `--no-hires` | skip that part |
-| `--uninstall` | put back everything the installer changed |
+| `--uninstall` | undo what the installer changed; settings you made since the install are kept. Add `--restore-files` to put back the whole config files from the install-time backups instead |
+| `--version` | print the installed ROCKNIXDS version (also in `/storage/.config/rocknixds-version`) |
 
 Pass options like this: `curl -fsSL …/install.sh | sh -s -- --with-60hz`.
 To go back to the stock DraStic display path without uninstalling: `touch /storage/.config/drastic/nodsflip`.
@@ -139,7 +140,10 @@ It's installed as the default DraStic launcher: start any DS game from Emulation
 
 - The game runs in a detached systemd unit (`dsflip-game`). The unit stops ES and sway, which gives
   DraStic DRM master, and brings them back when you quit. Switching takes about 5 seconds each way.
-- To quit, use the ROCKNIX exit hotkey or *Exit DraStic* in DraStic's menu (MODE button).
+- To quit, use the ROCKNIX exit hotkey or *Exit DraStic* in DraStic's menu (MODE button). Stopping the unit
+  (`systemctl stop dsflip-game`) also works: the unit's stop hook always brings sway and ES back.
+- `dsflip.log` in `/storage/.config/drastic/dsflip/` covers the last session, and `.1` to `.3` the three before it;
+  the first line is the libdsflip version.
 - To go back to the previous launcher: `touch /storage/.config/drastic/nodsflip`.
 - 2× resolution is ES's per-system/per-game *hires 3D* option (`nds.hires_3d=1`).
 
@@ -148,7 +152,8 @@ to the device and run `sh install.sh`.
 
 **Microphone.** libdsflip captures the mic over ALSA and holds DraStic's own "fake mic" control while you blow or
 speak, like ROCKNIX's `libdrastouch` does: an RMS level per block against an adaptive noise floor, with ES's DraStic
-*microphone sensitivity* setting as the threshold. The mic also hears the speaker, so an echo gate fed by the audio
+*microphone sensitivity* setting as the threshold. **That setting is off by default:** set it (medium is a good
+start) under the Nintendo DS system's or the game's options, or the mic stays off, as on stock ROCKNIX. The mic also hears the speaker, so an echo gate fed by the audio
 pump's output level keeps game music from pressing it (0 false presses in testing, with music playing).
 
 Not in this mode yet: gptokeyb keyboard hotkeys. Everything DraStic maps to buttons itself works.

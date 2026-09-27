@@ -25,6 +25,10 @@
 #include "rc_consoles.h"
 #include "rc_hash.h"
 
+#ifndef DSFLIP_VERSION
+#define DSFLIP_VERSION "dev"
+#endif
+
 void dsflip_toast(const char *line1, const char *line2, uint32_t accent, int ms);
 void dsflip_log(const char *fmt, ...);
 
@@ -296,7 +300,7 @@ static void ra_start(void) {
     rc_client_set_event_handler(rc, on_event);
     rc_client_set_hardcore_enabled(rc, 0);
     char clause[128] = ""; rc_client_get_user_agent_clause(rc, clause, sizeof clause);
-    snprintf(user_agent, sizeof user_agent, "dsflip/1.0 (ROCKNIX; RG DS) %s", clause);
+    snprintf(user_agent, sizeof user_agent, "dsflip/%s (ROCKNIX; RG DS) %s", DSFLIP_VERSION, clause);
 
     char tu[128] = "", tok[256] = "";
     FILE *tf = fopen(TOKEN_FILE, "r");
