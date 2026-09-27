@@ -62,9 +62,15 @@ switches on 2× resolution for DS. It also adds the ds-* shaders to ES's shader 
 backed up first under `/storage/rgds-rocknix-backup/` (the folder keeps its old name so earlier installs can still be undone).
 Running it again upgrades an earlier version in place.
 
-Cartridge scans, 3D boxes and the RetroAchievements strip are per-game media that the installer doesn't download.
-Until a game has them, the theme draws a card with the game's name or box art. [`dii-ess-aye/scrape/`](dii-ess-aye/scrape)
-has the tools that make them and push them into ES.
+Cartridge scans, 3D boxes, screenshots and the RetroAchievements strip are per-game media that the installer
+doesn't download. One command from a PC fetches and pushes all of it, no scraper account needed:
+
+```sh
+python3 dii-ess-aye/scrape/rocknixds-media.py --device <RG DS ip>
+```
+
+See [`dii-ess-aye/scrape/`](dii-ess-aye/scrape) for what it does and where the art comes from. Until a game has
+its art, the theme draws a card with the game's name or box art.
 
 | Option | |
 |---|---|
@@ -317,8 +323,10 @@ the top panel, the bottom panel, and an unused third.
 - **Boot splash** across both panels while ES loads hidden, then the menu appears placed, with no jumps.
 - **Robust launcher** (`start_es_rgds.sh`): falls back to stock ES after 2 quick crashes, keeps ES floating
   at 0,0, and brings the menu back after a game.
-- **Scraping without an account** ([`scrape/`](dii-ess-aye/scrape)): cart scans from the LaunchBox Games Database,
-  3D boxes and label art made from covers, and the RetroAchievements strip, all pushed through ES's local HTTP API.
+- **Game art without an account** ([`scrape/rocknixds-media.py`](dii-ess-aye/scrape)): one command fetches covers,
+  screenshots and titles from libretro-thumbnails, real cart scans from the LaunchBox Games Database, renders the
+  3D boxes, label art and the RetroAchievements strip, fills empty descriptions, and pushes it all through ES's
+  local HTTP API.
 
 | File | What it is |
 |---|---|
