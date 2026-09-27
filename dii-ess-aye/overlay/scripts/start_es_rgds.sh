@@ -31,6 +31,21 @@ FAILS=/tmp/es-rgds-fails
 REVEAL_DELAY=1          # after ES answers its API, before its window is shown. Measured: at 0-0.3 s the top panel is still
                         # black (ES hasn't drawn its first view); at 1 s both panels are complete
 
+# Which layout: this theme spans one 1920x480 canvas over both panels. Any other theme is drawn for one 640x480
+# screen, so it gets stock ROCKNIX's layout: ES fullscreen on the top panel, the bottom panel off. (1.3 forced the
+# 1920 canvas on every theme, stretching them over both screens.) theme-changed.sh restarts ES when the choice
+# switches between the two.
+THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
+if [ -z "$THEME_SET" ] || [ "$THEME_SET" = dii-ess-aye ]; then
+    ES_ARGS="--resolution 1920 480"
+    LAYOUT='[app_id="emulationstation"] floating enable, fullscreen disable, move absolute position 0 0'
+    OUTPUTS='output DSI-1 power on'
+else
+    ES_ARGS=
+    LAYOUT='[app_id="emulationstation"] floating disable, move window to output DSI-2, fullscreen enable'
+    OUTPUTS='output DSI-1 power off'
+fi
+
 # Which ES: the patched one is built against one ROCKNIX release (bin/rocknix-version), but it runs on any release
 # where it links: every library it needs is there and every symbol resolves (the dynamic loader checks, ~10 ms).
 # Where it doesn't, stock ES runs and says why, once per release. (1.3 ran stock ES on every other release, and
@@ -93,13 +108,18 @@ fi
         sleep 0.1
     done
     sleep $REVEAL_DELAY
-    LAYOUT='[app_id="emulationstation"] floating enable, fullscreen disable, move absolute position 0 0'
-    swaymsg -s "$SOCK" "[app_id=\"emulationstation\"] scratchpad show, floating enable, fullscreen disable, move absolute position 0 0, focus" >/dev/null 2>&1
+    swaymsg -s "$SOCK" "$OUTPUTS" >/dev/null 2>&1
+    if [ -n "$ES_ARGS" ]; then
+        swaymsg -s "$SOCK" "[app_id=\"emulationstation\"] scratchpad show, floating enable, fullscreen disable, move absolute position 0 0, focus" >/dev/null 2>&1
+    else
+        swaymsg -s "$SOCK" "[app_id=\"emulationstation\"] scratchpad show, $LAYOUT" >/dev/null 2>&1
+    fi
     swaymsg -s "$SOCK" "$LAYOUT, focus" >/dev/null 2>&1
     # The sway config's exec_always seat/touch setup for ES, now that its window exists. This used to be a sway
     # `reload`, which blocks sway for 2.1-2.5 s (measured): the panels froze just as ES appeared, on every boot and
     # every return from a game. Running the config's ES lines directly does the same without the reload.
     sed -n 's/^exec_always \(swaymsg .*emulationstation.*\)$/\1/p' /storage/.config/sway/config 2>/dev/null |
+        { if [ -n "$ES_ARGS" ]; then cat; else grep -v 'floating enable'; fi; } |   # another theme: keep its layout
         while read -r cmd; do SWAYSOCK="$SOCK" sh -c "$cmd" >/dev/null 2>&1; done
     # stock ES sizes popups for the 1920 px canvas, wider than the panels: short centred lines stay visible
     if [ -n "$RGDS_NOTICE" ] &&
@@ -129,6 +149,7 @@ walk(json.load(sys.stdin)); sys.exit(1)'; then
                     swaymsg -s "$SOCK" "$LAYOUT, focus" >/dev/null 2>&1
                 fi ;;
             *'"change": "fullscreen_mode"'*'"app_id": "emulationstation"'*)
+                [ -n "$ES_ARGS" ] || continue       # another theme: fullscreen on the top panel is its layout
                 sleep 0.2
                 swaymsg -s "$SOCK" -t get_tree | tr -d ' \n' | grep -q '"fullscreen_mode":1,[^}]*"app_id":"emulationstation"' &&
                     swaymsg -s "$SOCK" "$LAYOUT" >/dev/null 2>&1 ;;
@@ -139,7 +160,7 @@ walk(json.load(sys.stdin)); sys.exit(1)'; then
 if [ -n "$USE_PATCHED" ]; then
     export ES_UI_WIDTH=640
     START=$(date +%s)
-    "$ES_BIN" --log-path /var/log --no-splash --resolution 1920 480
+    "$ES_BIN" --log-path /var/log --no-splash $ES_ARGS
     RC=$?
     DUR=$(( $(date +%s) - START ))
     # Only two quick crashes in a row fall back to stock ES (a genuinely broken patched binary). A session that
@@ -154,4 +175,4 @@ if [ -n "$USE_PATCHED" ]; then
     exit $RC
 fi
 
-emulationstation --log-path /var/log --no-splash --resolution 1920 480
+emulationstation --log-path /var/log --no-splash $ES_ARGS

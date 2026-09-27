@@ -372,6 +372,9 @@ the top panel, the bottom panel, and an unused third.
   - `es-rgds-devkeys.patch` (1.4): the build carries no RetroAchievements or ScreenScraper developer keys. It reads
     them at run time from ROCKNIX's own ES (`/usr/bin/emulationstation`), so the RetroAchievements menu and the
     ScreenScraper scraper work as in stock ES (1.3's menu showed "Unauthenticated", 401).
+- **Other themes** (since 1.4): pick any other theme in ES and ES restarts in stock ROCKNIX's layout, the top panel
+  at 640x480 with the bottom panel off; pick this one again and it spans both panels. 1.3 stretched every theme
+  across both screens. (`theme-changed.sh`, run by ES's theme-changed event, does the restart.)
 - **Boot splash** across both panels while ES loads hidden, then the menu appears placed, with no jumps.
 - **Touch in ES** (since 1.4): swipe to scroll the carousels, tap to open the selection, tap menu rows. ROCKNIX's
   sway config left ES with no touch events; `sway-config.theme` attaches the touchscreens to ES's seat too.

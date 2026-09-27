@@ -111,6 +111,8 @@ if [ $UNINSTALL = 1 ]; then
         fi
         [ -f $ESF ] && sed -i -E '/value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"/d' $ESF   # our shader entries
     fi
+    rm -f /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
+    rmdir /storage/.config/emulationstation/scripts/theme-changed /storage/.config/emulationstation/scripts 2>/dev/null
     rm -f $VERSION_FILE /storage/.config/rocknixds-es-notice /storage/.config/rocknixds-stock-es /storage/.config/rocknixds-any-rocknix
     if [ -e $BACKUP/.had-no-launcher-wrapper ] && [ -e $DRASTIC/drastic.real ]; then
         rm -f $DRASTIC/drastic $DRASTIC/drastic.dvsync; mv $DRASTIC/drastic.real $DRASTIC/drastic   # stock layout again
@@ -188,6 +190,10 @@ if [ $THEME_ON = 1 ]; then
     cp "$SRC/dii-ess-aye/device/sway-config.theme" /storage/dii-ess-aye-backup/sway-config.theme
     cp "$SRC/dii-ess-aye/device/autostart-dii-ess-aye" /storage/.config/autostart/dii-ess-aye
     chmod +x /storage/.config/autostart/dii-ess-aye
+    # restart ES when the theme choice switches between this theme and another (their canvases differ)
+    mkdir -p /storage/.config/emulationstation/scripts/theme-changed
+    cp "$SRC/dii-ess-aye/device/theme-changed.sh" /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
+    chmod +x /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
     # the theme's own enable script: launcher bind mount, sway config, ThemeSet/menu settings
     # (ES is stopped; the flag stops it from restarting ES itself, we do that at the end)
     touch /tmp/has-restarted-for-theme
