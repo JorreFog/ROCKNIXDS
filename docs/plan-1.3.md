@@ -289,13 +289,27 @@ achievements, "1 of 187 unlocked" read from memory, where before the whole set w
 - Handle a `SDL_CreateTexture` allocation failure by falling back to passthrough for that texture instead of
   leaving `s->tex = 0` with a half-built slot.
 
-### I6. Cooler shader mode
+### I6. Cooler shader mode — DONE 2026-09-27 (400 MHz floor is the default)
 
 `session.sh` pins the GPU governor to `performance` (800 MHz) whenever a shader is on
 ([`session.sh:20`](../dsflip/device/session.sh)). The shader pass takes ~2.5 ms per screen at 800 MHz, and since
 1.2 the GPU work is off the timing path, so a lower clock may cost nothing. **Plan:** keep `simple_ondemand`
 and raise `min_freq` to 400 MHz, then 300, measuring drops and SoC temperature over 5 min of HeartGold with
 lcd1x+nds-color; pick the lowest that holds 0.1 drops/s.
+
+**Result (Joar's play, Pokémon Black 2 at 2×, lcd1x+nds-color, one continuous session, clock switched live):**
+
+| setting | time | drops/s | GPU clock used | GPU temperature |
+|---|---|---|---|---|
+| performance, 800 MHz | 231 s | 0.113 | 800 | 58 → 64 °C, +1.8 °C/min |
+| simple_ondemand, 400 MHz floor | 300 s | 0.047 | avg 500 (400 two thirds of the time) | 64 → 66 °C, +0.4 °C/min |
+| simple_ondemand, 300 MHz floor | 289 s | 0.042 | avg 490, never 300 | 67 °C, level |
+
+The lower clock costs nothing in frames (run 1's total includes three bursts of 3-10 drops, likely game loads),
+and the governor never used 300 MHz, so the default is simple_ondemand with a 400 MHz floor. What it does to
+temperature isn't separable from this session: the runs followed each other, so each started where the last one
+ended, and the SoC levelled at ~67 °C only in the last run. A fair heat comparison would be a cold start and
+~10 min per setting.
 
 ### I7. Theme
 

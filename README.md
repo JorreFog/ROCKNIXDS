@@ -207,7 +207,9 @@ stock path uses:
   a slow rate trim locks it to the device clock. `DSFLIP_AUDIO_PUMP=0` restores SDL audio.
 - **Measured** (HeartGold at 2×, scripted walking, 90 s runs): lcd1x+nds-color 0.02–0.09 dropped frames/s,
   lcd3x 0.04, zero-copy 0.00. Before these changes shaders dropped 5–30/s.
-- **Cost:** with a shader the GPU stays at ROCKNIX's 800 MHz, where lcd1x+nds-color takes ~2.5 ms per screen.
+- **Cost:** lcd1x+nds-color takes ~2.5 ms per screen at 800 MHz. With a shader the GPU runs `simple_ondemand`
+  with a 400 MHz floor, averaging ~500 MHz: in a 2× Pokémon Black 2 session that dropped 0.05 frames/s against
+  0.11 with the clock pinned at 800 MHz (`DSFLIP_SHADER_GOV=performance` restores that).
   At the 200 MHz used in zero-copy mode it would take 16 ms. HeartGold at 2× with lcd3x: 4 dropped frames in
   60 s of walking, SoC ~60 °C.
 - At 2× (hires) the source is 512×384, so shaders written for integer scales ≥2× (sharp-bilinear, lcd3x) scale
@@ -271,7 +273,7 @@ Logged every 10 s during real play (HeartGold at 2×, walking around, 5–6 min 
 - **GPU:** with libdsflip and no shader, nothing is rendered on the GPU during play: no texture upload, no shader and no
   compositor. So `session.sh` switches the Mali's devfreq governor to `powersave` (200 MHz, its lowest step)
   while the game runs and restores the previous governor when you quit. Before that change it idled at
-  800 MHz for nothing. With a shader selected it keeps ROCKNIX's clock (see *Shaders*).
+  800 MHz for nothing. With a shader selected it scales between 400 and 800 MHz (see *Shaders*).
 - **Temperature:** it levels off around 55–58 °C during 2× play. The runs were back to back, so each started
   from the previous run's heat. The 800 MHz figure is a single end-of-run reading. Stock ROCKNIX (sway + GL)
   hasn't been logged the same way yet, so there is no measured stock-vs-libdsflip temperature number.

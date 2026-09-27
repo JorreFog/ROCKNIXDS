@@ -21,17 +21,17 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
   echo "$(ms) ms: ES and sway stopped"
   # without a shader the Mali GPU does nothing in this mode (the display controller scans out DraStic's
   # buffers), so it goes to powersave (200 MHz): anything more is only heat. With a shader it draws every frame
-  # (lcd1x-nds-color: ~3 ms per screen at 800 MHz) and is pinned to performance by default. That is safe but runs
-  # warm; simple_ondemand with a min_freq floor lets it idle between frames while keeping enough for a heavy
-  # frame's shader (at 400 MHz the pass is ~2x longer but still well inside the 16 ms budget in light testing).
-  # Tunable without a rebuild (a heavy 3D scene needs its own sweep before this becomes the default):
-  #   DSFLIP_SHADER_GOV=simple_ondemand DSFLIP_SHADER_GPU_MIN=400000000
+  # (lcd1x-nds-color: ~3 ms per screen at 800 MHz), under simple_ondemand with a 400 MHz floor. Measured
+  # 2026-09-27 (I6: Pokemon Black 2 at 2x, lcd1x-nds-color, ~5 min per setting in one session): pinned 800 MHz
+  # dropped 0.11 frames/s, the 400 MHz floor 0.05/s and a 300 MHz floor 0.04/s, with the GPU averaging ~500 MHz
+  # instead of 800 (the governor never went below 400, so 300 buys nothing). The SoC settled at ~67 C.
+  # Tunable without a rebuild: DSFLIP_SHADER_GOV=performance restores the old pinned clock.
   GPU=/sys/class/devfreq/fde60000.gpu
   GPU_GOV=$(cat $GPU/governor 2>/dev/null)
   GPU_MIN=$(cat $GPU/min_freq 2>/dev/null)
   case "${DSHOOK_SHADER:-none}" in
     none|bilinear) GOV=powersave; MIN= ;;
-    *) GOV=${DSFLIP_SHADER_GOV:-performance}; MIN=$DSFLIP_SHADER_GPU_MIN ;;
+    *) GOV=${DSFLIP_SHADER_GOV:-simple_ondemand}; MIN=${DSFLIP_SHADER_GPU_MIN:-400000000} ;;
   esac
   [ -n "$GPU_GOV" ] && { echo "$GPU_GOV" > /tmp/dsflip-gpu-governor; echo "$GPU_MIN" > /tmp/dsflip-gpu-min; echo $GOV > $GPU/governor 2>/dev/null; [ -n "$MIN" ] && echo $MIN > $GPU/min_freq 2>/dev/null; }
   rm -f $STATE $NOTICE
