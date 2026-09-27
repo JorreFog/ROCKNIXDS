@@ -134,15 +134,23 @@ write("empty_slot.svg", CARD_W, CARD_H, f'''<path d="{card}" fill="#000000" fill
 <path d="M5.5,103 H{CW - 5.5}" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1.2"/>
 <path d="{rr(6.5, 4.5, CW - 13, 86, 6)}" fill="none" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1"/>''')
 
-# --- menu_slot: rounded icon frame, window x25..99 y25..99 ---
-hole = rr_ccw(25, 25, 75, 75, 7)
-outer = rr(2, 2, 121, 134, 14)
-write("menu_slot.svg", 125, 140, f'''<defs>{grad("ms", [(0, PANEL_HI), (0.6, PANEL), (1, PANEL_LO)])}</defs>
-<path d="{rr(2, 5, 121, 134, 14)}" fill="#000000" fill-opacity="0.35"/>
+# --- menu_slot: a dark socket the icon tile sits in. The icon (gen_icons.py tiles, 1/1.45 of the slot = 86 px)
+#     shows through the window x21.5..103.5 y21..103, 2 px inside the tile's edge so its anti-aliased rim is hidden ---
+hole = rr_ccw(21.5, 21, 82, 82, 15)
+outer = rr(2, 2, 121, 134, 16)
+write("menu_slot.svg", 125, 140, f'''<defs>{grad("ms", [(0, "#2c3036"), (1, "#1e2125")])}</defs>
+<path d="{rr(2, 6, 121, 134, 16)}" fill="#000000" fill-opacity="0.4"/>
 <path d="{outer} {hole}" fill="url(#ms)"/>
-<path d="{outer}" fill="none" stroke="{EDGE}" stroke-width="2"/>
-<path d="{rr(4, 4, 117, 130, 12)}" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
-<path d="{rr(23.5, 23.5, 78, 78, 8.5)}" fill="none" stroke="{EDGE}" stroke-width="3"/>''')
+<path d="{outer}" fill="none" stroke="{EDGE}" stroke-width="1.5"/>
+<path d="{rr(3.5, 3.5, 118, 131, 14.5)}" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1"/>
+<path d="{rr(20, 19.5, 85, 85, 16)}" fill="none" stroke="#000000" stroke-opacity="0.55" stroke-width="3"/>''')
+
+# --- carousel_tray: the band the system carousel sits on (600x180, bottom screen y232..412) ---
+write("carousel_tray.svg", 600, 180, f'''<defs>{grad("ct", [(0, "#000000"), (1, "#000000")])}
+<linearGradient id="cty" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000" stop-opacity="0.34"/><stop offset="1" stop-color="#000000" stop-opacity="0.18"/></linearGradient></defs>
+<path d="{rr(0, 0, 600, 180, 20)}" fill="url(#cty)"/>
+<path d="{rr(0.75, 0.75, 598.5, 178.5, 19.5)}" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1.5"/>
+<path d="M30,1.5 H570" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1"/>''')
 
 # --- start_window: DSi blue selection frame, window x20..139 y22..141 ---
 hole = rr_ccw(20, 22, 120, 120, 9)

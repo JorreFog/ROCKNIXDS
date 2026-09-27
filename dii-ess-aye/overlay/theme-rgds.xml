@@ -327,7 +327,14 @@
             <zIndex>2</zIndex>
         </image>
 
-        <!-- Bottom screen (X 0.333-0.666) -->
+        <!-- Bottom screen (X 0.333-0.666): a tray under the carousel, then the carousel -->
+        <image name="carousel_tray" extra="true">
+            <path>${themePath}/assets/images/common/carousel_tray.svg</path>
+            <pos>0.5 0.6708333</pos><!-- x660..1260 y232..412 -->
+            <origin>0.5 0.5</origin>
+            <size>0.3125 0.375</size>
+            <zIndex>40</zIndex>
+        </image>
         <carousel name="systemcarousel">
             <type>horizontal</type>
             <pos>0.5 0.64</pos>

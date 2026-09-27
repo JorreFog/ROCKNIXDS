@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="180" viewBox="0 0 600 180">
+<defs><linearGradient id="ct" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#000000"/></linearGradient>
+<linearGradient id="cty" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000" stop-opacity="0.34"/><stop offset="1" stop-color="#000000" stop-opacity="0.18"/></linearGradient></defs>
+<path d="M20,0 H580 A20,20 0 0 1 600,20 V160 A20,20 0 0 1 580,180 H20 A20,20 0 0 1 0,160 V20 A20,20 0 0 1 20,0 Z" fill="url(#cty)"/>
+<path d="M20.25,0.75 H579.75 A19.5,19.5 0 0 1 599.25,20.25 V159.75 A19.5,19.5 0 0 1 579.75,179.25 H20.25 A19.5,19.5 0 0 1 0.75,159.75 V20.25 A19.5,19.5 0 0 1 20.25,0.75 Z" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1.5"/>
+<path d="M30,1.5 H570" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1"/>
+</svg>
