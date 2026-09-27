@@ -145,12 +145,13 @@ write("menu_slot.svg", 125, 140, f'''<defs>{grad("ms", [(0, "#2c3036"), (1, "#1e
 <path d="{rr(3.5, 3.5, 118, 131, 14.5)}" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1"/>
 <path d="{rr(20, 19.5, 85, 85, 16)}" fill="none" stroke="#000000" stroke-opacity="0.55" stroke-width="3"/>''')
 
-# --- carousel_tray: the band the system carousel sits on (600x180, bottom screen y232..412) ---
-write("carousel_tray.svg", 600, 180, f'''<defs>{grad("ct", [(0, "#000000"), (1, "#000000")])}
-<linearGradient id="cty" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000" stop-opacity="0.34"/><stop offset="1" stop-color="#000000" stop-opacity="0.18"/></linearGradient></defs>
-<path d="{rr(0, 0, 600, 180, 20)}" fill="url(#cty)"/>
-<path d="{rr(0.75, 0.75, 598.5, 178.5, 19.5)}" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1.5"/>
-<path d="M30,1.5 H570" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1"/>''')
+# --- carousel_tray: the band the system carousel sits on, across the whole bottom screen (640x180, y232..412).
+#     Full width because the icon row itself spans x8..632: a box with ends (it was 600 wide) left the outer
+#     sockets hanging over its edges, and the icons scroll in from the panel edges anyway ---
+write("carousel_tray.svg", 640, 180, f'''<defs><linearGradient id="cty" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000" stop-opacity="0.34"/><stop offset="1" stop-color="#000000" stop-opacity="0.18"/></linearGradient></defs>
+<rect x="0" y="0" width="640" height="180" fill="url(#cty)"/>
+<path d="M0,0.75 H640 M0,179.25 H640" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1.5"/>
+<path d="M0,2.5 H640" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1"/>''')
 
 # --- start_window: DSi blue selection frame, window x20..139 y22..141 ---
 hole = rr_ccw(20, 22, 120, 120, 9)

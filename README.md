@@ -58,8 +58,9 @@ curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh 
 
 It installs the dii-ess-aye theme (downloaded from [upstream](https://github.com/beebono/dii-ess-aye) at the pinned
 commit, then this repo's overlay), the patched EmulationStation, `libdsflip` as the default DraStic launcher, and
-switches on 2× resolution for DS. It also adds the ds-* shaders to ES's shader menu. Everything it replaces is
-backed up first under `/storage/rgds-rocknix-backup/` (the folder keeps its old name so earlier installs can still be undone).
+switches on 2× resolution for DS. It also adds the ds-* shaders to ES's shader menu, and keeps them there when a
+ROCKNIX update changes that menu. Everything it replaces is backed up first under `/storage/rgds-rocknix-backup/`
+(the folder keeps its old name so earlier installs can still be undone).
 Running it again upgrades an earlier version in place.
 
 Cartridge scans, 3D boxes, screenshots and the RetroAchievements strip are per-game media that the installer

@@ -1,0 +1,5 @@
+#!/bin/sh
+# ROCKNIXDS: keep the ds-* shaders in ES's DraStic "shader" option, and let a ROCKNIX update's changes to
+# es_features.cfg flow into the copy the installer made (see es-features.sh). Runs before ES starts.
+[ -x /storage/.config/drastic/dsflip/es-features.sh ] && /storage/.config/drastic/dsflip/es-features.sh
+exit 0

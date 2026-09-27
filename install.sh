@@ -121,7 +121,8 @@ if [ $UNINSTALL = 1 ]; then
     fi
     rm -rf $DRASTIC/dsflip
     [ -f $BACKUP/.shaders-added ] && while read -r b; do rm -f "$DRASTIC/shaders/$b"; done < $BACKUP/.shaders-added
-    [ -e $BACKUP/.esf-created ] && rm -f $ESF
+    [ -e $BACKUP/.esf-created ] && rm -f $ESF $ESF.rocknixds-old
+    rm -f /storage/.config/autostart/rocknixds-es-features
     [ -e $BACKUP/.theme-installed-by-us ] && rm -rf $THEME
     [ -d $BACKUP/theme-previous ] && mv $BACKUP/theme-previous $THEME
     systemctl restart sway.service 2>/dev/null || true; sleep 2
@@ -197,7 +198,7 @@ if [ $DSFLIP_ON = 1 ]; then
     [ -e $DRASTIC/drastic.real ] || touch $BACKUP/.had-no-launcher-wrapper
     mkdir -p $WORK/dsflip
     cp "$SRC/dsflip/libdsflip.so" "$SRC/dsflip/device/session.sh" "$SRC/dsflip/device/restore.sh" \
-       "$SRC/dsflip/device/drastic-wrapper.sh" "$SRC/dsflip/device/install.sh" $WORK/dsflip/
+       "$SRC/dsflip/device/drastic-wrapper.sh" "$SRC/dsflip/device/install.sh" "$SRC/dsflip/device/es-features.sh" $WORK/dsflip/
     sh $WORK/dsflip/install.sh
 
     # DS-pixel-aware shaders for DraStic (sharp and LCD-grid looks that work at 1x and 2x) + their ES entries
@@ -208,19 +209,14 @@ if [ $DSFLIP_ON = 1 ]; then
         else grep -qx "$b" $BACKUP/.shaders-added 2>/dev/null || echo "$b" >> $BACKUP/.shaders-added; fi
         cp "$f" $DRASTIC/shaders/
     done
-    [ -f $ESF ] || { [ -f /usr/config/emulationstation/es_features.cfg ] && cp /usr/config/emulationstation/es_features.cfg $ESF && touch $BACKUP/.esf-created; }
-    if [ -f $ESF ]; then
-        backup_once $ESF
-        # our entries (value = file name): drop any old ones, then insert the current set after lcd1x+nds-color
-        grep -vE 'value="ds-(crisp|grid|grid-2x|crisp-color|grid-color)"' $ESF > $ESF.new
-        awk '{ print } /value="lcd1x-nds-color"/ && !done { i = $0; sub(/<choice.*/, "", i);
-               print i "<choice name=\"ds-crisp (sharp, 1x and 2x)\" value=\"ds-crisp\" />";
-               print i "<choice name=\"ds-crisp + NDS color\" value=\"ds-crisp-color\" />";
-               print i "<choice name=\"ds-grid (sharp + DS pixel grid)\" value=\"ds-grid\" />";
-               print i "<choice name=\"ds-grid + NDS color\" value=\"ds-grid-color\" />";
-               print i "<choice name=\"ds-grid-2x (pixel-perfect + even DS grid)\" value=\"ds-grid-2x\" />"; done = 1 }' \
-            $ESF.new > $ESF && rm -f $ESF.new
-    fi
+    # the ds-* entries in ES's DraStic shader option: es-features.sh, which also runs at every boot (its own
+    # autostart hook), so a ROCKNIX update's es_features.cfg changes flow into a copy the installer created
+    if [ -f $ESF ]; then backup_once $ESF
+    elif [ -f /usr/config/emulationstation/es_features.cfg ]; then touch $BACKUP/.esf-created; fi
+    sh $DRASTIC/dsflip/es-features.sh
+    mkdir -p /storage/.config/autostart
+    cp "$SRC/dsflip/device/autostart-rocknixds-es-features" /storage/.config/autostart/rocknixds-es-features
+    chmod +x /storage/.config/autostart/rocknixds-es-features
 fi
 
 # ---- hires 3D ----------------------------------------------------------------------------------------

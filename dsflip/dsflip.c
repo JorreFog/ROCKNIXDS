@@ -750,37 +750,56 @@ static void *tap_fifo_thread(void *a) {
     return 0;
 }
 
-static void *touch_thread(void *a) {
-    const char *want = a;
-    glob_t g; char path[64] = "";
-    if (glob("/sys/class/input/event*", 0, 0, &g)) return 0;
+static int touch_find(const char *want, char *path, size_t n) {   /* the evdev node whose device path contains want */
+    glob_t g; *path = 0;
+    if (glob("/sys/class/input/event*", 0, 0, &g)) return -1;
     for (size_t i = 0; i < g.gl_pathc && !*path; i++) {
         char dev[300], real_[512]; snprintf(dev, sizeof dev, "%s/device", g.gl_pathv[i]);
-        if (realpath(dev, real_) && strstr(real_, want)) snprintf(path, sizeof path, "/dev/input/%s", strrchr(g.gl_pathv[i], '/') + 1);
+        if (realpath(dev, real_) && strstr(real_, want)) snprintf(path, n, "/dev/input/%s", strrchr(g.gl_pathv[i], '/') + 1);
     }
     globfree(&g);
-    int tfd = *path ? open(path, O_RDONLY | O_CLOEXEC) : -1;
-    if (tfd < 0) { LOG("[dsflip] no touchscreen matching %s\n", want); return 0; }
-    int ax[6] = { 0 }, ay[6] = { 0 };
-    ioctl(tfd, 0x80184540 + 0x35, ax); ioctl(tfd, 0x80184540 + 0x36, ay);   /* EVIOCGABS(ABS_MT_POSITION_X/Y) */
-    int xmax = ax[2] > 0 ? ax[2] : 639, ymax = ay[2] > 0 ? ay[2] : 479;
-    LOG("[dsflip] touch %s range %dx%d\n", path, xmax + 1, ymax + 1);
-    struct { long s, us; uint16_t type, code; int32_t value; } ev[32];
-    int x = 0, y = 0, down = 0, was_down = 0;
+    return *path ? 0 : -1;
+}
+
+/* Reads the touchscreen for the whole session. If the device goes away (a suspend/resume or a driver rebind removes
+ * and recreates it), a held stylus is released and the device is found and opened again. */
+static void *touch_thread(void *a) {
+    const char *want = a;
+    int missing_logged = 0;
     for (;;) {
-        ssize_t n = read(tfd, ev, sizeof ev);
-        if (n <= 0) break;
-        for (int i = 0; i < (int)(n / sizeof ev[0]); i++) {
-            if (ev[i].type == 3 && (ev[i].code == 0x35 || ev[i].code == 0)) x = ev[i].value;
-            else if (ev[i].type == 3 && (ev[i].code == 0x36 || ev[i].code == 1)) y = ev[i].value;
-            else if (ev[i].type == 1 && ev[i].code == 0x14a) down = ev[i].value != 0;   /* BTN_TOUCH */
-            else if (ev[i].type == 0 && ev[i].code == 0) {                                /* SYN_REPORT */
-                if (down || was_down) touch_emit(down != was_down, down, x, y, xmax, ymax);
-                was_down = down;
+        char path[64];
+        int tfd = touch_find(want, path, sizeof path) ? -1 : open(path, O_RDONLY | O_CLOEXEC);
+        if (tfd < 0) {
+            if (!missing_logged++) LOG("[dsflip] no touchscreen matching %s (still looking)\n", want);
+            usleep(500000); continue;
+        }
+        missing_logged = 0;
+        int ax[6] = { 0 }, ay[6] = { 0 };
+        ioctl(tfd, 0x80184540 + 0x35, ax); ioctl(tfd, 0x80184540 + 0x36, ay);   /* EVIOCGABS(ABS_MT_POSITION_X/Y) */
+        int xmax = ax[2] > 0 ? ax[2] : 639, ymax = ay[2] > 0 ? ay[2] : 479;
+        LOG("[dsflip] touch %s range %dx%d\n", path, xmax + 1, ymax + 1);
+        struct { long s, us; uint16_t type, code; int32_t value; } ev[32];
+        int x = 0, y = 0, down = 0, was_down = 0;
+        ssize_t n;
+        for (;;) {
+            n = read(tfd, ev, sizeof ev);
+            if (n < 0 && errno == EINTR) continue;
+            if (n <= 0) break;
+            for (int i = 0; i < (int)(n / sizeof ev[0]); i++) {
+                if (ev[i].type == 3 && (ev[i].code == 0x35 || ev[i].code == 0)) x = ev[i].value;
+                else if (ev[i].type == 3 && (ev[i].code == 0x36 || ev[i].code == 1)) y = ev[i].value;
+                else if (ev[i].type == 1 && ev[i].code == 0x14a) down = ev[i].value != 0;   /* BTN_TOUCH */
+                else if (ev[i].type == 0 && ev[i].code == 0) {                                /* SYN_REPORT */
+                    if (down || was_down) touch_emit(down != was_down, down, x, y, xmax, ymax);
+                    was_down = down;
+                }
             }
         }
+        LOG("[dsflip] touch read ended (%s): reopening\n", n < 0 ? strerror(errno) : "end of file");
+        close(tfd);
+        if (was_down) touch_emit(1, 0, x, y, xmax, ymax);      /* don't leave DraStic's stylus pressed */
+        usleep(200000);
     }
-    LOG("[dsflip] touch read ended\n");
     return 0;
 }
 

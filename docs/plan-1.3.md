@@ -114,7 +114,7 @@ presses in a quiet room.
 **Plan:** size the box to whole lines (4 lines, `size` 0.2333 0.1833) or draw a 20 px fade at the bottom of the
 bubble over the text (an image with a gradient at zIndex 58).
 
-### B10. Our copy of `es_features.cfg` hides ROCKNIX's future changes (medium, verify)
+### B10. Our copy of `es_features.cfg` hides ROCKNIX's future changes (medium, verify) — DONE 2026-09-27
 
 When the user has no `/storage/.config/emulationstation/es_features.cfg`, the installer copies the system one
 there and adds the ds-* shader entries ([`install.sh`](../install.sh), the `.esf-created` flag). ES prefers the
@@ -124,6 +124,15 @@ On the reviewer's device the copies already differ only by our five lines. Verif
 
 **Plan:** if ES supports a user overlay file, use it; otherwise regenerate the user copy at every boot from the
 current system file plus our entries (in the autostart hook), so a ROCKNIX update flows through.
+
+**Done:** ES does load `es_features_*.cfg` overlays (`CustomFeatures::loadAdditionnalFeatures`), but it appends
+emulators and features without merging, so an overlay would add a second "shader" row. So `dsflip/device/
+es-features.sh` runs from the installer and from its own autostart hook (`rocknixds-es-features`, before ES
+starts): a copy the installer created is rebuilt from ROCKNIX's file whenever that file's md5 changes (previous
+copy kept as `.rocknixds-old`); a copy that predates the install only gets our entries. Our choices go at the end
+of the drastic-sa core's shader option, found by structure rather than after one particular choice, and the file
+is only rewritten when its content changes. Tested: first build, rerun, a simulated ROCKNIX update (new emulator
+and a new DraStic choice both flow in), a user's own copy (only reordered), a file without the option (untouched).
 
 ### B11. No version in the logs or the RetroAchievements user agent (low) — DONE
 
@@ -275,7 +284,7 @@ achievements, "1 of 187 unlocked" read from memory, where before the whole set w
 
 ### I5. libdsflip robustness
 
-- Reopen the touch device if the read ends ([`dsflip.c:832`](../dsflip/dsflip.c)), for suspend/resume.
+- **DONE 2026-09-27:** Reopen the touch device if the read ends ([`dsflip.c:832`](../dsflip/dsflip.c)), for suspend/resume.
 - A `DSFLIP_DEBUG=1` that adds per-frame lines, off by default, instead of the many one-off env switches.
 - Handle a `SDL_CreateTexture` allocation failure by falling back to passthrough for that texture instead of
   leaving `s->tex = 0` with a half-built slot.
@@ -291,7 +300,8 @@ lcd1x+nds-color; pick the lowest that holds 0.1 drops/s.
 ### I7. Theme
 
 - B9 and B14 above.
-- Long titles: "Pokemon HeartGold Version" fits the bubble; longer names will overflow the 24 px title. Plan:
+- **DONE 2026-09-27** (horizontal marquee after 1.5 s; ES was cutting them to "..."; the system name too).
+  Long titles: "Pokemon HeartGold Version" fits the bubble; longer names will overflow the 24 px title. Plan:
   `autoScroll` horizontal on the title, or shrink to 20 px when longer than ~26 characters (an ES `size`
   expression).
 - Touch in ES menus (known issue since 1.0): the sway config maps the Goodix touchscreen to `DSI-2` only for
@@ -300,6 +310,8 @@ lcd1x+nds-color; pick the lowest that holds 0.1 drops/s.
   `sway-config.theme`.
 - Game list: show the video preview when one is scraped (the `md_video` element exists; the media tool in I1
   can fetch libretro-thumbnails' videos where available).
+- **DONE 2026-09-27 (reported by Joar):** the tray behind the main menu's icon row was 600 px wide while the row
+  spans x8..632, so the outer sockets hung over its ends. It is now a full-width band (`carousel_tray.svg`).
 - An "unplayed" cartridge look (slightly desaturated label) so the carousel shows what's new at a glance.
 
 ### I8. Installer and upgrades
@@ -332,7 +344,7 @@ lcd1x+nds-color; pick the lowest that holds 0.1 drops/s.
   `ES_UI_WIDTH` override in that helper (with the carousel views exempt) may replace most of the patch.
 - **Build in CI:** a GitHub Actions job that builds `libdsflip.so` with clang and a Debian arm64 sysroot, and
   the ES binary in the ROCKNIX build container, so what ships is reproducible from the source in the repo.
-- **A smoke test:** `tools/smoke.sh <device-ip>`: install from the checkout, launch a ROM through ES's API,
+- **DONE (1.3-dev):** **A smoke test:** `tools/smoke.sh <device-ip>`: install from the checkout, launch a ROM through ES's API,
   read `dsflip.log` for `ready`, 60 presents/s and 0 drops over 30 s, kill DraStic, check ES is back. This is
   what the 1.2 release was verified with by hand; make it one command and run it before every release.
 

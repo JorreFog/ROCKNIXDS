@@ -330,9 +330,9 @@
         <!-- Bottom screen (X 0.333-0.666): a tray under the carousel, then the carousel -->
         <image name="carousel_tray" extra="true">
             <path>${themePath}/assets/images/common/carousel_tray.svg</path>
-            <pos>0.5 0.6708333</pos><!-- x660..1260 y232..412 -->
+            <pos>0.5 0.6708333</pos><!-- x640..1280 (the whole bottom screen) y232..412 -->
             <origin>0.5 0.5</origin>
-            <size>0.3125 0.375</size>
+            <size>0.3333333 0.375</size>
             <zIndex>40</zIndex>
         </image>
         <carousel name="systemcarousel">
@@ -370,6 +370,8 @@
             <fontSize>0.0583333</fontSize><!-- 28px -->
             <color>E8E9EBFF</color>
             <alignment>center</alignment>
+            <autoScroll>horizontal</autoScroll><!-- a name wider than the box scrolls instead of ending in "..." -->
+            <autoScrollDelay>1500</autoScrollDelay><!-- ES's default 6 s (+1 s) is too long to notice -->
             <zIndex>57</zIndex>
         </text>
 
@@ -683,6 +685,8 @@
             <fontSize>0.0500000</fontSize><!-- 24px -->
             <color>E8E9EBFF</color>
             <alignment>center</alignment>
+            <autoScroll>horizontal</autoScroll><!-- titles past ~26 characters scroll instead of ending in "..." -->
+            <autoScrollDelay>1500</autoScrollDelay><!-- starts ~2.3 s after the title appears (ES default: ~7 s) -->
             <zIndex>57</zIndex>
         </text>
 
