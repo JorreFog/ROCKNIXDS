@@ -106,7 +106,7 @@ notes read as if blowing into the mic just works. Found in the device's `dsflip.
 `medium` when the setting is unset (`DSFLIP_MIC_DEFAULT` in the wrapper) after checking it causes no false
 presses in a quiet room.
 
-### B9. The game description clips a line through the glyphs (low, visible)
+### B9. The game description clips a line through the glyphs (low, visible) — DONE 2026-09-27 (fades)
 
 `md_description` is 120 px tall at a ~22 px line height ([`theme-rgds.xml:689`](../dii-ess-aye/overlay/theme-rgds.xml)):
 5.4 lines, and the last visible line is cut mid-glyph (visible on Pokémon Black 2's bubble).
@@ -184,7 +184,7 @@ so uninstall still works, but the file is misleading.
 
 ## Part 2: improvements for 1.3
 
-### I1. One command for the game art (the biggest gap users see)
+### I1. One command for the game art (the biggest gap users see) — DONE 2026-09-27 (`rocknixds-media.py`)
 
 Cart scans, 3D boxes, label art and the RetroAchievements strip are what make the theme, and today they need
 desktop Python, Pillow, a 108 MB LaunchBox `Metadata.zip` and hand-run pushes. The device has Python 3.14 but
@@ -212,13 +212,21 @@ Today about 5 s each way, mostly fixed sleeps and ES's own startup. Plan in thre
    would let libdsflip take a lease in ~100 ms and hand it back on exit. Prototype on the device before
    committing to it.
 
-### I3. DraStic's menu on the bottom screen, with touch
+### I3. DraStic's menu on the bottom screen, with touch — DONE 2026-09-27 (bottom screen; touch impossible)
 
 The 800×480 menu goes to the top panel and the bottom panel is black; touch is disabled in the menu
 (`touch_rect_ok` is only set when a DS screen is on the bottom). DraStic's menu is built for touch.
 
 **Plan:** show the menu on the bottom panel (hardware-scaled, as today) and map touch to menu coordinates
 (`x * 800/640`), keep the top panel showing the last game frame. Test with the load/save state dialogs.
+
+**Done:** the menu is routed to the bottom panel; the top plane is left alone, so it keeps the last game frame.
+Touch cannot work: the premise was wrong. Disassembling drastic.real (r2.5.2.2, aarch64) shows the menu's input
+loop (the SDL_PollEvent loop at 0x8b9c0) dispatches only SDL key (0x300/0x301), joystick axis (0x600), hat
+(0x602) and button (0x603/0x604) events; mouse (0x400..0x402) and finger (0x700..) events fall through. The
+binary does not even import SDL_GetMouseState. Injecting mouse events (relative stylus deltas, absolute menu-space
+and absolute DS-space coordinates) was tried and ignored, as expected. Translating taps into d-pad presses by
+reading the menu texture is not worth it: the menu's rows are about 8 px tall at 800×480.
 
 ### B16. Achievements are disabled at load because the RAM scan hasn't finished (high) — DONE 2026-09-27
 
@@ -315,6 +323,9 @@ speaker via the mic, and the game-launch/quit cycle. **B16** (RetroAchievements 
 of the tester's report) was found and fixed the same day. I6 (cooler shaders) is now tunable by env; choosing a
 lower default needs a heavy-gameplay temperature sweep. **B17** (a transient crash stuck the device on stock ES,
 which dropped the patched clock format so the date showed as the time) was found and fixed too.
+
+Later the same day: **I1** (`dii-ess-aye/scrape/rocknixds-media.py`, every DS game's art and text in one command),
+**B9** (description fades) and **I3** (DraStic's menu on the bottom panel; touch in it is impossible, see I3).
 
 ## Suggested order
 

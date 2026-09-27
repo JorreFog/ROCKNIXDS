@@ -134,7 +134,9 @@ its measure-first phases are in [`docs/drastic-2x-plan.md`](docs/drastic-2x-plan
   commit still misses. `DSFLIP_PACING=immediate` gives the old behaviour.
 - **Mailbox presenter thread.** `SDL_RenderPresent` never blocks, a superseded frame is dropped, and an
   unchanged panel keeps its buffer.
-- **DraStic's menu.** It's an 800×480 RGB565 texture, shown on the top panel with hardware scaling.
+- **DraStic's menu.** It's an 800×480 RGB565 texture, shown on the bottom panel with hardware scaling while
+  the top panel keeps the last game frame. It takes no touch: DraStic's menu loop reads only key and joystick
+  events (there is no mouse or finger handling in the binary), so it is navigated with the d-pad and buttons.
 - **Touch.** Read from the bottom panel's own gt911 controller (i2c-5). DraStic ignores absolute mouse
   coordinates and moves its stylus by *relative* deltas, summed per frame and clamped. So every
   touch-down first pins the stylus to (0,0), then (next frame) moves it by exactly the target.
