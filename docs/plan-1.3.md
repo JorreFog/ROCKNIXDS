@@ -39,7 +39,7 @@ a user on ssh) ends with black panels and the GPU pinned at `performance`. Found
 sway and ES) and `-p KillMode=mixed` so DraStic gets the signal first. Test: `systemctl stop dsflip-game`
 mid-game must bring the menu back within the usual ~5 s.
 
-### B3. libdsflip gives up after 3 s if it can't take the display (medium)
+### B3. libdsflip gives up after 3 s if it can't take the display (medium) — DONE
 
 `session.sh` sleeps 0.5 s after stopping sway, starts DraStic, and after 3 s kills it if the log says
 `passthrough` ([`session.sh:29`](../dsflip/device/session.sh)). If sway is slow to release DRM master (it
@@ -49,7 +49,7 @@ happens on a busy system) the user gets a black screen, then the menu again, wit
 `session.sh` show why it aborted (a toast is impossible there, so write a line to `last-session.log` and let
 the ES launcher show a popup on return, see I8). Test: start a game while sway is being restarted.
 
-### B4. Real-time presenter + spin lock can stall (medium)
+### B4. Real-time presenter + spin lock can stall (medium) — DONE
 
 `mu` is a spin lock built on `sched_yield` ([`dsflip.c:93`](../dsflip/dsflip.c)). The presenter runs
 `SCHED_FIFO` 10 and the audio pump `SCHED_FIFO` 20, while DraStic's main thread (which takes `mu` in
@@ -64,7 +64,7 @@ sysroot since RetroAchievements was added.
 contention diagnostics (they can wrap `pthread_mutex_trylock`). Test: the `[lock]` line still reports, a 90 s
 HeartGold run shows the same drop rate as before.
 
-### B5. Recreating a screen texture while a buffer is on screen corrupts buffer tracking (medium)
+### B5. Recreating a screen texture while a buffer is on screen corrupts buffer tracking (medium) — DONE
 
 When DraStic recreates a screen texture (the hires toggle in its menu does this), the recycled slot's buffers
 in `READY`/`QUEUED`/`SCANOUT` state are zeroed and immediately re-allocated by `mkbuf`
