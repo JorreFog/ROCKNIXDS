@@ -25,6 +25,24 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 - The **panel timing fix**, the older **vsync pacing shim**, and the measurement tools (including a DS
   stress-test ROM) behind all the numbers below.
 
+### New in 1.3
+
+- **RetroAchievements work again.** Sets were being disabled at load because the game loaded before libdsflip
+  had found the DS's RAM; now it waits for it.
+- **Faster switching:** a game's first frame comes ~3.5 s after you start it (was ~4.8 s), and the menu is back
+  ~4.3 s after you quit (was ~6 s plus a 2 s freeze).
+- **DraStic's menu on the bottom screen,** with the game frame kept on top.
+- **Cooler shaders:** the GPU scales between 400 and 800 MHz (averaging ~500) instead of sitting at 800, with no
+  extra dropped frames.
+- **Game art in one command** ([`rocknixds-media.py`](dii-ess-aye/scrape)): covers, screenshots, titles, cart
+  scans, 3D boxes and descriptions for every DS game, no scraper account.
+- **It tells you when something goes wrong:** if a game ends abnormally, ES shows why once it's back; the patched
+  ES only runs on the ROCKNIX release it's built for, and says so otherwise.
+- **Theme:** new logo, redesigned main menu with modern system icons, descriptions that fade instead of cutting
+  a line, and long titles that scroll.
+- **Safer install and uninstall:** uninstall keeps settings you changed later, the ds-* shaders stay in ES's
+  menu when ROCKNIX updates it, and touch recovers if the touchscreen resets.
+
 ### New in 1.2
 
 - **Shaders at full speed at 2×.** The old stutter came from DraStic's audio timing, not the GPU. A real-time
