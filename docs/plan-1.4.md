@@ -78,3 +78,11 @@ was waiting for the launch command, carries on. What it took:
 
 Opt-in because HideWindow is global: with it off, other systems' emulators may show ES's loading screen on the
 screen they don't use (untested). `fast-switch on|off|status` sets both; uninstall undoes it.
+
+## 5. CI builds (2026-09-27)
+
+`.github/workflows/build.yml` builds libdsflip.so on every push to `dsflip/` (beta, main, PRs, on demand): a Debian
+trixie container (glibc 2.41, the same as ROCKNIX 20260901), clang + lld, an arm64 sysroot from the packages
+`build.sh` names, then checks the result is AArch64, needs at most the device's glibc (it needs 2.38) and exports
+the SDL hooks, and keeps it as an artifact. The CI-built library passed the smoke test on the device. The patched
+ES isn't built in CI: it needs ROCKNIX's full build system (hours of toolchain per run).

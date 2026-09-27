@@ -184,6 +184,9 @@ It's installed as the default DraStic launcher: start any DS game from Emulation
 - To go back to the previous launcher: `touch /storage/.config/drastic/nodsflip`.
 - 2× resolution is ES's per-system/per-game *hires 3D* option (`nds.hires_3d=1`).
 
+GitHub Actions builds `libdsflip.so` from source on every change (`.github/workflows/build.yml`: Debian trixie arm64
+sysroot, the device's glibc) and keeps it as a build artifact.
+
 Install from a checkout: copy `dsflip/libdsflip.so` plus `dsflip/device/{session.sh,drastic-wrapper.sh,install.sh}`
 to the device and run `sh install.sh`.
 
