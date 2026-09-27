@@ -125,6 +125,9 @@ static int logical_w = 512, logical_h = 192;
 static stex *pending_route[2];          /* routes recorded by RenderCopy during this frame */
 static SDL_Rect route_dst[2]; static int touch_rect_ok;   /* touch only while a DS screen is on the bottom panel */
 static int menu_touch;                                     /* DraStic's menu is on the bottom panel (no touch: see touch_emit) */
+static int vp_x, vp_y, vp_w, vp_h;                         /* where a shader draws the DS screen on the panel (0x0: all of it) */
+static int touch_outside;                                  /* the current touch began outside that rectangle: ignore it */
+int shader_viewport(int *v);
 static void *window;
 static int cursor_log;                  /* DSFLIP_CURSOR_LOG=1: log where DraStic draws its 32x32 stylus cursor */
 /* stats */
@@ -711,10 +714,21 @@ static void touch_emit(int down_change, int down, int x, int y, int xmax, int ym
      * DraStic's menu (also on the bottom panel) takes no touch: its input loop (r2.5.2.2, aarch64) handles only
      * SDL key, joystick axis/hat/button events, never mouse or finger events, so taps in it go nowhere. */
     if (!touch_rect_ok) return;
-    int lx = (int)((long long)x * 256 / (xmax + 1));
-    int ly = (int)((long long)y * 192 / (ymax + 1));
+    /* a shader may draw the DS screen into a rectangle of the panel (ds-integer: 512x384, centred): map into it.
+     * A touch that starts outside it (on the bezel) is ignored until it lifts; one that slides out is clamped. */
+    int x0 = 0, y0 = 0, w = xmax + 1, h = ymax + 1;
+    if (vp_w > 0 && vp_h > 0) {
+        int pw = P[1].mode.hdisplay ? P[1].mode.hdisplay : 640, ph = P[1].mode.vdisplay ? P[1].mode.vdisplay : 480;
+        x0 = vp_x * (xmax + 1) / pw; y0 = vp_y * (ymax + 1) / ph; w = vp_w * (xmax + 1) / pw; h = vp_h * (ymax + 1) / ph;
+    }
+    if (down_change && down) touch_outside = x < x0 || x >= x0 + w || y < y0 || y >= y0 + h;
+    if (touch_outside) { if (down_change && !down) touch_outside = 0; return; }
+    int lx = (int)((long long)(x - x0) * 256 / w);
+    int ly = (int)((long long)(y - y0) * 192 / h);
     sdl_ev e;
     uint32_t wid = window ? SDL_GetWindowID(window) : 1, ts = SDL_GetTicks();
+    if (lx < 0) lx = 0;
+    if (ly < 0) ly = 0;
     if (lx > 255) lx = 255;
     if (ly > 191) ly = 191;
     stylus_move(lx, ly, down, down_change && down);
@@ -955,6 +969,7 @@ __attribute__((constructor)) static void init(void) {
     pthread_t th; pthread_create(&th, 0, presenter, 0);
     for (int k = 0; k < 300 && !shader_done; k++) usleep(10000);
     if (shader_nm) LOG("[dsflip] shader input: %s\n", shader_copy_mode ? "upload from memory" : "dma-buf import");
+    { int v[4]; if (shader_on && shader_viewport(v)) { vp_x = v[0]; vp_y = v[1]; vp_w = v[2]; vp_h = v[3]; } }
     const char *inv = getenv("DSFLIP_TOUCH_INVERT");        /* "x", "y", "xy" or unset/"none" */
     if (inv) { touch_inv_x = strchr(inv, 'x') != 0; touch_inv_y = strchr(inv, 'y') != 0; }
     const char *tp = getenv("DSFLIP_TOUCH");

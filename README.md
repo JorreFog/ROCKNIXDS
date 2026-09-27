@@ -209,6 +209,7 @@ stock path uses:
   | ds-grid + NDS color | ds-grid with the DS color profile |
   | ds-grid-2x | pixel-perfect at 2×, with an even DS-pixel grid |
   | ds-fsr | AMD FSR 1.0 (EASU): smooth, edge-aware upscaling instead of sharp pixels. Heavier: it runs the GPU at 800 MHz |
+  | ds-integer | pixel-perfect: each screen at exactly 2× (512×384), centred in a dark bezel. Touch follows the smaller screen |
 
   The NDS color profile is the one ROCKNIX's lcd1x+nds-color uses, except that very saturated blues are clamped
   (that shader's math is undefined there and bleeds red into them on this GPU).

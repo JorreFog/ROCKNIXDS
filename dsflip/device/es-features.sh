@@ -18,7 +18,7 @@ STATE=${ESF_STATE:-/storage/rgds-rocknix-backup}     # the installer's backup di
 # our choices go at the end of the drastic-sa core's <feature name="shader">, indented like its other choices;
 # any earlier copy of them is dropped first, so this is idempotent
 add_ours() {
-    grep -vE 'value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr)"' "$1" | awk '
+    grep -vE 'value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"' "$1" | awk '
         /<core name="drastic-sa"/ { core = 1 }
         core && /<\/core>/ { core = 0 }
         core && /<feature name="shader"/ { shader = 1 }
@@ -30,6 +30,7 @@ add_ours() {
             print ind "<choice name=\"ds-grid + NDS color\" value=\"ds-grid-color\" />"
             print ind "<choice name=\"ds-grid-2x (pixel-perfect + even DS grid)\" value=\"ds-grid-2x\" />"
             print ind "<choice name=\"ds-fsr (FSR 1.0, smooth edges)\" value=\"ds-fsr\" />"
+            print ind "<choice name=\"ds-integer (pixel-perfect 2x + bezel)\" value=\"ds-integer\" />"
             shader = 0; added = 1
         }
         { print }

@@ -110,6 +110,10 @@ static EGLDisplay dpy;
 static GLenum up_fmt; int shader_copy_mode;      /* set by the caller before shader_init */
 static GLuint up_tex[2]; static int up_w[2], up_h[2];
 static GLuint prog; static GLint u_tex, u_tsize, u_osize, u_fch;
+/* a shader that draws the DS screen into part of the panel (ds-integer) says where, in panel pixels, with a line
+ * "dsflip-viewport: x y w h" in its source; libdsflip maps touches into that rectangle */
+static int vp[4];
+int shader_viewport(int *v) { if (vp[2] <= 0 || vp[3] <= 0) return 0; for (int i = 0; i < 4; i++) v[i] = vp[i]; return 1; }
 static int drm_fd;
 
 /* ---- shader sources ---- */
@@ -279,6 +283,10 @@ int shader_init(int fd, const char *name) {
     const char *from = "libdrastouch";
     if (!fs) { fs = slurp(path, &n); from = path; }
     if (!fs) { SLOG("[shader] unknown shader \"%s\" (not built into libdrastouch, no %s)\n", name, path); return 0; }
+    { const char *m = strstr(fs, "dsflip-viewport:");
+      if (m && sscanf(m + 16, "%d %d %d %d", &vp[0], &vp[1], &vp[2], &vp[3]) == 4)
+          SLOG("[shader] draws the DS screen at %d,%d %dx%d of the panel (touch follows)\n", vp[0], vp[1], vp[2], vp[3]);
+      else vp[2] = vp[3] = 0; }
     char *ffs = flip_fragcoord(fs);
     const char *pre = up_fmt == 0x1908 && shader_copy_mode ? "#define SWIZ(c) (c).bgra\nuniform highp float dsf_fch;\n"
                       "#define dsf_FragCoord() vec4(gl_FragCoord.x, dsf_fch - gl_FragCoord.y, gl_FragCoord.zw)\n"
