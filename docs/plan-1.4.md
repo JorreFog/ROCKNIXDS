@@ -86,3 +86,34 @@ trixie container (glibc 2.41, the same as ROCKNIX 20260901), clang + lld, an arm
 `build.sh` names, then checks the result is AArch64, needs at most the device's glibc (it needs 2.38) and exports
 the SDL hooks, and keeps it as an artifact. The CI-built library passed the smoke test on the device. The patched
 ES isn't built in CI: it needs ROCKNIX's full build system (hours of toolchain per run).
+
+## Bug round (2026-09-27): issue #3 and Reddit reports
+
+- **RetroAchievements menu "Unauthenticated" (401)** (#3): the patched ES had no developer keys (ROCKNIX compiles
+  them into its own ES from CI secrets). `es-rgds-devkeys.patch` reads them at run time from
+  `/usr/bin/emulationstation`; nothing is redistributed. Menu verified on the device; ScreenScraper works again too.
+- **"1 of N achievements" on unplayed games** (#3): RA adds a pseudo-achievement ("Warning: Unknown Emulator",
+  id 101000001) for clients it doesn't know and reports it unlocked. `ra-fetch.py` skips ids >= 101000001 like
+  rcheevos; the media tool now always refreshes the strip.
+- **"Last played" wrong for DS** (#3): ES is stopped during a game, so `playstats.py` does ES's post-game update
+  (play count, time played, last played) into the game's recovery file, as ES does. Not in fast-switch mode.
+- **No unlock sound** (#3): libdsflip plays the sound picked in ES's RetroAchievements settings (stb_vorbis,
+  mixed into the audio pump). The default is "none", as for RetroArch.
+- **Scraper keyboard stretched** (Reddit): stock ES, which 1.3 ran on every other ROCKNIX release. The patched ES
+  now runs wherever its libraries and symbols resolve (dynamic loader check).
+- **Other themes stretched over both screens** (Reddit): the launcher forced a 1920x480 canvas. Other themes now
+  get stock ROCKNIX's layout; `theme-changed.sh` restarts ES when the choice switches.
+- **DQ4 screens flip in battles** (Reddit): not changed. `stressrom/dsswap.nds` toggles the DS screen-swap bit;
+  libdsflip follows it exactly like the hardware (DraStic moves the pictures between its per-position textures).
+  So DQ4 swapping screens for battles is the game's own behaviour, which stock DraStic shows too. Worth confirming
+  with the tester (`touch /storage/.config/drastic/nodsflip` runs stock DraStic's display path).
+
+## Proposal: libdsflip as a standalone package (Reddit request, for other firmwares)
+
+libdsflip is already separable: one LD_PRELOAD library for DraStic r2.5.2.2 (aarch64, glibc >= 2.38), built in CI,
+with the top panel's connector set by `DSFLIP_TOP`. What another firmware needs, as a release asset
+`libdsflip-<version>-aarch64.tar.gz`: `libdsflip.so`, the shaders, a minimal `dsflip-run` that gives it the
+display (stop the compositor or switch VT, run DraStic with the library preloaded, restore) and a short contract:
+KMS with two connectors, DRM master, the verdict file (`/tmp/dsflip-state`), the log, the environment variables.
+Updates: the firmware polls GitHub's releases API for the latest asset. ROCKNIX users keep `install.sh`
+(`--no-theme` already installs libdsflip without the theme).
