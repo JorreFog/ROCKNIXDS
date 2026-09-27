@@ -184,28 +184,20 @@ write("info_panel.svg", 608, 360, f'''<defs>{grad("ip", [(0, "#43474e"), (1, "#2
 <path d="M22,251.5 H586" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1"/>''')
 
 # --- home panels (main menu top screen) ---
-# home_clock_panel: 608x190 card for the clock and date (left) and a DSi-style calendar tile (right, x432..588
-# y16..174: red month band y16..58 with binder rings, white page below)
-write("home_clock_panel.svg", 608, 190, f'''<defs>{grad("hp", [(0, "#43474e"), (1, "#2f3136")])}
-{grad("calr", [(0, "#f0605f"), (1, "#c7302f")])}{grad("calp", [(0, "#fbfbf8"), (1, "#e2e1dc")])}</defs>
-<path d="{rr(2, 6, 604, 182, 18)}" fill="#000000" fill-opacity="0.4"/>
-<path d="{rr(2, 2, 604, 182, 18)}" fill="url(#hp)" stroke="{EDGE}" stroke-width="2"/>
-<path d="{rr(4, 4, 600, 178, 16)}" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
-<path d="{rr(432, 20, 156, 158, 10)}" fill="#000000" fill-opacity="0.35"/>
-<path d="{rr(432, 16, 156, 158, 10)}" fill="url(#calp)" stroke="{EDGE}" stroke-width="1.5"/>
-<path d="M442,16 H578 A10,10 0 0 1 588,26 V58 H432 V26 A10,10 0 0 1 442,16 Z" fill="url(#calr)"/>
-<path d="M433,58 H587" stroke="#8e1f1f" stroke-width="1.5"/>
-<circle cx="470" cy="16" r="5.5" fill="#2b2d31" stroke="{EDGE}" stroke-width="1"/>
-<circle cx="550" cy="16" r="5.5" fill="#2b2d31" stroke="{EDGE}" stroke-width="1"/>
-<path d="M470,6 V16 M550,6 V16" stroke="#9aa0a8" stroke-width="3" stroke-linecap="round"/>''')
-# home_system_panel: 608x150 card for the selected system: icon well x20..130 y20..130, details to the right
-write("home_system_panel.svg", 608, 150, f'''<defs>{grad("hs", [(0, "#43474e"), (1, "#2f3136")])}
+# home_hero_panel: 608x340 card for the main menu's top screen: icon well x18..208 y18..208 (the system icon
+# with a glow), name and counts to the right, and two stat tiles along the bottom (y236..322: x18..299, x309..590)
+tiles = "".join(f'<path d="{rr(x, 236, 281, 86, 12)}" fill="url(#well)" stroke="{EDGE}" stroke-width="1.5"/>'
+                f'<path d="{rr(x + 1.5, 237.5, 278, 83, 11)}" fill="none" stroke="#ffffff" stroke-opacity="0.06" stroke-width="1"/>'
+                for x in (18, 309))
+write("home_hero_panel.svg", 608, 340, f'''<defs>{grad("hh", [(0, "#43474e"), (1, "#2f3136")])}
 {grad("well", [(0, "#1d1f23"), (1, "#15171a")])}</defs>
-<path d="{rr(2, 6, 604, 142, 18)}" fill="#000000" fill-opacity="0.4"/>
-<path d="{rr(2, 2, 604, 142, 18)}" fill="url(#hs)" stroke="{EDGE}" stroke-width="2"/>
-<path d="{rr(4, 4, 600, 138, 16)}" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
-<path d="{rr(18, 18, 110, 110, 14)}" fill="url(#well)" stroke="{EDGE}" stroke-width="2"/>
-<path d="{rr(19.5, 19.5, 107, 107, 13)}" fill="none" stroke="{ACCENT}" stroke-opacity="0.25" stroke-width="1"/>''')
+<path d="{rr(2, 6, 604, 332, 18)}" fill="#000000" fill-opacity="0.4"/>
+<path d="{rr(2, 2, 604, 332, 18)}" fill="url(#hh)" stroke="{EDGE}" stroke-width="2"/>
+<path d="{rr(4, 4, 600, 328, 16)}" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
+<path d="{rr(18, 18, 190, 190, 18)}" fill="url(#well)" stroke="{EDGE}" stroke-width="2"/>
+<path d="{rr(19.5, 19.5, 187, 187, 17)}" fill="none" stroke="{ACCENT}" stroke-opacity="0.25" stroke-width="1"/>
+<path d="M226,214 H590" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1"/>
+{tiles}''')
 
 # --- tabs (108x56, opaque x0..100 / x8..108, y8..56) with L2/R2 badge ---
 def tab(name, flip, label):
@@ -272,8 +264,9 @@ def logo_frag(name):
     f = open(os.path.join(HERE, "..", "logo", name + ".frag")).read()
     w, h = (float(v) for v in f.split("-->", 1)[0].strip("<!- \n").split(" x "))
     return f, w, h
-WIDE, WW, WH = logo_frag("rocknixds-logo-wide")
-STACK, SW, SH = logo_frag("rocknixds-logo")
+WIDE, WW, WH = logo_frag("rocknixds-logo")          # one line: wordmark, DS icon, DS
+STACK, SW, SH = logo_frag("rocknixds-logo-stack")   # wordmark over [icon DS], for small squares
+STACKL, _, _ = logo_frag("rocknixds-logo-stack-light")   # the same with a dark DS, for the white card label
 write("distro_logo.svg", round(WW), round(WH), WIDE)
 
 # --- soft light behind the logo (the theme makes it breathe) ---
@@ -351,14 +344,14 @@ logo_defs = f'<defs>{grad("rk", [(0, "#ff6b6b"), (1, "#e8403f")])}{grad("nx", [(
 # top: logo 400 px wide (native 500 x ~95) centred at y 205, device name, divider
 write("../splash/splash_top.svg", 640, 480, base + f'''
 {logo_defs}
-<ellipse cx="320" cy="190" rx="300" ry="150" fill="url(#glow)"/>
-<g transform="translate({320 - SW * 0.66 / 2:.2f} {186 - SH * 0.66 / 2:.2f}) scale(0.66)">{STACK}</g>
-<path d="M200,322 H440" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
-{glyph_run("Anbernic RG DS", 320, 354, 15, "#a9afb8")}''')
+<ellipse cx="320" cy="200" rx="300" ry="120" fill="url(#glow)"/>
+<g transform="translate({320 - WW * (540 / WW) / 2:.2f} {200 - WH * (540 / WW) / 2:.2f}) scale({540 / WW:.5f})">{WIDE}</g>
+<path d="M200,288 H440" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
+{glyph_run("Anbernic RG DS", 320, 320, 15, "#a9afb8")}''')
 # bottom: the DS card (100x104, drawn 1.6x) with the logo on its label, in the selection frame; Loading + dots
 card = open(os.path.join(OUT, "game_slot.svg")).read().split(">", 1)[1].rsplit("</svg>", 1)[0]
-ls = 64 / SW   # logo 64 px wide on the 76 px label
-lab = f'<rect x="12" y="21" width="76" height="66" fill="#fbfbf8"/><g transform="translate({50 - 32:.2f} {54 - SH * ls / 2:.2f}) scale({ls:.4f})">{STACK}</g>'
+ls = 62 / SW   # stacked logo 62 px wide on the 76 px label
+lab = f'<rect x="12" y="21" width="76" height="66" fill="#fbfbf8"/><g transform="translate({50 - 32:.2f} {54 - SH * ls / 2:.2f}) scale({ls:.4f})">{STACKL}</g>'
 cx, cy, sc = 320, 190, 1.6
 cw, ch = 100 * sc, 104 * sc
 fw, fh = cw + 26, ch + 26

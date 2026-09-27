@@ -1,9 +1,14 @@
-<p align="center"><img src="docs/img/rocknixds-logo.svg" width="440" alt="ROCKNIXDS"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/img/rocknixds-logo.svg">
+    <img src="docs/img/rocknixds-logo-light.svg" width="560" alt="ROCKNIXDS">
+  </picture>
+</p>
 
 <p align="center"><b>Full-speed 2× DraStic and a DSi-style dual-screen frontend for the Anbernic RG DS on ROCKNIX.</b></p>
 
 <p align="center">
-  <img src="docs/img/es-home-ds.png" width="265" alt="Main menu: clock and calendar card and the selected system on the top screen, system carousel on the bottom">
+  <img src="docs/img/es-home-ds.png" width="265" alt="Main menu: the selected system with its icon, counts and play stats on the top screen, system carousel on the bottom">
   <img src="docs/img/es-games-ds.png" width="265" alt="Game list: 3D box, screenshot and RetroAchievements progress on top, real DS cartridges on the bottom">
   <img src="docs/img/gameplay-hires-ds.png" width="265" alt="Pokémon HeartGold at 2x internal resolution on both panels">
 </p>
@@ -286,9 +291,9 @@ post-present sleep to the compositor's latch point (learned from `wp_presentatio
 Builds on [beebono/dii-ess-aye](https://github.com/beebono/dii-ess-aye). ES runs on a 1920×480 canvas:
 the top panel, the bottom panel, and an unused third.
 
-- **Main menu.** The top screen is a DSi-style home: a clock card with the date and a calendar tile, and a card for
-  the selected system (icon, games and played count, last played, time played). The bottom screen is the system
-  carousel with a text bubble.
+- **Main menu.** The top screen shows the selected system on one card: its icon, name and maker, games and played
+  counts, and last/time played tiles; the date sits in the status bar next to the clock. The bottom screen is the
+  system carousel with a name bubble.
 - **Game list.** Every game is a DS cartridge on the bottom screen: a real cart scan when it has one, otherwise a
   card drawn with its label art or name. The top screen shows the 3D game case, the screenshot, genre and play
   count, and RetroAchievements progress (badge, N of M achievements, progress bar, points).
@@ -324,10 +329,10 @@ the top panel, the bottom panel, and an unused third.
 
 ## `logo/`: the ROCKNIXDS logo
 
-A wide ROCKNIX line over a big chrome "DS", after the Nintendo DS logo's layout. `make_logo.py` draws it from
-[Unbounded](https://github.com/googlefonts/unbounded) (SIL OFL 1.1) as plain paths, with a dark outline so it works
-on light and dark backgrounds. It writes the stacked logo, a one-line version for the theme's bottom bar, and
-fragments that `gen_skin.py` embeds. `docs/ds_frame.py` makes the clamshell screenshots from 1280×480 captures.
+The ROCKNIX wordmark (the stock one, traced to vectors), the DS two-screen icon, and "DS" set in
+[Unbounded](https://github.com/googlefonts/unbounded) (SIL OFL 1.1), all as plain paths. `make_logo.py` writes a
+dark-background and a light-background version, a stacked version for small squares, and fragments that
+`gen_skin.py` embeds in the theme's bottom bar and the boot splash. `docs/ds_frame.py` makes the clamshell screenshots from 1280×480 captures.
 
 ---
 

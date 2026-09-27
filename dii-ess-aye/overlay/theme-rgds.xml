@@ -144,9 +144,9 @@
         <!-- Bottom screen (X 0.333-0.666) -->
         <image name="text_bubble" extra="true">
             <path>${themePath}/assets/images/common/text_bubble.svg</path>
-            <pos>0.5 0.3</pos>
+            <pos>0.5 0.2666667</pos><!-- y50..206, tail towards the selected icon -->
             <origin>0.5 0.5</origin>
-            <size>0.2667 0.45</size>
+            <size>0.2395833 0.325</size><!-- 460x156 -->
             <zIndex>56</zIndex>
         </image>
 
@@ -206,112 +206,115 @@
 
     <!-- Main system selection menu -->
     <view name="system">
-        <!-- Top screen (X 0-0.333), DSi-style home: clock card (clock, date, calendar tile) and a card for the
-             selected system; the ROCKNIX logo sits between the Prev/Next tabs. Canvas fractions x/1920, y/480. -->
-        <image name="home_clock_panel" extra="true">
-            <path>${themePath}/assets/images/common/home_clock_panel.svg</path>
-            <pos>0.1666667 0.30625</pos><!-- x16..624 y52..242 -->
-            <origin>0.5 0.5</origin>
-            <size>0.3166667 0.3958333</size>
-            <zIndex>1</zIndex>
-        </image>
-        <clock name="home_clock" extra="true">
-            <pos>0.1171875 0.2645833</pos><!-- 225,127 -->
-            <origin>0.5 0.5</origin>
-            <size>0.2135417 0.2</size>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.1666667</fontSize><!-- 80px -->
-            <color>F2F3F5FF</color>
-            <alignment>center</alignment>
-            <zIndex>2</zIndex>
-        </clock>
+        <!-- Top screen (X 0-0.333): one hero card (home_hero_panel.svg at x16..624 y58..398): the system's icon in a
+             glowing well, its name, maker and counts beside it, and two stat tiles along the bottom. The date sits in
+             the status bar next to the clock. Canvas fractions are x/1920, y/480. -->
         <clock name="home_date" extra="true">
             <format>%A, %B %e</format>
-            <pos>0.1171875 0.4145833</pos><!-- 225,199 -->
+            <pos>0.1666667 0.0458333</pos><!-- status bar centre, 320,22 -->
             <origin>0.5 0.5</origin>
-            <size>0.2135417 0.0625</size>
+            <size>0.15 0.0625</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.0458333</fontSize><!-- 22px -->
-            <color>8FC8FFFF</color>
+            <fontSize>0.0333333</fontSize><!-- 16px -->
+            <color>A9AFB8FF</color>
             <alignment>center</alignment>
             <zIndex>2</zIndex>
         </clock>
-        <clock name="home_cal_month" extra="true">
-            <format>%B</format>
-            <pos>0.2739583 0.1854167</pos><!-- centre of the calendar band: panel x16 + tile x510, y52 + 37 -->
+        <image name="home_hero_panel" extra="true">
+            <path>${themePath}/assets/images/common/home_hero_panel.svg</path>
+            <pos>0.1666667 0.475</pos><!-- x16..624 y58..398 -->
             <origin>0.5 0.5</origin>
-            <size>0.078125 0.0625</size>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.0354167</fontSize><!-- 17px: fits "September" in the band -->
-            <color>FFFFFFFF</color>
-            <alignment>center</alignment>
-            <zIndex>2</zIndex>
-        </clock>
-        <clock name="home_cal_day" extra="true">
-            <format>%e</format>
-            <pos>0.2739583 0.35</pos><!-- centre of the calendar page: 526, 52 + 116 -->
-            <origin>0.5 0.5</origin>
-            <size>0.078125 0.2</size>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.1458333</fontSize><!-- 70px -->
-            <color>2A2C30FF</color>
-            <alignment>center</alignment>
-            <zIndex>2</zIndex>
-        </clock>
-
-        <image name="home_system_panel" extra="true">
-            <path>${themePath}/assets/images/common/home_system_panel.svg</path>
-            <pos>0.1666667 0.6958333</pos><!-- x16..624 y259..409 -->
-            <origin>0.5 0.5</origin>
-            <size>0.3166667 0.3125</size>
+            <size>0.3166667 0.7083333</size>
             <zIndex>1</zIndex>
+        </image>
+        <image name="home_glow" extra="true">
+            <path>${themePath}/assets/images/common/logo_glow.svg</path>
+            <pos>0.0671875 0.35625</pos><!-- icon well centre 129,171 -->
+            <origin>0.5 0.5</origin>
+            <size>0.1458333 0.5</size><!-- 280x240 -->
+            <zIndex>1.5</zIndex>
+            <storyboard repeat="forever">
+                <animation property="opacity" from="0.55" to="1" duration="1800" autoReverse="true" repeat="forever" mode="easeInOut"/>
+            </storyboard>
         </image>
         <image name="home_system_icon" extra="true">
             <path>${themePath}/assets/images/systems/default.png</path><!-- fallback, like the carousel logo -->
             <path>${themePath}/assets/images/systems/${system.theme}.png</path>
-            <pos>0.0453125 0.6958333</pos><!-- icon well centre 87,334 -->
+            <pos>0.0671875 0.35625</pos>
             <origin>0.5 0.5</origin>
-            <maxSize>0.0458333 0.1833333</maxSize><!-- 88x88 -->
+            <maxSize>0.078125 0.3125</maxSize><!-- 150x150 -->
             <linearSmooth>true</linearSmooth>
             <zIndex>2</zIndex>
         </image>
         <text name="home_system_name" extra="true">
-            <text>{system:fullName}</text>
-            <pos>0.0791667 0.5708333</pos><!-- x152..604 y274..306 -->
-            <size>0.2354167 0.0666667</size>
+            <text>{system:collection} ? proper({system:fullName}) : {system:fullName}</text>
+            <pos>0.1260417 0.2375000</pos>
+            <size>0.1895833 0.1000000</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.0583333</fontSize><!-- 28px -->
+            <fontSize>0.0750000</fontSize><!-- 36px -->
             <color>F2F3F5FF</color>
+            <alignment>left</alignment>
+            <verticalAlignment>center</verticalAlignment>
+            <zIndex>2</zIndex>
+        </text>
+        <text name="home_system_maker" extra="true">
+            <text>{system:manufacturer}</text>
+            <pos>0.1260417 0.3500000</pos>
+            <size>0.1895833 0.0500000</size>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.0375000</fontSize><!-- 18px -->
+            <color>A9AFB8FF</color>
             <alignment>left</alignment>
             <zIndex>2</zIndex>
         </text>
         <text name="home_system_counts" extra="true">
             <text>("{system:total}" == "1" ? "1 game" : "{system:total}" + " games") + "  ·  {system:gamesPlayed} played"</text>
-            <pos>0.0791667 0.6541667</pos><!-- y314..338 -->
-            <size>0.2354167 0.05</size>
+            <pos>0.1260417 0.4166667</pos>
+            <size>0.1895833 0.0583333</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.0416667</fontSize><!-- 20px -->
+            <fontSize>0.0458333</fontSize><!-- 22px -->
             <color>8FC8FFFF</color>
             <alignment>left</alignment>
             <zIndex>2</zIndex>
         </text>
-        <text name="home_system_last" extra="true">
-            <text>Last played {system:lastPlayedDate}</text><!-- plain text: dates with "/" break ES expressions -->
-            <pos>0.0791667 0.7166667</pos><!-- y344..366 -->
-            <size>0.2354167 0.0458333</size>
+        <!-- stat tiles (panel y236..322): screen y294..380, x34..315 and x325..606 -->
+        <text name="home_last_label" extra="true">
+            <text>LAST PLAYED</text>
+            <pos>0.0260417 0.6354167</pos>
+            <size>0.1302083 0.0416667</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.0375</fontSize><!-- 18px -->
-            <color>A9AFB8FF</color>
+            <fontSize>0.0270833</fontSize><!-- 13px -->
+            <color>8A9098FF</color>
+            <alignment>left</alignment>
+            <zIndex>2</zIndex>
+        </text>
+        <text name="home_system_last" extra="true">
+            <text>{system:lastPlayedDate}</text><!-- plain: an expression around this binding is printed literally by ES -->
+            <pos>0.0260417 0.6812500</pos>
+            <size>0.1302083 0.0666667</size>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.0500000</fontSize><!-- 24px -->
+            <color>F2F3F5FF</color>
+            <alignment>left</alignment>
+            <zIndex>2</zIndex>
+        </text>
+        <text name="home_time_label" extra="true">
+            <text>TIME PLAYED</text>
+            <pos>0.1776042 0.6354167</pos>
+            <size>0.1302083 0.0416667</size>
+            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
+            <fontSize>0.0270833</fontSize><!-- 13px -->
+            <color>8A9098FF</color>
             <alignment>left</alignment>
             <zIndex>2</zIndex>
         </text>
         <text name="home_system_time" extra="true">
-            <text>Time played {system:gameTime}</text>
-            <pos>0.0791667 0.7708333</pos><!-- y370..392 -->
-            <size>0.2354167 0.0458333</size>
+            <text>{system:gameTime}</text><!-- plain: an expression around this binding is printed literally by ES -->
+            <pos>0.1776042 0.6812500</pos>
+            <size>0.1302083 0.0666667</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.0375</fontSize>
-            <color>A9AFB8FF</color>
+            <fontSize>0.0500000</fontSize><!-- 24px -->
+            <color>F2F3F5FF</color>
             <alignment>left</alignment>
             <zIndex>2</zIndex>
         </text>
@@ -320,7 +323,7 @@
             <path>${themePath}/assets/images/common/distro_logo.svg</path>
             <pos>0.1666667 0.9291667</pos><!-- between the tabs, 320,446 -->
             <origin>0.5 0.5</origin>
-            <size>0.1348958 0.0791667</size><!-- ROCKNIXDS mark 259x38 (1173x172 art) -->
+            <size>0.1354167 0.0804167</size><!-- ROCKNIXDS mark 260x38.6 (937x139 art) -->
             <zIndex>2</zIndex>
         </image>
 
@@ -353,30 +356,19 @@
 
         <text name="systemName" extra="true">
             <text>{system:collection} ? proper({system:fullName}) : {system:fullName}</text>
-            <pos>0.5 0.15</pos>
+            <pos>0.5 0.2229167</pos><!-- y107 -->
             <origin>0.5 0.5</origin>
             <size>0.2333 0.1</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.0500000</fontSize><!-- 24px -->
+            <fontSize>0.0583333</fontSize><!-- 28px -->
             <color>E8E9EBFF</color>
             <alignment>center</alignment>
             <zIndex>57</zIndex>
         </text>
 
-        <text name="system_maker" extra="true">
-            <text>{system:manufacturer}</text>
-            <pos>0.5 0.2291667</pos>
-            <origin>0.5 0.5</origin>
-            <size>0.2333 0.06</size>
-            <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <fontSize>0.0375000</fontSize><!-- 18px -->
-            <color>A9AEB5FF</color>
-            <alignment>center</alignment>
-            <zIndex>57</zIndex>
-        </text>
         <text name="system_games" extra="true">
             <text>"{system:total}" == "1" ? "1 game" : "{system:total}" + " games"</text>
-            <pos>0.5 0.3541667</pos>
+            <pos>0.5 0.3145833</pos><!-- y151 -->
             <origin>0.5 0.5</origin>
             <size>0.2333 0.06</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
@@ -387,6 +379,7 @@
         </text>
 
         <text name="systemInfo">
+            <visible>false</visible>
             <pos>0.5 0.35</pos>
             <origin>0.5 0.5</origin>
             <size>0.2333 0.3</size>
