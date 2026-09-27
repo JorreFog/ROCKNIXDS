@@ -374,8 +374,10 @@ the top panel, the bottom panel, and an unused third.
   sway config left ES with no touch events; `sway-config.theme` attaches the touchscreens to ES's seat too.
 - **Robust launcher** (`start_es_rgds.sh`): falls back to stock ES after 2 quick crashes, keeps ES floating
   at 0,0, and brings the menu back after a game. The patched ES is built for one ROCKNIX release
-  (`emulationstation-rgds.rocknix`, today 20260901); on any other the launcher runs stock ES and says so once
-  (`touch /storage/.config/rocknixds-any-rocknix` runs the patched one anyway). It also batches ROCKNIX's 64
+  (`emulationstation-rgds.rocknix`, today 20260901); on any other it runs if its libraries and symbols all resolve
+  (the dynamic loader checks), otherwise stock ES runs and the launcher says so once. 1.3 ran stock ES on every
+  other release, whose keyboard and menus stretch across both screens. `touch /storage/.config/rocknixds-stock-es`
+  always runs stock ES. It also batches ROCKNIX's 64
   `systemctl import-environment` calls into one (1.35 s saved on every ES start) and applies the sway seat
   setup directly instead of a `swaymsg reload`, which froze the panels for over 2 s as the menu appeared.
 - **Game art without an account** ([`scrape/rocknixds-media.py`](dii-ess-aye/scrape)): one command fetches covers,

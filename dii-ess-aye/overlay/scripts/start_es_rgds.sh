@@ -31,18 +31,24 @@ FAILS=/tmp/es-rgds-fails
 REVEAL_DELAY=1          # after ES answers its API, before its window is shown. Measured: at 0-0.3 s the top panel is still
                         # black (ES hasn't drawn its first view); at 1 s both panels are complete
 
-# Which ES: the patched one is built against one ROCKNIX release (bin/rocknix-version = its OS_VERSION). On another
-# release it may not start, or misread newer settings, so run stock ES there and say why, once per release
-# (touch /storage/.config/rocknixds-any-rocknix to run it anyway). Two quick crashes in a row also mean stock ES.
+# Which ES: the patched one is built against one ROCKNIX release (bin/rocknix-version), but it runs on any release
+# where it links: every library it needs is there and every symbol resolves (the dynamic loader checks, ~10 ms).
+# Where it doesn't, stock ES runs and says why, once per release. (1.3 ran stock ES on every other release, and
+# stock ES sizes its menus and keyboard for the whole 1920 px canvas.) touch /storage/.config/rocknixds-stock-es to
+# always run stock ES. Two quick crashes in a row also mean stock ES.
+es_links() {
+    ! LD_TRACE_LOADED_OBJECTS=1 LD_WARN=yes LD_BIND_NOW=yes /usr/lib/ld-linux-aarch64.so.1 "$1" 2>&1 |
+        grep -qE 'undefined symbol|not found|cannot open|error while loading'
+}
 ES_FOR=$(cat "${ES_BIN%/*}/rocknix-version" 2>/dev/null)
 OS_VER=$(. /etc/os-release 2>/dev/null; echo "$OS_VERSION")
 USE_PATCHED=1 RGDS_NOTICE= RGDS_MARK=
-if [ ! -x "$ES_BIN" ]; then
+if [ ! -x "$ES_BIN" ] || [ -e /storage/.config/rocknixds-stock-es ]; then
     USE_PATCHED=
-elif [ -n "$ES_FOR" ] && [ "$ES_FOR" != "$OS_VER" ] && [ ! -e /storage/.config/rocknixds-any-rocknix ]; then
+elif [ "$ES_FOR" != "$OS_VER" ] && ! es_links "$ES_BIN"; then
     USE_PATCHED=
     if [ "$(cat /storage/.config/rocknixds-es-notice 2>/dev/null)" != "$OS_VER" ]; then
-        RGDS_NOTICE="ROCKNIXDS: its patched EmulationStation is built for ROCKNIX $ES_FOR and this is $OS_VER, so stock EmulationStation is running. The theme works, but menus and popups span both screens until a ROCKNIXDS release for this ROCKNIX."
+        RGDS_NOTICE="ROCKNIXDS: its patched EmulationStation (built for ROCKNIX $ES_FOR) can't run on ROCKNIX $OS_VER, so stock EmulationStation is running. The theme works, but menus, popups and the keyboard span both screens until a ROCKNIXDS release for this ROCKNIX."
         RGDS_MARK=/storage/.config/rocknixds-es-notice
     fi
 elif [ "$(cat $FAILS 2>/dev/null || echo 0)" -ge 2 ]; then
