@@ -19,6 +19,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dirent.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include "rc_client.h"
@@ -42,6 +44,15 @@ void dsflip_log(const char *fmt, ...);
 
 static rc_client_t *rc;
 static volatile uint8_t *ram;           /* DS main RAM inside DraStic, once found */
+/* DTCM (the ARM9's 16 KB data TCM; RA addresses 0x1000000-0x1003FFF). DraStic backs the whole DS address space with
+ * one shared-memory file (/dev/shm/drastic_mapped_memory.dat, kept open, unlinked) mapped view by view at a fixed
+ * base: main RAM at file offset 0, ITCM at 0x400000, DTCM at 0x410000, mapped wherever the game's CP15 puts it
+ * (HeartGold: 0x027E0000, verified byte-identical). We map our own read-only view of that 16 KB from DraStic's fd,
+ * so it stays valid if the game moves DTCM (DraStic remaps its view then). */
+#define DTCM_ADDR 0x1000000u
+#define DTCM_SIZE 0x4000u
+#define DTCM_FILE_OFF 0x410000
+static volatile uint8_t *dtcm;
 static volatile int game_loaded, scanning, logged_in, load_started;
 static char rom_path[1024], user[128], pass[256];
 static uint8_t rom_hdr[0x160];
@@ -138,8 +149,32 @@ static void server_call(const rc_api_request_t *req, rc_client_server_callback_t
 }
 
 /* ---------- memory ---------- */
+static void dtcm_map(void) {
+    if (dtcm) return;
+    DIR *d = opendir("/proc/self/fd"); if (!d) return;
+    struct dirent *e; int fd = -1;
+    while ((e = readdir(d)) && fd < 0) {
+        char l[64], t[256]; snprintf(l, sizeof l, "/proc/self/fd/%s", e->d_name);
+        ssize_t n = readlink(l, t, sizeof t - 1); if (n <= 0) continue; t[n] = 0;
+        if (!strncmp(t, "/dev/shm/drastic_mapped_memory.dat", 34)) fd = atoi(e->d_name);
+    }
+    closedir(d);
+    if (fd < 0) { dsflip_log("[ra] DTCM: DraStic's shared memory file not open, DTCM achievements unavailable\n"); return; }
+    void *p = mmap(0, DTCM_SIZE, PROT_READ, MAP_SHARED, fd, DTCM_FILE_OFF);
+    if (p == MAP_FAILED) { dsflip_log("[ra] DTCM: mmap failed: %s\n", strerror(errno)); return; }
+    dtcm = p;
+    dsflip_log("[ra] DTCM mapped (fd %d, offset %#x)\n", fd, DTCM_FILE_OFF);
+}
+
 static uint32_t read_memory(uint32_t addr, uint8_t *buf, uint32_t n, rc_client_t *c) {
     (void)c;
+    if (addr >= DTCM_ADDR && addr < DTCM_ADDR + DTCM_SIZE) {
+        const volatile uint8_t *t = dtcm;
+        if (!t) return 0;
+        if (addr + n > DTCM_ADDR + DTCM_SIZE) n = DTCM_ADDR + DTCM_SIZE - addr;
+        memcpy(buf, (const void *)(t + (addr - DTCM_ADDR)), n);
+        return n;
+    }
     const volatile uint8_t *m = ram;
     if (!m || addr >= DS_RAM_SIZE) return 0;
     if (addr + n > DS_RAM_SIZE) n = DS_RAM_SIZE - addr;
@@ -182,6 +217,7 @@ static void *scan_thread(void *a) {
     }
     if (f) fclose(f);
     if (mem >= 0) close(mem);
+    dtcm_map();                                           /* before ram is published: the set loads after that */
     if (best) ram = (volatile uint8_t *)best;
     dsflip_log("[ra] RAM scan: %d candidate(s)%s%p\n", cands, best ? ", using " : ", will retry", (void *)best);
     scanning = 0;
@@ -435,6 +471,10 @@ void ra_frame(void) {
     if (getenv("DSFLIP_RA_TEST") && ram && frames % 120 == 0) {
         uint32_t sum = 0; for (uint32_t i = 0; i < DS_RAM_SIZE; i += 64) sum = sum * 31 + ram[i];
         dsflip_log("[ra] test: RAM checksum %08x at frame %d\n", sum, frames);
+        uint8_t t[DTCM_SIZE]; uint32_t got = read_memory(DTCM_ADDR, t, DTCM_SIZE, rc), nz = 0;
+        for (uint32_t i = 0; i < got; i++) nz += t[i] != 0;
+        dsflip_log("[ra] test: DTCM read %u bytes, %u non-zero, top word %02x%02x%02x%02x\n", got, nz,
+                   t[DTCM_SIZE - 5], t[DTCM_SIZE - 6], t[DTCM_SIZE - 7], t[DTCM_SIZE - 8]);
     }
     if (game_loaded && ram) rc_client_do_frame(rc);
     else rc_client_idle(rc);

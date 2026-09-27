@@ -247,6 +247,9 @@ Standalone DraStic has no RetroAchievements support, so `libdsflip` brings its o
 - **Game detection** uses rcheevos' NDS hash of the ROM DraStic was started with.
 - **Memory:** the DS keeps a copy of the cartridge header at `0x027FFE00`, so matching the ROM's header
   inside DraStic's memory finds the emulated main RAM (RA addresses `0x000000–0x3FFFFF`) exactly.
+- **DTCM** (the ARM9's 16 KB data memory, RA addresses `0x1000000–0x1003FFF`, used by a few sets) since 1.4:
+  DraStic backs DS memory with one shared-memory file, DTCM at a fixed offset in it, and libdsflip maps its own
+  read-only view of that, so it follows the game wherever it places DTCM.
 - **Pop-ups** (unlocks with the achievement's badge, the game summary with its icon, offline/online) are cards in the
   theme's DSi font that drop in from the top edge and slide back up, and a small pill shows progress on tracked achievements ("3/5"). Badges and icons are
   downloaded once per game into `/storage/.config/drastic/dsflip/badges/`. `dsflip/ui.c` draws them on a thread of
@@ -392,7 +395,7 @@ dark-background and a light-background version, a stacked version for small squa
 
 ## Known issues
 
-- **RetroAchievements:** softcore only, and achievements that read the DS's DTCM (rare) don't work yet.
+- **RetroAchievements:** softcore only.
 - **Heavy stretches at 2× can still drop frames** (up to ~10/s in one run). There, DraStic's own frame
   times vary so much that its frames arrive spread over the whole refresh cycle, and no latch position can
   separate them. Calm stretches drop about one frame every 8 s.

@@ -51,4 +51,11 @@ Games are unaffected (sway is stopped; libdsflip reads the touchscreen itself).
   change, no scaling), eased out over 280 ms in and eased in over 200 ms out; the presenter commits the overlay every
   frame while it moves. Logged on the device: 4, 12, 23, 32 ... 71, 72 rows in; 72 ... 21, 10, 4, off out; no commit
   rejected, 60 fps.
+- **DTCM (2026-09-27):** DraStic (r2.5.2.2) backs the DS address space with one shared-memory file,
+  `/dev/shm/drastic_mapped_memory.dat` (open as an fd, unlinked), mapped view by view at a fixed base: main RAM at
+  file offset 0, ITCM 0x400000 (32 KB, mirrored), shared WRAM 0x408000, DTCM 0x410000 (16 KB) at the game's CP15
+  address (HeartGold 0x027E0000; the RAM mirror there is split around it). The file's bytes at 0x410000 equal the
+  game's view at 0x027E0000 (checked). ra.c maps its own read-only view from DraStic's fd before the set loads
+  and serves RA 0x1000000-0x1003FFF from it (`DSFLIP_RA_TEST` logs live DTCM reads through `read_memory`). Not yet
+  seen: an actual unlock of a DTCM achievement (no such set at hand).
 - **Hardcore:** not possible, DraStic's savestates, cheats and fast-forward can't be locked from outside.
