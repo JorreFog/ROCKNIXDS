@@ -247,8 +247,11 @@ Standalone DraStic has no RetroAchievements support, so `libdsflip` brings its o
 - **Game detection** uses rcheevos' NDS hash of the ROM DraStic was started with.
 - **Memory:** the DS keeps a copy of the cartridge header at `0x027FFE00`, so matching the ROM's header
   inside DraStic's memory finds the emulated main RAM (RA addresses `0x000000–0x3FFFFF`) exactly.
-- **Pop-ups** (unlocks, game summary, offline/online) are drawn in an 8×8 pixel font (Press Start 2P) on a spare hardware
-  overlay plane of the top panel, so they cost the game nothing.
+- **Pop-ups** (unlocks with the achievement's badge, the game summary with its icon, offline/online) are cards in the
+  theme's DSi font, and a small pill shows progress on tracked achievements ("3/5"). Badges and icons are
+  downloaded once per game into `/storage/.config/drastic/dsflip/badges/`. `dsflip/ui.c` draws them on a thread of
+  its own (stb_truetype, stb_image) into a spare hardware overlay plane of the top panel, so they cost the game
+  nothing. `DSFLIP_UI_DEMO=1` shows a sample unlock and progress pill after a game loads.
 - **Softcore only.** Hardcore needs savestates, cheats and fast-forward locked, which can't be enforced
   from outside DraStic.
 

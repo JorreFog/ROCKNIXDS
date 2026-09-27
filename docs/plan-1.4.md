@@ -38,3 +38,13 @@ matrix). So `sway-config.theme` keeps ROCKNIX's seat1 lines and adds `seat seat0
 ES's own touch model then works: swipe scrolls the carousel, a tap opens the current selection (anywhere, by ES's
 design), taps pick menu rows. Tested with `touchtap.py`, which writes a real touch into the evdev node.
 Games are unaffected (sway is stopped; libdsflip reads the touchscreen itself).
+
+## 3. RetroAchievements
+
+- **DSi-enhanced ROMs** were already verified in 1.3 (Black 2: its set loads, "1 of 187 unlocked").
+- **Pop-ups redone (2026-09-27):** `dsflip/ui.c` renders cards (badge or game icon, coloured first line, title) and
+  a progress pill in the DSi font (Liberation Sans without the theme), premultiplied ARGB into the 640x72 overlay
+  plane, on its own thread; pop-ups queue. Badges are prefetched after the game loads (HeartGold: 137 of 137 in a
+  few seconds) and cached, so an unlock shows its badge at once. rc_client's PROGRESS_INDICATOR_SHOW/UPDATE/HIDE
+  drive the pill. Checked on the device with `DSFLIP_UI_DEMO=1` and scanout + overlay dumps.
+- **Hardcore:** not possible, DraStic's savestates, cheats and fast-forward can't be locked from outside.

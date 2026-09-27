@@ -233,7 +233,6 @@ static void add_fb(drmModeAtomicReq *r, panel *p, dbuf *b) {
     if (p->p_fence && b->fence >= 0) drmModeAtomicAddProperty(r, p->plane, p->p_fence, b->fence);  /* flip once the GPU is done */
 }
 
-#include "font8.h"
 void ra_frame(void);
 
 void dsflip_log(const char *fmt, ...) {
@@ -285,11 +284,10 @@ static void release(dbuf *b) {
 /* toast: a small overlay plane on the top panel (RetroAchievements pop-ups), committed together with the
  * game frames. Rendered into one of two buffers, never the one being scanned out. */
 #define TOAST_W 640
-#define TOAST_H 56
+#define TOAST_H 72
 static uint32_t tp_plane, tp_fb, tp_crtc, tp_sx, tp_sy, tp_sw, tp_sh, tp_cx, tp_cy, tp_cw, tp_ch;
 static dbuf toast[2];
 static int toast_cur, toast_shown, toast_want, toast_dirty;
-static long long toast_until;
 
 static void add_toast(drmModeAtomicReq *r) {
     if (toast_want) {
@@ -300,7 +298,7 @@ static void add_toast(drmModeAtomicReq *r) {
         drmModeAtomicAddProperty(r, tp_plane, tp_sw, (uint64_t)TOAST_W << 16);
         drmModeAtomicAddProperty(r, tp_plane, tp_sh, (uint64_t)TOAST_H << 16);
         drmModeAtomicAddProperty(r, tp_plane, tp_cx, 0);
-        drmModeAtomicAddProperty(r, tp_plane, tp_cy, 6);
+        drmModeAtomicAddProperty(r, tp_plane, tp_cy, 0);
         drmModeAtomicAddProperty(r, tp_plane, tp_cw, TOAST_W);
         drmModeAtomicAddProperty(r, tp_plane, tp_ch, TOAST_H);
     } else {
@@ -373,46 +371,29 @@ static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned c
     unlock(&mu);
 }
 
-static void toast_text(uint32_t *px, int pitch, int x, int y, const char *t, uint32_t col, int maxc) {
-    int n = 0;
-    for (; *t && n < maxc; t++, n++) {
-        unsigned char c = (unsigned char)*t;
-        if (n == maxc - 1 && t[1]) c = '~';          /* truncated */
-        if (c < 32 || c > 126) c = '?';
-        const unsigned char *g = font8[c - 32];
-        for (int gy = 0; gy < 8; gy++)
-            for (int gx = 0; gx < 8; gx++)
-                if (g[gy] & (0x80 >> gx))
-                    for (int sy = 0; sy < 2; sy++) {
-                        uint32_t *row = (uint32_t *)((char *)px + (y + gy * 2 + sy) * pitch);
-                        row[x + n * 16 + gx * 2] = row[x + n * 16 + gx * 2 + 1] = col;
-                    }
-    }
+/* the overlay plane is drawn by ui.c (RetroAchievements pop-ups and progress, in the DSi font) on its own thread:
+ * begin hands it the buffer that isn't on screen (TOAST_W x TOAST_H ARGB8888, premultiplied), end shows it or hides
+ * the plane; the presenter commits it with the next frame (or at once if no frame is coming) */
+static int ov_next;
+uint32_t *dsflip_overlay_begin(int *pitch, int *w, int *h) {
+    if (!ok || !tp_plane) return 0;
+    lock(&mu); ov_next = toast_shown ? !toast_cur : toast_cur; unlock(&mu);
+    *pitch = (int)toast[ov_next].pitch; *w = TOAST_W; *h = TOAST_H;
+    return toast[ov_next].map;
 }
-
-/* public: show a two-line pop-up on the top panel for ms milliseconds (thread-safe) */
-void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms) {
-    if (!ok || !tp_plane) return;
-    lock(&mu); int next = toast_shown ? !toast_cur : toast_cur; unlock(&mu);
-    dbuf *b = &toast[next];
-    uint32_t *px = b->map; int pitch = (int)b->pitch;
-    uint32_t bg = 0xff161b26, edge = 0xff000000 | accent;
-    for (int y = 0; y < TOAST_H; y++) {
-        uint32_t *row = (uint32_t *)((char *)px + y * pitch);
-        for (int x = 0; x < TOAST_W; x++) {
-            uint32_t c = bg;
-            if (x < 6 || y >= TOAST_H - 2) c = edge;                  /* accent bar + underline */
-            if ((x < 2 || x >= TOAST_W - 2) && (y < 2 || y >= TOAST_H - 2)) c = 0;   /* soft corners */
-            row[x] = c;
-        }
-    }
-    toast_text(px, pitch, 18, 8, l1 ? l1 : "", 0xff000000 | accent, 38);
-    toast_text(px, pitch, 18, 30, l2 ? l2 : "", 0xffffffff, 38);
+void dsflip_overlay_end(int show) {
     lock(&mu);
-    toast_cur = next; toast_want = 1; toast_dirty = 1; toast_until = now_us() + (long long)ms * 1000;
+    if (show) toast_cur = ov_next;
+    toast_want = show; toast_dirty = 1;
     unlock(&mu);
     uint64_t one = 1; if (write(efd, &one, 8) < 0) {}
-    }
+}
+void ui_popup(const char *l1, const char *l2, const char *badge_png, uint32_t accent, int ms);
+/* public: a two-line pop-up without a badge (thread-safe) */
+void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms) {
+    if (!ok || !tp_plane) return;
+    ui_popup(l1, l2, 0, accent, ms);
+}
 
 /* SIGUSR2: dump what each panel scans out to <logdir>/scan<i>.raw (header "w h pitch bpp\n" + pixels) */
 static volatile int want_dump, touch_dumps;   /* DSFLIP_TOUCH_DUMP=N: dump the bottom screen at the first N touch-downs */
@@ -609,8 +590,8 @@ static void *presenter(void *a) {
             if ((P[0].ready || P[1].ready) && !pending_mask && now_us() - ready_since > 2 * (long long)period) { st_late++; try_commit(); }
             unlock(&mu);
         }
-        if (toast_want && now_us() > toast_until) {   /* hide an expired toast (commits even without a new frame) */
-            lock(&mu); toast_want = 0; toast_dirty = 1; try_commit(); unlock(&mu);
+        if (toast_dirty && !pending_mask && !P[0].ready && !P[1].ready) {   /* an overlay change with no frame coming */
+            lock(&mu); try_commit(); unlock(&mu);
         }
         if (want_dump) { want_dump = 0; lock(&mu); dump_scan(); unlock(&mu); }
         if (tdump_n < touch_dumps && tdump_x >= 0) { lock(&mu); dump_touch(); unlock(&mu); tdump_n++; tdump_x = -1; }

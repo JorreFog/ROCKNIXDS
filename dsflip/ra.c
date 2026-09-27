@@ -30,10 +30,13 @@
 #endif
 
 void dsflip_toast(const char *line1, const char *line2, uint32_t accent, int ms);
+void ui_popup(const char *l1, const char *l2, const char *badge_png, uint32_t accent, int ms);
+void ui_progress(const char *text, const char *badge_png);
 void dsflip_log(const char *fmt, ...);
 
 #define SYSCFG "/storage/.config/system/configs/system.cfg"
 #define TOKEN_FILE "/storage/.config/drastic/dsflip/ra.token"
+#define BADGE_DIR "/storage/.config/drastic/dsflip/badges"     /* achievement badges and game icons, fetched once */
 #define DS_RAM_SIZE 0x400000u
 #define HDR_OFF 0x3FFE00u
 
@@ -185,16 +188,103 @@ static void *scan_thread(void *a) {
     return 0;
 }
 
+/* ---------- images: badges and game icons, cached as files ---------- */
+static int fetch_file(const char *url, const char *path) {         /* 1 if path exists afterwards */
+    if (access(path, R_OK) == 0) return 1;
+    if (!*url || !curl_load()) return 0;
+    membuf body = { 0, 0 }; long status = 0;
+    void *h = c_init(); if (!h) return 0;
+    c_setopt(h, CURLOPT_URL, url); c_setopt(h, CURLOPT_USERAGENT, user_agent); c_setopt(h, CURLOPT_NOSIGNAL, 1L);
+    c_setopt(h, CURLOPT_TIMEOUT, 10L); c_setopt(h, CURLOPT_FOLLOWLOCATION, 1L);
+    c_setopt(h, CURLOPT_WRITEFUNCTION, on_body); c_setopt(h, CURLOPT_WRITEDATA, &body);
+    if (c_perform(h) == 0) c_getinfo(h, CURLINFO_RESPONSE_CODE, &status);
+    c_cleanup(h);
+    int ok = 0;
+    if (status == 200 && body.len > 8 && !memcmp(body.data, "\x89PNG", 4)) {
+        char tmp[600]; snprintf(tmp, sizeof tmp, "%s.part", path);
+        FILE *f = fopen(tmp, "wb");
+        if (f) { ok = fwrite(body.data, 1, body.len, f) == body.len; if (fclose(f)) ok = 0; }
+        if (ok) ok = rename(tmp, path) == 0; else unlink(tmp);
+    }
+    free(body.data);
+    return ok;
+}
+static void badge_file(const rc_client_achievement_t *a, char *path, size_t n) { snprintf(path, n, BADGE_DIR "/%s.png", a->badge_name); }
+static int badge_fetch(const rc_client_achievement_t *a, char *path, size_t n) {
+    char url[512] = "";
+    badge_file(a, path, n);
+    rc_client_achievement_get_image_url(a, RC_CLIENT_ACHIEVEMENT_STATE_UNLOCKED, url, sizeof url);
+    return fetch_file(url, path);
+}
+static void detach(void *(*fn)(void *), void *arg) {
+    pthread_t t; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
+    if (pthread_create(&t, &at, fn, arg)) fn(arg);
+    pthread_attr_destroy(&at);
+}
+/* after the game loads: its icon for the "loaded" pop-up, then every badge, so an unlock shows its badge at once */
+typedef struct { char title[128], line[160], icon_url[512]; } load_msg;
+static void *prefetch_thread(void *a) {
+    load_msg *m = a;
+    mkdir(BADGE_DIR, 0755);
+    char icon[600]; const rc_client_game_t *g = rc_client_get_game_info(rc);
+    snprintf(icon, sizeof icon, BADGE_DIR "/game-%s.png", g && g->badge_name ? g->badge_name : "0");
+    int have_icon = fetch_file(m->icon_url, icon);
+    ui_popup(m->title, m->line, have_icon ? icon : 0, 0x6ab0ff, 5000);
+    free(m);
+    rc_client_achievement_list_t *l = rc_client_create_achievement_list(rc, RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE, RC_CLIENT_ACHIEVEMENT_LIST_GROUPING_LOCK_STATE);
+    int got = 0, n = 0;
+    for (uint32_t b = 0; l && b < l->num_buckets; b++)
+        for (uint32_t i = 0; i < l->buckets[b].num_achievements; i++) {
+            char path[600]; n++; got += badge_fetch(l->buckets[b].achievements[i], path, sizeof path);
+        }
+    if (l) rc_client_destroy_achievement_list(l);
+    dsflip_log("[ra] badges: %d of %d cached in " BADGE_DIR "\n", got, n);
+    if (getenv("DSFLIP_UI_DEMO")) {                  /* test hook: what an unlock and a progress update look like */
+        rc_client_achievement_list_t *d = rc_client_create_achievement_list(rc, RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE, RC_CLIENT_ACHIEVEMENT_LIST_GROUPING_LOCK_STATE);
+        if (d && d->num_buckets && d->buckets[0].num_achievements) {
+            const rc_client_achievement_t *a = d->buckets[0].achievements[0];
+            char path[600], l1[64]; badge_file(a, path, sizeof path);
+            snprintf(l1, sizeof l1, "Achievement unlocked \xc2\xb7 %u points", a->points);
+            sleep(6); ui_popup(l1, a->title, path, 0xffd84a, 5000);
+            sleep(7); ui_progress("3/5", path);
+            sleep(5); ui_progress(0, 0);
+        }
+        if (d) rc_client_destroy_achievement_list(d);
+    }
+    return 0;
+}
+typedef struct { char l1[128], l2[160], badge[600]; const rc_client_achievement_t *a; } unlock_msg;
+static void *unlock_thread(void *a) {                /* the badge is normally cached already; fetch it if not */
+    unlock_msg *m = a;
+    int have = badge_fetch(m->a, m->badge, sizeof m->badge);
+    ui_popup(m->l1, m->l2, have ? m->badge : 0, 0xffd84a, 5000);
+    free(m);
+    return 0;
+}
+
 /* ---------- events, login, game load ---------- */
 static void on_event(const rc_client_event_t *e, rc_client_t *c) {
     (void)c;
-    char l1[128], l2[160];
+    char l2[160];
     switch (e->type) {
-    case RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED:
-        snprintf(l1, sizeof l1, "Achievement unlocked  %u pts", e->achievement->points);
-        snprintf(l2, sizeof l2, "%s", e->achievement->title);
+    case RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED: {
+        unlock_msg *m = calloc(1, sizeof *m);
         dsflip_log("[ra] unlocked: %s (%u)\n", e->achievement->title, e->achievement->points);
-        dsflip_toast(l1, l2, 0xffd84a, 5000);
+        if (!m) break;
+        snprintf(m->l1, sizeof m->l1, "Achievement unlocked \xc2\xb7 %u points", e->achievement->points);
+        snprintf(m->l2, sizeof m->l2, "%s", e->achievement->title);
+        m->a = e->achievement;
+        detach(unlock_thread, m);
+        break;
+    }
+    case RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_SHOW:
+    case RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_UPDATE: {
+        char path[600]; badge_file(e->achievement, path, sizeof path);
+        ui_progress(e->achievement->measured_progress, access(path, R_OK) == 0 ? path : 0);
+        break;
+    }
+    case RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_HIDE:
+        ui_progress(0, 0);
         break;
     case RC_CLIENT_EVENT_GAME_COMPLETED:
         dsflip_toast("All achievements unlocked!", rc_client_get_game_info(rc)->title, 0xffd84a, 6000);
@@ -230,8 +320,12 @@ static void on_load(int result, const char *err, rc_client_t *c, void *u) {
         snprintf(l2, sizeof l2, "%u of %u unlocked (softcore)", s.num_unlocked_achievements, s.num_core_achievements);
     else snprintf(l2, sizeof l2, "no achievements for this game yet");
     dsflip_log("[ra] game %u '%s': %s\n", g->id, g->title, l2);
-    dsflip_toast(g->title, l2, 0x6ab0ff, 5000);
     game_loaded = 1;
+    load_msg *m = calloc(1, sizeof *m);
+    if (!m) { dsflip_toast(g->title, l2, 0x6ab0ff, 5000); return; }
+    snprintf(m->title, sizeof m->title, "%s", g->title); snprintf(m->line, sizeof m->line, "%s", l2);
+    rc_client_game_get_image_url(g, m->icon_url, sizeof m->icon_url);
+    detach(prefetch_thread, m);
 }
 
 static void save_token(void) {
