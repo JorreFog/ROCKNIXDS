@@ -374,9 +374,11 @@ the top panel, the bottom panel, and an unused third.
     ScreenScraper scraper work as in stock ES (1.3's menu showed "Unauthenticated", 401).
   - `es-rgds-powersaver.patch` (1.4): with the power saver on "enhanced" (the installer sets it), an idle menu
     draws nothing; this wakes ES once a minute so the clock and battery stay current, and polls input once per
-    frame instead of every millisecond while idle (SDL can't block with a gamepad open: ~760 wake-ups/s -> ~66).
-    The theme's looping animations now stop after a few cycles. Idle menu: ~101% -> ~39% CPU (of 400), GPU at its
-    lowest clock, ~150 mA less.
+    frame instead of every millisecond while idle (SDL can't block with a gamepad open: ~760 wake-ups/s -> ~66),
+    and closes the audio device after a minute without input (open, SDL streams silence to PipeWire nonstop and the
+    speaker amplifier stays on; reopening takes 60-100 ms, so quick browsing never waits for it).
+    The theme's looping animations now stop after a few cycles. Idle menu: ~101% -> ~13% CPU (of 400), average clock
+    ~1390 -> ~530 MHz, GPU at its lowest clock.
 - **Other themes** (since 1.4): pick any other theme in ES and ES restarts in stock ROCKNIX's layout, the top panel
   at 640x480 with the bottom panel off; pick this one again and it spans both panels. 1.3 stretched every theme
   across both screens. (`theme-changed.sh`, run by ES's theme-changed event, does the restart.)

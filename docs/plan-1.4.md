@@ -220,8 +220,10 @@ stays under 65%, up at once, down after 2 s.
   cycles (they restart on navigation), the power saver is "enhanced", and es-rgds-powersaver.patch wakes ES each
   minute for the clock (it was frozen otherwise) and polls input per frame instead of per millisecond (SDL can't
   block with a gamepad open). Idle menu: CPU 101% -> 39% of 400, average clock 1389 -> ~800 MHz, GPU 400 -> 200 MHz,
-  SoC 43 -> 38 C, ~150 mA less. What's left is mostly audio: ES keeps a stream open (silence) and PipeWire
-  processes it, ~13% of a core.
+  SoC 43 -> 38 C, ~150 mA less. Then audio: ES kept a stream open (silence; SDL2 streams silence even when paused)
+  and PipeWire processed it, ~13% of a core, with the sink RUNNING (amplifier on). The patch closes ES's audio after
+  60 s without input (reopening measured 63-102 ms, so not at the 3 s standby: that delayed the first press while
+  browsing). Idle menu now: 13% of 400 at ~530 MHz average, sink SUSPENDED.
 
 Found on the way: ROCKNIX's `powerstate` service re-applies a GPU profile whenever the battery status flips
 (charger plugged/unplugged, or a weak charger flapping), which overrode the session's GPU clock mid-game; session.sh

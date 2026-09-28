@@ -1,15 +1,15 @@
-From c7ae26639a53b1361c66f3fa0c9dfe422e2fdcda Mon Sep 17 00:00:00 2001
+From 575368afa75e521875e38c984074556a2268f04a Mon Sep 17 00:00:00 2001
 From: JorreFog <305496122+JorreFog@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 18:55:30 +0200
-Subject: [PATCH] es-rgds-powersaver: wake each minute in standby for the
- clock; poll input once per frame
+Subject: [PATCH] es-rgds-powersaver: in standby wake each minute for the
+ clock, poll input once per frame, close audio after a minute idle
 
 ---
- es-app/src/main.cpp | 17 ++++++++++++++++-
- 1 file changed, 16 insertions(+), 1 deletion(-)
+ es-app/src/main.cpp | 34 +++++++++++++++++++++++++++++++++-
+ 1 file changed, 33 insertions(+), 1 deletion(-)
 
 diff --git a/es-app/src/main.cpp b/es-app/src/main.cpp
-index edd28e10b..790eb016a 100644
+index edd28e10b..63c502ca8 100644
 --- a/es-app/src/main.cpp
 +++ b/es-app/src/main.cpp
 @@ -1,6 +1,7 @@
@@ -20,7 +20,7 @@ index edd28e10b..790eb016a 100644
  #include "services/HttpServerThread.h"
  #include "guis/GuiDetectDevice.h"
  #include "guis/GuiMsgBox.h"
-@@ -729,7 +730,21 @@ int main(int argc, char* argv[])
+@@ -729,7 +730,38 @@ int main(int argc, char* argv[])
  		if (screenSaverWait)
  			eventResult = SDL_WaitEventTimeout(&event, screenSaverTimeout);
  		else if (ps_standby)
@@ -36,9 +36,26 @@ index edd28e10b..790eb016a 100644
 +			// with a gamepad open SDL can't block in SDL_WaitEventTimeout and polls every millisecond (measured: ~760
 +			// wake-ups/s in an idle menu); check once per frame instead, which keeps the first press after idling as
 +			// quick as a frame
++			// and close the audio device after a minute without input: open, SDL streams silence to PipeWire nonstop (~13%
++			// of a core in an idle menu, and the speaker amplifier stays powered). It reopens with the next input, which
++			// takes 60-100 ms, so not sooner: quick browsing never waits for it. Not while music plays.
++			static bool audioClosedForIdle = false;
++			if (!audioClosedForIdle && (int)(SDL_GetTicks() - ps_time) > 60000 && AudioManager::isInitialized() &&
++				Mix_Playing(-1) == 0 && !Mix_PlayingMusic())
++			{
++				AudioManager::getInstance()->deinit();
++				audioClosedForIdle = true;
++			}
 +			Uint32 until = SDL_GetTicks() + timeout;
 +			while (!(eventResult = SDL_PollEvent(&event)) && (int)(until - SDL_GetTicks()) > 0)
 +				SDL_Delay(16);
++			if (eventResult && audioClosedForIdle)
++			{
++				Uint32 t0 = SDL_GetTicks();
++				AudioManager::getInstance()->init();
++				audioClosedForIdle = false;
++				LOG(LogInfo) << "Audio reopened after idle in " << (SDL_GetTicks() - t0) << " ms";
++			}
 +		}
  		else
  			eventResult = SDL_PollEvent(&event);
