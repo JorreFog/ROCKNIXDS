@@ -1,0 +1,91 @@
+{
+ "tag": "au-base",
+ "secs": 90.1,
+ "cpu_busy_pct": 130.3,
+ "cpu_avg_mhz": 1608,
+ "cpu_time_at_khz_pct": {
+  "1608000": 100.0
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 0,
+ "gpu_time_at_hz_pct": {},
+ "gpu_governor": "powersave",
+ "temp_c": [
+  49.444,
+  52.5,
+  51.875
+ ],
+ "bat_ma": -486.1,
+ "bat_v": 4.12,
+ "charger": "1",
+ "cpu_by_kind_pct": {
+  "user": 107.6,
+  "nice": 0.0,
+  "system": 15.7,
+  "irq": 5.3,
+  "softirq": 1.7,
+  "steal": 0.0
+ },
+ "threads": [
+  [
+   48.0,
+   "drastic.real",
+   "drastic.real",
+   215524
+  ],
+  [
+   15.8,
+   "drastic.real",
+   "drastic.real",
+   215549
+  ],
+  [
+   14.7,
+   "drastic.real",
+   "drastic.real",
+   215547
+  ],
+  [
+   14.7,
+   "drastic.real",
+   "drastic.real",
+   215546
+  ],
+  [
+   5.2,
+   "drastic.real",
+   "data-loop.0",
+   215551
+  ],
+  [
+   5.1,
+   "drastic.real",
+   "drastic.real",
+   215545
+  ],
+  [
+   3.2,
+   "pipewire",
+   "data-loop.0",
+   534
+  ],
+  [
+   1.7,
+   "drastic.real",
+   "dsf-present",
+   215528
+  ],
+  [
+   0.9,
+   "drastic.real",
+   "dsf-alsa",
+   215553
+  ],
+  [
+   0.7,
+   "battery_led_sta",
+   "battery_led_sta",
+   1648
+  ]
+ ]
+}

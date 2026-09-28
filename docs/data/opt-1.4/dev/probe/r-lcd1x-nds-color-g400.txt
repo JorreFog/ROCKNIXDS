@@ -1,0 +1,15 @@
+r-lcd1x-nds-color-g400: 90 s  CPU 143% of 400 at avg 1747 MHz (performance)  GPU avg 533 MHz (simple_ondemand)  SoC 47.8->51.9 C (max 51.2)  battery -293 mA at 4.164 V (charger on)
+  CPU by kind (% of 400): user 113.7  system 20.7  irq 6.9  softirq 1.8
+   48.4%  drastic.real/drastic.real (140603)
+   15.8%  drastic.real/drastic.real (140628)
+   14.7%  drastic.real/drastic.real (140626)
+   14.4%  drastic.real/drastic.real (140625)
+    5.5%  drastic.real/data-loop.0 (140630)
+    5.0%  drastic.real/drastic.real (140624)
+    4.9%  drastic.real/dsf-shader (140611)
+    3.7%  drastic.real/mali-cmar-backe (140618)
+    3.4%  pipewire/data-loop.0 (534)
+    2.0%  drastic.real/dsf-present (140610)
+    0.9%  kworker/u17:1-mali_jd/kworker/u17:1-mali_jd (90621)
+    0.9%  drastic.real/dsf-alsa (140632)
+frames: 91 s, 60.0 presents/s, 0.09 drops/s

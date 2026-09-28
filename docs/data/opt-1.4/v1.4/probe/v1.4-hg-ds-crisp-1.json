@@ -1,0 +1,171 @@
+{
+ "tag": "v1.4-hg-ds-crisp-1",
+ "secs": 90.2,
+ "cpu_busy_pct": 152.6,
+ "cpu_avg_mhz": 1540,
+ "cpu_time_at_khz_pct": {
+  "1416000": 76.2,
+  "1608000": 2.2,
+  "1800000": 2.2,
+  "1992000": 19.3
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 400,
+ "gpu_time_at_hz_pct": {
+  "400000000": 100.0
+ },
+ "gpu_governor": "simple_ondemand",
+ "temp_c": [
+  59.444,
+  58.333,
+  60.0
+ ],
+ "bat_ma": -307.7,
+ "bat_v": 4.072,
+ "charger": "1",
+ "cpu_by_kind_pct": {
+  "user": 124.8,
+  "nice": 0.0,
+  "system": 18.4,
+  "irq": 7.6,
+  "softirq": 1.8,
+  "steal": 0.0
+ },
+ "threads": [
+  [
+   54.5,
+   "drastic.real",
+   "drastic.real",
+   7733
+  ],
+  [
+   18.8,
+   "drastic.real",
+   "drastic.real",
+   7755
+  ],
+  [
+   17.4,
+   "drastic.real",
+   "drastic.real",
+   7752
+  ],
+  [
+   17.1,
+   "drastic.real",
+   "drastic.real",
+   7753
+  ],
+  [
+   5.8,
+   "drastic.real",
+   "dsf-shader",
+   7738
+  ],
+  [
+   5.5,
+   "drastic.real",
+   "drastic.real",
+   7751
+  ],
+  [
+   4.6,
+   "drastic.real",
+   "mali-cmar-backe",
+   7745
+  ],
+  [
+   3.3,
+   "pipewire",
+   "data-loop.0",
+   527
+  ],
+  [
+   2.6,
+   "drastic.real",
+   "dsf-present",
+   7737
+  ],
+  [
+   1.9,
+   "drastic.real",
+   "data-loop.0",
+   7757
+  ],
+  [
+   0.6,
+   "kworker/u17:2-mali_jd",
+   "kworker/u17:2-mali_jd",
+   589
+  ],
+  [
+   0.6,
+   "drastic.real",
+   "dsf-pump",
+   7758
+  ]
+ ],
+ "processes_incl_children": [
+  [
+   129.68,
+   "./drastic.real /storage/dsflip/roms/HGtest.nds",
+   7733
+  ],
+  [
+   3.32,
+   "/usr/bin/pipewire",
+   367
+  ],
+  [
+   2.91,
+   "/bin/bash /usr/bin/powerstate",
+   368
+  ],
+  [
+   1.29,
+   "/bin/sh /storage/dsflip/hgpower.sh v1.4-hg-ds-crisp-1 90 CPUGOV=performance DSFLIP_SHADER=",
+   7734
+  ],
+  [
+   0.61,
+   "[kworker/u17:2-mali_jd]",
+   589
+  ],
+  [
+   0.5,
+   "[kworker/u16:5-events_unbound]",
+   102
+  ],
+  [
+   0.49,
+   "[kworker/u16:4-devfreq_wq]",
+   52
+  ],
+  [
+   0.47,
+   "/bin/bash /usr/bin/rocknix-touchscreen-keyboard",
+   375
+  ],
+  [
+   0.44,
+   "[kworker/0:2-events]",
+   89
+  ],
+  [
+   0.43,
+   "[kworker/u17:1-mali_jd]",
+   5650
+  ],
+  [
+   0.37,
+   "[kworker/0:0-events]",
+   5432
+  ],
+  [
+   0.29,
+   "[kworker/u16:2-events_power_efficient]",
+   48
+  ]
+ ],
+ "forks_per_s": 7.2
+}

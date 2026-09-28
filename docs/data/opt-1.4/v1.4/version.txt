@@ -1,0 +1,2 @@
+1.4-dev
+ac2767187da6692ea3fc306da9e250b1  /storage/.config/drastic/dsflip/libdsflip.so

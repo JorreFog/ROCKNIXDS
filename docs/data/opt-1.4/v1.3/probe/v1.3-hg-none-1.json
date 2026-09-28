@@ -1,0 +1,149 @@
+{
+ "tag": "v1.3-hg-none-1",
+ "secs": 90.1,
+ "cpu_busy_pct": 121.4,
+ "cpu_avg_mhz": 1992,
+ "cpu_time_at_khz_pct": {
+  "1992000": 100.0
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 0,
+ "gpu_time_at_hz_pct": {},
+ "gpu_governor": "powersave",
+ "temp_c": [
+  55.555,
+  57.777,
+  57.222
+ ],
+ "bat_ma": -255.5,
+ "bat_v": 4.108,
+ "charger": "1",
+ "cpu_by_kind_pct": {
+  "user": 101.9,
+  "nice": 0.0,
+  "system": 12.8,
+  "irq": 5.2,
+  "softirq": 1.5,
+  "steal": 0.0
+ },
+ "threads": [
+  [
+   45.7,
+   "drastic.real",
+   "drastic.real",
+   10584
+  ],
+  [
+   15.2,
+   "drastic.real",
+   "drastic.real",
+   10596
+  ],
+  [
+   13.9,
+   "drastic.real",
+   "drastic.real",
+   10594
+  ],
+  [
+   13.8,
+   "drastic.real",
+   "drastic.real",
+   10593
+  ],
+  [
+   5.5,
+   "drastic.real",
+   "data-loop.0",
+   10598
+  ],
+  [
+   4.8,
+   "drastic.real",
+   "drastic.real",
+   10592
+  ],
+  [
+   3.1,
+   "pipewire",
+   "data-loop.0",
+   535
+  ],
+  [
+   1.7,
+   "drastic.real",
+   "drastic.real",
+   10588
+  ],
+  [
+   0.9,
+   "drastic.real",
+   "drastic.real",
+   10600
+  ],
+  [
+   0.7,
+   "battery_led_sta",
+   "battery_led_sta",
+   1654
+  ]
+ ],
+ "processes_incl_children": [
+  [
+   101.86,
+   "./drastic.real /storage/dsflip/roms/HGtest.nds",
+   10584
+  ],
+  [
+   5.24,
+   "/bin/sh /usr/lib/autostart/quirks/devices/Anbernic RG DS/bin/battery_led_status",
+   1654
+  ],
+  [
+   3.07,
+   "/usr/bin/pipewire",
+   357
+  ],
+  [
+   2.42,
+   "/bin/bash /usr/bin/powerstate",
+   359
+  ],
+  [
+   1.02,
+   "/bin/sh /storage/dsflip/hgpower.sh v1.3-hg-none-1 90 CPUGOV=performance DSFLIP_SHADER=none",
+   10585
+  ],
+  [
+   0.39,
+   "/bin/bash /usr/bin/rocknix-touchscreen-keyboard",
+   367
+  ],
+  [
+   0.34,
+   "[kworker/u16:0-events_unbound]",
+   12
+  ],
+  [
+   0.34,
+   "[kworker/3:2-events_freezable]",
+   71
+  ],
+  [
+   0.33,
+   "[kworker/u16:2+events_unbound]",
+   48
+  ],
+  [
+   0.31,
+   "[kworker/u16:3-events_unbound]",
+   50
+  ],
+  [
+   0.3,
+   "[kworker/0:2-events]",
+   144
+  ]
+ ],
+ "forks_per_s": 19.5
+}

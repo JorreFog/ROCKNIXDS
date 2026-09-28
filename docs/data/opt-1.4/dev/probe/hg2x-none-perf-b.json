@@ -1,0 +1,89 @@
+{
+ "tag": "hg2x-none-perf-b",
+ "secs": 60.1,
+ "cpu_busy_pct": 120.8,
+ "cpu_avg_mhz": 1992,
+ "cpu_time_at_khz_pct": {
+  "1992000": 100.0
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 0,
+ "gpu_time_at_hz_pct": {},
+ "gpu_governor": "powersave",
+ "temp_c": [
+  47.777,
+  48.333,
+  48.888
+ ],
+ "bat_ma": -122.6,
+ "bat_v": 4.234,
+ "charger": "1",
+ "threads": [
+  [
+   45.6,
+   "drastic.real",
+   "drastic.real",
+   27447
+  ],
+  [
+   15.1,
+   "drastic.real",
+   "drastic.real",
+   27457
+  ],
+  [
+   14.2,
+   "drastic.real",
+   "drastic.real",
+   27455
+  ],
+  [
+   13.8,
+   "drastic.real",
+   "drastic.real",
+   27454
+  ],
+  [
+   5.7,
+   "drastic.real",
+   "data-loop.0",
+   27459
+  ],
+  [
+   4.8,
+   "drastic.real",
+   "drastic.real",
+   27453
+  ],
+  [
+   3.1,
+   "pipewire",
+   "data-loop.0",
+   534
+  ],
+  [
+   1.8,
+   "drastic.real",
+   "dsf-present",
+   27449
+  ],
+  [
+   0.9,
+   "drastic.real",
+   "dsf-alsa",
+   27461
+  ],
+  [
+   0.7,
+   "battery_led_sta",
+   "battery_led_sta",
+   1648
+  ],
+  [
+   0.5,
+   "kworker/u16:5-events_unbound",
+   "kworker/u16:5-events_unbound",
+   4680
+  ]
+ ]
+}

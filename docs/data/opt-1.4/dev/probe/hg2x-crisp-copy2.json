@@ -1,0 +1,97 @@
+{
+ "tag": "hg2x-crisp-copy2",
+ "secs": 90.2,
+ "cpu_busy_pct": 155.2,
+ "cpu_avg_mhz": 1992,
+ "cpu_time_at_khz_pct": {
+  "1992000": 100.0
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 400,
+ "gpu_time_at_hz_pct": {
+  "400000000": 100.0
+ },
+ "gpu_governor": "simple_ondemand",
+ "temp_c": [
+  53.125,
+  53.125,
+  53.75
+ ],
+ "bat_ma": -265.6,
+ "bat_v": 4.206,
+ "charger": "1",
+ "threads": [
+  [
+   48.9,
+   "drastic.real",
+   "drastic.real",
+   54950
+  ],
+  [
+   17.0,
+   "drastic.real",
+   "dsf-shader",
+   54953
+  ],
+  [
+   16.4,
+   "drastic.real",
+   "drastic.real",
+   54982
+  ],
+  [
+   15.0,
+   "drastic.real",
+   "drastic.real",
+   54979
+  ],
+  [
+   14.7,
+   "drastic.real",
+   "drastic.real",
+   54980
+  ],
+  [
+   6.2,
+   "drastic.real",
+   "data-loop.0",
+   54984
+  ],
+  [
+   4.8,
+   "drastic.real",
+   "drastic.real",
+   54978
+  ],
+  [
+   3.7,
+   "pipewire",
+   "data-loop.0",
+   534
+  ],
+  [
+   3.5,
+   "drastic.real",
+   "mali-cmar-backe",
+   54960
+  ],
+  [
+   2.3,
+   "drastic.real",
+   "dsf-present",
+   54952
+  ],
+  [
+   0.9,
+   "drastic.real",
+   "dsf-alsa",
+   54986
+  ],
+  [
+   0.8,
+   "battery_led_sta",
+   "battery_led_sta",
+   1648
+  ]
+ ]
+}

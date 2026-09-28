@@ -1,0 +1,51 @@
+{
+ "tag": "k-lcd1x-nds-color",
+ "secs": 60.1,
+ "cpu_busy_pct": 71.8,
+ "cpu_avg_mhz": 1992,
+ "cpu_time_at_khz_pct": {
+  "1992000": 100.0
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 400,
+ "gpu_time_at_hz_pct": {
+  "400000000": 100.0
+ },
+ "gpu_governor": "simple_ondemand",
+ "temp_c": [
+  50.0,
+  46.111,
+  50.0
+ ],
+ "bat_ma": -6.0,
+ "bat_v": 4.18,
+ "charger": "1",
+ "cpu_by_kind_pct": {
+  "user": 4.8,
+  "nice": 0.0,
+  "system": 7.6,
+  "irq": 58.6,
+  "softirq": 0.8,
+  "steal": 0.0
+ },
+ "threads": [
+  [
+   2.4,
+   "drastic.real",
+   "data-loop.0",
+   129009
+  ],
+  [
+   1.3,
+   "pipewire",
+   "data-loop.0",
+   534
+  ],
+  [
+   0.6,
+   "battery_led_sta",
+   "battery_led_sta",
+   1648
+  ]
+ ]
+}

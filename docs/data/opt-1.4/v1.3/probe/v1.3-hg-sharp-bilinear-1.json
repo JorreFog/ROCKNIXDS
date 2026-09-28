@@ -1,0 +1,163 @@
+{
+ "tag": "v1.3-hg-sharp-bilinear-1",
+ "secs": 90.1,
+ "cpu_busy_pct": 158.9,
+ "cpu_avg_mhz": 1992,
+ "cpu_time_at_khz_pct": {
+  "1992000": 100.0
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 400,
+ "gpu_time_at_hz_pct": {
+  "400000000": 100.0
+ },
+ "gpu_governor": "simple_ondemand",
+ "temp_c": [
+  63.888,
+  65.0,
+  64.444
+ ],
+ "bat_ma": -405.7,
+ "bat_v": 4.083,
+ "charger": "1",
+ "cpu_by_kind_pct": {
+  "user": 125.6,
+  "nice": 0.0,
+  "system": 24.1,
+  "irq": 7.4,
+  "softirq": 1.8,
+  "steal": 0.0
+ },
+ "threads": [
+  [
+   49.1,
+   "drastic.real",
+   "drastic.real",
+   20462
+  ],
+  [
+   16.8,
+   "drastic.real",
+   "drastic.real",
+   20467
+  ],
+  [
+   16.2,
+   "drastic.real",
+   "drastic.real",
+   20483
+  ],
+  [
+   14.9,
+   "drastic.real",
+   "drastic.real",
+   20480
+  ],
+  [
+   14.7,
+   "drastic.real",
+   "drastic.real",
+   20481
+  ],
+  [
+   5.7,
+   "drastic.real",
+   "data-loop.0",
+   20485
+  ],
+  [
+   4.9,
+   "drastic.real",
+   "drastic.real",
+   20479
+  ],
+  [
+   3.8,
+   "drastic.real",
+   "mali-cmar-backe",
+   20474
+  ],
+  [
+   3.7,
+   "pipewire",
+   "data-loop.0",
+   535
+  ],
+  [
+   2.8,
+   "drastic.real",
+   "drastic.real",
+   20466
+  ],
+  [
+   1.0,
+   "drastic.real",
+   "drastic.real",
+   20487
+  ],
+  [
+   0.8,
+   "battery_led_sta",
+   "battery_led_sta",
+   1654
+  ]
+ ],
+ "processes_incl_children": [
+  [
+   130.47,
+   "./drastic.real /storage/dsflip/roms/HGtest.nds",
+   20462
+  ],
+  [
+   5.85,
+   "/bin/sh /usr/lib/autostart/quirks/devices/Anbernic RG DS/bin/battery_led_status",
+   1654
+  ],
+  [
+   3.75,
+   "/usr/bin/pipewire",
+   357
+  ],
+  [
+   2.67,
+   "/bin/bash /usr/bin/powerstate",
+   359
+  ],
+  [
+   1.13,
+   "/bin/sh /storage/dsflip/hgpower.sh v1.3-hg-sharp-bilinear-1 90 CPUGOV=performance DSFLIP_S",
+   20463
+  ],
+  [
+   0.67,
+   "[kworker/u17:2-mali_jd]",
+   15627
+  ],
+  [
+   0.54,
+   "[kworker/u16:5-devfreq_wq]",
+   5791
+  ],
+  [
+   0.44,
+   "[kworker/u16:3-events_unbound]",
+   50
+  ],
+  [
+   0.43,
+   "[kworker/u16:0-devfreq_wq]",
+   12
+  ],
+  [
+   0.43,
+   "/bin/bash /usr/bin/rocknix-touchscreen-keyboard",
+   367
+  ],
+  [
+   0.24,
+   "[kworker/0:0-events_freezable]",
+   12984
+  ]
+ ],
+ "forks_per_s": 19.3
+}

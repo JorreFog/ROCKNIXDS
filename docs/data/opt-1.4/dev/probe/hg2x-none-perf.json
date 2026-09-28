@@ -1,0 +1,83 @@
+{
+ "tag": "hg2x-none-perf",
+ "secs": 60.1,
+ "cpu_busy_pct": 120.3,
+ "cpu_avg_mhz": 1992,
+ "cpu_time_at_khz_pct": {
+  "1992000": 100.0
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 0,
+ "gpu_time_at_hz_pct": {},
+ "gpu_governor": "performance",
+ "temp_c": [
+  43.75,
+  45.555,
+  46.111
+ ],
+ "bat_ma": -178.3,
+ "bat_v": 4.234,
+ "charger": "1",
+ "threads": [
+  [
+   45.6,
+   "drastic.real",
+   "drastic.real",
+   18511
+  ],
+  [
+   14.7,
+   "drastic.real",
+   "drastic.real",
+   18526
+  ],
+  [
+   13.6,
+   "drastic.real",
+   "drastic.real",
+   18524
+  ],
+  [
+   13.4,
+   "drastic.real",
+   "drastic.real",
+   18523
+  ],
+  [
+   4.9,
+   "drastic.real",
+   "data-loop.0",
+   18528
+  ],
+  [
+   4.8,
+   "drastic.real",
+   "drastic.real",
+   18522
+  ],
+  [
+   3.0,
+   "pipewire",
+   "data-loop.0",
+   534
+  ],
+  [
+   1.5,
+   "drastic.real",
+   "drastic.real",
+   18513
+  ],
+  [
+   0.8,
+   "drastic.real",
+   "drastic.real",
+   18538
+  ],
+  [
+   0.7,
+   "battery_led_sta",
+   "battery_led_sta",
+   1648
+  ]
+ ]
+}

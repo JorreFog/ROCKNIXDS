@@ -1,0 +1,5 @@
+v1.4-idle-1: 60 s  CPU 10% of 400 at avg 460 MHz (schedutil)  GPU avg 200 MHz (simple_ondemand)  SoC 49.4->48.9 C (max 49.4)  battery +74 mA at 4.109 V (charger on)
+  CPU by kind (% of 400): user 1.5  system 3.9  irq 3.3  softirq 1.2
+    1.0%  kworker/0:1-events/kworker/0:1-events (11)
+    0.6%  emulationstatio/emulationstatio (3988)
+    0.5%  python3/python3 (4782)

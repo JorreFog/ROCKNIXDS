@@ -1,0 +1,157 @@
+{
+ "tag": "v1.4-hg-none-3",
+ "secs": 90.1,
+ "cpu_busy_pct": 136.6,
+ "cpu_avg_mhz": 1442,
+ "cpu_time_at_khz_pct": {
+  "1416000": 93.1,
+  "1608000": 2.5,
+  "1800000": 2.2,
+  "1992000": 2.2
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 0,
+ "gpu_time_at_hz_pct": {},
+ "gpu_governor": "powersave",
+ "temp_c": [
+  61.666,
+  58.888,
+  61.666
+ ],
+ "bat_ma": -240.5,
+ "bat_v": 4.064,
+ "charger": "1",
+ "cpu_by_kind_pct": {
+  "user": 114.7,
+  "nice": 0.0,
+  "system": 14.0,
+  "irq": 6.3,
+  "softirq": 1.8,
+  "steal": 0.0
+ },
+ "threads": [
+  [
+   53.6,
+   "drastic.real",
+   "drastic.real",
+   17389
+  ],
+  [
+   17.8,
+   "drastic.real",
+   "drastic.real",
+   17413
+  ],
+  [
+   16.8,
+   "drastic.real",
+   "drastic.real",
+   17411
+  ],
+  [
+   16.7,
+   "drastic.real",
+   "drastic.real",
+   17410
+  ],
+  [
+   5.6,
+   "drastic.real",
+   "drastic.real",
+   17409
+  ],
+  [
+   3.0,
+   "pipewire",
+   "data-loop.0",
+   527
+  ],
+  [
+   2.1,
+   "drastic.real",
+   "dsf-present",
+   17393
+  ],
+  [
+   1.8,
+   "drastic.real",
+   "data-loop.0",
+   17415
+  ],
+  [
+   0.6,
+   "kworker/u16:0+events_unbound",
+   "kworker/u16:0+events_unbound",
+   13839
+  ],
+  [
+   0.6,
+   "drastic.real",
+   "dsf-alsa",
+   17417
+  ]
+ ],
+ "processes_incl_children": [
+  [
+   115.77,
+   "./drastic.real /storage/dsflip/roms/HGtest.nds",
+   17389
+  ],
+  [
+   3.04,
+   "/usr/bin/pipewire",
+   367
+  ],
+  [
+   2.82,
+   "/bin/bash /usr/bin/powerstate",
+   368
+  ],
+  [
+   1.26,
+   "/bin/sh /storage/dsflip/hgpower.sh v1.4-hg-none-3 90 CPUGOV=performance DSFLIP_SHADER=none",
+   17390
+  ],
+  [
+   0.63,
+   "[kworker/u16:0-events_unbound]",
+   13839
+  ],
+  [
+   0.44,
+   "[kworker/0:1-events]",
+   9706
+  ],
+  [
+   0.44,
+   "/bin/bash /usr/bin/rocknix-touchscreen-keyboard",
+   375
+  ],
+  [
+   0.38,
+   "[kworker/u16:4-events_unbound]",
+   52
+  ],
+  [
+   0.37,
+   "[kworker/3:0-events_freezable]",
+   5042
+  ],
+  [
+   0.29,
+   "[kworker/0:0-events]",
+   5432
+  ],
+  [
+   0.27,
+   "[kworker/u16:3-leds]",
+   7898
+  ],
+  [
+   0.22,
+   "[kworker/3:3-events_freezable]",
+   8739
+  ]
+ ],
+ "forks_per_s": 7.1
+}

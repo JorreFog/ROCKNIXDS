@@ -1,0 +1,13 @@
+none-bad: 90 s  CPU 133% of 400 at avg 1729 MHz (performance)  GPU avg 0 MHz (performance)  SoC 49.4->48.3 C (max 50.0)  battery -190 mA at 4.196 V (charger on)
+   49.0%  drastic.real/drastic.real (93529)
+   17.2%  drastic.real/drastic.real (93544)
+   15.8%  drastic.real/drastic.real (93541)
+   15.5%  drastic.real/drastic.real (93542)
+    5.2%  drastic.real/data-loop.0 (93546)
+    5.1%  drastic.real/drastic.real (93540)
+    3.3%  pipewire/data-loop.0 (534)
+    2.1%  drastic.real/dsf-present (93531)
+    0.9%  drastic.real/dsf-alsa (93548)
+    0.7%  battery_led_sta/battery_led_sta (1648)
+    0.6%  kworker/u16:2+events_unbound/kworker/u16:2+events_unbound (18486)
+frames: 91 s, 60.0 presents/s, 0.09 drops/s

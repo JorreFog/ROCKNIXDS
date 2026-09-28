@@ -1,0 +1,14 @@
+final-none: 90 s  CPU 134% of 400 at avg 1622 MHz (performance)  GPU avg 0 MHz (powersave)  SoC 50.6->52.5 C (max 52.5)  battery -231 mA at 4.150 V (charger on)
+  CPU by kind (% of 400): user 111.0  system 15.8  irq 5.5  softirq 1.8
+   49.9%  drastic.real/drastic.real (200608)
+   16.5%  drastic.real/drastic.real (200621)
+   15.5%  drastic.real/drastic.real (200619)
+   15.3%  drastic.real/drastic.real (200618)
+    5.3%  drastic.real/drastic.real (200617)
+    5.3%  drastic.real/data-loop.0 (200623)
+    3.3%  pipewire/data-loop.0 (534)
+    1.7%  drastic.real/dsf-present (200612)
+    1.0%  drastic.real/dsf-alsa (200625)
+    0.7%  battery_led_sta/battery_led_sta (1648)
+    0.5%  kworker/0:2-events_freezable/kworker/0:2-events_freezable (190370)
+frames: 91 s, 60.0 presents/s, 0.04 drops/s

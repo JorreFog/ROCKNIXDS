@@ -1,0 +1,170 @@
+{
+ "tag": "v1.4-hg-ds-crisp-2",
+ "secs": 90.2,
+ "cpu_busy_pct": 146.5,
+ "cpu_avg_mhz": 1567,
+ "cpu_time_at_khz_pct": {
+  "1416000": 52.8,
+  "1608000": 15.8,
+  "1800000": 31.4
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 400,
+ "gpu_time_at_hz_pct": {
+  "400000000": 100.0
+ },
+ "gpu_governor": "simple_ondemand",
+ "temp_c": [
+  58.333,
+  61.666,
+  61.111
+ ],
+ "bat_ma": -306.7,
+ "bat_v": 4.07,
+ "charger": "1",
+ "cpu_by_kind_pct": {
+  "user": 119.9,
+  "nice": 0.0,
+  "system": 17.4,
+  "irq": 7.4,
+  "softirq": 1.8,
+  "steal": 0.0
+ },
+ "threads": [
+  [
+   52.7,
+   "drastic.real",
+   "drastic.real",
+   8751
+  ],
+  [
+   17.9,
+   "drastic.real",
+   "drastic.real",
+   8773
+  ],
+  [
+   16.6,
+   "drastic.real",
+   "drastic.real",
+   8770
+  ],
+  [
+   16.2,
+   "drastic.real",
+   "drastic.real",
+   8771
+  ],
+  [
+   5.6,
+   "drastic.real",
+   "dsf-shader",
+   8756
+  ],
+  [
+   5.3,
+   "drastic.real",
+   "drastic.real",
+   8769
+  ],
+  [
+   4.4,
+   "drastic.real",
+   "mali-cmar-backe",
+   8763
+  ],
+  [
+   3.2,
+   "pipewire",
+   "data-loop.0",
+   527
+  ],
+  [
+   2.2,
+   "drastic.real",
+   "dsf-present",
+   8755
+  ],
+  [
+   1.9,
+   "drastic.real",
+   "data-loop.0",
+   8775
+  ],
+  [
+   0.6,
+   "kworker/u17:2-mali_jd",
+   "kworker/u17:2-mali_jd",
+   589
+  ],
+  [
+   0.6,
+   "drastic.real",
+   "dsf-alsa",
+   8788
+  ]
+ ],
+ "processes_incl_children": [
+  [
+   124.11,
+   "./drastic.real /storage/dsflip/roms/HGtest.nds",
+   8751
+  ],
+  [
+   3.17,
+   "/usr/bin/pipewire",
+   367
+  ],
+  [
+   2.74,
+   "/bin/bash /usr/bin/powerstate",
+   368
+  ],
+  [
+   1.21,
+   "/bin/sh /storage/dsflip/hgpower.sh v1.4-hg-ds-crisp-2 90 CPUGOV=performance DSFLIP_SHADER=",
+   8752
+  ],
+  [
+   0.54,
+   "[kworker/u17:2-mali_jd]",
+   589
+  ],
+  [
+   0.54,
+   "[kworker/u17:0-mali_jd]",
+   8552
+  ],
+  [
+   0.53,
+   "[kworker/u16:5-events_unbound]",
+   102
+  ],
+  [
+   0.45,
+   "/bin/bash /usr/bin/rocknix-touchscreen-keyboard",
+   375
+  ],
+  [
+   0.39,
+   "[kworker/u16:3-events_unbound]",
+   7898
+  ],
+  [
+   0.39,
+   "[kworker/1:0-events_freezable]",
+   5189
+  ],
+  [
+   0.38,
+   "[kworker/0:0-events_freezable]",
+   5432
+  ],
+  [
+   0.37,
+   "[kworker/1:2-events]",
+   77
+  ]
+ ],
+ "forks_per_s": 7.1
+}

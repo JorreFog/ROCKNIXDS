@@ -1,0 +1,85 @@
+{
+ "tag": "au-44k-lat60",
+ "secs": 90.1,
+ "cpu_busy_pct": 122.4,
+ "cpu_avg_mhz": 1608,
+ "cpu_time_at_khz_pct": {
+  "1608000": 100.0
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 0,
+ "gpu_time_at_hz_pct": {},
+ "gpu_governor": "powersave",
+ "temp_c": [
+  53.75,
+  53.75,
+  53.75
+ ],
+ "bat_ma": -554.2,
+ "bat_v": 4.103,
+ "charger": "1",
+ "cpu_by_kind_pct": {
+  "user": 101.9,
+  "nice": 0.0,
+  "system": 13.9,
+  "irq": 5.0,
+  "softirq": 1.7,
+  "steal": 0.0
+ },
+ "threads": [
+  [
+   49.7,
+   "drastic.real",
+   "drastic.real",
+   222971
+  ],
+  [
+   15.9,
+   "drastic.real",
+   "drastic.real",
+   222983
+  ],
+  [
+   13.3,
+   "drastic.real",
+   "drastic.real",
+   222980
+  ],
+  [
+   13.1,
+   "drastic.real",
+   "drastic.real",
+   222981
+  ],
+  [
+   5.0,
+   "drastic.real",
+   "drastic.real",
+   222979
+  ],
+  [
+   1.8,
+   "drastic.real",
+   "dsf-present",
+   222975
+  ],
+  [
+   1.7,
+   "pipewire",
+   "data-loop.0",
+   534
+  ],
+  [
+   0.9,
+   "drastic.real",
+   "data-loop.0",
+   222985
+  ],
+  [
+   0.7,
+   "battery_led_sta",
+   "battery_led_sta",
+   1648
+  ]
+ ]
+}

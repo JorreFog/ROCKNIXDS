@@ -1,0 +1,19 @@
+v1.4-hg-ds-crisp-3: 90 s  CPU 138% of 400 at avg 1741 MHz (performance)  GPU avg 400 MHz (simple_ondemand)  SoC 61.7->61.1 C (max 61.7)  battery -341 mA at 4.056 V (charger on)
+  CPU by kind (% of 400): user 112.9  system 16.9  irq 6.8  softirq 1.6
+   49.6%  drastic.real/drastic.real (18403)
+   16.8%  drastic.real/drastic.real (18425)
+   15.4%  drastic.real/drastic.real (18422)
+   15.1%  drastic.real/drastic.real (18423)
+    5.2%  drastic.real/dsf-shader (18408)
+    5.1%  drastic.real/drastic.real (18421)
+    4.2%  drastic.real/mali-cmar-backe (18415)
+    3.0%  pipewire/data-loop.0 (527)
+    2.4%  drastic.real/dsf-present (18407)
+    1.7%  drastic.real/data-loop.0 (18427)
+    0.9%  kworker/u17:2-mali_jd/kworker/u17:2-mali_jd (589)
+    0.6%  drastic.real/dsf-alsa (18429)
+frames: 91 s, 60.0 presents/s, 0.07 drops/s
+[audio] pump 44097.0 Hz, drain 44122.6 Hz, ring 1280..1792, underruns 0, overflows 0, xruns 0, trim -767 ppm
+[audio] pump 44079.9 Hz, drain 44079.9 Hz, ring 1280..1792, underruns 0, overflows 0, xruns 0, trim -177 ppm
+[audio] pump 44116.4 Hz, drain 44116.4 Hz, ring 1280..1792, underruns 0, overflows 0, xruns 0, trim +293 ppm
+[audio] pump 44100.2 Hz, drain 44100.2 Hz, ring 1280..1792, underruns 0, overflows 0, xruns 0, trim +153 ppm

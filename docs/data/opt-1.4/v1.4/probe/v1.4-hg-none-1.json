@@ -1,0 +1,141 @@
+{
+ "tag": "v1.4-hg-none-1",
+ "secs": 90.1,
+ "cpu_busy_pct": 120.2,
+ "cpu_avg_mhz": 1663,
+ "cpu_time_at_khz_pct": {
+  "1416000": 20.2,
+  "1608000": 33.3,
+  "1800000": 44.3,
+  "1992000": 2.2
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 0,
+ "gpu_time_at_hz_pct": {},
+ "gpu_governor": "powersave",
+ "temp_c": [
+  55.0,
+  57.222,
+  56.666
+ ],
+ "bat_ma": -258.1,
+ "bat_v": 4.082,
+ "charger": "1",
+ "cpu_by_kind_pct": {
+  "user": 103.0,
+  "nice": 0.0,
+  "system": 10.6,
+  "irq": 5.2,
+  "softirq": 1.5,
+  "steal": 0.0
+ },
+ "threads": [
+  [
+   48.0,
+   "drastic.real",
+   "drastic.real",
+   5444
+  ],
+  [
+   16.0,
+   "drastic.real",
+   "drastic.real",
+   5457
+  ],
+  [
+   14.6,
+   "drastic.real",
+   "drastic.real",
+   5455
+  ],
+  [
+   14.5,
+   "drastic.real",
+   "drastic.real",
+   5454
+  ],
+  [
+   5.1,
+   "drastic.real",
+   "drastic.real",
+   5453
+  ],
+  [
+   2.7,
+   "pipewire",
+   "data-loop.0",
+   527
+  ],
+  [
+   1.7,
+   "drastic.real",
+   "dsf-present",
+   5448
+  ],
+  [
+   1.6,
+   "drastic.real",
+   "data-loop.0",
+   5459
+  ],
+  [
+   0.5,
+   "drastic.real",
+   "dsf-alsa",
+   5461
+  ]
+ ],
+ "processes_incl_children": [
+  [
+   102.61,
+   "./drastic.real /storage/dsflip/roms/HGtest.nds",
+   5444
+  ],
+  [
+   2.74,
+   "/usr/bin/pipewire",
+   367
+  ],
+  [
+   2.51,
+   "/bin/bash /usr/bin/powerstate",
+   368
+  ],
+  [
+   1.1,
+   "/bin/sh /storage/dsflip/hgpower.sh v1.4-hg-none-1 90 CPUGOV=performance DSFLIP_SHADER=none",
+   5445
+  ],
+  [
+   0.41,
+   "[kworker/0:2-events]",
+   89
+  ],
+  [
+   0.41,
+   "/bin/bash /usr/bin/rocknix-touchscreen-keyboard",
+   375
+  ],
+  [
+   0.32,
+   "[kworker/u16:4-leds]",
+   52
+  ],
+  [
+   0.32,
+   "[kworker/u16:1-events_power_efficient]",
+   47
+  ],
+  [
+   0.3,
+   "[kworker/2:1-events_freezable]",
+   56
+  ],
+  [
+   0.29,
+   "[kworker/u16:5-events_power_efficient]",
+   102
+  ]
+ ],
+ "forks_per_s": 7.2
+}

@@ -1,0 +1,19 @@
+v1.3-hg-sharp-bilinear-1: 90 s  CPU 159% of 400 at avg 1992 MHz (performance)  GPU avg 400 MHz (simple_ondemand)  SoC 63.9->65.0 C (max 64.4)  battery -406 mA at 4.083 V (charger on)
+  CPU by kind (% of 400): user 125.6  system 24.1  irq 7.4  softirq 1.8
+   49.1%  drastic.real/drastic.real (20462)
+   16.8%  drastic.real/drastic.real (20467)
+   16.2%  drastic.real/drastic.real (20483)
+   14.9%  drastic.real/drastic.real (20480)
+   14.7%  drastic.real/drastic.real (20481)
+    5.7%  drastic.real/data-loop.0 (20485)
+    4.9%  drastic.real/drastic.real (20479)
+    3.8%  drastic.real/mali-cmar-backe (20474)
+    3.7%  pipewire/data-loop.0 (535)
+    2.8%  drastic.real/drastic.real (20466)
+    1.0%  drastic.real/drastic.real (20487)
+    0.8%  battery_led_sta/battery_led_sta (1654)
+frames: 90 s, 60.0 presents/s, 0.09 drops/s
+[audio] pump 44108.2 Hz, drain 44133.8 Hz, ring 1280..1792, underruns 0, overflows 0, xruns 0, trim +240 ppm
+[audio] pump 44104.6 Hz, drain 44104.6 Hz, ring 1280..1792, underruns 0, overflows 0, xruns 0, trim -250 ppm
+[audio] pump 44101.3 Hz, drain 44075.7 Hz, ring 1280..1792, underruns 0, overflows 0, xruns 0, trim +220 ppm
+[audio] pump 44086.3 Hz, drain 44111.9 Hz, ring 1280..1792, underruns 0, overflows 0, xruns 0, trim -170 ppm

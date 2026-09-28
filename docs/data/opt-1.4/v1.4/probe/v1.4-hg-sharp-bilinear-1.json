@@ -1,0 +1,168 @@
+{
+ "tag": "v1.4-hg-sharp-bilinear-1",
+ "secs": 90.2,
+ "cpu_busy_pct": 158.2,
+ "cpu_avg_mhz": 1416,
+ "cpu_time_at_khz_pct": {
+  "1416000": 100.0
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 400,
+ "gpu_time_at_hz_pct": {
+  "400000000": 100.0
+ },
+ "gpu_governor": "simple_ondemand",
+ "temp_c": [
+  60.0,
+  59.444,
+  60.0
+ ],
+ "bat_ma": -283.4,
+ "bat_v": 4.07,
+ "charger": "1",
+ "cpu_by_kind_pct": {
+  "user": 128.9,
+  "nice": 0.0,
+  "system": 19.4,
+  "irq": 7.9,
+  "softirq": 1.9,
+  "steal": 0.0
+ },
+ "threads": [
+  [
+   56.3,
+   "drastic.real",
+   "drastic.real",
+   9782
+  ],
+  [
+   19.5,
+   "drastic.real",
+   "drastic.real",
+   9804
+  ],
+  [
+   18.0,
+   "drastic.real",
+   "drastic.real",
+   9801
+  ],
+  [
+   17.7,
+   "drastic.real",
+   "drastic.real",
+   9802
+  ],
+  [
+   6.3,
+   "drastic.real",
+   "dsf-shader",
+   9787
+  ],
+  [
+   5.6,
+   "drastic.real",
+   "drastic.real",
+   9800
+  ],
+  [
+   4.8,
+   "drastic.real",
+   "mali-cmar-backe",
+   9794
+  ],
+  [
+   3.4,
+   "pipewire",
+   "data-loop.0",
+   527
+  ],
+  [
+   2.8,
+   "drastic.real",
+   "dsf-present",
+   9786
+  ],
+  [
+   2.0,
+   "drastic.real",
+   "data-loop.0",
+   9806
+  ],
+  [
+   1.0,
+   "kworker/u17:2-mali_jd",
+   "kworker/u17:2-mali_jd",
+   589
+  ],
+  [
+   0.6,
+   "kworker/u16:3-leds",
+   "kworker/u16:3-leds",
+   7898
+  ]
+ ],
+ "processes_incl_children": [
+  [
+   134.5,
+   "./drastic.real /storage/dsflip/roms/HGtest.nds",
+   9782
+  ],
+  [
+   3.43,
+   "/usr/bin/pipewire",
+   367
+  ],
+  [
+   3.02,
+   "/bin/bash /usr/bin/powerstate",
+   368
+  ],
+  [
+   1.34,
+   "/bin/sh /storage/dsflip/hgpower.sh v1.4-hg-sharp-bilinear-1 90 CPUGOV=performance DSFLIP_S",
+   9783
+  ],
+  [
+   1.04,
+   "[kworker/u17:2-mali_jd]",
+   589
+  ],
+  [
+   0.57,
+   "[kworker/u16:3-leds]",
+   7898
+  ],
+  [
+   0.47,
+   "/bin/bash /usr/bin/rocknix-touchscreen-keyboard",
+   375
+  ],
+  [
+   0.43,
+   "[kworker/u16:2-events_unbound]",
+   48
+  ],
+  [
+   0.42,
+   "[kworker/u16:5+events_unbound]",
+   102
+  ],
+  [
+   0.37,
+   "[kworker/0:2-events]",
+   89
+  ],
+  [
+   0.34,
+   "[kworker/0:1-events]",
+   9706
+  ],
+  [
+   0.24,
+   "[kworker/2:1-mm_percpu_wq]",
+   56
+  ]
+ ],
+ "forks_per_s": 7.2
+}

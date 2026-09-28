@@ -1,0 +1,155 @@
+{
+ "tag": "v1.4-hg-none-2",
+ "secs": 90.1,
+ "cpu_busy_pct": 135.0,
+ "cpu_avg_mhz": 1445,
+ "cpu_time_at_khz_pct": {
+  "1416000": 84.7,
+  "1608000": 15.3
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 0,
+ "gpu_time_at_hz_pct": {},
+ "gpu_governor": "powersave",
+ "temp_c": [
+  56.111,
+  57.222,
+  57.222
+ ],
+ "bat_ma": -232.3,
+ "bat_v": 4.081,
+ "charger": "1",
+ "cpu_by_kind_pct": {
+  "user": 115.7,
+  "nice": 0.0,
+  "system": 11.5,
+  "irq": 6.1,
+  "softirq": 1.7,
+  "steal": 0.0
+ },
+ "threads": [
+  [
+   53.0,
+   "drastic.real",
+   "drastic.real",
+   6719
+  ],
+  [
+   18.8,
+   "drastic.real",
+   "drastic.real",
+   6732
+  ],
+  [
+   17.7,
+   "drastic.real",
+   "drastic.real",
+   6729
+  ],
+  [
+   17.2,
+   "drastic.real",
+   "drastic.real",
+   6730
+  ],
+  [
+   5.5,
+   "drastic.real",
+   "drastic.real",
+   6728
+  ],
+  [
+   3.0,
+   "pipewire",
+   "data-loop.0",
+   527
+  ],
+  [
+   2.2,
+   "drastic.real",
+   "dsf-present",
+   6723
+  ],
+  [
+   1.8,
+   "drastic.real",
+   "data-loop.0",
+   6734
+  ],
+  [
+   0.6,
+   "drastic.real",
+   "dsf-alsa",
+   6736
+  ],
+  [
+   0.5,
+   "kworker/u16:5+events_unbound",
+   "kworker/u16:5+events_unbound",
+   102
+  ]
+ ],
+ "processes_incl_children": [
+  [
+   117.33,
+   "./drastic.real /storage/dsflip/roms/HGtest.nds",
+   6719
+  ],
+  [
+   3.01,
+   "/usr/bin/pipewire",
+   367
+  ],
+  [
+   2.73,
+   "/bin/bash /usr/bin/powerstate",
+   368
+  ],
+  [
+   1.25,
+   "/bin/sh /storage/dsflip/hgpower.sh v1.4-hg-none-2 90 CPUGOV=performance DSFLIP_SHADER=none",
+   6720
+  ],
+  [
+   0.53,
+   "[kworker/u16:5+events_unbound]",
+   102
+  ],
+  [
+   0.45,
+   "/bin/bash /usr/bin/rocknix-touchscreen-keyboard",
+   375
+  ],
+  [
+   0.37,
+   "[kworker/u16:2-events_power_efficient]",
+   48
+  ],
+  [
+   0.28,
+   "[kworker/u16:4-leds]",
+   52
+  ],
+  [
+   0.27,
+   "[kworker/0:2-events_freezable]",
+   89
+  ],
+  [
+   0.24,
+   "[kworker/1:2-events_freezable]",
+   77
+  ],
+  [
+   0.23,
+   "[kworker/3:1-events]",
+   51
+  ],
+  [
+   0.23,
+   "[kworker/0:0-events]",
+   5432
+  ]
+ ],
+ "forks_per_s": 7.1
+}

@@ -1,0 +1,15 @@
+grid-color-new: 90 s  CPU 155% of 400 at avg 1606 MHz (performance)  GPU avg 548 MHz (simple_ondemand)  SoC 45.6->50.0 C (max 50.6)  battery -294 mA at 4.148 V (charger on)
+  CPU by kind (% of 400): user 122.5  system 22.8  irq 7.4  softirq 1.9
+   51.2%  drastic.real/drastic.real (162000)
+   17.7%  drastic.real/drastic.real (162027)
+   16.2%  drastic.real/drastic.real (162024)
+   15.9%  drastic.real/drastic.real (162025)
+    5.7%  drastic.real/data-loop.0 (162029)
+    5.4%  drastic.real/dsf-shader (162005)
+    5.2%  drastic.real/drastic.real (162023)
+    4.0%  drastic.real/mali-cmar-backe (162012)
+    3.6%  pipewire/data-loop.0 (534)
+    2.1%  drastic.real/dsf-present (162004)
+    1.0%  drastic.real/dsf-alsa (162031)
+    0.8%  battery_led_sta/battery_led_sta (1648)
+frames: 91 s, 60.0 presents/s, 0.09 drops/s

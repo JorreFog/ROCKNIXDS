@@ -1,0 +1,155 @@
+{
+ "tag": "v1.3-hg-none-2",
+ "secs": 90.1,
+ "cpu_busy_pct": 127.5,
+ "cpu_avg_mhz": 1992,
+ "cpu_time_at_khz_pct": {
+  "1992000": 100.0
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 0,
+ "gpu_time_at_hz_pct": {},
+ "gpu_governor": "powersave",
+ "temp_c": [
+  57.222,
+  58.888,
+  58.333
+ ],
+ "bat_ma": -258.3,
+ "bat_v": 4.105,
+ "charger": "1",
+ "cpu_by_kind_pct": {
+  "user": 104.6,
+  "nice": 0.0,
+  "system": 16.0,
+  "irq": 5.5,
+  "softirq": 1.5,
+  "steal": 0.0
+ },
+ "threads": [
+  [
+   46.0,
+   "drastic.real",
+   "drastic.real",
+   13057
+  ],
+  [
+   16.3,
+   "drastic.real",
+   "drastic.real",
+   13082
+  ],
+  [
+   14.9,
+   "drastic.real",
+   "drastic.real",
+   13079
+  ],
+  [
+   14.5,
+   "drastic.real",
+   "drastic.real",
+   13080
+  ],
+  [
+   4.9,
+   "drastic.real",
+   "drastic.real",
+   13078
+  ],
+  [
+   4.9,
+   "drastic.real",
+   "data-loop.0",
+   13084
+  ],
+  [
+   3.0,
+   "pipewire",
+   "data-loop.0",
+   535
+  ],
+  [
+   2.2,
+   "drastic.real",
+   "drastic.real",
+   13061
+  ],
+  [
+   0.8,
+   "drastic.real",
+   "drastic.real",
+   13086
+  ],
+  [
+   0.7,
+   "battery_led_sta",
+   "battery_led_sta",
+   1654
+  ],
+  [
+   0.5,
+   "kworker/u16:5-events_unbound",
+   "kworker/u16:5-events_unbound",
+   5791
+  ]
+ ],
+ "processes_incl_children": [
+  [
+   105.07,
+   "./drastic.real /storage/dsflip/roms/HGtest.nds",
+   13057
+  ],
+  [
+   5.26,
+   "/bin/sh /usr/lib/autostart/quirks/devices/Anbernic RG DS/bin/battery_led_status",
+   1654
+  ],
+  [
+   3.02,
+   "/usr/bin/pipewire",
+   357
+  ],
+  [
+   2.42,
+   "/bin/bash /usr/bin/powerstate",
+   359
+  ],
+  [
+   1.03,
+   "/bin/sh /storage/dsflip/hgpower.sh v1.3-hg-none-2 90 CPUGOV=performance DSFLIP_SHADER=none",
+   13058
+  ],
+  [
+   0.51,
+   "[kworker/u16:5-events_unbound]",
+   5791
+  ],
+  [
+   0.45,
+   "[kworker/u16:2+events_unbound]",
+   48
+  ],
+  [
+   0.42,
+   "[kworker/3:1-events_freezable]",
+   11257
+  ],
+  [
+   0.39,
+   "/bin/bash /usr/bin/rocknix-touchscreen-keyboard",
+   367
+  ],
+  [
+   0.3,
+   "[kworker/u16:0-thermal_events]",
+   12
+  ],
+  [
+   0.26,
+   "[kworker/3:2-events_freezable]",
+   71
+  ]
+ ],
+ "forks_per_s": 19.5
+}

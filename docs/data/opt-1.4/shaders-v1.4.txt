@@ -1,0 +1,15 @@
+shader                   2x       1x   (GPU at 800 MHz, ms per panel)
+null                   0.53     0.45
+ds-crisp-color         1.07     1.07
+ds-crisp               0.57     0.49
+ds-fsr                 4.28     4.28
+ds-grid-2x             0.75     0.75
+ds-grid-color          1.68     1.68
+ds-grid                1.00     1.00
+ds-integer             0.70     0.66
+sharp-bilinear         0.57     0.47
+lcd1x-nds-color        1.65     1.64
+lcd3x                  0.69     0.69
+scanlines              0.58     0.53
+sharp-shimmerless      0.57     0.50
+quilez                 0.60     0.52

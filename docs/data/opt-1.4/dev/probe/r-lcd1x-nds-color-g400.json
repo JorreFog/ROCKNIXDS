@@ -1,0 +1,110 @@
+{
+ "tag": "r-lcd1x-nds-color-g400",
+ "secs": 90.1,
+ "cpu_busy_pct": 143.0,
+ "cpu_avg_mhz": 1747,
+ "cpu_time_at_khz_pct": {
+  "1416000": 3.5,
+  "1608000": 41.1,
+  "1800000": 35.2,
+  "1992000": 20.2
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 533,
+ "gpu_time_at_hz_pct": {
+  "400000000": 56.2,
+  "600000000": 21.2,
+  "800000000": 22.6
+ },
+ "gpu_governor": "simple_ondemand",
+ "temp_c": [
+  47.777,
+  51.875,
+  51.25
+ ],
+ "bat_ma": -293.0,
+ "bat_v": 4.164,
+ "charger": "1",
+ "cpu_by_kind_pct": {
+  "user": 113.7,
+  "nice": 0.0,
+  "system": 20.7,
+  "irq": 6.9,
+  "softirq": 1.8,
+  "steal": 0.0
+ },
+ "threads": [
+  [
+   48.4,
+   "drastic.real",
+   "drastic.real",
+   140603
+  ],
+  [
+   15.8,
+   "drastic.real",
+   "drastic.real",
+   140628
+  ],
+  [
+   14.7,
+   "drastic.real",
+   "drastic.real",
+   140626
+  ],
+  [
+   14.4,
+   "drastic.real",
+   "drastic.real",
+   140625
+  ],
+  [
+   5.5,
+   "drastic.real",
+   "data-loop.0",
+   140630
+  ],
+  [
+   5.0,
+   "drastic.real",
+   "drastic.real",
+   140624
+  ],
+  [
+   4.9,
+   "drastic.real",
+   "dsf-shader",
+   140611
+  ],
+  [
+   3.7,
+   "drastic.real",
+   "mali-cmar-backe",
+   140618
+  ],
+  [
+   3.4,
+   "pipewire",
+   "data-loop.0",
+   534
+  ],
+  [
+   2.0,
+   "drastic.real",
+   "dsf-present",
+   140610
+  ],
+  [
+   0.9,
+   "kworker/u17:1-mali_jd",
+   "kworker/u17:1-mali_jd",
+   90621
+  ],
+  [
+   0.9,
+   "drastic.real",
+   "dsf-alsa",
+   140632
+  ]
+ ]
+}

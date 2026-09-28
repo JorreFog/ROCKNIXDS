@@ -25,6 +25,27 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 - The **panel timing fix**, the older **vsync pacing shim**, and the measurement tools (including a DS
   stress-test ROM) behind all the numbers below.
 
+### New in 1.4
+
+- **Longer battery life and a cooler handheld.** A menu left alone uses a sixth of the CPU it did in 1.3 (10% of one core instead of 57%), at under a quarter of the clock; DS games run the CPU at the
+  clock the game needs instead of 1992 MHz, with the same smoothness; shaders take half or less of the GPU time;
+  game audio half the CPU. Every change and every measurement is in the
+  [optimization report](docs/optimization-1.4.md).
+- **Two new screen modes:** `ds-fsr` (AMD FidelityFX Super Resolution 1.0, fast enough for both screens) and
+  `ds-integer` (each DS screen at exactly 2× in a bezel, with touch that follows).
+- **Touch works in EmulationStation's menus,** on both screens.
+- **RetroAchievements:** new pop-ups in the DSi font with the achievement's badge and a progress pill;
+  achievements that read the DS's DTCM memory work; the unlock sound chosen in ES plays; ES's RetroAchievements
+  menu opens again (it said "Unauthenticated").
+- **Play stats for DS games:** last played, play count and time played are recorded.
+- **fast-switch** (experimental, opt-in): ES and sway stay up during DS games, and the menu is back in ~1.7 s.
+- **Other themes** get stock ROCKNIX's layout, and the patched ES runs on any ROCKNIX release where it links.
+- **Media tool:** RetroAchievements counts leave out RA's hidden warning achievement, and errors are shown
+  instead of silently keeping old strips.
+- **Fixes:** an interrupt storm that could follow a DS game (~60% of a core until the next reboot), and ROCKNIX's
+  power service overriding the game's GPU clock.
+- **MIT license**, and libdsflip builds on GitHub Actions.
+
 ### New in 1.3
 
 - **RetroAchievements work again.** Sets were being disabled at load because the game loaded before libdsflip
@@ -225,7 +246,10 @@ stock path uses:
   aren't copied into this repo and stay in step with ROCKNIX updates.
 - The GPU is ARM's libmali (`/dev/mali0`, no DRM render node). ROCKNIX exports `MALI_DEFAULT_DISPLAY=wayland`,
   which can't work with sway stopped, so libdsflip uses libmali's GBM display.
-- **Nothing on the timing path waits for the GPU:** a worker thread uploads and shades each frame, both
+- **The GPU reads DraStic's frames where DraStic wrote them** (since 1.4: its buffers are imported as dma-bufs).
+  Uploading each frame first was most of every shader's cost (ds-crisp 1.96 -> 0.75 ms per screen);
+  `DSFLIP_SHADER_COPY=1` brings the upload back.
+- **Nothing on the timing path waits for the GPU:** a worker thread shades each frame, both
   screens' GPU fence goes to the display controller with the commit (`IN_FENCE_FD`), and the presenter thread
   (real-time priority) only handles vblank events, the latch timer and commits.
 - **Audio pump (`audio.c`):** DraStic paces its frames on its audio callback. SDL's pulse backend called it in
@@ -235,7 +259,8 @@ stock path uses:
   a slow rate trim locks it to the device clock. `DSFLIP_AUDIO_PUMP=0` restores SDL audio.
 - **Measured** (HeartGold at 2×, scripted walking, 90 s runs): lcd1x+nds-color 0.02–0.09 dropped frames/s,
   lcd3x 0.04, zero-copy 0.00. Before these changes shaders dropped 5–30/s.
-- **Cost:** lcd1x+nds-color takes ~2.5 ms per screen at 800 MHz. With a shader the GPU runs `simple_ondemand`
+- **Cost** (1.3, with the upload; 1.4's numbers are in the [optimization report](docs/optimization-1.4.md#shaders-read-drastics-frames-directly)):
+  lcd1x+nds-color takes ~2.5 ms per screen at 800 MHz. With a shader the GPU runs `simple_ondemand`
   with a 400 MHz floor, averaging ~500 MHz: in a 2× Pokémon Black 2 session that dropped 0.05 frames/s against
   0.11 with the clock pinned at 800 MHz (`DSFLIP_SHADER_GOV=performance` restores that).
   At the 200 MHz used in zero-copy mode it would take 16 ms. ds-fsr takes ~4.8 ms per screen (~9.5 ms of the
@@ -306,9 +331,12 @@ Logged every 10 s during real play (HeartGold at 2×, walking around, 5–6 min 
 | same, heavy stretch of the game (run B) | 1992 MHz | 200 MHz | 56.1 → 57.8 °C | 41% |
 | same, 6-min run (run C) | 1992 MHz | 200 MHz | 57.2 → 57.8 °C | 37% |
 
-- **CPU:** ROCKNIX runs DraStic with the `performance` governor, so all four cores sit at their 1992 MHz
-  maximum the whole time. libdsflip doesn't change that. DraStic uses roughly 70% of one core in total: the
-  main (emulation) thread at 36–41%, plus 3D/helper threads at ~13–15%, ~11–13% and ~5%.
+- **CPU:** ROCKNIX runs DraStic with the `performance` governor, so up to 1.3 all four cores sat at their
+  1992 MHz maximum the whole time (the table above is from then). Since 1.4, libdsflip sets the clock the game
+  needs and no lower: HeartGold at 2× averages ~1600–1800 MHz with the same smoothness (see the
+  [optimization report](docs/optimization-1.4.md#a-cpu-governor-inside-libdsflip)). DraStic uses roughly 70% of
+  one core in total at 1992 MHz: the main (emulation) thread at 36–41%, plus 3D/helper threads at ~13–15%,
+  ~11–13% and ~5%.
 - **GPU:** with libdsflip and no shader, nothing is rendered on the GPU during play: no texture upload, no shader and no
   compositor. So `session.sh` switches the Mali's devfreq governor to `powersave` (200 MHz, its lowest step)
   while the game runs and restores the previous governor when you quit. Before that change it idled at

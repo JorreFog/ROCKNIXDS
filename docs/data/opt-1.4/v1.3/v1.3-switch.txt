@@ -1,0 +1,11 @@
+ROM: /storage/roms/nds/Pokemon - HeartGold Version (USA).nds
+cycle | unit    sway-off ready   texture | unit-off outputs ES-api  ES-shown
+1     | 2.32    2.51    2.83    3.44    | 1.36    1.40    2.65    4.37   
+        session.sh: 200 ms: ES and sway stopped
+        session.sh: 540 ms: libdsflip: ready
+2     | 2.33    2.54    2.82    3.42    | 1.37    1.41    2.70    4.55   
+        session.sh: 219 ms: ES and sway stopped
+        session.sh: 556 ms: libdsflip: ready
+3     | 2.28    2.55    2.86    3.46    | 1.32    1.38    2.63    4.47   
+        session.sh: 269 ms: ES and sway stopped
+        session.sh: 609 ms: libdsflip: ready

@@ -1,0 +1,15 @@
+k-ds-crisp: 60 s  CPU 197% of 400 at avg 1992 MHz (performance)  GPU avg 400 MHz (simple_ondemand)  SoC 51.2->54.4 C (max 54.4)  battery -324 mA at 4.164 V (charger on)
+  CPU by kind (% of 400): user 110.8  system 20.2  irq 63.9  softirq 1.8
+   49.0%  drastic.real/drastic.real (130865)
+   14.9%  drastic.real/drastic.real (130886)
+   13.6%  drastic.real/drastic.real (130884)
+   12.9%  drastic.real/drastic.real (130883)
+    7.1%  drastic.real/dsf-shader (130870)
+    5.3%  drastic.real/data-loop.0 (130888)
+    4.9%  drastic.real/drastic.real (130882)
+    4.0%  drastic.real/mali-cmar-backe (130877)
+    3.4%  pipewire/data-loop.0 (534)
+    2.2%  drastic.real/dsf-present (130869)
+    0.8%  kworker/u17:0-mali_hwc_watchdog_wq/kworker/u17:0-mali_hwc_watchdog_wq (130899)
+    0.8%  drastic.real/dsf-alsa (130890)
+frames: 61 s, 60.0 presents/s, 0.13 drops/s

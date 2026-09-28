@@ -1,0 +1,15 @@
+r-ds-grid-color-g400: 90 s  CPU 153% of 400 at avg 1610 MHz (performance)  GPU avg 600 MHz (simple_ondemand)  SoC 50.6->52.5 C (max 53.1)  battery -294 mA at 4.152 V (charger on)
+  CPU by kind (% of 400): user 120.3  system 23.0  irq 7.4  softirq 1.9
+   50.7%  drastic.real/drastic.real (145544)
+   17.6%  drastic.real/drastic.real (145566)
+   16.1%  drastic.real/drastic.real (145563)
+   15.9%  drastic.real/drastic.real (145564)
+    5.6%  drastic.real/data-loop.0 (145568)
+    5.4%  drastic.real/dsf-shader (145549)
+    5.2%  drastic.real/drastic.real (145562)
+    3.9%  drastic.real/mali-cmar-backe (145556)
+    3.6%  pipewire/data-loop.0 (534)
+    2.3%  drastic.real/dsf-present (145548)
+    1.0%  drastic.real/dsf-alsa (145570)
+    0.8%  battery_led_sta/battery_led_sta (1648)
+frames: 91 s, 60.0 presents/s, 0.09 drops/s

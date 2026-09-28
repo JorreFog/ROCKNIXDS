@@ -1,0 +1,98 @@
+{
+ "tag": "hg2x-none-sched",
+ "secs": 60.1,
+ "cpu_busy_pct": 138.5,
+ "cpu_avg_mhz": 1771,
+ "cpu_time_at_khz_pct": {
+  "1416000": 10.6,
+  "1608000": 37.8,
+  "1800000": 7.7,
+  "1992000": 43.9
+ },
+ "cpu_governor": "schedutil",
+ "gpu_avg_mhz": 0,
+ "gpu_time_at_hz_pct": {},
+ "gpu_governor": "performance",
+ "temp_c": [
+  44.375,
+  47.222,
+  46.666
+ ],
+ "bat_ma": -154.3,
+ "bat_v": 4.23,
+ "charger": "1",
+ "threads": [
+  [
+   51.1,
+   "drastic.real",
+   "drastic.real",
+   39561
+  ],
+  [
+   16.8,
+   "drastic.real",
+   "drastic.real",
+   39571
+  ],
+  [
+   14.2,
+   "drastic.real",
+   "drastic.real",
+   39568
+  ],
+  [
+   14.0,
+   "drastic.real",
+   "drastic.real",
+   39569
+  ],
+  [
+   6.7,
+   "sugov:0",
+   "sugov:0",
+   39560
+  ],
+  [
+   5.3,
+   "drastic.real",
+   "data-loop.0",
+   39573
+  ],
+  [
+   5.0,
+   "drastic.real",
+   "drastic.real",
+   39567
+  ],
+  [
+   3.3,
+   "pipewire",
+   "data-loop.0",
+   534
+  ],
+  [
+   2.1,
+   "drastic.real",
+   "dsf-present",
+   39563
+  ],
+  [
+   0.8,
+   "drastic.real",
+   "dsf-alsa",
+   39575
+  ],
+  [
+   0.7,
+   "battery_led_sta",
+   "battery_led_sta",
+   1648
+  ],
+  [
+   0.6,
+   "kworker/u16:4-events_unbound",
+   "kworker/u16:4-events_unbound",
+   83
+  ]
+ ]
+}

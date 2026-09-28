@@ -1,0 +1,16 @@
+au-44k-lat60: 90 s  CPU 122% of 400 at avg 1608 MHz (performance)  GPU avg 0 MHz (powersave)  SoC 53.8->53.8 C (max 53.8)  battery -554 mA at 4.103 V (charger on)
+  CPU by kind (% of 400): user 101.9  system 13.9  irq 5.0  softirq 1.7
+   49.7%  drastic.real/drastic.real (222971)
+   15.9%  drastic.real/drastic.real (222983)
+   13.3%  drastic.real/drastic.real (222980)
+   13.1%  drastic.real/drastic.real (222981)
+    5.0%  drastic.real/drastic.real (222979)
+    1.8%  drastic.real/dsf-present (222975)
+    1.7%  pipewire/data-loop.0 (534)
+    0.9%  drastic.real/data-loop.0 (222985)
+    0.7%  battery_led_sta/battery_led_sta (1648)
+frames: 91 s, 60.0 presents/s, 0.18 drops/s
+[audio] pump 44051.1 Hz, drain 44127.9 Hz, ring 1024..2048, underruns 0, overflows 0, xruns 0, trim +770 ppm
+[audio] pump 44119.1 Hz, drain 44119.1 Hz, ring 1024..2048, underruns 0, overflows 0, xruns 0, trim -1197 ppm
+[audio] pump 44105.1 Hz, drain 44028.3 Hz, ring 1280..2048, underruns 0, overflows 0, xruns 0, trim +1587 ppm
+[audio] pump 44100.6 Hz, drain 44100.6 Hz, ring 1024..2048, underruns 0, overflows 0, xruns 0, trim -1220 ppm

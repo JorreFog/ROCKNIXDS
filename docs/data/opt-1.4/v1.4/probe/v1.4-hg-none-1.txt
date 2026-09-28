@@ -1,0 +1,16 @@
+v1.4-hg-none-1: 90 s  CPU 120% of 400 at avg 1663 MHz (performance)  GPU avg 0 MHz (powersave)  SoC 55.0->57.2 C (max 56.7)  battery -258 mA at 4.082 V (charger on)
+  CPU by kind (% of 400): user 103.0  system 10.6  irq 5.2  softirq 1.5
+   48.0%  drastic.real/drastic.real (5444)
+   16.0%  drastic.real/drastic.real (5457)
+   14.6%  drastic.real/drastic.real (5455)
+   14.5%  drastic.real/drastic.real (5454)
+    5.1%  drastic.real/drastic.real (5453)
+    2.7%  pipewire/data-loop.0 (527)
+    1.7%  drastic.real/dsf-present (5448)
+    1.6%  drastic.real/data-loop.0 (5459)
+    0.5%  drastic.real/dsf-alsa (5461)
+frames: 90 s, 60.0 presents/s, 0.04 drops/s
+[audio] pump 44106.0 Hz, drain 44131.6 Hz, ring 1280..1792, underruns 0, overflows 0, xruns 0, trim +57 ppm
+[audio] pump 44081.8 Hz, drain 44056.2 Hz, ring 1280..1792, underruns 0, overflows 0, xruns 0, trim -43 ppm
+[audio] pump 44108.5 Hz, drain 44134.1 Hz, ring 1280..1792, underruns 0, overflows 0, xruns 0, trim +50 ppm
+[audio] pump 44092.5 Hz, drain 44066.9 Hz, ring 1280..1792, underruns 0, overflows 0, xruns 0, trim -70 ppm

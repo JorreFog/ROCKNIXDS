@@ -1,0 +1,116 @@
+{
+ "tag": "v1.4-idle-2",
+ "secs": 60.2,
+ "cpu_busy_pct": 9.6,
+ "cpu_avg_mhz": 456,
+ "cpu_time_at_khz_pct": {
+  "408000": 93.2,
+  "600000": 1.5,
+  "816000": 0.9,
+  "1104000": 1.2,
+  "1416000": 2.8,
+  "1608000": 0.0,
+  "1992000": 0.3
+ },
+ "cpu_governor": "schedutil",
+ "gpu_avg_mhz": 200,
+ "gpu_time_at_hz_pct": {
+  "200000000": 100.0
+ },
+ "gpu_governor": "simple_ondemand",
+ "temp_c": [
+  48.888,
+  47.777,
+  48.888
+ ],
+ "bat_ma": 86.3,
+ "bat_v": 4.11,
+ "charger": "1",
+ "cpu_by_kind_pct": {
+  "user": 1.1,
+  "nice": 0.0,
+  "system": 4.0,
+  "irq": 3.4,
+  "softirq": 1.2,
+  "steal": 0.0
+ },
+ "threads": [
+  [
+   0.8,
+   "kworker/0:2-events",
+   "kworker/0:2-events",
+   89
+  ],
+  [
+   0.6,
+   "kworker/0:1-events",
+   "kworker/0:1-events",
+   11
+  ],
+  [
+   0.6,
+   "emulationstatio",
+   "emulationstatio",
+   3988
+  ],
+  [
+   0.5,
+   "python3",
+   "python3",
+   4993
+  ]
+ ],
+ "processes_incl_children": [
+  [
+   1.25,
+   "/bin/bash /usr/bin/powerstate",
+   368
+  ],
+  [
+   0.81,
+   "[kworker/0:2-events]",
+   89
+  ],
+  [
+   0.63,
+   "/storage/.config/emulationstation/themes/dii-ess-aye/bin/emulationstation --log-path /var/",
+   3988
+  ],
+  [
+   0.62,
+   "[kworker/0:1-events]",
+   11
+  ],
+  [
+   0.48,
+   "/bin/bash /usr/bin/rocknix-touchscreen-keyboard",
+   375
+  ],
+  [
+   0.37,
+   "[kworker/3:1-events_freezable]",
+   51
+  ],
+  [
+   0.37,
+   "[kworker/1:3-events]",
+   80
+  ],
+  [
+   0.28,
+   "/bin/bash /storage/.config/drastic/dsflip/battery-led-status",
+   1654
+  ],
+  [
+   0.23,
+   "[kworker/u16:1-events_unbound]",
+   47
+  ],
+  [
+   0.22,
+   "[kworker/u16:2-devfreq_wq]",
+   48
+  ]
+ ],
+ "forks_per_s": 3.3
+}

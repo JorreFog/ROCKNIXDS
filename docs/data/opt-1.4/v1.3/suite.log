@@ -1,0 +1,16 @@
+20:00:35 idle: settling 100 s
+20:03:16 idle 1: v1.3-idle-1: 60 s  CPU 58% of 400 at avg 1992 MHz (performance)  GPU avg 400 MHz (simple_ondemand)  SoC 51.9->
+20:04:17 idle 2: v1.3-idle-2: 60 s  CPU 57% of 400 at avg 1992 MHz (performance)  GPU avg 400 MHz (simple_ondemand)  SoC 51.2->
+20:05:17 idle 3: v1.3-idle-3: 60 s  CPU 54% of 400 at avg 1992 MHz (performance)  GPU avg 400 MHz (simple_ondemand)  SoC 51.2->
+20:07:18 hg none 1: v1.3-hg-none-1: 90 s  CPU 121% of 400 at avg 1992 MHz (performance)  GPU avg 0 MHz (powersave)  SoC 55.6->57.8 C (max 57.2)  battery -256 mA at 4.108 V (charger on) frames: 91 s, 60.0 presents/s, 0.02
+20:09:18 hg none 2: v1.3-hg-none-2: 90 s  CPU 127% of 400 at avg 1992 MHz (performance)  GPU avg 0 MHz (powersave)  SoC 57.2->58.9 C (max 58.3)  battery -258 mA at 4.105 V (charger on) frames: 91 s, 60.0 presents/s, 3.76
+20:11:19 hg ds-crisp 1: v1.3-hg-ds-crisp-1: 90 s  CPU 156% of 400 at avg 1992 MHz (performance)  GPU avg 400 MHz (simple_ondemand)  SoC 60.6->62.8 C (max 62.8)  battery -380 mA at 4.093 V (charger on) frames: 90 s, 60.0 pres
+20:13:20 hg ds-crisp 2: v1.3-hg-ds-crisp-2: 90 s  CPU 158% of 400 at avg 1992 MHz (performance)  GPU avg 400 MHz (simple_ondemand)  SoC 62.8->63.9 C (max 63.9)  battery -414 mA at 4.086 V (charger on) frames: 90 s, 60.0 pres
+20:15:20 hg sharp-bilinear 1: v1.3-hg-sharp-bilinear-1: 90 s  CPU 159% of 400 at avg 1992 MHz (performance)  GPU avg 400 MHz (simple_ondemand)  SoC 63.9->65.0 C (max 64.4)  battery -406 mA at 4.083 V (charger on) frames: 90 s, 60.
+20:17:21 hg sharp-bilinear 2: v1.3-hg-sharp-bilinear-2: 90 s  CPU 158% of 400 at avg 1992 MHz (performance)  GPU avg 400 MHz (simple_ondemand)  SoC 64.4->65.6 C (max 65.6)  battery -417 mA at 4.080 V (charger on) frames: 90 s, 60.
+20:18:49 stress: done
+20:19:49 switch: 3     | 2.28    2.55    2.86    3.46    | 1.32    1.38    2.63    4.47            session.sh: 269 ms: ES and sway stopped         session.sh: 609 ms: libdsflip: ready 
+20:19:50 results in docs/data/opt-1.4/v1.3
+20:22:16 hg none 3: v1.3-hg-none-3: 90 s  CPU 124% of 400 at avg 1992 MHz (performance)  GPU avg 0 MHz (powersave)  SoC 63.9->63.3 C (max 63.9)  battery -326 mA at 4.080 V (charger on) frames: 91 s, 60.0 presents/s, 0.00 drops/s 
+20:24:17 hg ds-crisp 3: v1.3-hg-ds-crisp-3: 90 s  CPU 156% of 400 at avg 1992 MHz (performance)  GPU avg 400 MHz (simple_ondemand)  SoC 64.4->66.2 C (max 66.2)  battery -438 mA at 4.069 V (charger on) frames: 90 s, 60.0 presents/s, 0.02 drops/s
+20:26:18 hg sharp-bilinear 3: v1.3-hg-sharp-bilinear-3: 90 s  CPU 159% of 400 at avg 1992 MHz (performance)  GPU avg 400 MHz (simple_ondemand)  SoC 66.2->67.5 C (max 67.5)  battery -444 mA at 4.066 V (charger on) frames: 90 s, 60.0 presents/s, 0.16 d

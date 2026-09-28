@@ -1,0 +1,111 @@
+{
+ "tag": "menu-audio-susp",
+ "secs": 60.1,
+ "cpu_busy_pct": 100.8,
+ "cpu_avg_mhz": 1394,
+ "cpu_time_at_khz_pct": {
+  "600000": 4.3,
+  "816000": 33.6,
+  "1104000": 12.9,
+  "1416000": 2.6,
+  "1608000": 2.4,
+  "1800000": 1.8,
+  "1992000": 42.3
+ },
+ "cpu_governor": "schedutil",
+ "gpu_avg_mhz": 400,
+ "gpu_time_at_hz_pct": {
+  "400000000": 100.0
+ },
+ "gpu_governor": "simple_ondemand",
+ "temp_c": [
+  45.0,
+  43.75,
+  45.0
+ ],
+ "bat_ma": -88.6,
+ "bat_v": 4.162,
+ "charger": "1",
+ "cpu_by_kind_pct": {
+  "user": 49.9,
+  "nice": 0.1,
+  "system": 34.8,
+  "irq": 14.0,
+  "softirq": 2.2,
+  "steal": 0.0
+ },
+ "threads": [
+  [
+   24.1,
+   "emulationstatio",
+   "emulationstatio",
+   164456
+  ],
+  [
+   20.7,
+   "sway",
+   "sway",
+   164337
+  ],
+  [
+   6.8,
+   "sugov:0",
+   "sugov:0",
+   164320
+  ],
+  [
+   4.7,
+   "pipewire-pulse",
+   "data-loop.0",
+   522
+  ],
+  [
+   3.8,
+   "emulationstatio",
+   "mali-cmar-backe",
+   164500
+  ],
+  [
+   3.5,
+   "sway",
+   "mali-cmar-backe",
+   164345
+  ],
+  [
+   1.6,
+   "pipewire",
+   "data-loop.0",
+   534
+  ],
+  [
+   1.6,
+   "emulationstatio",
+   "PulseMainloop",
+   164569
+  ],
+  [
+   1.4,
+   "kworker/u17:3-mali_jd",
+   "kworker/u17:3-mali_jd",
+   151002
+  ],
+  [
+   1.0,
+   "pipewire-pulse",
+   "pipewire-pulse",
+   424
+  ],
+  [
+   0.8,
+   "battery_led_sta",
+   "battery_led_sta",
+   1648
+  ],
+  [
+   0.7,
+   "kworker/u17:0-mali_jd",
+   "kworker/u17:0-mali_jd",
+   163840
+  ]
+ ]
+}

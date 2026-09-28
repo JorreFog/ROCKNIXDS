@@ -1,0 +1,168 @@
+{
+ "tag": "v1.3-hg-ds-crisp-3",
+ "secs": 90.2,
+ "cpu_busy_pct": 155.9,
+ "cpu_avg_mhz": 1992,
+ "cpu_time_at_khz_pct": {
+  "1992000": 100.0
+ },
+ "cpu_governor": "performance",
+ "gpu_avg_mhz": 400,
+ "gpu_time_at_hz_pct": {
+  "400000000": 100.0
+ },
+ "gpu_governor": "simple_ondemand",
+ "temp_c": [
+  64.444,
+  66.25,
+  66.25
+ ],
+ "bat_ma": -437.9,
+ "bat_v": 4.069,
+ "charger": "1",
+ "cpu_by_kind_pct": {
+  "user": 125.5,
+  "nice": 0.0,
+  "system": 21.8,
+  "irq": 6.8,
+  "softirq": 1.8,
+  "steal": 0.0
+ },
+ "threads": [
+  [
+   48.9,
+   "drastic.real",
+   "drastic.real",
+   35256
+  ],
+  [
+   16.6,
+   "drastic.real",
+   "drastic.real",
+   35277
+  ],
+  [
+   16.5,
+   "drastic.real",
+   "drastic.real",
+   35261
+  ],
+  [
+   15.0,
+   "drastic.real",
+   "drastic.real",
+   35274
+  ],
+  [
+   14.7,
+   "drastic.real",
+   "drastic.real",
+   35275
+  ],
+  [
+   5.7,
+   "drastic.real",
+   "data-loop.0",
+   35279
+  ],
+  [
+   4.9,
+   "drastic.real",
+   "drastic.real",
+   35273
+  ],
+  [
+   3.7,
+   "pipewire",
+   "data-loop.0",
+   535
+  ],
+  [
+   3.6,
+   "drastic.real",
+   "mali-cmar-backe",
+   35268
+  ],
+  [
+   2.2,
+   "drastic.real",
+   "drastic.real",
+   35260
+  ],
+  [
+   1.0,
+   "drastic.real",
+   "drastic.real",
+   35287
+  ],
+  [
+   0.8,
+   "battery_led_sta",
+   "battery_led_sta",
+   1654
+  ]
+ ],
+ "processes_incl_children": [
+  [
+   129.64,
+   "./drastic.real /storage/dsflip/roms/HGtest.nds",
+   35256
+  ],
+  [
+   5.83,
+   "/bin/sh /usr/lib/autostart/quirks/devices/Anbernic RG DS/bin/battery_led_status",
+   1654
+  ],
+  [
+   3.72,
+   "/usr/bin/pipewire",
+   357
+  ],
+  [
+   2.73,
+   "/bin/bash /usr/bin/powerstate",
+   359
+  ],
+  [
+   1.11,
+   "/bin/sh /storage/dsflip/hgpower.sh v1.3-hg-ds-crisp-3 90 CPUGOV=performance DSFLIP_SHADER=",
+   35257
+  ],
+  [
+   0.43,
+   "/bin/bash /usr/bin/rocknix-touchscreen-keyboard",
+   367
+  ],
+  [
+   0.42,
+   "[kworker/0:4-events]",
+   32150
+  ],
+  [
+   0.41,
+   "[kworker/u17:3-mali_jd]",
+   32715
+  ],
+  [
+   0.4,
+   "[kworker/0:2-events_freezable]",
+   144
+  ],
+  [
+   0.35,
+   "[kworker/u16:2-events_unbound]",
+   48
+  ],
+  [
+   0.35,
+   "[kworker/u16:0-devfreq_wq]",
+   12
+  ],
+  [
+   0.34,
+   "[kworker/u17:0-mali_jd]",
+   23029
+  ]
+ ],
+ "forks_per_s": 19.3
+}
