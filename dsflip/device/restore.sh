@@ -18,6 +18,7 @@ if [ -s /tmp/dsflip-cpu-max ]; then                  # the CPU clock limit libds
     rm -f /tmp/dsflip-cpu-max
 fi
 [ -x /storage/.config/drastic/dsflip/menu-power.sh ] && /storage/.config/drastic/dsflip/menu-power.sh   # the menus' governor
+XDG_RUNTIME_DIR=$RT pw-metadata -n settings 0 clock.force-rate 0 >/dev/null 2>&1          # PipeWire's own rate again
 sway_has_outputs() {
     SOCK=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
     [ -n "$SOCK" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$SOCK" -t get_outputs 2>/dev/null | grep -q '"active": true'

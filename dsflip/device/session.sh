@@ -58,6 +58,10 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
   # A file left by a session that never got restored holds the real limit: keep it.
   CPU=/sys/devices/system/cpu/cpufreq/policy0
   [ -f /tmp/dsflip-cpu-max ] || cat $CPU/scaling_max_freq > /tmp/dsflip-cpu-max 2>/dev/null
+  # PipeWire at DraStic's 44.1 kHz for the session (restore.sh resets it): at its usual 48 kHz every cycle resampled
+  # DraStic's audio, and DraStic's audio threads cost ~9% of a core; at 44.1 kHz ~5% (measured 2026-09-28, HeartGold
+  # at 1608 MHz). Set before DraStic opens its stream: switching mid-stream made the drain uneven for the session.
+  XDG_RUNTIME_DIR=/var/run/0-runtime-dir pw-metadata -n settings 0 clock.force-rate 44100 >/dev/null 2>&1
   rm -f $STATE $NOTICE
   cd $D
   # no wait for the display: libdsflip retries DRM master itself while seatd lets go of it (~0.4 s after sway)

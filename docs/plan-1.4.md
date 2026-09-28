@@ -229,8 +229,15 @@ stays under 65%, up at once, down after 2 s.
   60 s without input (reopening measured 63-102 ms, so not at the 3 s standby: that delayed the first press while
   browsing). Idle menu now: 13% of 400 at ~530 MHz average, sink SUSPENDED.
 
-**Still open:** game audio goes DraStic -> ALSA "default" -> PipeWire (~9% of a core in games; check how ROCKNIX's
-volume keys work before bypassing it), skipping unchanged frames in shader mode, ds-fsr (5.3 ms per panel), other
+- **Game audio (2026-09-28):** PipeWire ran its graph every 256 samples at 48 kHz (DraStic's ALSA periods of 7.5 ms
+  set the quantum) and resampled DraStic's 44.1 kHz in every cycle: ~9% of a core. ROCKNIX's volume keys change the
+  PipeWire sink's (soft) volume, so bypassing PipeWire would lose them. session.sh now forces PipeWire's graph to
+  44.1 kHz for the session (pw-metadata clock.force-rate, reset by restore.sh): audio threads 9.3% -> 4.9% at 1608
+  MHz, pump steady (ring 1280..1792), drops 0.00-0.04. Bigger ALSA periods (60 ms buffer) cut wake-ups further but
+  made the drain bursty (drops 0.18/s) and add latency: not taken. Switching the rate mid-stream made the drain
+  uneven for the rest of the session, which is why it's set before DraStic starts.
+
+**Still open:** skipping unchanged frames in shader mode, ds-fsr (5.3 ms per panel), other
 systems' governors (no ROMs on the test device), ROCKNIX's battery LED poller (~1% of a core).
 
 Found on the way: ROCKNIX's `powerstate` service re-applies a GPU profile whenever the battery status flips
