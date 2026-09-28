@@ -147,7 +147,7 @@ static void server_call(const rc_api_request_t *req, rc_client_server_callback_t
     r->url = strdup(req->url); r->post = req->post_data ? strdup(req->post_data) : 0;
     r->ctype = req->content_type ? strdup(req->content_type) : 0; r->cb = cb; r->cbdata = cbdata;
     pthread_t t; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
-    if (pthread_create(&t, &at, http_thread, r)) { http_thread(r); }
+    if (pthread_create(&t, &at, http_thread, r)) { http_thread(r); } else pthread_setname_np(t, "dsf-http");
     pthread_attr_destroy(&at);
 }
 
@@ -257,7 +257,7 @@ static int badge_fetch(const rc_client_achievement_t *a, char *path, size_t n) {
 }
 static void detach(void *(*fn)(void *), void *arg) {
     pthread_t t; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
-    if (pthread_create(&t, &at, fn, arg)) fn(arg);
+    if (pthread_create(&t, &at, fn, arg)) fn(arg); else pthread_setname_np(t, "dsf-ra");
     pthread_attr_destroy(&at);
 }
 /* after the game loads: its icon for the "loaded" pop-up, then every badge, so an unlock shows its badge at once */
@@ -478,7 +478,7 @@ void ra_frame(void) {
     if (!ram && !scanning && frames >= 90 && frames % 120 == 90) {
         scanning = 1;
         pthread_t t; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
-        if (pthread_create(&t, &at, scan_thread, 0)) scanning = 0;
+        if (pthread_create(&t, &at, scan_thread, 0)) scanning = 0; else pthread_setname_np(t, "dsf-ramscan");
         pthread_attr_destroy(&at);
     }
     /* load the game only once DS RAM is found, so rc_client validates the achievement set against real memory

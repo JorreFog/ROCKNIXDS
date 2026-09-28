@@ -7,7 +7,7 @@ set -e
 SR=${1:?usage: build.sh <aarch64-sysroot>}
 cd "$(dirname "$0")"
 RC=third_party/rcheevos
-SRCS="dsflip.c shader.c audio.c ra.c ui.c $(ls $RC/src/rc_client.c $RC/src/rc_compat.c $RC/src/rc_util.c $RC/src/rc_version.c \
+SRCS="dsflip.c shader.c audio.c ra.c ui.c cpugov.c $(ls $RC/src/rc_client.c $RC/src/rc_compat.c $RC/src/rc_util.c $RC/src/rc_version.c \
       $RC/src/rcheevos/*.c $RC/src/rapi/*.c $RC/src/rhash/*.c)"
 V=$(cat ../VERSION 2>/dev/null || echo dev)
 clang --target=aarch64-linux-gnu --sysroot="$SR" -fuse-ld=lld -shared -fPIC -O2 -Wall -Wno-unused-function \

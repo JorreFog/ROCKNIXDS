@@ -1,5 +1,5 @@
 #!/bin/sh
-# Brings the desktop back after a libdsflip game session: GPU governor, sway, ES. Called by session.sh when
+# Brings the desktop back after a libdsflip game session: GPU governor, CPU clock limit, sway, ES. Called by session.sh when
 # DraStic exits, and by the unit's ExecStopPost when the session was stopped or killed (then it's the only
 # thing that runs). Safe to run twice: every step checks first.
 #
@@ -12,6 +12,10 @@ if [ -f /tmp/dsflip-gpu-governor ]; then
     cat /tmp/dsflip-gpu-governor > $GPU/governor 2>/dev/null
     [ -s /tmp/dsflip-gpu-min ] && cat /tmp/dsflip-gpu-min > $GPU/min_freq 2>/dev/null
     rm -f /tmp/dsflip-gpu-governor /tmp/dsflip-gpu-min
+fi
+if [ -s /tmp/dsflip-cpu-max ]; then                  # the CPU clock limit libdsflip's governor lowered
+    cat /tmp/dsflip-cpu-max > /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq 2>/dev/null
+    rm -f /tmp/dsflip-cpu-max
 fi
 sway_has_outputs() {
     SOCK=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)

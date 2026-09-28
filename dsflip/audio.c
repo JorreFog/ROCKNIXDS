@@ -248,8 +248,8 @@ int audio_pump_open(struct SDL_AudioSpec_ *want, struct SDL_AudioSpec_ *have, in
         if (r) return r;
     }
     if (have) { *have = *want; have->size = (uint32_t)want->samples * fb; have->silence = 0; }
-    pthread_t th; pthread_create(&th, 0, pump, 0);
-    if (use_alsa) pthread_create(&th, 0, writer, 0);
+    pthread_t th; if (!pthread_create(&th, 0, pump, 0)) pthread_setname_np(th, "dsf-pump");
+    if (use_alsa && !pthread_create(&th, 0, writer, 0)) pthread_setname_np(th, "dsf-alsa");
     dsflip_log("[audio] pump: %d Hz, DraStic's callback every %d samples (%.2f ms), ring target %d (%.1f ms), output %s\n",
                freq, chunk, chunk * 1000.0 / freq, target, target * 1000.0 / freq, use_alsa ? "ALSA default" : "SDL");
     return 0;
@@ -322,5 +322,5 @@ void audio_mic_start(void) {
     static float thresh;
     thresh = t ? (float)atof(t) : 0;
     if (thresh <= 0) { dsflip_log("[mic] off (ES: microphone sensitivity)\n"); return; }
-    pthread_t th; pthread_create(&th, 0, mic_thread, &thresh);
+    pthread_t th; if (!pthread_create(&th, 0, mic_thread, &thresh)) pthread_setname_np(th, "dsf-mic");
 }

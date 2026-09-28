@@ -232,7 +232,8 @@ static int ui_start(void) {                           /* with mx held */
     }
     if (!font_ok) { dsflip_log("[ui] no font: pop-ups off\n"); return 0; }
     pthread_t t; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
-    pthread_create(&t, &at, ui_thread, 0); pthread_attr_destroy(&at);
+    if (!pthread_create(&t, &at, ui_thread, 0)) pthread_setname_np(t, "dsf-ui");
+    pthread_attr_destroy(&at);
     return 1;
 }
 

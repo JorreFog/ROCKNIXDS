@@ -132,6 +132,11 @@ static void *window;
 static int cursor_log;                  /* DSFLIP_CURSOR_LOG=1: log where DraStic draws its 32x32 stylus cursor */
 /* stats */
 static int st_present, st_commit, st_drop, st_busy, st_flips[2], st_touch;
+volatile int dsflip_presents;           /* SDL_RenderPresent calls since start (cpugov.c) */
+volatile long long dsflip_frame_work_max; /* the heaviest frame's CPU time on DraStic's main thread (ns) since
+                                           cpugov.c last took it: a frame over 16.7 ms is a late frame */
+volatile int dsflip_queue_drops;        /* frames dropped from the queue since start (cpugov.c) */
+void cpugov_start(void);
 static int st_drop_src, st_drop_q, st_drop_buf;
 static long long st_evt_max, st_c2f_max; static int st_c2f_long; /* vblank->event delivery; commit->flip (>1 refresh) */   /* drops by cause: replaced before shading, queue overflow, no buffer */
 /* shader pass (shader.c) */
@@ -511,7 +516,7 @@ static int queue_on = 1;
 static void enqueue(int i, dbuf *b, long long t) {
     if (!P[i].ready) { if (!P[0].ready && !P[1].ready) ready_since = t; P[i].ready = b; return; }
     if (queue_on && !P[i].ready2) { P[i].ready2 = b; return; }
-    release(P[i].ready); st_drop++; st_drop_q++;
+    release(P[i].ready); st_drop++; st_drop_q++; dsflip_queue_drops++;
     if (queue_on) { P[i].ready = P[i].ready2; P[i].ready2 = b; } else P[i].ready = b;
 }
 
@@ -586,7 +591,7 @@ static void *presenter(void *a) {
      * makes the next latch find the previous flip "pending" (measured: events handled up to 7-9 ms late in shader
      * mode at normal priority). So it always runs SCHED_FIFO, below the audio pump (20). DSFLIP_PRESENTER_RT=0: off */
     { const char *pr = getenv("DSFLIP_PRESENTER_RT"); if (!(pr && *pr == '0')) set_fifo(10); }
-    if (shader_nm) { pthread_t th; pthread_create(&th, 0, shader_worker, 0); }   /* it sets shader_done */
+    if (shader_nm) { pthread_t th; if (!pthread_create(&th, 0, shader_worker, 0)) pthread_setname_np(th, "dsf-shader"); }   /* it sets shader_done */
     else shader_done = 1;
     drmEventContext ev = { .version = 3, .page_flip_handler2 = on_flip };
     struct pollfd pf[3] = { { .fd = fd, .events = POLLIN }, { .fd = efd, .events = POLLIN }, { .fd = tfd, .events = POLLIN } };
@@ -975,8 +980,11 @@ __attribute__((constructor)) static void init(void) {
             if (mkbuf(&P[i].out[k], P[i].mode.hdisplay, P[i].mode.vdisplay, DRM_FORMAT_XRGB8888, 32)) {
                 LOG("[dsflip] shader output buffers: alloc failed\n"); shader_nm = 0; break;
             }
-    { const char *sc = getenv("DSFLIP_SHADER_COPY"); shader_copy_mode = !(sc && *sc == '0'); }   /* 0: import DraStic's buffers */
-    pthread_t th; pthread_create(&th, 0, presenter, 0);
+    /* shader input: DraStic's buffers imported as dma-bufs (default), or DSFLIP_SHADER_COPY=1: uploaded from memory.
+     * Measured 2026-09-28: the upload was most of every shader's cost (ds-crisp 1.96 -> 0.75 ms per panel at 2x) and
+     * 17% of a core on the shader thread (-> 5.5%); HeartGold 2x drops the same (0.04/s) either way. */
+    { const char *sc = getenv("DSFLIP_SHADER_COPY"); shader_copy_mode = sc && *sc == '1'; }
+    pthread_t th; if (!pthread_create(&th, 0, presenter, 0)) pthread_setname_np(th, "dsf-present");
     for (int k = 0; k < 300 && !shader_done; k++) usleep(10000);
     if (shader_nm) LOG("[dsflip] shader input: %s\n", shader_copy_mode ? "upload from memory" : "dma-buf import");
     anim_log = getenv("DSFLIP_UI_DEMO") != 0;
@@ -984,12 +992,13 @@ __attribute__((constructor)) static void init(void) {
     const char *inv = getenv("DSFLIP_TOUCH_INVERT");        /* "x", "y", "xy" or unset/"none" */
     if (inv) { touch_inv_x = strchr(inv, 'x') != 0; touch_inv_y = strchr(inv, 'y') != 0; }
     const char *tp = getenv("DSFLIP_TOUCH");
-    pthread_create(&th, 0, touch_thread, (void *)(tp ? tp : "fe5e0000.i2c"));
+    if (!pthread_create(&th, 0, touch_thread, (void *)(tp ? tp : "fe5e0000.i2c"))) pthread_setname_np(th, "dsf-touch");
     cursor_log = getenv("DSFLIP_CURSOR_LOG") != 0;
     if (getenv("DSFLIP_TAP_FIFO")) pthread_create(&th, 0, tap_fifo_thread, 0);
     ok = 1;
     LOG("[dsflip] ready: top plane %u, bottom plane %u (init %lld ms)\n", P[0].plane, P[1].plane, (now_us() - t_init) / 1000);
     verdict("ready");
+    cpugov_start();
 }
 
 /* ---------- audio: the pump (audio.c); DSFLIP_AUDIO_PUMP=0 leaves DraStic's audio to SDL ---------- */
@@ -1168,8 +1177,13 @@ void SDL_RenderPresent(void *rn) {
     REAL(void, SDL_RenderPresent, void *);
     if (!ok) { real(rn); return; }
     long long tp = now_us();
+    {   /* this frame's CPU time on DraStic's main thread (the one presenting) */
+        static long long last; struct timespec ct; clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ct);
+        long long c = ct.tv_sec * 1000000000LL + ct.tv_nsec, w = last ? c - last : 0; last = c;
+        if (w > dsflip_frame_work_max) dsflip_frame_work_max = w;
+    }
     lock(&mu);
-    st_present++;
+    st_present++; dsflip_presents++;
     if (vbl_ref) {                       /* where in the refresh cycle did this frame arrive? */
         note_raw(tp);
         if (!shader_on) note_phase(tp);  /* shader mode: when the shaded frame is ready (shade_pending) */

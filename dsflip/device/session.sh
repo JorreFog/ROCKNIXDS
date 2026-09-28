@@ -49,6 +49,10 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
     *) GOV=${DSFLIP_SHADER_GOV:-simple_ondemand}; MIN=${DSFLIP_SHADER_GPU_MIN:-400000000} ;;
   esac
   [ -n "$GPU_GOV" ] && { echo "$GPU_GOV" > /tmp/dsflip-gpu-governor; echo "$GPU_MIN" > /tmp/dsflip-gpu-min; echo $GOV > $GPU/governor 2>/dev/null; [ -n "$MIN" ] && echo $MIN > $GPU/min_freq 2>/dev/null; }
+  # libdsflip's CPU governor (cpugov.c) lowers the CPU's clock limit while the game runs; restore.sh puts it back.
+  # A file left by a session that never got restored holds the real limit: keep it.
+  CPU=/sys/devices/system/cpu/cpufreq/policy0
+  [ -f /tmp/dsflip-cpu-max ] || cat $CPU/scaling_max_freq > /tmp/dsflip-cpu-max 2>/dev/null
   rm -f $STATE $NOTICE
   cd $D
   # no wait for the display: libdsflip retries DRM master itself while seatd lets go of it (~0.4 s after sway)
@@ -70,7 +74,7 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
   # the unit's timeout. Kill it at once (what the exit hotkey does), put the governor back and leave: starting
   # sway/ES from inside a unit that systemd is stopping waits behind that stop (measured: 40 s), so the unit's
   # ExecStopPost (restore.sh) brings them back instead.
-  trap 'kill -9 $P 2>/dev/null; wait $P; record; [ -n "$GPU_GOV" ] && { echo "$GPU_GOV" > $GPU/governor 2>/dev/null; rm -f /tmp/dsflip-gpu-governor; }; echo "$(date) stopped by the unit: restore.sh brings sway + ES back"; exit 0' TERM INT
+  trap 'kill -9 $P 2>/dev/null; wait $P; record; [ -n "$GPU_GOV" ] && echo "$GPU_GOV" > $GPU/governor 2>/dev/null; echo "$(date) stopped by the unit: restore.sh brings sway + ES back"; exit 0' TERM INT
   # libdsflip couldn't take the display: don't leave black panels. It decides within ~6 s at worst (3 s for DRM
   # master, 3 s for the shader); no verdict in 10 s means it isn't loaded or hangs.
   v=; i=0

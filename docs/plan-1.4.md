@@ -128,6 +128,25 @@ drops/s and the GPU's average clock (devfreq trans_stat) before and after.
   and can't be edited here; faster look-alikes of our own could replace them, checked against the originals.
 - **Then the clock:** re-run 1.3's I6 sweep; with cheaper shaders the 400 MHz floor may drop to 200-300 MHz.
 
+**Measured 2026-09-28** (`tools/shaders.sh`: ms per 640x480 panel at 800 MHz, real frames, copy mode as shipped,
+draws queued back to back):
+
+| shader | 2x | 1x | | shader | 2x | 1x |
+|---|---|---|---|---|---|---|
+| null (pass-through) | 1.97 | 1.03 | | sharp-bilinear | 1.93 | 1.02 |
+| ds-crisp | 1.95 | 1.09 | | lcd1x-nds-color | 2.07 | 2.03 |
+| ds-crisp-color | 1.96 | 1.65 | | lcd3x | 2.01 | 1.10 |
+| ds-grid | 1.91 | 1.39 | | scanlines | 1.87 | 1.11 |
+| ds-grid-color | 2.50 | 2.48 | | sharp-shimmerless | 1.96 | 1.09 |
+| ds-grid-2x | 1.88 | 1.01 | | quilez | 1.83 | 1.09 |
+| ds-integer | 1.91 | 1.06 | | ds-fsr | 5.28 | 5.27 |
+
+Almost every shader costs what the pass-through costs: the time is the **upload** of DraStic's frame
+(glTexSubImage2D; ~1 ms more at 2x than 1x) and writing the panel, not the shader's math. Importing DraStic's buffer
+instead (dma-buf, `DSFLIP_SHADER_COPY=0`, already in libdsflip): null 2x 1.90 -> 0.69 ms, ds-crisp 1.96 -> 0.75,
+1x 1.06 -> 0.63; ds-fsr unchanged (5.3: its math). In a real session (HeartGold 2x, ds-crisp, copy mode) the shader
+thread alone took 17% of a core, mostly that upload, and the GPU sat at its 400 MHz floor throughout.
+
 ## 7. CPU, battery and heat across the whole device (requested 2026-09-28, not started)
 
 Goal: the same games and menus for less CPU, less power and a cooler device. Replaces the "battery tuning" note at
@@ -143,6 +162,28 @@ ES idle in the game list, HeartGold walking at 1x and 2x (zero-copy and a shader
 - **Other systems** (RetroArch cores, PPSSPP ...): ROCKNIX's per-system governor settings; only where a measured
   saving holds without drops, and as settings, not patches to ROCKNIX.
 - **Idle and background:** services and timers that wake the device while playing (journald, network scans).
+
+**Measured 2026-09-28** (`tools/power.sh`: HeartGold 2x, no shader, walking, 60 s per setting; battery current
+on a weak charger, so read the trend):
+
+| CPU | CPU used (of 400%) | busiest DraStic thread | drops/s | battery | SoC |
+|---|---|---|---|---|---|
+| performance, 1992 MHz (ROCKNIX's nds setting) | 121% | 46% | 0.07 | -123..-178 mA | 48 C |
+| schedutil (averaged 1771 MHz) | 138% | 51% | 0.10 | -154 mA | 47 C |
+| capped 1608 MHz | 127% | 50% | 0.10 | -99 mA | 47 C |
+| capped 1416 MHz | 146% | 56% | 0.07 | -66 mA | 46 C |
+| capped 1104 MHz | 183% | 66% | 0.13 | -40 mA | 43 C |
+
+Our own threads are small (presenter 1.8%, ALSA writer 0.9%, pump and touch < 0.5%); the audio path through
+PipeWire costs ~9% of a core (a `data-loop` thread inside DraStic + pipewire's own). A fixed cap is too blunt for
+heavier games, so libdsflip gets its own governor (`cpugov.c`): the lowest clock at which DraStic's busiest thread
+stays under 65%, up at once, down after 2 s.
+
+Found on the way: ROCKNIX's `powerstate` service re-applies a GPU profile whenever the battery status flips
+(charger plugged/unplugged, or a weak charger flapping), which overrode the session's GPU clock mid-game; session.sh
+now puts it back (7e2ff35). ES idle in the menu: CPU at 1992 MHz by the `performance` setting (schedutil: 763 MHz
+average, 1 C cooler), PipeWire and ES's audio threads run while nothing plays, and the GPU sits at 800 MHz on
+battery with `gpuperf=performance`.
 
 ## Proposal: libdsflip as a standalone package (Reddit request, for other firmwares)
 
