@@ -26,7 +26,7 @@ Options:
   --out DIR           work directory (default: ./media-out)
   --dry-run           show what would be fetched and pushed, touch nothing
 """
-import argparse, difflib, gzip, html, io, json, os, re, shlex, subprocess, sys, unicodedata, urllib.parse, urllib.request
+import argparse, difflib, gzip, html, io, json, os, re, shlex, shutil, subprocess, sys, unicodedata, urllib.parse, urllib.request
 from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -207,18 +207,23 @@ def main():
             f.write(dev.fetch(FONT_ON_DEVICE))
 
     # RetroAchievements: the numbers come from the device (its account, its token)
-    ra = {}
+    ra, ra_info = {}, {}
     if not a.no_ra:
         try:
             src = open(os.path.join(HERE, "ra-fetch.py"), "rb").read()
-            dev.run("cat > /tmp/ra-fetch.py && rm -rf /tmp/ra && python3 /tmp/ra-fetch.py /tmp/ra >/dev/null 2>&1; "
-                    "cd /tmp/ra 2>/dev/null && tar cf - . ", data=src)
+            # its output is the per-game summary (or why it failed): show it, a silent failure left old strips in place
+            fetched = dev.run("cat > /tmp/ra-fetch.py && rm -rf /tmp/ra && python3 /tmp/ra-fetch.py /tmp/ra 2>&1; "
+                              "echo \"exit $?\"", data=src)
+            log("RetroAchievements (fetched on the device):\n  " + fetched.strip().replace("\n", "\n  "))
             tarball = dev.run("cd /tmp/ra && tar cf - .", binary=True)
-            radir = os.path.join(out, "ra"); os.makedirs(radir, exist_ok=True)
+            radir = os.path.join(out, "ra"); shutil.rmtree(radir, ignore_errors=True); os.makedirs(radir)
             subprocess.run(["tar", "xf", "-", "-C", radir], input=tarball, check=True)
-            if os.path.exists(os.path.join(radir, "ra.json")):
-                run_tool("ra_panel.py", os.path.join(radir, "ra.json"), radir, font, os.path.join(out, "wheel"))
-                ra = {gid: os.path.join(out, "wheel", gid + ".png") for gid in json.load(open(os.path.join(radir, "ra.json")))}
+            if not os.path.exists(os.path.join(radir, "ra.json")):
+                raise RuntimeError("ra-fetch.py wrote no ra.json (see above)")
+            shutil.rmtree(os.path.join(out, "wheel"), ignore_errors=True)
+            run_tool("ra_panel.py", os.path.join(radir, "ra.json"), radir, font, os.path.join(out, "wheel"))
+            ra_info = json.load(open(os.path.join(radir, "ra.json")))
+            ra = {gid: os.path.join(out, "wheel", gid + ".png") for gid in ra_info}
         except Exception as e:                                      # no account, offline, ...: the rest still runs
             log(f"RetroAchievements skipped: {e}")
 
@@ -276,6 +281,8 @@ def main():
         # RetroAchievements strip: always pushed, it shows progress, which changes between runs
         if gid in ra and os.path.exists(ra[gid]):
             results["wheel"] = dev.push_media(gid, "wheel", open(ra[gid], "rb").read())
+        elif gid in ra and ra_info.get(gid, {}).get("error"):
+            results["wheel"] = "not updated (RetroAchievements error, see the top)"
         # text, only for fields ES has empty
         match, _ = best_match(name, list(meta_db))
         if match:
