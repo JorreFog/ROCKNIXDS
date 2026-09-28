@@ -46,6 +46,11 @@ the RG DS; none of it has run on a Plus yet, so please report what you see.
 - **`--with-60hz`** retunes the Plus from 60.17 Hz to 60.003 Hz (horizontal front porch 120 → 122, vertical
   16 → 17; the porches only grow). It first checks that the panels' pixel clock is the 62769231 Hz (816 MHz / 13)
   it was worked out for, and changes nothing otherwise.
+- **Install the alpha** (its own branch, separate from `main` and `beta`; on an RG DS it installs like `beta`):
+
+  ```sh
+  curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/plus-alpha/install.sh | RGDS_BRANCH=plus-alpha sh
+  ```
 - Things to check first on a Plus: both panels show ES across both screens; a DS game fills both panels; a
   stylus tap lands where you touch; `/storage/.config/drastic/dsflip/dsflip.log` says `ready` and
   `toast plane: N (1024x115)`; with a shader, `[shader] submit` stays well under 16 ms.
