@@ -1,0 +1,93 @@
+#!/bin/sh
+# dsflip-run <drastic> [drastic args...] <rom>
+#
+# Runs DraStic (r2.5.2.2, aarch64) on the RG DS's two panels with libdsflip: DraStic draws straight into the panels'
+# scanout buffers (KMS), at 60 fps with hires 3D. For firmwares other than ROCKNIX (ROCKNIX users: install.sh).
+#
+# libdsflip needs the display (DRM master) for itself, so whatever shows the frontend has to let go of it first.
+# DSFLIP_HANDOVER picks how:
+#   auto  (default) cmd if DSFLIP_STOP_CMD is set, else vt if a compositor is running, else none
+#   none  nothing holds the display (the frontend is a plain KMS app that exits or waits while games run)
+#   vt    switch the console to another VT (DSFLIP_VT, default 12): a compositor started through seatd/logind then
+#         releases the display, and gets it back when we switch back. Keeps the frontend running.
+#   cmd   run DSFLIP_STOP_CMD before the game and DSFLIP_START_CMD after it (e.g. stop/start the compositor)
+# If libdsflip can't take the display (see its verdict below), the display is handed back and DraStic runs the
+# ordinary way, unless DSFLIP_FALLBACK=0.
+#
+# Settings: environment variables, or dsflip.conf beside this script (shell syntax: KEY=value). See README.md.
+# Exit status: DraStic's.
+HERE=$(cd "$(dirname "$0")" && pwd)
+[ -f "$HERE/dsflip.conf" ] && . "$HERE/dsflip.conf"
+[ $# -ge 1 ] || { echo "usage: dsflip-run <drastic> [args...] <rom>" >&2; exit 2; }
+DRASTIC=$1; shift
+case "$DRASTIC" in /*) ;; *) DRASTIC=$(cd "$(dirname "$DRASTIC")" && pwd)/$(basename "$DRASTIC") ;; esac
+LIB=${DSFLIP_LIB:-$HERE/libdsflip.so}
+export DSFLIP_STATE=${DSFLIP_STATE:-/tmp/dsflip-state}
+export DSFLIP_DATA=${DSFLIP_DATA:-$HERE/data}
+LOGDIR=${DSFLIP_LOGDIR:-$HERE/logs}
+export DSFLIP_LOG=${DSFLIP_LOG:-$LOGDIR/dsflip.log}
+mkdir -p "$DSFLIP_DATA" "$LOGDIR" 2>/dev/null
+RUNLOG=$LOGDIR/run.log
+for v in DSFLIP_SHADER DSFLIP_SHADER_DIR DSFLIP_TOP DSFLIP_CARD DSFLIP_FONT DSFLIP_RA_USER DSFLIP_RA_PASSWORD \
+         DSFLIP_RA_SOUND DSHOOK_MIC_THRESH; do
+    eval "[ -n \"\${$v}\" ] && export $v"
+done
+
+say() { echo "$(date '+%F %T') $*" >> "$RUNLOG"; }
+plain() { cd "$(dirname "$DRASTIC")" && exec "$DRASTIC" "$@"; }
+
+HANDOVER=${DSFLIP_HANDOVER:-auto}
+if [ "$HANDOVER" = auto ]; then
+    if [ -n "$DSFLIP_STOP_CMD" ]; then HANDOVER=cmd
+    elif pidof sway weston labwc cage gamescope kwin_wayland Xorg X >/dev/null 2>&1; then HANDOVER=vt
+    else HANDOVER=none; fi
+fi
+[ -f "$LIB" ] || { say "no $LIB: plain DraStic"; plain "$@"; }
+
+OLDVT=
+release() {
+    case "$HANDOVER" in
+    vt)
+        OLDVT=$(fgconsole 2>/dev/null || echo 1)
+        VT=${DSFLIP_VT:-12}
+        # a new VT in graphics mode or blanked powers the panels down under us: keep it text, unblanked
+        command -v python3 >/dev/null && python3 -c 'import fcntl, os, sys; fcntl.ioctl(os.open("/dev/tty" + sys.argv[1], os.O_RDWR), 0x4B3A, 0)' "$VT" 2>/dev/null
+        chvt "$VT"
+        echo 0 > /sys/class/graphics/fb0/blank 2>/dev/null ;;
+    cmd) sh -c "$DSFLIP_STOP_CMD" ;;
+    esac
+}
+restore() {
+    case "$HANDOVER" in
+    vt) [ -n "$OLDVT" ] && chvt "$OLDVT"; OLDVT= ;;
+    cmd) [ -n "$DSFLIP_START_CMD" ] && sh -c "$DSFLIP_START_CMD"; DSFLIP_START_CMD= ;;
+    esac
+}
+
+say "start: $* (handover $HANDOVER, shader ${DSFLIP_SHADER:-none})"
+release
+rm -f "$DSFLIP_STATE"
+# libdsflip retries the display for 3 s itself, so no wait for the frontend to let go
+( cd "$(dirname "$DRASTIC")" && SDL_VIDEODRIVER=dummy LD_PRELOAD="$LIB${LD_PRELOAD:+:$LD_PRELOAD}" exec "$DRASTIC" "$@" ) &
+P=$!
+trap 'kill -9 $P 2>/dev/null; wait $P; restore; say "stopped by a signal"; exit 143' TERM INT HUP
+
+# the verdict: "ready", or "passthrough: <why>" (libdsflip decides within ~6 s: 3 s for the display, 3 s for a shader)
+v=; i=0
+while [ $i -lt 200 ] && kill -0 $P 2>/dev/null; do
+    v=$(cat "$DSFLIP_STATE" 2>/dev/null); [ -n "$v" ] && break
+    sleep 0.05; i=$((i + 1))
+done
+say "libdsflip: ${v:-no verdict}"
+if [ "$v" != ready ]; then
+    kill -9 $P 2>/dev/null; wait $P 2>/dev/null
+    restore
+    trap - TERM INT HUP
+    [ "${DSFLIP_FALLBACK:-1}" = 0 ] && exit 1
+    say "running DraStic without libdsflip"
+    plain "$@"
+fi
+wait $P; rc=$?
+restore
+say "drastic exited: $rc"
+exit $rc

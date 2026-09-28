@@ -37,8 +37,8 @@ void ui_progress(const char *text, const char *badge_png);
 void dsflip_log(const char *fmt, ...);
 
 #define SYSCFG "/storage/.config/system/configs/system.cfg"
-#define TOKEN_FILE "/storage/.config/drastic/dsflip/ra.token"
-#define BADGE_DIR "/storage/.config/drastic/dsflip/badges"     /* achievement badges and game icons, fetched once */
+/* the login token and the badge cache live in DSFLIP_DATA (default: ROCKNIX's libdsflip folder) */
+static char TOKEN_FILE[512], BADGE_DIR[512];      /* BADGE_DIR: achievement badges and game icons, fetched once */
 #define DS_RAM_SIZE 0x400000u
 #define HDR_OFF 0x3FFE00u
 
@@ -248,7 +248,7 @@ static int fetch_file(const char *url, const char *path) {         /* 1 if path 
     free(body.data);
     return ok;
 }
-static void badge_file(const rc_client_achievement_t *a, char *path, size_t n) { snprintf(path, n, BADGE_DIR "/%s.png", a->badge_name); }
+static void badge_file(const rc_client_achievement_t *a, char *path, size_t n) { snprintf(path, n, "%s/%s.png", BADGE_DIR, a->badge_name); }
 static int badge_fetch(const rc_client_achievement_t *a, char *path, size_t n) {
     char url[512] = "";
     badge_file(a, path, n);
@@ -266,7 +266,7 @@ static void *prefetch_thread(void *a) {
     load_msg *m = a;
     mkdir(BADGE_DIR, 0755);
     char icon[600]; const rc_client_game_t *g = rc_client_get_game_info(rc);
-    snprintf(icon, sizeof icon, BADGE_DIR "/game-%s.png", g && g->badge_name ? g->badge_name : "0");
+    snprintf(icon, sizeof icon, "%s/game-%s.png", BADGE_DIR, g && g->badge_name ? g->badge_name : "0");
     int have_icon = fetch_file(m->icon_url, icon);
     ui_popup(m->title, m->line, have_icon ? icon : 0, 0x6ab0ff, 5000);
     free(m);
@@ -277,7 +277,7 @@ static void *prefetch_thread(void *a) {
             char path[600]; n++; got += badge_fetch(l->buckets[b].achievements[i], path, sizeof path);
         }
     if (l) rc_client_destroy_achievement_list(l);
-    dsflip_log("[ra] badges: %d of %d cached in " BADGE_DIR "\n", got, n);
+    dsflip_log("[ra] badges: %d of %d cached in %s\n", got, n, BADGE_DIR);
     if (getenv("DSFLIP_UI_DEMO")) {                  /* test hook: what an unlock and a progress update look like */
         rc_client_achievement_list_t *d = rc_client_create_achievement_list(rc, RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE, RC_CLIENT_ACHIEVEMENT_LIST_GROUPING_LOCK_STATE);
         if (d && d->num_buckets && d->buckets[0].num_achievements) {
@@ -407,6 +407,11 @@ static void on_login_password(int result, const char *err, rc_client_t *c, void 
 static char sound_path[600];
 static void *sound_load_thread(void *a) { (void)a; audio_sfx_load(sound_path); return 0; }
 static void sound_setup(void) {
+    const char *file = getenv("DSFLIP_RA_SOUND");     /* standalone: an .ogg path, or "none" */
+    if (file && *file) {
+        if (!strcmp(file, "none")) { dsflip_log("[ra] unlock sound: none\n"); return; }
+        snprintf(sound_path, sizeof sound_path, "%s", file); detach(sound_load_thread, 0); return;
+    }
     char key[700], name[128] = "";
     const char *base = strrchr(rom_path, '/'); base = base ? base + 1 : rom_path;
     snprintf(key, sizeof key, "nds[\"%s\"].retroachievements.sound", base);
@@ -426,9 +431,18 @@ static void on_rc_log(const char *msg, const rc_client_t *c) { (void)c; dsflip_l
 /* called once, from the first SDL_RenderPresent (DraStic's main thread) */
 static void ra_start(void) {
     char v[16] = "";
-    cfg_get("global.retroachievements", v, sizeof v);
-    cfg_get("global.retroachievements.username", user, sizeof user);
-    cfg_get("global.retroachievements.password", pass, sizeof pass);
+    const char *data = getenv("DSFLIP_DATA"); if (!data || !*data) data = "/storage/.config/drastic/dsflip";
+    snprintf(TOKEN_FILE, sizeof TOKEN_FILE, "%s/ra.token", data);
+    snprintf(BADGE_DIR, sizeof BADGE_DIR, "%s/badges", data);
+    const char *eu = getenv("DSFLIP_RA_USER");        /* standalone: the account from the environment */
+    if (eu && *eu) {
+        const char *ep = getenv("DSFLIP_RA_PASSWORD");
+        strcpy(v, "1"); snprintf(user, sizeof user, "%s", eu); snprintf(pass, sizeof pass, "%s", ep ? ep : "");
+    } else {                                          /* ROCKNIX: ES > RetroAchievements (system.cfg) */
+        cfg_get("global.retroachievements", v, sizeof v);
+        cfg_get("global.retroachievements.username", user, sizeof user);
+        cfg_get("global.retroachievements.password", pass, sizeof pass);
+    }
     const char *test = getenv("DSFLIP_RA_TEST");
     /* ROM = DraStic's last argument */
     FILE *f = fopen("/proc/self/cmdline", "rb");

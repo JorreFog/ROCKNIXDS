@@ -28,8 +28,12 @@ void dsflip_overlay_end(int show);
 void dsflip_log(const char *fmt, ...);
 
 static const char *font_paths[] = {
+    0,                                                  /* DSFLIP_FONT, if set */
     "/storage/.config/emulationstation/themes/dii-ess-aye/assets/fonts/dsi_font.otf",
     "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",   /* other firmwares' usual fonts */
+    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/TTF/DejaVuSans.ttf",
 };
 static stbtt_fontinfo font;
 static int font_ok;
@@ -221,8 +225,9 @@ static void *ui_thread(void *a) {
 static int ui_start(void) {                           /* with mx held */
     if (started) return font_ok;
     started = 1;
+    font_paths[0] = getenv("DSFLIP_FONT");
     for (size_t i = 0; i < sizeof font_paths / sizeof *font_paths && !font_ok; i++) {
-        FILE *f = fopen(font_paths[i], "rb"); if (!f) continue;
+        FILE *f = font_paths[i] ? fopen(font_paths[i], "rb") : 0; if (!f) continue;
         fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
         unsigned char *d = n > 0 ? malloc((size_t)n) : 0;
         if (d && fread(d, 1, (size_t)n, f) == (size_t)n && stbtt_InitFont(&font, d, stbtt_GetFontOffsetForIndex(d, 0))) {

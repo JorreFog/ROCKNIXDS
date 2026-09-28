@@ -1,0 +1,24 @@
+# dsflip.conf: settings for dsflip-run (copy this file to dsflip.conf beside dsflip-run). Shell syntax.
+# A value set here wins over the same variable in the environment.
+
+# How the frontend lets go of the display (see README.md): auto, none, vt or cmd
+#DSFLIP_HANDOVER=auto
+#DSFLIP_VT=12
+#DSFLIP_STOP_CMD="systemctl stop my-frontend.service"
+#DSFLIP_START_CMD="systemctl start my-frontend.service"
+
+# A shader: ds-crisp, ds-crisp-color, ds-grid, ds-grid-color, ds-grid-2x, ds-integer, ds-fsr (shaders/ folder).
+# Unset or "none": no shader (zero-copy, the GPU stays idle).
+#DSFLIP_SHADER=ds-crisp
+
+# RetroAchievements (softcore). The password is only used for the first login; after that a token is kept in data/.
+#DSFLIP_RA_USER=
+#DSFLIP_RA_PASSWORD=
+#DSFLIP_RA_SOUND=/path/to/unlock.ogg
+
+# Microphone: how far above the background noise counts as blowing or speaking into the DS mic.
+# 0.03 = high sensitivity, 0.15 = medium, 0.3 = low (ROCKNIX ES's choices); 0: mic off
+#DSHOOK_MIC_THRESH=0
+
+# Run DraStic the ordinary way if libdsflip can't take the display (1) or give up (0)
+#DSFLIP_FALLBACK=1

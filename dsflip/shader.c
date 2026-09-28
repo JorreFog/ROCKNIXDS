@@ -8,8 +8,8 @@
 // as it does in stock's window, so pixel masks keep stock's phase.
 //
 // Shader sources: ROCKNIX's built-ins are read out of /usr/lib/libdrastouch.so at runtime (they are not
-// copied into this repo), recognised by their content. Other names load /storage/.config/drastic/shaders/
-// <name>.frag, the same files the stock path uses.
+// copied into this repo), recognised by their content. Other names load <name>.frag from DSFLIP_SHADER_DIR,
+// /storage/.config/drastic/shaders (the files the stock path uses), or shaders/ beside libdsflip.so.
 //
 // GL runs only on the presenter thread, in a surfaceless context (it renders only into imported dumb buffers).
 // The RG DS's GPU runs ARM's libmali (mali_kbase, /dev/mali0; there is no DRM render node), so libmali's EGL in
@@ -276,13 +276,22 @@ int shader_init(int fd, const char *name) {
     /* upload path: DraStic's XRGB8888 is B,G,R,X in memory; BGRA uploads need no swizzle in the shader */
     const char *gx = (const char *)glGetString(0x1F03 /* GL_EXTENSIONS */);
     up_fmt = gx && strstr(gx, "GL_EXT_texture_format_BGRA8888") ? 0x80E1 /* GL_BGRA_EXT */ : 0x1908 /* GL_RGBA */;
-    char path[256]; size_t n;
-    const char *sdir = getenv("DSFLIP_SHADER_DIR");   /* testing: load .frag files from elsewhere */
-    snprintf(path, sizeof path, "%s/%s.frag", sdir ? sdir : "/storage/.config/drastic/shaders", name);
+    /* .frag files: DSFLIP_SHADER_DIR, ROCKNIX's DraStic shader folder, then shaders/ beside libdsflip.so (the
+     * standalone package's layout) */
+    char path[600] = "", dirs[3][512]; size_t n; int nd = 0;
+    const char *sdir = getenv("DSFLIP_SHADER_DIR");
+    if (sdir && *sdir) snprintf(dirs[nd++], sizeof dirs[0], "%s", sdir);
+    snprintf(dirs[nd++], sizeof dirs[0], "/storage/.config/drastic/shaders");
+    Dl_info di;
+    if (dladdr((void *)shader_init, &di) && di.dli_fname && strrchr(di.dli_fname, '/'))
+        snprintf(dirs[nd++], sizeof dirs[0], "%.*s/shaders", (int)(strrchr(di.dli_fname, '/') - di.dli_fname), di.dli_fname);
     char *fs = drastouch_source(name, 0), *vs = drastouch_source(name, 1);
     const char *from = "libdrastouch";
-    if (!fs) { fs = slurp(path, &n); from = path; }
-    if (!fs) { SLOG("[shader] unknown shader \"%s\" (not built into libdrastouch, no %s)\n", name, path); return 0; }
+    for (int i = 0; i < nd && !fs; i++) {
+        snprintf(path, sizeof path, "%s/%s.frag", dirs[i], name);
+        fs = slurp(path, &n); from = path;
+    }
+    if (!fs) { SLOG("[shader] unknown shader \"%s\" (not built into libdrastouch, no %s.frag in the shader folders)\n", name, name); return 0; }
     { const char *m = strstr(fs, "dsflip-viewport:");
       if (m && sscanf(m + 16, "%d %d %d %d", &vp[0], &vp[1], &vp[2], &vp[3]) == 4)
           SLOG("[shader] draws the DS screen at %d,%d %dx%d of the panel (touch follows)\n", vp[0], vp[1], vp[2], vp[3]);

@@ -25,6 +25,7 @@
 //
 // Requirements: DRM master (sway stopped), SDL_VIDEODRIVER=dummy. Env:
 //   DSFLIP_TOP=DSI-2               connector that shows the DS top screen
+//   DSFLIP_CARD=/dev/dri/cardN     display device (default: the first card with two connected DSI panels)
 //   DSFLIP_TOUCH=fe5e0000.i2c      bottom touchscreen (i2c-5; calibrated: raw == panel pixels)
 //   DSFLIP_TOUCH_INVERT=x/y/xy     axes to invert (default none)
 //   DSFLIP_LOG=path                stats log (default /storage/dsflip/logs/dsflip.log)
@@ -856,6 +857,28 @@ static void give_up(const char *why) {
     verdict(v);
 }
 
+/* The display device: DSFLIP_CARD, else the first /dev/dri/card* with two connected DSI panels (card0 on ROCKNIX;
+ * other firmwares can number them differently, e.g. with a second DRM driver loaded). */
+static int open_card(void) {
+    const char *c = getenv("DSFLIP_CARD");
+    if (c && *c) return open(c, O_RDWR | O_CLOEXEC);
+    glob_t g; int found = -1;
+    if (glob("/dev/dri/card*", 0, 0, &g)) return open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
+    for (size_t i = 0; i < g.gl_pathc && found < 0; i++) {
+        int f = open(g.gl_pathv[i], O_RDWR | O_CLOEXEC); if (f < 0) continue;
+        drmModeRes *res = drmModeGetResources(f); int dsi = 0;
+        for (int k = 0; res && k < res->count_connectors; k++) {
+            drmModeConnector *cn = drmModeGetConnector(f, res->connectors[k]);
+            if (cn && cn->connector_type == DRM_MODE_CONNECTOR_DSI && cn->connection == DRM_MODE_CONNECTED) dsi++;
+            drmModeFreeConnector(cn);
+        }
+        drmModeFreeResources(res);
+        if (dsi >= 2) { found = f; LOG("[dsflip] display: %s\n", g.gl_pathv[i]); } else close(f);
+    }
+    globfree(&g);
+    return found >= 0 ? found : open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
+}
+
 __attribute__((constructor)) static void init(void) {
     const char *lp = getenv("DSFLIP_LOG"); if (!lp) lp = "/storage/dsflip/logs/dsflip.log";
     {   /* keep the previous three sessions' logs (.1 = the last one): testers lost evidence to the overwrite */
@@ -871,7 +894,7 @@ __attribute__((constructor)) static void init(void) {
     LOG("[dsflip] libdsflip %s\n", DSFLIP_VERSION);
     const char *top = getenv("DSFLIP_TOP"); if (!top) top = "DSI-2";
 
-    fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
+    fd = open_card();
     long long t_init = now_us();
     int master = -1;                    /* sway/seatd may still be letting go of the device: retry for up to 3 s */
     for (int k = 0; fd >= 0 && k < 300 && (master = drmSetMaster(fd)) != 0; k++) usleep(10000);

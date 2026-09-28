@@ -1,0 +1,30 @@
+#!/bin/sh
+# dsflip-update [--check]
+#
+# Updates this libdsflip folder to the newest release on GitHub (stable releases only; pre-releases are skipped).
+# Keeps dsflip.conf, data/ (RetroAchievements login and badges) and logs/. --check only says whether there is one.
+# Needs curl and tar. DSFLIP_REPO picks another repository (owner/name).
+set -e
+HERE=$(cd "$(dirname "$0")" && pwd)
+REPO=${DSFLIP_REPO:-JorreFog/ROCKNIXDS}
+HAVE=$(cat "$HERE/VERSION" 2>/dev/null || echo none)
+JSON=$(curl -fsSL -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$REPO/releases/latest")
+URL=$(printf '%s' "$JSON" | grep -o '"browser_download_url": *"[^"]*/libdsflip-[^"/]*-aarch64\.tar\.gz"' | head -n1 | sed 's/.*"\(https[^"]*\)"$/\1/')
+[ -n "$URL" ] || { echo "the latest release of $REPO has no libdsflip package"; exit 1; }
+NEW=$(basename "$URL" | sed 's/^libdsflip-\(.*\)-aarch64\.tar\.gz$/\1/')
+if [ "$NEW" = "$HAVE" ]; then echo "libdsflip $HAVE is the latest"; exit 0; fi
+echo "libdsflip $HAVE -> $NEW"
+[ "$1" = --check ] && exit 0
+TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+curl -fsSL "$URL" | tar xz -C "$TMP"
+SRC=$TMP/libdsflip-$NEW-aarch64
+[ -f "$SRC/libdsflip.so" ] || { echo "unexpected package layout"; exit 1; }
+# every file by rename: a game starting meanwhile gets the old or the new library, never half of one, and this
+# script keeps reading its old copy
+put() { cp "$1" "$2.new" && mv "$2.new" "$2"; }
+mkdir -p "$HERE/shaders"
+for f in "$SRC"/shaders/*.frag; do put "$f" "$HERE/shaders/$(basename "$f")"; done
+for f in dsflip-run README.md LICENSE THIRD_PARTY.md dsflip.conf.example libdsflip.so dsflip-update VERSION; do
+    [ -f "$SRC/$f" ] && put "$SRC/$f" "$HERE/$f"
+done
+echo "updated to $NEW"
