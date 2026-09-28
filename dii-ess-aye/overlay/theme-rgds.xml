@@ -43,8 +43,11 @@
             <size>1.0208333 1.0833333</size><!-- 1960x520 -->
             <path>${themePath}/assets/images/common/grid.svg</path>
             <zIndex>0.1</zIndex>
-            <storyboard repeat="forever">
-                <animation property="pos" from="0 0" to="-0.0104167 -0.0416667" duration="6000" repeat="forever"/>
+            <!-- Every looping animation stops after a few cycles (it restarts when the view or selection changes): while
+                 anything animates ES draws 60 frames a second and sway composites them, ~45% of a core in an idle menu
+                 (measured 2026-09-28). With ES's power saver on "enhanced" an idle menu then draws nothing. -->
+            <storyboard>
+                <animation property="pos" from="0 0" to="-0.0104167 -0.0416667" duration="6000" repeat="2"/>
             </storyboard>
         </image>
 
@@ -162,7 +165,7 @@
                  Invisible during the 500 ms slide (it framed two half icons mid-scroll), fades in once the icon arrives. -->
             <storyboard>
                 <animation property="opacity" begin="450" from="0" to="1" duration="120"/>
-                <animation property="scale" begin="450" from="1" to="1.035" duration="900" autoReverse="true" repeat="forever" mode="easeInOut"/>
+                <animation property="scale" begin="450" from="1" to="1.035" duration="900" autoReverse="true" repeat="4" mode="easeInOut"/>
             </storyboard>
         </image>
 
@@ -233,8 +236,8 @@
             <origin>0.5 0.5</origin>
             <size>0.1458333 0.5</size><!-- 280x240 -->
             <zIndex>1.5</zIndex>
-            <storyboard repeat="forever">
-                <animation property="opacity" from="0.55" to="1" duration="1800" autoReverse="true" repeat="forever" mode="easeInOut"/>
+            <storyboard>
+                <animation property="opacity" from="0.55" to="1" duration="1800" autoReverse="true" repeat="3" mode="easeInOut"/>
             </storyboard>
         </image>
         <image name="home_system_icon" extra="true">
@@ -652,7 +655,7 @@
                          (a frame fading in/out on a card still sliding showed up at the sides), and goes at once -->
                     <storyboard event="activate">
                         <animation property="opacity" begin="450" from="0" to="1" duration="120"/>
-                        <animation property="scale" begin="450" from="1" to="1.035" duration="900" autoReverse="true" repeat="forever" mode="easeInOut"/>
+                        <animation property="scale" begin="450" from="1" to="1.035" duration="900" autoReverse="true" repeat="4" mode="easeInOut"/>
                     </storyboard>
                     <storyboard event="deactivate">
                         <animation property="opacity" from="0" to="0" duration="1"/>

@@ -103,8 +103,8 @@ if [ $UNINSTALL = 1 ]; then
             old=$(sed -n 's/^nds\.hires_3d=//p' $B/.config/system/configs/system.cfg | head -n1)
             if [ -n "$old" ]; then set_cfg nds.hires_3d "$old"; else sed -i '/^nds\.hires_3d=/d' $SYSCFG; fi
         fi
-        if [ -f $B/.config/emulationstation/es_settings.cfg ] && [ -f $ES_SETTINGS ]; then   # the theme's three keys only
-            for k in ThemeSet FullScreenMenu GameTransitionStyle; do
+        if [ -f $B/.config/emulationstation/es_settings.cfg ] && [ -f $ES_SETTINGS ]; then   # the theme's keys only
+            for k in ThemeSet FullScreenMenu GameTransitionStyle PowerSaverMode; do
                 old=$(es_get $k $B/.config/emulationstation/es_settings.cfg)
                 if [ -n "$old" ]; then es_set $k "$old"; else es_del $k; fi
             done
@@ -202,6 +202,9 @@ if [ $THEME_ON = 1 ]; then
     touch /tmp/has-restarted-for-theme
     XDG_RUNTIME_DIR=/var/run/0-runtime-dir SWAYSOCK=$(ls /var/run/0-runtime-dir/sway-ipc.*.sock 2>/dev/null | head -n1) \
         bash $THEME/scripts/enable_theme_rgds.sh
+    # ES's power saver on "enhanced": an idle menu draws nothing instead of 25-60 frames a second (the patched ES
+    # still wakes each minute for the clock). Only if it's on ES's default: a choice made in the menu stays.
+    case "$(es_get PowerSaverMode $ES_SETTINGS)" in ""|default) es_set PowerSaverMode enhanced ;; esac
 fi
 
 # ---- libdsflip ---------------------------------------------------------------------------------------

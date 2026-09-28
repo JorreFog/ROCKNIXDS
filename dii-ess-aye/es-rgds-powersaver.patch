@@ -1,0 +1,48 @@
+From c7ae26639a53b1361c66f3fa0c9dfe422e2fdcda Mon Sep 17 00:00:00 2001
+From: JorreFog <305496122+JorreFog@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 18:55:30 +0200
+Subject: [PATCH] es-rgds-powersaver: wake each minute in standby for the
+ clock; poll input once per frame
+
+---
+ es-app/src/main.cpp | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/es-app/src/main.cpp b/es-app/src/main.cpp
+index edd28e10b..790eb016a 100644
+--- a/es-app/src/main.cpp
++++ b/es-app/src/main.cpp
+@@ -1,6 +1,7 @@
+ //EmulationStation, a graphical front-end for ROM browsing. Created by Alec "Aloshi" Lofquist.
+ //http://www.aloshi.com
+ 
++#include <chrono>
+ #include "services/HttpServerThread.h"
+ #include "guis/GuiDetectDevice.h"
+ #include "guis/GuiMsgBox.h"
+@@ -729,7 +730,21 @@ int main(int argc, char* argv[])
+ 		if (screenSaverWait)
+ 			eventResult = SDL_WaitEventTimeout(&event, screenSaverTimeout);
+ 		else if (ps_standby)
+-			eventResult = SDL_WaitEventTimeout(&event, PowerSaver::getTimeout());
++		{
++			// ROCKNIXDS: wake at the next full minute too, so a theme's clock and battery stay current while an idle
++			// menu draws nothing (power saver "enhanced"/"instant" otherwise sleeps until input or the screensaver)
++			int timeout = PowerSaver::getTimeout();
++			long long nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
++			int toMinute = (int)(60000 - nowMs % 60000) + 20;
++			if (timeout <= 0 || timeout > toMinute)
++				timeout = toMinute;
++			// with a gamepad open SDL can't block in SDL_WaitEventTimeout and polls every millisecond (measured: ~760
++			// wake-ups/s in an idle menu); check once per frame instead, which keeps the first press after idling as
++			// quick as a frame
++			Uint32 until = SDL_GetTicks() + timeout;
++			while (!(eventResult = SDL_PollEvent(&event)) && (int)(until - SDL_GetTicks()) > 0)
++				SDL_Delay(16);
++		}
+ 		else
+ 			eventResult = SDL_PollEvent(&event);
+ 
+-- 
+2.55.0
+

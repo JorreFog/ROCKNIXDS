@@ -214,6 +214,15 @@ stays under 65%, up at once, down after 2 s.
   switches the panels off through sway before stopping it; restore.sh counts the display controller's interrupts
   after a session and power-cycles the panels if they storm (swaymsg power off/on cleared it: 84,618/s -> 93/s).
 
+- **The idle menu (2026-09-28):** ES + sway used ~45% of a core in a menu nobody touched. The theme's four looping
+  animations (background drift, START frame pulses, logo glow) kept ES drawing 60 frames a second and sway
+  compositing them; ES's power saver ("default") would still draw 25 a second. Now the animations stop after a few
+  cycles (they restart on navigation), the power saver is "enhanced", and es-rgds-powersaver.patch wakes ES each
+  minute for the clock (it was frozen otherwise) and polls input per frame instead of per millisecond (SDL can't
+  block with a gamepad open). Idle menu: CPU 101% -> 39% of 400, average clock 1389 -> ~800 MHz, GPU 400 -> 200 MHz,
+  SoC 43 -> 38 C, ~150 mA less. What's left is mostly audio: ES keeps a stream open (silence) and PipeWire
+  processes it, ~13% of a core.
+
 Found on the way: ROCKNIX's `powerstate` service re-applies a GPU profile whenever the battery status flips
 (charger plugged/unplugged, or a weak charger flapping), which overrode the session's GPU clock mid-game; session.sh
 now puts it back (7e2ff35). ES idle in the menu: CPU at 1992 MHz by the `performance` setting (schedutil: 763 MHz
