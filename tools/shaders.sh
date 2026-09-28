@@ -20,4 +20,4 @@ FRAG
 if [ -n "$FRAMES" ]; then
     for f in top2x top1x bot2x bot1x; do $SSH "cat > $B/frames/$f.raw" < "$FRAMES/$f.raw"; done
 fi
-$SSH "CLOCK=${CLOCK:-} REPS=${REPS:-} $B/shbench.sh $*"
+$SSH "CLOCK=${CLOCK:-} REPS=${REPS:-} ${COPY:+COPY=1} $B/shbench.sh $*"    # shtest: COPY set at all = upload mode
