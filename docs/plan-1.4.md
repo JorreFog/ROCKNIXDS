@@ -237,8 +237,15 @@ stays under 65%, up at once, down after 2 s.
   made the drain bursty (drops 0.18/s) and add latency: not taken. Switching the rate mid-stream made the drain
   uneven for the rest of the session, which is why it's set before DraStic starts.
 
+- **ROCKNIX's battery LED monitor (2026-09-28):** a bash loop that started ~15 processes a second ($(cat) for sysfs,
+  awk via get_setting twice per poll, subshells, sleep): 6.5% of a core with its children, half of the idle menu's
+  remaining CPU. battery-led-status is the same monitor (LEDs, thresholds, 1 s poll, overrides) reading sysfs with
+  bash's read, re-reading system.cfg only when it changed and waiting in read -t: 0.4% (the rest is the fuel gauge's
+  I2C reads). A systemd drop-in in /storage/.config/system.d points the service at it; it runs ROCKNIX's own
+  script instead whenever that differs from the version it follows (checked by md5 at start; tested).
+
 **Still open:** skipping unchanged frames in shader mode, ds-fsr (5.3 ms per panel), other
-systems' governors (no ROMs on the test device), ROCKNIX's battery LED poller (~1% of a core).
+systems' governors (no ROMs on the test device).
 
 Found on the way: ROCKNIX's `powerstate` service re-applies a GPU profile whenever the battery status flips
 (charger plugged/unplugged, or a weak charger flapping), which overrode the session's GPU clock mid-game; session.sh

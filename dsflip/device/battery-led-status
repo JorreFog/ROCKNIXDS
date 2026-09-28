@@ -1,0 +1,119 @@
+#!/bin/bash
+# ROCKNIXDS: ROCKNIX's RG DS battery LED monitor (quirks/devices/Anbernic RG DS/bin/battery_led_status, GPL-2.0,
+# Copyright (C) 2026 ROCKNIX), the same LEDs, thresholds, overrides and 1 s poll, without starting processes.
+#
+# ROCKNIX's loop starts ~15 processes a second: $(cat ...) for two sysfs files, awk (get_setting) for the LED
+# brightness setting twice per poll, subshells for its helpers, and sleep. Measured with its children: 6.5% of a
+# core, half of what an idle menu used after the 1.4 menu work. Here sysfs is read with bash's read, the brightness
+# setting is re-read from system.cfg only when the file changed (bash, no awk), and the poll waits in read -t on a
+# FIFO instead of sleep: ~0.2% of a core. install.sh points batteryledstatus.service at this only while ROCKNIX's script is the version this copy
+# follows (md5 b4ce44b02bf400a915964f3f2e392f28), so a ROCKNIX change to the LEDs is never masked.
+#
+# Upper LED (green:power + red:status): green = normal (>20%), red = low (<=20%), blink = critical (<=5%).
+# Lower LED (amber:charging): amber = charging, off = discharging / full.
+# Overrides as in ROCKNIX's: THRESHOLD_LOW, THRESHOLD_CRITICAL, POLL_INTERVAL.
+
+# only while ROCKNIX's script is the one this follows: after a ROCKNIX update that changed it, run theirs instead
+ORIG="/usr/lib/autostart/quirks/devices/Anbernic RG DS/bin/battery_led_status"
+set -- $(md5sum "$ORIG" 2>/dev/null)
+[ "$1" = b4ce44b02bf400a915964f3f2e392f28 ] || exec /usr/bin/battery_led_status
+
+LED_PATH="/sys/class/leds"
+BAT=/sys/class/power_supply/battery
+CFG=/storage/.config/system/configs/system.cfg
+
+THRESHOLD_LOW=${THRESHOLD_LOW:-20}
+THRESHOLD_CRITICAL=${THRESHOLD_CRITICAL:-5}
+POLL_INTERVAL=${POLL_INTERVAL:-1}
+
+BRI=255
+STAMP=/run/rocknixds-led-cfg        # when system.cfg was last read (a redirection sets it: no process)
+read_brightness() {                 # led.brightness from system.cfg (get_setting's plain key lookup)
+    # parsing the whole file in bash is the expensive part (~1% of a core every 5 s), so only when it changed
+    [[ -e $STAMP && ! $CFG -nt $STAMP ]] && return
+    : > $STAMP
+    local k v val=
+    while IFS='=' read -r k v; do [[ $k == led.brightness ]] && val=$v; done < "$CFG"
+    case $val in
+        mid) BRI=63 ;;
+        min) BRI=15 ;;
+        *)   BRI=255 ;;
+    esac
+}
+
+led_upper() {
+    case ${1} in
+        green)
+            echo "none" >${LED_PATH}/red:status/trigger
+            echo ${BRI} >${LED_PATH}/green:power/brightness
+            echo 0      >${LED_PATH}/red:status/brightness
+        ;;
+        red)
+            echo "none" >${LED_PATH}/red:status/trigger
+            echo 0      >${LED_PATH}/green:power/brightness
+            echo ${BRI} >${LED_PATH}/red:status/brightness
+        ;;
+        blink_red)
+            echo 0 >${LED_PATH}/green:power/brightness
+            local BLINK; read -r BLINK < ${LED_PATH}/red:status/brightness
+            [ "${BLINK}" = "0" ] && echo ${BRI} >${LED_PATH}/red:status/brightness \
+                                 || echo 0      >${LED_PATH}/red:status/brightness
+        ;;
+    esac
+}
+
+led_lower() {
+    [ "${1}" = "0" ] && echo 0      >${LED_PATH}/amber:charging/brightness \
+                     || echo ${BRI} >${LED_PATH}/amber:charging/brightness
+}
+
+# the poll's wait: read -t on a FIFO nobody writes (a builtin; sleep would be a process per poll)
+WAIT=/run/rocknixds-led-wait
+[ -p $WAIT ] || { rm -f $WAIT; mkfifo $WAIT; }
+exec 3<>$WAIT
+
+PREV_UPPER=""
+PREV_LOWER=""
+PREV_BRI=""
+
+while true; do
+    read -r CAP < $BAT/capacity
+    read -r STAT < $BAT/status
+    read_brightness
+    if (( CAP <= THRESHOLD_CRITICAL )); then UPPER=blink_red
+    elif (( CAP <= THRESHOLD_LOW )); then UPPER=red
+    else UPPER=green; fi
+    LOWER=0
+
+    case ${STAT} in
+        Charging)
+            # No blinking while charging, show battery level colour + amber lower
+            [ "${UPPER}" = "blink_red" ] && UPPER="red"
+            LOWER=${BRI}
+        ;;
+        Full|"Not charging")
+            UPPER="green"
+        ;;
+        Discharging)
+            :
+        ;;
+        *)
+            UPPER="green"
+        ;;
+    esac
+
+    BRI_CHANGED=0
+    [ "${BRI}" != "${PREV_BRI}" ] && BRI_CHANGED=1 && PREV_BRI="${BRI}"
+
+    # Always call led_upper for blink_red (needs to toggle every poll), otherwise only on state or brightness change
+    if [ "${UPPER}" = "blink_red" ] || [ "${UPPER}" != "${PREV_UPPER}" ] || [ "${BRI_CHANGED}" = "1" ]; then
+        led_upper ${UPPER}
+        PREV_UPPER="${UPPER}"
+    fi
+    if [ "${LOWER}" != "${PREV_LOWER}" ] || [ "${BRI_CHANGED}" = "1" ]; then
+        led_lower ${LOWER}
+        PREV_LOWER="${LOWER}"
+    fi
+
+    read -t ${POLL_INTERVAL} -u 3 _ 2>/dev/null
+done

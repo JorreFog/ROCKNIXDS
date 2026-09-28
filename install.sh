@@ -113,6 +113,11 @@ if [ $UNINSTALL = 1 ]; then
     fi
     rm -f /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
     rm -f /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh /storage/.config/autostart/rocknixds-menu-power
+    if [ -f /storage/.config/system.d/batteryledstatus.service.d/rocknixds.conf ]; then      # ROCKNIX's LED monitor again
+        rm -f /storage/.config/system.d/batteryledstatus.service.d/rocknixds.conf
+        rmdir /storage/.config/system.d/batteryledstatus.service.d 2>/dev/null
+        systemctl daemon-reload; systemctl restart batteryledstatus.service 2>/dev/null
+    fi
     echo performance > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor 2>/dev/null   # ROCKNIX's menu governor
     rmdir /storage/.config/emulationstation/scripts/theme-changed /storage/.config/emulationstation/scripts/game-end \
           /storage/.config/emulationstation/scripts 2>/dev/null
@@ -218,7 +223,8 @@ if [ $DSFLIP_ON = 1 ]; then
     mkdir -p $WORK/dsflip
     cp "$SRC/dsflip/libdsflip.so" "$SRC/dsflip/device/session.sh" "$SRC/dsflip/device/restore.sh" \
        "$SRC/dsflip/device/drastic-wrapper.sh" "$SRC/dsflip/device/install.sh" "$SRC/dsflip/device/es-features.sh" \
-       "$SRC/dsflip/device/fast-switch" "$SRC/dsflip/device/playstats.py" "$SRC/dsflip/device/menu-power.sh" $WORK/dsflip/
+       "$SRC/dsflip/device/fast-switch" "$SRC/dsflip/device/playstats.py" "$SRC/dsflip/device/menu-power.sh" \
+       "$SRC/dsflip/device/battery-led-status" $WORK/dsflip/
     sh $WORK/dsflip/install.sh
 
     # DS-pixel-aware shaders for DraStic (sharp and LCD-grid looks that work at 1x and 2x) + their ES entries
@@ -243,6 +249,13 @@ if [ $DSFLIP_ON = 1 ]; then
     cp "$SRC/dsflip/device/game-end-menu-power.sh" /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh
     chmod +x /storage/.config/autostart/rocknixds-menu-power /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh
     $DRASTIC/dsflip/menu-power.sh
+    # ROCKNIX's battery LED monitor started ~15 processes a second (6.5% of a core); the same monitor without them
+    # (battery-led-status, which runs ROCKNIX's own if that ever changes) through a systemd drop-in
+    if [ -f /usr/lib/systemd/system/batteryledstatus.service ]; then
+        mkdir -p /storage/.config/system.d/batteryledstatus.service.d
+        cp "$SRC/dsflip/device/batteryledstatus-rocknixds.conf" /storage/.config/system.d/batteryledstatus.service.d/rocknixds.conf
+        systemctl daemon-reload; systemctl restart batteryledstatus.service 2>/dev/null
+    fi
 fi
 
 # ---- hires 3D ----------------------------------------------------------------------------------------
