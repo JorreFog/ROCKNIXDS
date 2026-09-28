@@ -108,6 +108,23 @@ ES isn't built in CI: it needs ROCKNIX's full build system (hours of toolchain p
   So DQ4 swapping screens for battles is the game's own behaviour, which stock DraStic shows too. Worth confirming
   with the tester (`touch /storage/.config/drastic/nodsflip` runs stock DraStic's display path).
 
+## 6. Shaders: as little GPU as possible (requested 2026-09-28, not started)
+
+Goal: every shader at the lowest GPU time and clock it can have without changing its picture, so the GPU can sit
+at its lowest clock (less heat, longer battery). Method, per shader: `shtest SRC=<real frame> PIPE=1` for GPU time
+per panel, a pixel diff against the current version (identical, or a stated tolerance), then a play session's
+drops/s and the GPU's average clock (devfreq trans_stat) before and after.
+- **Skip unchanged frames:** when DraStic presents the same picture again (menus, pauses, 30 fps games), reuse the
+  last output instead of shading it again. Likely the biggest single saving.
+- **Static borders:** ds-integer's bezel never changes; draw it once per buffer and shade only the 512x384 screen
+  (scissor), instead of the whole 640x480 panel every frame.
+- **Per-shader work:** tap positions computed in the vertex shader (varyings) instead of per pixel, mediump
+  wherever the diff stays exact (highp only where it was measured to matter, see ds-fsr's positions), fewer
+  texture reads (bilinear taps that fetch 2 texels at once), no branches in the hot path.
+- **The stock names** (lcd3x, lcd1x-nds-color, sharp-bilinear...) come from ROCKNIX's libdrastouch at run time
+  and can't be edited here; faster look-alikes of our own could replace them, checked against the originals.
+- **Then the clock:** re-run 1.3's I6 sweep; with cheaper shaders the 400 MHz floor may drop to 200-300 MHz.
+
 ## Proposal: libdsflip as a standalone package (Reddit request, for other firmwares)
 
 libdsflip is already separable: one LD_PRELOAD library for DraStic r2.5.2.2 (aarch64, glibc >= 2.38), built in CI,
