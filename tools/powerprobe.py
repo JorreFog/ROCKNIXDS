@@ -38,6 +38,13 @@ def cpu_stat():
 CATS = ("user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal")
 
 
+def forks():
+    for line in rd("/proc/stat").split("\n"):
+        if line.startswith("processes "):
+            return int(line.split()[1])
+    return 0
+
+
 def cpu_freqs():
     out = {}
     for line in rd(CPUF + "/stats/time_in_state").split("\n"):
@@ -77,6 +84,22 @@ def threads():
     return out
 
 
+def procs():
+    """per process: its own CPU plus its finished children's (ticks), so polling scripts that start a process each
+    time show their real cost"""
+    out = {}
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        s = rd(f"/proc/{pid}/stat")
+        if not s:
+            continue
+        r = s[s.rfind(")") + 2:].split()
+        cmd = rd(f"/proc/{pid}/cmdline").replace("\0", " ").strip() or "[" + s[s.find("(") + 1:s.rfind(")")] + "]"
+        out[int(pid)] = (cmd[:90], int(r[11]) + int(r[12]) + int(r[13]) + int(r[14]))
+    return out
+
+
 def dist(a, b):
     d = {k: b.get(k, 0) - a.get(k, 0) for k in b}
     tot = sum(d.values()) or 1
@@ -87,7 +110,7 @@ def dist(a, b):
 def main():
     secs = float(sys.argv[1]) if len(sys.argv) > 1 else 30
     tag = sys.argv[2] if len(sys.argv) > 2 else ""
-    c0, g0, (t0, i0, v0), th0 = cpu_freqs(), gpu_freqs(), cpu_stat(), threads()
+    f0, c0, g0, (t0, i0, v0), th0, pr0 = forks(), cpu_freqs(), gpu_freqs(), cpu_stat(), threads(), procs()
     temp0 = int(rd(TZ, "0")) / 1000
     tmax, cur, volt = temp0, [], []
     start = time.monotonic()
@@ -97,7 +120,7 @@ def main():
         cur.append(int(rd(BAT + "/current_avg", "0")))
         volt.append(int(rd(BAT + "/voltage_avg", "0")))
     wall = time.monotonic() - start
-    c1, g1, (t1, i1, v1), th1 = cpu_freqs(), gpu_freqs(), cpu_stat(), threads()
+    f1, c1, g1, (t1, i1, v1), th1, pr1 = forks(), cpu_freqs(), gpu_freqs(), cpu_stat(), threads(), procs()
     cats = {c: round(400.0 * (b - a) / max(1, t1 - t0), 1) for c, a, b in zip(CATS, v0, v1) if c not in ("idle", "iowait")}
     temp1 = int(rd(TZ, "0")) / 1000
     busy = 400.0 * (1 - (i1 - i0) / max(1, t1 - t0))
@@ -110,12 +133,20 @@ def main():
             if pct >= 0.5:
                 tops.append((round(pct, 1), comm, name, k[1]))
     tops.sort(reverse=True)
+    ptops = []
+    for pid, (cmd, t) in pr1.items():
+        if pid in pr0 and pid != os.getpid():
+            pct = 100.0 * (t - pr0[pid][1]) / HZ / wall
+            if pct >= 0.2:
+                ptops.append((round(pct, 2), cmd, pid))
+    ptops.sort(reverse=True)
     res = {"tag": tag, "secs": round(wall, 1), "cpu_busy_pct": round(busy, 1), "cpu_avg_mhz": round(cavg / 1000),
            "cpu_time_at_khz_pct": cdist, "cpu_governor": rd(CPUF + "/scaling_governor"),
            "gpu_avg_mhz": round(gavg / 1e6), "gpu_time_at_hz_pct": gdist, "gpu_governor": rd(GPU + "/governor"),
            "temp_c": [temp0, temp1, tmax],
            "bat_ma": round(sum(cur) / max(1, len(cur)) / 1000, 1), "bat_v": round(sum(volt) / max(1, len(volt)) / 1e6, 3),
-           "charger": rd("/sys/class/power_supply/charger/online"), "cpu_by_kind_pct": cats, "threads": tops[:12]}
+           "charger": rd("/sys/class/power_supply/charger/online"), "cpu_by_kind_pct": cats, "threads": tops[:12],
+           "processes_incl_children": ptops[:12], "forks_per_s": round((f1 - f0) / wall, 1)}
     print(f"{tag or 'probe'}: {wall:.0f} s  CPU {busy:.0f}% of 400 at avg {cavg/1000:.0f} MHz ({res['cpu_governor']})  "
           f"GPU avg {gavg/1e6:.0f} MHz ({res['gpu_governor']})  SoC {temp0:.1f}->{temp1:.1f} C (max {tmax:.1f})  "
           f"battery {res['bat_ma']:+.0f} mA at {res['bat_v']:.3f} V (charger {'on' if res['charger'] == '1' else 'off'})")

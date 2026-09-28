@@ -205,10 +205,11 @@ stays under 65%, up at once, down after 2 s.
   30 s doubling to 10 min, and the floor is 1104 MHz. HeartGold 2x walking, 90 s: no shader 1622 MHz average at 0.04
   drops/s, ds-crisp 1778 MHz at 0.07 (fixed 1992: 0.07-0.09 and 0.00-0.04). Smoke tests: 0.04 drops/s.
 - Shaders import DraStic's frames (no upload), see section 6.
-- The menus: ROCKNIX leaves the CPU at `performance` in ES (nothing applies a governor at boot, and its launcher
-  sets performance after every game; `system.cpugovernor` is the games' default, not the menus'). `menu-power.sh`
-  puts the menus on schedutil at boot, after every ES game (game-end script) and after DS sessions (restore.sh).
-  Verified: after a launch the governor read performance in the hook and schedutil after it.
+- The menus: ROCKNIX runs ES at `performance`: its autostart applies `system.cpugovernor` (the games' default too) as
+  its very last step, after user hooks, and its launcher sets performance after every game. `menu-power.sh` puts the
+  menus on schedutil when ES starts (ES's start scripts, so after the autostart; a 1.4-dev autostart hook was
+  overridden by it), after every ES game (game-end script) and after DS sessions (restore.sh). Verified: after a
+  launch the governor read performance in the hook and schedutil after it; after a reboot it is schedutil.
   `touch /storage/.config/rocknixds-menu-performance` keeps ROCKNIX's behaviour.
 
 - **Display interrupt storm (found 2026-09-28):** stopping sway for a DS game while its buffers were still being

@@ -31,7 +31,10 @@ case $SHADER in
 esac
 [ -n "$GPUGOV" ] && GOV=$GPUGOV; [ -n "$GPUMIN" ] && MIN=$GPUMIN
 echo $GOV > $G/governor; [ -n "$MIN" ] && echo $MIN > $G/min_freq
-# PWRATE=<Hz>: PipeWire's graph forced to that rate for the run (clock.force-rate), reset after
+# PWRATE=<Hz>: PipeWire's graph forced to that rate for the run (clock.force-rate), reset after. Unset: as the installed
+# session.sh does (1.4 forces 44.1 kHz, 1.3 doesn't); PWRATE=0: not forced.
+[ -z "$PWRATE" ] && grep -q "clock.force-rate 44100" $CFGD/dsflip/session.sh 2>/dev/null && PWRATE=44100
+[ "$PWRATE" = 0 ] && PWRATE=
 PWM() { XDG_RUNTIME_DIR=/var/run/0-runtime-dir pw-metadata -n settings 0 clock.force-rate $1 >/dev/null 2>&1; }
 [ -n "$PWRATE" ] && PWM $PWRATE
 CFG=$CFGD/config/drastic.cfg

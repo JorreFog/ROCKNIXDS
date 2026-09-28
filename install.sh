@@ -112,7 +112,8 @@ if [ $UNINSTALL = 1 ]; then
         [ -f $ESF ] && sed -i -E '/value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"/d' $ESF   # our shader entries
     fi
     rm -f /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
-    rm -f /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh /storage/.config/autostart/rocknixds-menu-power
+    rm -f /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh /storage/.config/autostart/rocknixds-menu-power \
+          /storage/.config/emulationstation/scripts/start/rocknixds-menu-power.sh
     if [ -f /storage/.config/system.d/batteryledstatus.service.d/rocknixds.conf ]; then      # ROCKNIX's LED monitor again
         rm -f /storage/.config/system.d/batteryledstatus.service.d/rocknixds.conf
         rmdir /storage/.config/system.d/batteryledstatus.service.d 2>/dev/null
@@ -120,7 +121,7 @@ if [ $UNINSTALL = 1 ]; then
     fi
     echo performance > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor 2>/dev/null   # ROCKNIX's menu governor
     rmdir /storage/.config/emulationstation/scripts/theme-changed /storage/.config/emulationstation/scripts/game-end \
-          /storage/.config/emulationstation/scripts 2>/dev/null
+          /storage/.config/emulationstation/scripts/start /storage/.config/emulationstation/scripts 2>/dev/null
     rm -f $VERSION_FILE /storage/.config/rocknixds-es-notice /storage/.config/rocknixds-stock-es /storage/.config/rocknixds-any-rocknix
     if [ -e $BACKUP/.had-no-launcher-wrapper ] && [ -e $DRASTIC/drastic.real ]; then
         rm -f $DRASTIC/drastic $DRASTIC/drastic.dvsync; mv $DRASTIC/drastic.real $DRASTIC/drastic   # stock layout again
@@ -243,11 +244,14 @@ if [ $DSFLIP_ON = 1 ]; then
     mkdir -p /storage/.config/autostart
     cp "$SRC/dsflip/device/autostart-rocknixds-es-features" /storage/.config/autostart/rocknixds-es-features
     chmod +x /storage/.config/autostart/rocknixds-es-features
-    # the menus on schedutil instead of ROCKNIX's performance (menu-power.sh): at boot and after every game
-    cp "$SRC/dsflip/device/autostart-rocknixds-menu-power" /storage/.config/autostart/rocknixds-menu-power
-    mkdir -p /storage/.config/emulationstation/scripts/game-end
-    cp "$SRC/dsflip/device/game-end-menu-power.sh" /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh
-    chmod +x /storage/.config/autostart/rocknixds-menu-power /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh
+    # the menus on schedutil instead of ROCKNIX's performance (menu-power.sh): whenever ES starts (after ROCKNIX's
+    # autostart, which applies its own governor last) and after every game. (1.4-dev had an autostart hook: overridden.)
+    rm -f /storage/.config/autostart/rocknixds-menu-power
+    for ev in start game-end; do
+        mkdir -p /storage/.config/emulationstation/scripts/$ev
+        cp "$SRC/dsflip/device/es-menu-power.sh" /storage/.config/emulationstation/scripts/$ev/rocknixds-menu-power.sh
+        chmod +x /storage/.config/emulationstation/scripts/$ev/rocknixds-menu-power.sh
+    done
     $DRASTIC/dsflip/menu-power.sh
     # ROCKNIX's battery LED monitor started ~15 processes a second (6.5% of a core); the same monitor without them
     # (battery-led-status, which runs ROCKNIX's own if that ever changes) through a systemd drop-in
