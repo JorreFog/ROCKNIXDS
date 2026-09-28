@@ -5,6 +5,10 @@ then screen modes and touch in ES's menus, then the RetroAchievements update, th
 switching, then CI builds. The in-game microphone check needs a play session on the device (battery tuning: section 7). Carried over from `plan-1.3.md`: B6, B7, B13, B14, I5 (debug switch, texture
 alloc fallback), I7 (video previews, unplayed look), I8 (hires warning, release assets), I9 (ES patch, CI).
 
+**Priority from 2026-09-28: optimization first** (sections 6 and 7: GPU cost of the shaders, then CPU, battery and
+heat across the device), before anything else. The standalone libdsflip package is parked on branch
+`standalone-wip` (built, not yet tested on the device).
+
 Already on `beta` for 1.4: **ds-fsr**, AMD FSR 1.0 (EASU) fast enough for both panels (see its header).
 
 ## 1. Suspend during a game — works (2026-09-27)
