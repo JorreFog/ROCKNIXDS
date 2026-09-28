@@ -27,8 +27,12 @@ itself (ROCKNIX's runemu.sh and start_drastic.sh take ~2.3 s before our unit sta
   source pixel once.
 - **Other systems**: ROCKNIX's per-system governors for RetroArch cores, measured with free homebrew ROMs.
 
-## 3. Parked branches
+## 3. SuperDrastic
 
-- `standalone-wip`: libdsflip as a package for other firmwares (built, not tested on the device).
+libdsflip now also lives on its own as [SuperDrastic](https://github.com/JorreFog/SuperDrastic) (libsuperdrastic.so, a generic launcher, the integration guide; tested on the RG DS in all three display handovers). ROCKNIXDS should install SuperDrastic's release instead of carrying its own copy of the library (dsflip/ then keeps only the ROCKNIX session scripts), so fixes land once.
+
+## 4. Parked branches
+
+- `standalone-wip`: superseded by SuperDrastic.
 - `plus-alpha`: the RG DS Plus port (pre-release v1.4-plus-alpha.1, untested on hardware); rebase onto 1.4 when the
   hardware is at hand.

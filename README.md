@@ -19,7 +19,8 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 
 - **`libdsflip`**, a replacement display path for DraStic. It sends each DS screen straight to its own panel,
   so 2× internal resolution runs at full speed, with frame pacing that doesn't stutter. It also adds
-  shaders, the microphone and RetroAchievements to standalone DraStic.
+  shaders, the microphone and RetroAchievements to standalone DraStic. It now also lives on its own as
+  [SuperDrastic](https://github.com/JorreFog/SuperDrastic), for any Linux firmware.
 - **`dii-ess-aye`**, a DSi-style EmulationStation theme spread across both screens, with real DS cartridges,
   3D boxes and RetroAchievements progress, and a patched ES build.
 - The **panel timing fix**, the older **vsync pacing shim**, and the measurement tools (including a DS
