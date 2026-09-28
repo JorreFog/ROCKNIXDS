@@ -55,6 +55,14 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
   SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log \
     LD_PRELOAD=$D/dsflip/libdsflip.so $D/dsflip/drastic "$ROM" > $D/dsflip/drastic.out 2>&1 &
   P=$!; TG=$(date +%s)
+  # ROCKNIX's powerstate service re-applies a GPU profile whenever the battery status flips between charging and
+  # discharging ("auto" on AC, system.gpuperf on battery): plugging or unplugging mid-game, or a weak charger that
+  # flaps, would leave e.g. a zero-copy game with the GPU pinned at 800 MHz. It polls every 2 s; so do we.
+  [ -n "$GPU_GOV" ] && ( while kill -0 $P 2>/dev/null; do
+      sleep 2
+      kill -0 $P 2>/dev/null || break          # the game ended: restore.sh owns the governor now
+      [ "$(cat $GPU/governor 2>/dev/null)" = "$GOV" ] || { echo $GOV > $GPU/governor 2>/dev/null; echo "$(ms) ms: GPU governor changed by another service: back to $GOV"; }
+    done ) &
   # ES is stopped, so it can't record the session (play count, last played, time played): do what ES does after a
   # game. In VT mode ES is only waiting, and records it itself.
   record() { [ -z "$VT" ] && [ "$v" = ready ] && python3 $D/dsflip/playstats.py "$ROM" $(( $(date +%s) - TG )); }
