@@ -1,17 +1,43 @@
-From d9c6379afdc69b0939874470de28649cd1cd5950 Mon Sep 17 00:00:00 2001
+From a3961b1e038ac09a92aefce96a1fbee276cebd01 Mon Sep 17 00:00:00 2001
 From: JorreFog <305496122+JorreFog@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 18:55:30 +0200
-Subject: [PATCH] es-rgds-powersaver: in standby wake each minute for the
- clock, poll input once per frame, close audio after a minute idle, wake for
- posted work (API launches)
+Subject: [PATCH] es-rgds-powersaver: low-power waits in standby and the static
+ screensaver, minute wakes for the clock, audio closed while idle, wake for
+ posted work
 
 ---
- es-app/src/main.cpp    | 34 +++++++++++++++++++++++++++++++++-
- es-core/src/Window.cpp |  2 ++
- 2 files changed, 35 insertions(+), 1 deletion(-)
+ es-app/src/SystemScreenSaver.cpp |  6 ++--
+ es-app/src/main.cpp              | 62 ++++++++++++++++++++++++++++++--
+ es-core/src/Window.cpp           |  2 ++
+ 3 files changed, 66 insertions(+), 4 deletions(-)
 
+diff --git a/es-app/src/SystemScreenSaver.cpp b/es-app/src/SystemScreenSaver.cpp
+index 9f4641bad..779f24fa3 100644
+--- a/es-app/src/SystemScreenSaver.cpp
++++ b/es-app/src/SystemScreenSaver.cpp
+@@ -29,6 +29,7 @@
+ 
+ #define FADE_TIME					(500)
+ #define DATE_TIME_UPDATE_INTERVAL	(100)
++int msToNextMinute();	// main.cpp
+ #define STATIC_SCREENSAVER_POLL_INTERVAL	(100)
+ 
+ SystemScreenSaver::SystemScreenSaver(Window* window) :
+@@ -77,9 +78,10 @@ int SystemScreenSaver::getNextUpdateTimeout()
+ 	if (mState != STATE_SCREENSAVER_ACTIVE || mVideoScreensaver)
+ 		return 0;
+ 
+-	// Black/dim periodically wake for polling-based input such as lightguns.
++	// Black/dim periodically wake for polling-based input such as lightguns. ROCKNIXDS: the RG DS has none, so only once
++	// a minute (for the clock under a dim screensaver): at 100 ms ES drew 10 frames a second of a static screen.
+ 	if (!mImageScreensaver)
+-		return STATIC_SCREENSAVER_POLL_INTERVAL;
++		return msToNextMinute();
+ 
+ 	// Slideshow: wake for the next image change.
+ 	int timeout = mVideoChangeTime - mTimer;
 diff --git a/es-app/src/main.cpp b/es-app/src/main.cpp
-index edd28e10b..63c502ca8 100644
+index edd28e10b..931d20bbe 100644
 --- a/es-app/src/main.cpp
 +++ b/es-app/src/main.cpp
 @@ -1,6 +1,7 @@
@@ -22,46 +48,93 @@ index edd28e10b..63c502ca8 100644
  #include "services/HttpServerThread.h"
  #include "guis/GuiDetectDevice.h"
  #include "guis/GuiMsgBox.h"
-@@ -729,7 +730,38 @@ int main(int argc, char* argv[])
+@@ -462,6 +463,25 @@ void launchStartupGame()
+ 
+ // #include "utils/MathExpr.h"
+ 
++// ROCKNIXDS (es-rgds-powersaver.patch): SDL_WaitEventTimeout can't block while a gamepad is open and polls every
++// millisecond (measured: ~760 wake-ups/s in an idle menu, and 6.75% of a core under the dim screensaver); this waits
++// the same way once a frame, which keeps the first press after idling as quick as a frame.
++static int lowPowerWaitEvent(SDL_Event* event, int timeout)
++{
++	Uint32 until = SDL_GetTicks() + timeout;
++	int r;
++	while (!(r = SDL_PollEvent(event)) && (int)(until - SDL_GetTicks()) > 0)
++		SDL_Delay(16);
++	return r;
++}
++
++// milliseconds to the next full minute (+20): when an idle menu or a static screensaver wakes, for the theme's clock
++int msToNextMinute()
++{
++	long long nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
++	return (int)(60000 - nowMs % 60000) + 20;
++}
++
+ int main(int argc, char* argv[])
+ {
+ 	// Utils::MathExpr::performUnitTests();
+@@ -705,6 +725,7 @@ int main(int argc, char* argv[])
+ 
+ 	int lastTime = SDL_GetTicks();
+ 	int ps_time = SDL_GetTicks();
++	bool audioClosedForIdle = false;	// ROCKNIXDS: see the power saver's standby below
+ 
+ 	bool running = true;
+ 
+@@ -726,13 +747,50 @@ int main(int argc, char* argv[])
+ 
+ 		int eventResult;
+ 
++		// ROCKNIXDS: close the audio device while idle: open, SDL streams silence to PipeWire nonstop (~13% of a core in
++		// an idle menu, and the speaker amplifier stays powered). It reopens with the next input (below), which takes
++		// 60-100 ms. Not while music or a sound plays.
++		auto closeAudioForIdle = [&audioClosedForIdle]()
++		{
++			if (!audioClosedForIdle && AudioManager::isInitialized() && Mix_Playing(-1) == 0 && !Mix_PlayingMusic())
++			{
++				AudioManager::getInstance()->deinit();
++				audioClosedForIdle = true;
++			}
++		};
++
  		if (screenSaverWait)
- 			eventResult = SDL_WaitEventTimeout(&event, screenSaverTimeout);
+-			eventResult = SDL_WaitEventTimeout(&event, screenSaverTimeout);
++		{
++			closeAudioForIdle();	// a screensaver only starts after minutes without input
++			eventResult = lowPowerWaitEvent(&event, screenSaverTimeout);
++		}
  		else if (ps_standby)
 -			eventResult = SDL_WaitEventTimeout(&event, PowerSaver::getTimeout());
 +		{
 +			// ROCKNIXDS: wake at the next full minute too, so a theme's clock and battery stay current while an idle
 +			// menu draws nothing (power saver "enhanced"/"instant" otherwise sleeps until input or the screensaver)
 +			int timeout = PowerSaver::getTimeout();
-+			long long nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-+			int toMinute = (int)(60000 - nowMs % 60000) + 20;
++			int toMinute = msToNextMinute();
 +			if (timeout <= 0 || timeout > toMinute)
 +				timeout = toMinute;
-+			// with a gamepad open SDL can't block in SDL_WaitEventTimeout and polls every millisecond (measured: ~760
-+			// wake-ups/s in an idle menu); check once per frame instead, which keeps the first press after idling as
-+			// quick as a frame
-+			// and close the audio device after a minute without input: open, SDL streams silence to PipeWire nonstop (~13%
-+			// of a core in an idle menu, and the speaker amplifier stays powered). It reopens with the next input, which
-+			// takes 60-100 ms, so not sooner: quick browsing never waits for it. Not while music plays.
-+			static bool audioClosedForIdle = false;
-+			if (!audioClosedForIdle && (int)(SDL_GetTicks() - ps_time) > 60000 && AudioManager::isInitialized() &&
-+				Mix_Playing(-1) == 0 && !Mix_PlayingMusic())
-+			{
-+				AudioManager::getInstance()->deinit();
-+				audioClosedForIdle = true;
-+			}
-+			Uint32 until = SDL_GetTicks() + timeout;
-+			while (!(eventResult = SDL_PollEvent(&event)) && (int)(until - SDL_GetTicks()) > 0)
-+				SDL_Delay(16);
-+			if (eventResult && audioClosedForIdle)
-+			{
-+				Uint32 t0 = SDL_GetTicks();
-+				AudioManager::getInstance()->init();
-+				audioClosedForIdle = false;
-+				LOG(LogInfo) << "Audio reopened after idle in " << (SDL_GetTicks() - t0) << " ms";
-+			}
++			// and the audio after a minute without input, not sooner: reopening delays the next press, and quick browsing
++			// shouldn't wait for it
++			if ((int)(SDL_GetTicks() - ps_time) > 60000)
++				closeAudioForIdle();
++			eventResult = lowPowerWaitEvent(&event, timeout);
 +		}
  		else
  			eventResult = SDL_PollEvent(&event);
  
++		// ROCKNIXDS: the audio closed while idle reopens with the first event, whichever way ES was waiting (the
++		// screensaver can start after it closed)
++		if (eventResult && audioClosedForIdle)
++		{
++			Uint32 t0 = SDL_GetTicks();
++			AudioManager::getInstance()->init();
++			audioClosedForIdle = false;
++			LOG(LogInfo) << "Audio reopened after idle in " << (SDL_GetTicks() - t0) << " ms";
++		}
++
+ 		if (eventResult)
+ 		{
+ 			// PowerSaver can push events to exit SDL_WaitEventTimeout immediatly
 diff --git a/es-core/src/Window.cpp b/es-core/src/Window.cpp
 index a51319026..7f0cb658b 100644
 --- a/es-core/src/Window.cpp

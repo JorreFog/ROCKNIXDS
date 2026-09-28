@@ -379,6 +379,9 @@ the top panel, the bottom panel, and an unused third.
     speaker amplifier stays on; reopening takes 60-100 ms, so quick browsing never waits for it).
     It also wakes ES for work posted to its main thread (a launch from the HTTP API waited up to a minute in
     standby, in stock ES's "enhanced" mode until the screensaver).
+    Under the black/dim screensaver ES waited 100 ms at a time (for lightguns) with the same millisecond polling and
+    drew 10 frames a second of a static screen (6.75% of a core); now it wakes once a minute (0.9%), and the audio
+    closes under the screensaver too.
     The theme's looping animations now stop after a few cycles. Idle menu: ~101% -> ~13% CPU (of 400), average clock
     ~1390 -> ~530 MHz, GPU at its lowest clock.
 - **Other themes** (since 1.4): pick any other theme in ES and ES restarts in stock ROCKNIX's layout, the top panel
