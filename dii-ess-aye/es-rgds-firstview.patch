@@ -1,0 +1,53 @@
+From 19beb69f071935d875d5d22a3ca10694e94757e9 Mon Sep 17 00:00:00 2001
+From: JorreFog <305496122+JorreFog@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 23:56:54 +0200
+Subject: [PATCH] es-rgds-firstview: write $RGDS_ES_DRAWN once the first view
+ is complete
+
+---
+ es-app/src/main.cpp | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/es-app/src/main.cpp b/es-app/src/main.cpp
+index 931d20bbe..90df9a9be 100644
+--- a/es-app/src/main.cpp
++++ b/es-app/src/main.cpp
+@@ -39,6 +39,7 @@
+ #include "TextToSpeech.h"
+ #include "Paths.h"
+ #include "resources/TextureData.h"
++#include "resources/TextureResource.h"
+ #include "Scripting.h"
+ #include "watchers/WatchersManager.h"
+ #include "HttpReq.h"
+@@ -918,6 +919,27 @@ int main(int argc, char* argv[])
+ 		}
+ 
+ 		Renderer::swapBuffers();		
++
++		// ROCKNIXDS: tell the theme's launcher when the first view is complete (a few frames drawn and no texture still
++		// loading), so it can show the window then instead of after a fixed delay. $RGDS_ES_DRAWN names the file.
++		static int drawnFrames = 0;
++		static Uint32 firstFrame = 0;
++		if (drawnFrames >= 0)
++		{
++			if (drawnFrames++ == 0)
++				firstFrame = SDL_GetTicks();
++			const char* drawnPath = getenv("RGDS_ES_DRAWN");
++			bool complete = drawnFrames >= 3 && TextureResource::getQueueSize() == 0;
++			if (!drawnPath || !*drawnPath)
++				drawnFrames = -1;
++			else if (complete || SDL_GetTicks() - firstFrame > 3000)
++			{
++				FILE* f = fopen(drawnPath, "w");
++				if (f) fclose(f);
++				LOG(LogInfo) << "First view " << (complete ? "complete" : "not complete after 3 s") << " after " << drawnFrames << " frames";
++				drawnFrames = -1;
++			}
++		}
+ 	}
+ 
+ 	if (Utils::Platform::isFastShutdown())
+-- 
+2.55.0
+

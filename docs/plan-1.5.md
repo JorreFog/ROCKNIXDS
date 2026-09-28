@@ -4,6 +4,17 @@ Carried over from 1.4 (see [plan-1.4.md](plan-1.4.md) and the [optimization repo
 
 ## 1. Starting and quitting games (first)
 
+**Done (2026-09-28):** the old measurement polled the way back one milestone after another, so "ES answers" could
+only be seen after the game unit had ended; `switchtime.sh` now polls them together and prints the session's and the
+ES launcher's own timestamps (both on the uptime clock). The real timeline after a quit (1.4.0): DraStic gone +0.44 s
+(its teardown), play stats +0.30 s (on the path), sway started, outputs +1.64 s, ES answering +3.4 s, visible ~+4.4 s
+(a fixed 1 s wait after ES answered). Changes: the play stats are written while sway starts (ES still starts only
+once they're written: it reads them), and the patched ES says when its first view is complete (es-rgds-firstview.patch;
+the launcher shows the window then). Now: outputs +1.38-1.43 s, ES answering +3.11-3.15 s, window shown +3.84-3.92 s
+(the launcher's timestamp; switchtime's own visibility poll lags ~0.5 s behind it). The rest is DraStic's teardown
+(0.43 s), sway's start (0.8 s) and ES loading its gamelists and theme (~1.4 s after its window appears).
+Test launches (smoke.sh, switchtime.sh) no longer count as plays (/tmp/rocknixds-testing).
+
 1.4 starts a game as fast as 1.3 (first frame 3.47 s after the launch request, 1.3: 3.44 s), but the way back to the
 menu is ~0.8 s slower: ES answers its API 3.51 s after the game ends (1.3: 2.65 s) and is visible at 5.26 s (1.3:
 4.47 s). Known so far: it isn't the menu governor hook (ES starts in ~1.7 s with or without it), the CPU clock limit

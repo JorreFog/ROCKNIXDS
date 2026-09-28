@@ -8,6 +8,8 @@
 # it owns the panels and restart it once if not.
 GPU=/sys/class/devfreq/fde60000.gpu
 RT=/var/run/0-runtime-dir
+up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamps for the log (switchtime.sh uses the same clock)
+echo "$(up) restore: start"
 if [ -f /tmp/dsflip-gpu-governor ]; then
     cat /tmp/dsflip-gpu-governor > $GPU/governor 2>/dev/null
     [ -s /tmp/dsflip-gpu-min ] && cat /tmp/dsflip-gpu-min > $GPU/min_freq 2>/dev/null
@@ -42,8 +44,14 @@ fi
 # ES's launcher waits for sway's outputs itself (the theme's start_es_rgds.sh; stock ROCKNIX starts both together at
 # boot too), so start both at once and let ES's settings script run while sway comes up. If sway comes up without
 # outputs, restarting it restarts ES as well (Requires=).
-systemctl is-active -q sway.service || systemctl start sway.service
-systemctl is-active -q essway.service || systemctl start essway.service
+systemctl is-active -q sway.service || { echo "$(up) restore: starting sway"; systemctl start sway.service; }
+# session.sh may still be writing the play stats (RECORD_PID): ES reads them when it starts, so it waits for them
+if [ -n "$RECORD_PID" ]; then
+    i=0; while kill -0 "$RECORD_PID" 2>/dev/null && [ $i -lt 100 ]; do sleep 0.05; i=$((i + 1)); done
+    echo "$(up) restore: play stats written"
+fi
+systemctl is-active -q essway.service || { echo "$(up) restore: starting ES"; systemctl start essway.service; }
+echo "$(up) restore: waiting for sway's outputs"
 if ! wait_outputs; then
     echo "$(date) sway has no outputs: restarting it"
     systemctl restart sway.service
@@ -54,6 +62,7 @@ fi
 # reboot): count its interrupts for half a second (normal: ~60 per panel per second) and clear it by switching the
 # panels off and on through sway, which does a full modeset. The panels blink once.
 vop_irqs() { awk '/fe040000.vop/ { s = 0; for (i = 2; i <= 5; i++) s += $i; print s }' /proc/interrupts; }
+echo "$(up) restore: outputs up"
 a=$(vop_irqs); sleep 0.5; b=$(vop_irqs)
 if [ -n "$a" ] && [ -n "$b" ] && [ $((b - a)) -gt 2000 ]; then
     echo "$(date) display controller interrupt storm ($(( (b - a) * 2 ))/s): power-cycling the panels"
@@ -71,4 +80,5 @@ N=/tmp/dsflip-notice.$$
 if [ -s /tmp/dsflip-notice ] && mv /tmp/dsflip-notice $N 2>/dev/null; then
     systemd-run --collect --quiet sh -c "for i in \$(seq 1 120); do curl -s -m 1 localhost:1234/isIdle 2>/dev/null | grep -q true && break; sleep 0.5; done; sleep 1; curl -s -m 5 -X POST --data-binary @$N localhost:1234/messagebox >/dev/null; rm -f $N" >/dev/null 2>&1 || rm -f $N
 fi
+echo "$(up) restore: done"
 exit 0

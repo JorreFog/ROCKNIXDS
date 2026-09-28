@@ -34,6 +34,8 @@ info "ROM: $ROM"
 # quiet reference: the mic in the menu (PipeWire needs the session's runtime dir)
 RT='XDG_RUNTIME_DIR=/var/run/0-runtime-dir'
 $SSH "$RT arecord -q -D default -d 2 -f S16_LE -r 44100 -c 1 /tmp/smoke-quiet.wav 2>/dev/null; echo" >/dev/null
+# no play stats for test launches (session.sh skips them while this file exists)
+$SSH "touch /tmp/rocknixds-testing"; trap '$SSH "rm -f /tmp/rocknixds-testing" 2>/dev/null' EXIT
 $SSH "curl -s -X POST --data-binary '$ROM' localhost:1234/launch" >/dev/null
 sleep 12
 $SSH 'systemctl is-active -q dsflip-game' && ok "game unit is running" || bad "game unit didn't start"

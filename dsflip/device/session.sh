@@ -10,6 +10,7 @@ NOTICE=/tmp/dsflip-notice        # why the game ended early; restore.sh shows it
 ROM="$1"
 T0=$(date +%s%N)
 ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
+up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with restore.sh and switchtime.sh
 {
   echo "$(date) start: $ROM (shader: ${DSHOOK_SHADER:-none})"
   # gptokeyb (start_drastic.sh starts it inside ES's unit) takes ~1.1 s to die on the stop's TERM, and the stop
@@ -77,7 +78,8 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
     done ) &
   # ES is stopped, so it can't record the session (play count, last played, time played): do what ES does after a
   # game. In VT mode ES is only waiting, and records it itself.
-  record() { [ -z "$VT" ] && [ "$v" = ready ] && python3 $D/dsflip/playstats.py "$ROM" $(( $(date +%s) - TG )); }
+  # (not while /tmp/rocknixds-testing exists: the test tools launch games through ES and mustn't count as plays)
+  record() { [ -z "$VT" ] && [ "$v" = ready ] && [ ! -e /tmp/rocknixds-testing ] && python3 $D/dsflip/playstats.py "$ROM" $(( $(date +%s) - TG )); }
   # `systemctl stop dsflip-game` sends TERM to everything here; DraStic ignores it and would be SIGKILLed only at
   # the unit's timeout. Kill it at once (what the exit hotkey does), put the governor back and leave: starting
   # sway/ES from inside a unit that systemd is stopping waits behind that stop (measured: 40 s), so the unit's
@@ -107,7 +109,7 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
   # (play stats, sway and ES starting) ran at it (the way back to the menu was ~1.2 s slower)
   cpu_full() { [ -s /tmp/dsflip-cpu-max ] && cat /tmp/dsflip-cpu-max > $CPU/scaling_max_freq 2>/dev/null; }
   cpu_full
-  echo "drastic exited: $rc"
+  echo "$(up) drastic exited: $rc"
   if [ ! -s $NOTICE ]; then
     case $rc in
       0|137|143) why= ;;              # Exit DraStic in its menu; ROCKNIX's exit hotkey (kill -9); a stop
@@ -120,7 +122,10 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
     esac
     [ -n "$why" ] && echo "DraStic stopped unexpectedly ($why). Logs: $D/dsflip" > $NOTICE
   fi
-  [ -s $NOTICE ] && echo "notice: $(cat $NOTICE)" || record
-  $D/dsflip/restore.sh        # governor back, sway (checked for outputs), ES, then the notice
+  # the play stats (Python, ~0.3 s) are written while sway starts, not before it: restore.sh starts ES only once
+  # they're done (ES reads them when it starts)
+  RECORD_PID=
+  if [ -s $NOTICE ]; then echo "notice: $(cat $NOTICE)"; else record & RECORD_PID=$!; fi
+  RECORD_PID=$RECORD_PID $D/dsflip/restore.sh   # governor back, sway (checked for outputs), ES, then the notice
   echo "$(date) restored"
 } >> $LOG 2>&1

@@ -401,6 +401,8 @@ the top panel, the bottom panel, and an unused third.
   - `es-rgds-devkeys.patch` (1.4): the build carries no RetroAchievements or ScreenScraper developer keys. It reads
     them at run time from ROCKNIX's own ES (`/usr/bin/emulationstation`), so the RetroAchievements menu and the
     ScreenScraper scraper work as in stock ES (1.3's menu showed "Unauthenticated", 401).
+  - `es-rgds-firstview.patch` (1.5): writes `$RGDS_ES_DRAWN` once ES's first view is complete (three frames drawn, no
+    texture still loading), so the launcher shows ES's window then, instead of a fixed second after ES answers.
   - `es-rgds-powersaver.patch` (1.4): with the power saver on "enhanced" (the installer sets it), an idle menu
     draws nothing; this wakes ES once a minute so the clock and battery stay current, and polls input once per
     frame instead of every millisecond while idle (SDL can't block with a gamepad open: ~760 wake-ups/s -> ~66),

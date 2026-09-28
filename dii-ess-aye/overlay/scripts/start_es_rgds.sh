@@ -28,8 +28,9 @@ done
 # Falls back to the stock binary if the patched one keeps crashing on startup.
 ES_BIN=/storage/.config/emulationstation/themes/dii-ess-aye/bin/emulationstation
 FAILS=/tmp/es-rgds-fails
-REVEAL_DELAY=1          # after ES answers its API, before its window is shown. Measured: at 0-0.3 s the top panel is still
-                        # black (ES hasn't drawn its first view); at 1 s both panels are complete
+REVEAL_DELAY=1          # stock ES only: after it answers its API, before its window is shown. Measured: at 0-0.3 s the
+                        # top panel is still black (ES hasn't drawn its first view); at 1 s both panels are complete.
+                        # The patched ES says when its first view is complete instead ($RGDS_ES_DRAWN).
 
 # Which layout: this theme spans one 1920x480 canvas over both panels. Any other theme is drawn for one 640x480
 # screen, so it gets stock ROCKNIX's layout: ES fullscreen on the top panel, the bottom panel off. (1.3 forced the
@@ -77,6 +78,10 @@ fi
 # Boot splash: a 1280x480 image across both panels while ES loads. The theme's sway config
 # sends new swayimg windows to the scratchpad (so the first, unplaced frame never shows);
 # bring it back already placed, in one command. ES is revealed over it, then it is closed.
+# the patched ES writes this once its first view is complete (es-rgds-powersaver.patch); the reveal below waits for it
+export RGDS_ES_DRAWN=/tmp/es-rgds-drawn
+rm -f $RGDS_ES_DRAWN
+read u _ < /proc/uptime; echo "[$u] launcher start" > /tmp/es-rgds-launch.log    # the start's timeline, for switchtime.sh
 SOCK=$(ls /var/run/0-runtime-dir/sway-ipc.*.sock 2>/dev/null | head -n1)
 SPLASH=/storage/.config/emulationstation/themes/dii-ess-aye/assets/images/splash/rgds-splash.png
 SPLASH_PID=
@@ -103,11 +108,19 @@ fi
     # (the panels' sway background) shows while ES loads instead of a half-placed menu.
     # ES starts its HTTP API right before showing its first view: reveal it then, already
     # placed across both panels (one command = one frame, no visible move).
-    for i in $(seq 1 450); do
-        curl -s -m 1 -o /dev/null localhost:1234/isIdle && break
-        sleep 0.1
-    done
-    sleep $REVEAL_DELAY
+    L=/tmp/es-rgds-launch.log; up() { read u _ < /proc/uptime; echo "[$u] $*" >> $L; }
+    up "ES window exists"
+    if [ -n "$USE_PATCHED" ]; then
+        # the patched ES says when its first view is complete (frames drawn, no texture still loading): show it then
+        for i in $(seq 1 400); do [ -e "$RGDS_ES_DRAWN" ] && break; sleep 0.05; done
+        up "ES's first view complete"
+    else
+        for i in $(seq 1 450); do
+            curl -s -m 1 -o /dev/null localhost:1234/isIdle && break
+            sleep 0.1
+        done
+        sleep $REVEAL_DELAY
+    fi
     swaymsg -s "$SOCK" "$OUTPUTS" >/dev/null 2>&1
     if [ -n "$ES_ARGS" ]; then
         swaymsg -s "$SOCK" "[app_id=\"emulationstation\"] scratchpad show, floating enable, fullscreen disable, move absolute position 0 0, focus" >/dev/null 2>&1
@@ -115,6 +128,7 @@ fi
         swaymsg -s "$SOCK" "[app_id=\"emulationstation\"] scratchpad show, $LAYOUT" >/dev/null 2>&1
     fi
     swaymsg -s "$SOCK" "$LAYOUT, focus" >/dev/null 2>&1
+    up "ES shown"
     # The sway config's exec_always seat/touch setup for ES, now that its window exists. This used to be a sway
     # `reload`, which blocks sway for 2.1-2.5 s (measured): the panels froze just as ES appeared, on every boot and
     # every return from a game. Running the config's ES lines directly does the same without the reload.

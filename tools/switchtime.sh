@@ -21,6 +21,7 @@ ROM=$(ls /storage/roms/nds/*.nds 2>/dev/null | grep -i -- "$ROMPAT" | head -n1)
 curl -s -m 2 localhost:1234/isIdle | grep -q true || { echo "ES isn't idle"; exit 1; }
 systemctl is-active -q dsflip-game && { echo "a game is running"; exit 1; }
 echo "ROM: $ROM"
+touch /tmp/rocknixds-testing; trap 'rm -f /tmp/rocknixds-testing' EXIT   # no play stats for these launches
 now() { date +%s%N; }
 sec() { echo $(( ($(now) - T0) / 1000000 )) | awk '{ printf "%6.2f", $1 / 1000 }'; }
 # poll for a condition (up to 30 s), record when it became true
@@ -46,14 +47,23 @@ while [ $k -le $N ]; do
     c=$(until_ 'grep -q . /tmp/dsflip-state 2>/dev/null')
     d=$(until_ 'grep -q "screen texture" $D/dsflip.log 2>/dev/null')
     sleep 6
-    T0=$(now)
+    T0=$(now); KT=$(cut -d' ' -f1 /proc/uptime)
     kill -9 $(pidof drastic.real) 2>/dev/null
-    e=$(until_ '! systemctl is-active -q dsflip-game')
-    f=$(until_ 'outputs')
-    g=$(until_ 'curl -s -m 1 localhost:1234/isIdle 2>/dev/null | grep -q true')
-    h=$(until_ 'es_visible')
-    printf '%-5s | %-7s %-7s %-7s %-7s | %-7s %-7s %-7s %-7s\n' $k $a $b $c $d $e $f $g $h
+    # the way back, all four polled together: each is recorded when it first holds (one after the other, a milestone
+    # couldn't be seen before the previous one, e.g. ES answering before the game unit had ended)
+    e= f= g= h=; i=0
+    while { [ -z "$e" ] || [ -z "$f" ] || [ -z "$g" ] || [ -z "$h" ]; } && [ $i -lt 600 ]; do
+        [ -z "$e" ] && ! systemctl is-active -q dsflip-game && e=$(sec)
+        [ -z "$f" ] && outputs && f=$(sec)
+        [ -z "$g" ] && curl -s -m 1 localhost:1234/isIdle 2>/dev/null | grep -q true && g=$(sec)
+        [ -z "$h" ] && [ -n "$f" ] && es_visible && h=$(sec)
+        sleep 0.02; i=$((i + 1))
+    done
+    printf '%-5s | %-7s %-7s %-7s %-7s | %-7s %-7s %-7s %-7s\n' $k $a $b $c $d ${e:-n/a} ${f:-n/a} ${g:-n/a} ${h:-n/a}
     grep -E '^[0-9]+ ms:' $D/last-session.log | tail -n 2 | sed 's/^/        session.sh: /'
+    echo "        killed at [$KT] (uptime); the session's own steps:"
+    awk -v kt="$KT" '/^\[[0-9.]+\] / { u = substr($1, 2, length($1) - 2) + 0; if (u >= kt) printf "        %+6.2f s  %s\n", u - kt, substr($0, length($1) + 2) }' $D/last-session.log | tail -n 12
+    awk -v kt="$KT" '/^\[[0-9.]+\] / { u = substr($1, 2, length($1) - 2) + 0; if (u >= kt) printf "        %+6.2f s  ES launcher: %s\n", u - kt, substr($0, length($1) + 2) }' /tmp/es-rgds-launch.log 2>/dev/null
     sleep 3
     k=$((k + 1))
 done
