@@ -200,6 +200,10 @@ stays under 65%, up at once, down after 2 s.
   frame rate over 1 s and the queue's drops, and keeps away for 30 s from a clock that dropped a frame. Result:
   ds-crisp 1660 MHz average at 0.04 drops/s, no shader 1729 MHz at 0.09; the 3D stress ROM's heavy levels 51.4 fps
   (fixed 1992: 51.0), where it goes to 1992 and stays. Heavier games get the full clock, lighter ones less.
+- Tuned again after a smoke test dropped 2.93 frames/s at 816 MHz in a still scene (frames dropped although the
+  heaviest frame was only ~40% of a refresh): any drop now moves up a step, a clock that keeps dropping is banned
+  30 s doubling to 10 min, and the floor is 1104 MHz. HeartGold 2x walking, 90 s: no shader 1622 MHz average at 0.04
+  drops/s, ds-crisp 1778 MHz at 0.07 (fixed 1992: 0.07-0.09 and 0.00-0.04). Smoke tests: 0.04 drops/s.
 - Shaders import DraStic's frames (no upload), see section 6.
 - The menus: ROCKNIX leaves the CPU at `performance` in ES (nothing applies a governor at boot, and its launcher
   sets performance after every game; `system.cpugovernor` is the games' default, not the menus'). `menu-power.sh`
@@ -224,6 +228,10 @@ stays under 65%, up at once, down after 2 s.
   and PipeWire processed it, ~13% of a core, with the sink RUNNING (amplifier on). The patch closes ES's audio after
   60 s without input (reopening measured 63-102 ms, so not at the 3 s standby: that delayed the first press while
   browsing). Idle menu now: 13% of 400 at ~530 MHz average, sink SUSPENDED.
+
+**Still open:** game audio goes DraStic -> ALSA "default" -> PipeWire (~9% of a core in games; check how ROCKNIX's
+volume keys work before bypassing it), skipping unchanged frames in shader mode, ds-fsr (5.3 ms per panel), other
+systems' governors (no ROMs on the test device), ROCKNIX's battery LED poller (~1% of a core).
 
 Found on the way: ROCKNIX's `powerstate` service re-applies a GPU profile whenever the battery status flips
 (charger plugged/unplugged, or a weak charger flapping), which overrode the session's GPU clock mid-game; session.sh
