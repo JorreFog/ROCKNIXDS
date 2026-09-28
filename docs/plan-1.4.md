@@ -2,8 +2,7 @@
 
 1.4 is meant to be a big update. Order agreed on 2026-09-27: check suspend first (it could reorder everything),
 then screen modes and touch in ES's menus, then the RetroAchievements update, then a prototype of near-instant
-switching, then CI builds. Battery tuning (a CPU sweep like 1.3's GPU one) and the in-game microphone check need
-play sessions on the device. Carried over from `plan-1.3.md`: B6, B7, B13, B14, I5 (debug switch, texture
+switching, then CI builds. The in-game microphone check needs a play session on the device (battery tuning: section 7). Carried over from `plan-1.3.md`: B6, B7, B13, B14, I5 (debug switch, texture
 alloc fallback), I7 (video previews, unplayed look), I8 (hires warning, release assets), I9 (ES patch, CI).
 
 Already on `beta` for 1.4: **ds-fsr**, AMD FSR 1.0 (EASU) fast enough for both panels (see its header).
@@ -124,6 +123,22 @@ drops/s and the GPU's average clock (devfreq trans_stat) before and after.
 - **The stock names** (lcd3x, lcd1x-nds-color, sharp-bilinear...) come from ROCKNIX's libdrastouch at run time
   and can't be edited here; faster look-alikes of our own could replace them, checked against the originals.
 - **Then the clock:** re-run 1.3's I6 sweep; with cheaper shaders the 400 MHz floor may drop to 200-300 MHz.
+
+## 7. CPU, battery and heat across the whole device (requested 2026-09-28, not started)
+
+Goal: the same games and menus for less CPU, less power and a cooler device. Replaces the "battery tuning" note at
+the top. Measure first, per scene, with numbers that can be compared: CPU per thread (/proc/<pid>/task/*/stat),
+cpufreq time_in_state, GPU devfreq trans_stat, SoC temperature (thermal_zone*), and battery power
+(voltage_avg x current_avg, on battery, charger unplugged: the gauge's percentage is unreliable). Baseline scenes:
+ES idle in the game list, HeartGold walking at 1x and 2x (zero-copy and a shader), a RetroArch system.
+- **Our own threads in DraStic sessions:** presenter, audio pump (RT timer every 256 samples), touch reader,
+  shader worker, RA and UI threads: wake-ups per second and CPU each; no polling where an event can wait.
+- **DraStic itself:** the CPU sweep 1.3 did for the GPU (governor, min/max clock, which cores), keeping drops at 0.
+- **ES and the menus:** idle CPU/GPU in the game list (animations, the carousel, the clock and battery widgets'
+  redraws); ES should draw nothing when nothing changes.
+- **Other systems** (RetroArch cores, PPSSPP ...): ROCKNIX's per-system governor settings; only where a measured
+  saving holds without drops, and as settings, not patches to ROCKNIX.
+- **Idle and background:** services and timers that wake the device while playing (journald, network scans).
 
 ## Proposal: libdsflip as a standalone package (Reddit request, for other firmwares)
 
