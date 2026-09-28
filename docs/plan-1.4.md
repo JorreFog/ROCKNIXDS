@@ -1,5 +1,7 @@
 # ROCKNIXDS 1.4 plan
 
+**Released as v1.4 on 2026-09-28.** The measured results are in [optimization-1.4.md](optimization-1.4.md); what's left moved to [plan-1.5.md](plan-1.5.md).
+
 1.4 is meant to be a big update. Order agreed on 2026-09-27: check suspend first (it could reorder everything),
 then screen modes and touch in ES's menus, then the RetroAchievements update, then a prototype of near-instant
 switching, then CI builds. The in-game microphone check needs a play session on the device (battery tuning: section 7). Carried over from `plan-1.3.md`: B6, B7, B13, B14, I5 (debug switch, texture
