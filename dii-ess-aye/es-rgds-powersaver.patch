@@ -1,12 +1,14 @@
-From 575368afa75e521875e38c984074556a2268f04a Mon Sep 17 00:00:00 2001
+From d9c6379afdc69b0939874470de28649cd1cd5950 Mon Sep 17 00:00:00 2001
 From: JorreFog <305496122+JorreFog@users.noreply.github.com>
 Date: Mon, 28 Sep 2026 18:55:30 +0200
 Subject: [PATCH] es-rgds-powersaver: in standby wake each minute for the
- clock, poll input once per frame, close audio after a minute idle
+ clock, poll input once per frame, close audio after a minute idle, wake for
+ posted work (API launches)
 
 ---
- es-app/src/main.cpp | 34 +++++++++++++++++++++++++++++++++-
- 1 file changed, 33 insertions(+), 1 deletion(-)
+ es-app/src/main.cpp    | 34 +++++++++++++++++++++++++++++++++-
+ es-core/src/Window.cpp |  2 ++
+ 2 files changed, 35 insertions(+), 1 deletion(-)
 
 diff --git a/es-app/src/main.cpp b/es-app/src/main.cpp
 index edd28e10b..63c502ca8 100644
@@ -60,6 +62,19 @@ index edd28e10b..63c502ca8 100644
  		else
  			eventResult = SDL_PollEvent(&event);
  
+diff --git a/es-core/src/Window.cpp b/es-core/src/Window.cpp
+index a51319026..7f0cb658b 100644
+--- a/es-core/src/Window.cpp
++++ b/es-core/src/Window.cpp
+@@ -1244,6 +1244,8 @@ void Window::postToUiThread(const std::function<void()>& func, void* data)
+ 		mTimeSinceLastInput = 0;
+ 		PowerSaver::pushRefreshEvent();
+ 	}
++	else // ROCKNIXDS: in power-saver standby the main loop only wakes on an event; a launch from the HTTP API waited up
++		PowerSaver::pushRefreshEvent();   // to a minute for it otherwise (no-op if one is already pending)
+ }
+ 
+ void Window::processPostedFunctions()
 -- 
 2.55.0
 

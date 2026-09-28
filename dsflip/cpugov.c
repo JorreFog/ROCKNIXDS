@@ -38,13 +38,16 @@ extern volatile int dsflip_queue_drops;     /* dsflip.c: frames dropped because 
 #define HIGH 0.85                            /* above this at the current clock: go up now */
 #define PEAK_TARGET 0.80                     /* the heaviest frame in a window may take this much of 16.7 ms */
 #define PEAK_HIGH 0.95                       /* a frame this close to late: go up now */
-#define BAD_FOR_S 30                         /* a clock that dropped a frame isn't tried again for this long */
+#define BAD_FOR_S 30                         /* a clock that dropped a frame isn't tried again for this long, doubled
+                                               for each further time it drops one (up to BAD_MAX_S) */
+#define BAD_MAX_S 600
 #define FPS_WINDOWS 4                        /* the frame rate is judged over 1 s: 250 ms holds only ~15 frames */
 #define DOWN_AFTER 8                         /* windows (2 s) in a row that fit a lower clock before stepping down */
 #define MAXT 64
 
 static int freqs[24], nf, cur, fmin_, fmax_;
 static long long bad_until[24];              /* per clock: don't step down to it before this (CLOCK_MONOTONIC ns) */
+static int strikes[24];                      /* per clock: how often it dropped frames this session */
 static long long now_ns;
 static int verbose;
 
@@ -133,9 +136,16 @@ static void *gov_thread(void *a) {
         const char *why = 0;
         if (umax > HIGH) why = "busy";
         else if (peak > PEAK_HIGH) why = "heavy frame";
-        else if (dropped && peak > 0.6) {
+        else if (dropped) {
+            /* any drop, however light the frames look: at low clocks frames were dropped with the main thread's
+             * heaviest frame at only ~40% of a refresh (measured at 816 MHz in a still HeartGold dialog) */
             why = "dropped"; if (want <= cur) want = fit(cur + 1);
-            int c = idx(cur); if (c >= 0) bad_until[c] = t + BAD_FOR_S * 1000000000LL;
+            int c = idx(cur);
+            if (c >= 0) {
+                long long ban = (long long)BAD_FOR_S << (strikes[c] < 5 ? strikes[c] : 5);
+                if (ban > BAD_MAX_S) ban = BAD_MAX_S;
+                bad_until[c] = t + ban * 1000000000LL; strikes[c]++;
+            }
         }
         else if (fps < 58.5 && fps > 5 && umax > 0.5) { why = "slow"; if (want <= cur) want = fit(cur + 1); }   /* +1 step */
         if (why && want > cur) { set_clock(want, why, umax, fps); low = 0; }
@@ -160,7 +170,8 @@ void cpugov_start(void) {
     cur = rd_int(POL "scaling_max_freq");
     /* the hardware's top, not the current limit: a session that crashed before restore.sh must not cap this one */
     fmax_ = getenv("DSFLIP_CPU_MAX") ? atoi(getenv("DSFLIP_CPU_MAX")) : rd_int(POL "cpuinfo_max_freq");
-    fmin_ = getenv("DSFLIP_CPU_MIN") ? atoi(getenv("DSFLIP_CPU_MIN")) : 816000;
+    /* 816 MHz dropped frames at 2x even in a still scene; the step to 1104 saves little */
+    fmin_ = getenv("DSFLIP_CPU_MIN") ? atoi(getenv("DSFLIP_CPU_MIN")) : 1104000;
     if (nf < 2 || cur <= 0 || access(POL "scaling_max_freq", W_OK)) { dsflip_log("[cpugov] off: no writable cpufreq\n"); return; }
     dsflip_log("[cpugov] on: %d..%d MHz, target %.0f%% load of the busiest DraStic thread\n", fmin_ / 1000, fmax_ / 1000, TARGET * 100);
     pthread_t th;

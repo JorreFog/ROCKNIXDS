@@ -377,6 +377,8 @@ the top panel, the bottom panel, and an unused third.
     frame instead of every millisecond while idle (SDL can't block with a gamepad open: ~760 wake-ups/s -> ~66),
     and closes the audio device after a minute without input (open, SDL streams silence to PipeWire nonstop and the
     speaker amplifier stays on; reopening takes 60-100 ms, so quick browsing never waits for it).
+    It also wakes ES for work posted to its main thread (a launch from the HTTP API waited up to a minute in
+    standby, in stock ES's "enhanced" mode until the screensaver).
     The theme's looping animations now stop after a few cycles. Idle menu: ~101% -> ~13% CPU (of 400), average clock
     ~1390 -> ~530 MHz, GPU at its lowest clock.
 - **Other themes** (since 1.4): pick any other theme in ES and ES restarts in stock ROCKNIX's layout, the top panel
