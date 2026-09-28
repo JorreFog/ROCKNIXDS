@@ -37,6 +37,8 @@ cd $CFGD
 ( export SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$L/hp-$TAG.log DSFLIP_SHADER=$SHADER "$@"
   LD_PRELOAD=$CFGD/dsflip/libdsflip.so exec ./drastic.real $D/roms/HGtest.nds >$L/hp-$TAG.out 2>&1 ) &
 PID=$!
+# ROCKNIX's powerstate re-applies a GPU profile when the charger status flips: keep this run's choice (as session.sh)
+( while kill -0 $PID 2>/dev/null; do sleep 2; [ "$(cat $G/governor)" = $GOV ] || echo $GOV > $G/governor; done ) &
 sleep 8; [ -f /tmp/drastic.cfg.hgpower ] && mv /tmp/drastic.cfg.hgpower $CFG
 python3 $D/padkey.py 312 0.6                 # load state 0 (L2 held)
 sleep 3; python3 $D/padkey.py 304 0.2; sleep 1; python3 $D/padkey.py 304 0.2; sleep 1   # B B: out of the save dialog

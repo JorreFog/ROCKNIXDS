@@ -28,6 +28,11 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
     echo 0 > /sys/class/graphics/fb0/blank 2>/dev/null   # a blanked console powers the panels down under us
     echo "$(ms) ms: display released by VT switch (sway on tty$(cat /tmp/dsflip-vt) stays up)"
   else
+    # the panels off through sway first: stopping sway while its buffers were still being scanned out let the display
+    # controller read freed memory (IOMMU page fault) and left one video port in an underrun loop, POST_BUF_EMPTY,
+    # ~84,000 interrupts/s on CPU 0 (~60% of a core) until the next modeset off/on (measured 2026-09-28)
+    S=$(ls /var/run/0-runtime-dir/sway-ipc.*.sock 2>/dev/null | head -n1)
+    [ -n "$S" ] && XDG_RUNTIME_DIR=/var/run/0-runtime-dir swaymsg -s "$S" output '*' power off >/dev/null 2>&1
     systemctl stop essway.service sway.service
     echo "$(ms) ms: ES and sway stopped"
   fi

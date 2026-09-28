@@ -50,6 +50,17 @@ if ! wait_outputs; then
     wait_outputs
     systemctl is-active -q essway.service || systemctl start essway.service
 fi
+# The display controller stuck in an underrun loop (see session.sh: ~84,000 interrupts/s, 60% of a core, until
+# reboot): count its interrupts for half a second (normal: ~60 per panel per second) and clear it by switching the
+# panels off and on through sway, which does a full modeset. The panels blink once.
+vop_irqs() { awk '/fe040000.vop/ { s = 0; for (i = 2; i <= 5; i++) s += $i; print s }' /proc/interrupts; }
+a=$(vop_irqs); sleep 0.5; b=$(vop_irqs)
+if [ -n "$a" ] && [ -n "$b" ] && [ $((b - a)) -gt 2000 ]; then
+    echo "$(date) display controller interrupt storm ($(( (b - a) * 2 ))/s): power-cycling the panels"
+    S=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
+    XDG_RUNTIME_DIR=$RT swaymsg -s "$S" output '*' power off >/dev/null 2>&1; sleep 0.3
+    XDG_RUNTIME_DIR=$RT swaymsg -s "$S" output '*' power on >/dev/null 2>&1
+fi
 # session.sh's message about why the game ended early: show it in ES once ES answers. From a transient unit of its
 # own, because this script may be running as dsflip-game's ExecStopPost, whose processes die when it finishes.
 # The mv makes it show once even though this script runs twice after a normal exit (session.sh + ExecStopPost).

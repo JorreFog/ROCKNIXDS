@@ -32,7 +32,10 @@ def cpu_stat():
     f = rd("/proc/stat").split("\n")[0].split()[1:]
     v = list(map(int, f))
     idle = v[3] + v[4]
-    return sum(v[:8]), idle
+    return sum(v[:8]), idle, v[:8]
+
+
+CATS = ("user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal")
 
 
 def cpu_freqs():
@@ -84,7 +87,7 @@ def dist(a, b):
 def main():
     secs = float(sys.argv[1]) if len(sys.argv) > 1 else 30
     tag = sys.argv[2] if len(sys.argv) > 2 else ""
-    c0, g0, (t0, i0), th0 = cpu_freqs(), gpu_freqs(), cpu_stat(), threads()
+    c0, g0, (t0, i0, v0), th0 = cpu_freqs(), gpu_freqs(), cpu_stat(), threads()
     temp0 = int(rd(TZ, "0")) / 1000
     tmax, cur, volt = temp0, [], []
     start = time.monotonic()
@@ -94,7 +97,8 @@ def main():
         cur.append(int(rd(BAT + "/current_avg", "0")))
         volt.append(int(rd(BAT + "/voltage_avg", "0")))
     wall = time.monotonic() - start
-    c1, g1, (t1, i1), th1 = cpu_freqs(), gpu_freqs(), cpu_stat(), threads()
+    c1, g1, (t1, i1, v1), th1 = cpu_freqs(), gpu_freqs(), cpu_stat(), threads()
+    cats = {c: round(400.0 * (b - a) / max(1, t1 - t0), 1) for c, a, b in zip(CATS, v0, v1) if c not in ("idle", "iowait")}
     temp1 = int(rd(TZ, "0")) / 1000
     busy = 400.0 * (1 - (i1 - i0) / max(1, t1 - t0))
     cavg, cdist = dist(c0, c1)
@@ -111,10 +115,11 @@ def main():
            "gpu_avg_mhz": round(gavg / 1e6), "gpu_time_at_hz_pct": gdist, "gpu_governor": rd(GPU + "/governor"),
            "temp_c": [temp0, temp1, tmax],
            "bat_ma": round(sum(cur) / max(1, len(cur)) / 1000, 1), "bat_v": round(sum(volt) / max(1, len(volt)) / 1e6, 3),
-           "charger": rd("/sys/class/power_supply/charger/online"), "threads": tops[:12]}
+           "charger": rd("/sys/class/power_supply/charger/online"), "cpu_by_kind_pct": cats, "threads": tops[:12]}
     print(f"{tag or 'probe'}: {wall:.0f} s  CPU {busy:.0f}% of 400 at avg {cavg/1000:.0f} MHz ({res['cpu_governor']})  "
           f"GPU avg {gavg/1e6:.0f} MHz ({res['gpu_governor']})  SoC {temp0:.1f}->{temp1:.1f} C (max {tmax:.1f})  "
           f"battery {res['bat_ma']:+.0f} mA at {res['bat_v']:.3f} V (charger {'on' if res['charger'] == '1' else 'off'})")
+    print("  CPU by kind (% of 400): " + "  ".join(f"{k} {v}" for k, v in cats.items() if v))
     for pct, comm, name, tid in tops[:12]:
         print(f"  {pct:5.1f}%  {comm}/{name} ({tid})")
     if tag:

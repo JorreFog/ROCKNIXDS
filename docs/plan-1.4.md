@@ -192,6 +192,13 @@ stays under 65%, up at once, down after 2 s.
   Verified: after a launch the governor read performance in the hook and schedutil after it.
   `touch /storage/.config/rocknixds-menu-performance` keeps ROCKNIX's behaviour.
 
+- **Display interrupt storm (found 2026-09-28):** stopping sway for a DS game while its buffers were still being
+  scanned out made the display controller read freed memory (`rk_iommu ... Page fault`), and video port 1 then
+  looped on `POST_BUF_EMPTY`: ~84,000 interrupts/s on CPU 0, ~60% of a core, in games AND the menus, until the
+  next full modeset (it survived later games and sway restarts). Seen once in ~40 sway stops. session.sh now
+  switches the panels off through sway before stopping it; restore.sh counts the display controller's interrupts
+  after a session and power-cycles the panels if they storm (swaymsg power off/on cleared it: 84,618/s -> 93/s).
+
 Found on the way: ROCKNIX's `powerstate` service re-applies a GPU profile whenever the battery status flips
 (charger plugged/unplugged, or a weak charger flapping), which overrode the session's GPU clock mid-game; session.sh
 now puts it back (7e2ff35). ES idle in the menu: CPU at 1992 MHz by the `performance` setting (schedutil: 763 MHz
