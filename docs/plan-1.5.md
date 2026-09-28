@@ -24,7 +24,11 @@ itself (ROCKNIX's runemu.sh and start_drastic.sh take ~2.3 s before our unit sta
 
 ## 2. Power, continued
 
-- **ROCKNIX's `powerstate` service**: a bash loop polling every 2 s with `cat`, `awk` on the battery's whole uevent
+- **Done (2026-09-29): ROCKNIX's `powerstate` service** replaced through a drop-in, like the LED monitor: 131 -> 8
+  ticks per 60 s (2.2% -> 0.13% of a core, with its child processes), the system's process starts 3/s -> 0/s. Same
+  behaviour: mode changes still run ROCKNIX's GPU profile, ledcontrol and log; `ledcontrol discharging` at a full
+  battery is done in-process (checked against ROCKNIX's: the same LEDs); a changed ROCKNIX script or ledcontrol
+  is run as is (tested). Was: a bash loop polling every 2 s with `cat`, `awk` on the battery's whole uevent
   (I2C reads) and `sleep`, ~3% of a core, more on battery (it looks settings up with `awk` on every pass after the
   first 40 s). Same treatment as `battery-led-status`: a fork-free copy behind a systemd drop-in that hands back to
   ROCKNIX's script if that ever changes (md5 79dcb5ee1f43876d5c1dff429f87b36b), including `ledcontrol discharging`

@@ -119,6 +119,11 @@ if [ $UNINSTALL = 1 ]; then
         rmdir /storage/.config/system.d/batteryledstatus.service.d 2>/dev/null
         systemctl daemon-reload; systemctl restart batteryledstatus.service 2>/dev/null
     fi
+    if [ -f /storage/.config/system.d/powerstate.service.d/rocknixds.conf ]; then           # ROCKNIX's powerstate again
+        rm -f /storage/.config/system.d/powerstate.service.d/rocknixds.conf
+        rmdir /storage/.config/system.d/powerstate.service.d 2>/dev/null
+        systemctl daemon-reload; systemctl restart powerstate.service 2>/dev/null
+    fi
     echo performance > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor 2>/dev/null   # ROCKNIX's menu governor
     rmdir /storage/.config/emulationstation/scripts/theme-changed /storage/.config/emulationstation/scripts/game-end \
           /storage/.config/emulationstation/scripts/start /storage/.config/emulationstation/scripts 2>/dev/null
@@ -225,7 +230,7 @@ if [ $DSFLIP_ON = 1 ]; then
     cp "$SRC/dsflip/libdsflip.so" "$SRC/dsflip/device/session.sh" "$SRC/dsflip/device/restore.sh" \
        "$SRC/dsflip/device/drastic-wrapper.sh" "$SRC/dsflip/device/install.sh" "$SRC/dsflip/device/es-features.sh" \
        "$SRC/dsflip/device/fast-switch" "$SRC/dsflip/device/playstats.py" "$SRC/dsflip/device/menu-power.sh" \
-       "$SRC/dsflip/device/battery-led-status" $WORK/dsflip/
+       "$SRC/dsflip/device/battery-led-status" "$SRC/dsflip/device/powerstate" $WORK/dsflip/
     sh $WORK/dsflip/install.sh
 
     # DS-pixel-aware shaders for DraStic (sharp and LCD-grid looks that work at 1x and 2x) + their ES entries
@@ -259,6 +264,13 @@ if [ $DSFLIP_ON = 1 ]; then
         mkdir -p /storage/.config/system.d/batteryledstatus.service.d
         cp "$SRC/dsflip/device/batteryledstatus-rocknixds.conf" /storage/.config/system.d/batteryledstatus.service.d/rocknixds.conf
         systemctl daemon-reload; systemctl restart batteryledstatus.service 2>/dev/null
+    fi
+    # the same for ROCKNIX's powerstate service (~2% of a core: cat, awk and sleep every 2 s; runs ROCKNIX's own if
+    # that ever changes)
+    if [ -f /usr/lib/systemd/system/powerstate.service ]; then
+        mkdir -p /storage/.config/system.d/powerstate.service.d
+        cp "$SRC/dsflip/device/powerstate-rocknixds.conf" /storage/.config/system.d/powerstate.service.d/rocknixds.conf
+        systemctl daemon-reload; systemctl restart powerstate.service 2>/dev/null
     fi
 fi
 

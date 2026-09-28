@@ -1,0 +1,130 @@
+#!/bin/bash
+# ROCKNIXDS: ROCKNIX's powerstate service (/usr/bin/powerstate, GPL-2.0, Copyright (C) 2023 JELOS), the same behaviour
+# without starting processes on every pass.
+#
+# ROCKNIX's loop polls every 2 s with $(cat ...) for the battery status, awk over the battery's whole uevent (the
+# fuel gauge answers every property over I2C) and sleep; after 40 s on battery it also looks up two settings with awk
+# on every pass (its counter only resets when the battery is low), and above 97% it runs ledcontrol, another bash
+# with more awk, every pass. Measured on the RG DS: ~3% of a core on the charger. Here the status and the level are
+# read with bash's read, the settings come from system.cfg only when it changed, ledcontrol's "discharging" is done
+# in-process, and the poll waits in read -t on a FIFO. What only happens when the charging state changes (the GPU
+# profile, ledcontrol, the log) is unchanged.
+# install.sh points powerstate.service at this; it runs ROCKNIX's own script whenever that isn't the exact version
+# this copy follows, and ROCKNIX's ledcontrol whenever that isn't the version its "discharging" was copied from.
+set -- $(md5sum /usr/bin/powerstate 2>/dev/null)
+[ "$1" = 79dcb5ee1f43876d5c1dff429f87b36b ] || exec /usr/bin/powerstate
+
+. /etc/profile
+
+LEDCTL="/usr/lib/autostart/quirks/devices/Anbernic RG DS/bin/ledcontrol"
+set -- $(md5sum "$LEDCTL" 2>/dev/null)
+[ "$1" = 53ff8910a7fefc6a05fdc0631291bf91 ] && LEDCTL_KNOWN=1 || LEDCTL_KNOWN=
+
+CFG=/storage/.config/system/configs/system.cfg
+STAMP=/run/rocknixds-powerstate-cfg     # when system.cfg was last read (a redirection sets it: no process)
+declare -A SET
+cfg_load() {                            # the settings this loop needs, re-read only when system.cfg changed
+    [[ -e $STAMP && ! $CFG -nt $STAMP ]] && return
+    : > $STAMP
+    SET=()
+    local k v
+    while IFS='=' read -r k v; do
+        case $k in
+            led.color|led.brightness|system.battery.warning|system.battery.warning_threshold|\
+            system.led.color|system.led.brightness|global.led.color|global.led.brightness|\
+            system.system.battery.warning|system.system.battery.warning_threshold|\
+            global.system.battery.warning|global.system.battery.warning_threshold)
+                [[ -v SET[$k] ]] || SET[$k]=$v ;;       # the first one, as get_setting's awk ... exit
+        esac
+    done < "$CFG"
+}
+cfg() {                                 # get_setting <key> with one argument: system.<key>, then <key>, then global.<key>
+    local v=${SET[system.$1]}
+    [ -n "$v" ] || v=${SET[$1]}
+    [ -n "$v" ] || v=${SET[global.$1]}
+    printf -v REPLY '%s' "$v"
+}
+
+# ledcontrol discharging, as the RG DS's ledcontrol (md5 above) does it: all three LEDs off, then led.color (default
+# green) at led.brightness (max/mid/min), setting led.brightness to max on its first run
+led_discharging() {
+    [ -n "$LEDCTL_KNOWN" ] || { ledcontrol discharging; return; }
+    cfg led.brightness; local bri=$REPLY
+    if [ -z "$bri" ]; then set_setting led.brightness max; bri=max; : > $STAMP; SET[led.brightness]=max; fi
+    case $bri in max) bri=255 ;; mid) bri=63 ;; min) bri=15 ;; esac
+    local L=/sys/class/leds
+    echo 0 > $L/green:power/brightness; echo 0 > $L/red:status/brightness; echo 0 > $L/amber:charging/brightness
+    cfg led.color
+    case ${REPLY:-green} in
+        green) echo $bri > $L/green:power/brightness ;;
+        red)   echo $bri > $L/red:status/brightness ;;
+        amber) echo $bri > $L/amber:charging/brightness ;;
+    esac
+}
+
+BAT=${RGDS_TEST_BAT:-$(ls -d /sys/class/power_supply/[bB][aA][tT]* 2>/dev/null | head -n1)}   # (RGDS_TEST_BAT: a fake one, for tests)
+WAIT=/run/rocknixds-powerstate-wait     # the poll's wait: read -t on a FIFO nobody writes (sleep would be a process)
+[ -p $WAIT ] || { rm -f $WAIT; mkfifo $WAIT; }
+exec 3<>$WAIT
+
+BATCNT=0
+unset CURRENT_MODE
+unset AC_STATUS
+ledcontrol $(get_setting led.color)
+
+while true; do
+  AC_STATUS=; [ -n "$BAT" ] && read -r AC_STATUS < $BAT/status 2>/dev/null
+  if [[ ! "${CURRENT_MODE}" =~ ${AC_STATUS} ]]; then
+    case ${AC_STATUS} in
+      Disch*)
+        log $0 "Switching to battery mode."
+        if [ -e "/tmp/.gpu_performance_level" ]; then
+          GPUPROFILE=$(cat /tmp/.gpu_performance_level)
+        else
+          GPUPROFILE=$(get_setting system.gpuperf)
+        fi
+        if [ -z "${GPUPROFILE}" ]; then
+          GPUPROFILE="auto"
+        fi
+        gpu_performance_level ${GPUPROFILE}
+        if [ "${DEVICE_LED_CHARGING}" = "true" ]; then
+          ledcontrol discharging
+        fi
+      ;;
+      *)
+        log $0 "Switching to performance mode."
+        gpu_performance_level auto
+        if [ "${DEVICE_LED_CHARGING}" = "true" ]; then
+          ledcontrol charging
+        fi
+      ;;
+    esac
+    CURRENT_MODE="${AC_STATUS}"
+  fi
+  BATLEFT=; [ -n "$BAT" ] && read -r BATLEFT < $BAT/capacity 2>/dev/null
+  if (( "${BATCNT}" >= "20" )) && [[ "${AC_STATUS}" =~ Disch ]]; then
+    cfg_load
+    cfg system.battery.warning; AUDIBLEALERT=$REPLY
+    cfg system.battery.warning_threshold; AUDIBLEALERT_THRESHOLD=$REPLY
+    [[ -z $AUDIBLEALERT_THRESHOLD ]] && AUDIBLEALERT_THRESHOLD=25
+
+    if [[ ${BATLEFT} -le ${AUDIBLEALERT_THRESHOLD} ]]; then
+      if [ "${DEVICE_LED_CONTROL}" = "true" ] && [ ! "${DEVICE_BATTERY_LED_STATUS}" = "true" ]; then
+        # Flash the RGB or power LED if available.
+        led_flash
+        BATCNT=0
+      elif [ "${AUDIBLEALERT}" = "1" ]; then
+        say "BATTERY AT ${BATLEFT}%"
+        BATCNT=0
+      fi
+    fi
+  elif (( "${BATLEFT}" > "97" )); then
+    if [ "${DEVICE_LED_CHARGING}" = "true" ]; then
+      # Reset the LED as if the battery was full.
+      cfg_load
+      led_discharging
+    fi
+  fi
+  BATCNT=$(( ${BATCNT} + 1 ))
+  read -t 2 -u 3 _ 2>/dev/null
+done
