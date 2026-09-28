@@ -253,7 +253,7 @@ if [ $DSFLIP_ON = 1 ]; then
         chmod +x /storage/.config/emulationstation/scripts/$ev/rocknixds-menu-power.sh
     done
     $DRASTIC/dsflip/menu-power.sh
-    # ROCKNIX's battery LED monitor started ~15 processes a second (6.5% of a core); the same monitor without them
+    # ROCKNIX's battery LED monitor started ~12 processes a second (6.5% of a core); the same monitor without them
     # (battery-led-status, which runs ROCKNIX's own if that ever changes) through a systemd drop-in
     if [ -f /usr/lib/systemd/system/batteryledstatus.service ]; then
         mkdir -p /storage/.config/system.d/batteryledstatus.service.d

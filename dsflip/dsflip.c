@@ -861,6 +861,21 @@ static void give_up(const char *why) {
     verdict(v);
 }
 
+/* the display controller's interrupt count (/proc/interrupts, all CPUs), -1 if not found */
+static long long vop_irqs(void) {
+    FILE *f = fopen("/proc/interrupts", "r"); if (!f) return -1;
+    char line[512]; long long n = -1;
+    while (fgets(line, sizeof line, f)) {
+        if (!strstr(line, "fe040000.vop")) continue;
+        char *p = strchr(line, ':'); if (!p) break;
+        n = 0; p++;
+        for (;;) { char *e; long long v = strtoll(p, &e, 10); if (e == p) break; n += v; p = e; }
+        break;
+    }
+    fclose(f);
+    return n;
+}
+
 __attribute__((constructor)) static void init(void) {
     const char *lp = getenv("DSFLIP_LOG"); if (!lp) lp = "/storage/dsflip/logs/dsflip.log";
     {   /* keep the previous three sessions' logs (.1 = the last one): testers lost evidence to the overwrite */
@@ -917,24 +932,42 @@ __attribute__((constructor)) static void init(void) {
     /* modeset both with the black buffer; other planes off */
     blk.kind = K_BLACK; blk.nb = 1; blk.w = P[1].mode.hdisplay; blk.h = P[1].mode.vdisplay;
     if (mkbuf(&blk.b[0], blk.w, blk.h, DRM_FORMAT_XRGB8888, 32)) { give_up("dumb buffer alloc failed"); return; }
-    drmModeAtomicReq *r = drmModeAtomicAlloc();
-    for (uint32_t k = 0; k < pres->count_planes; k++) {
-        uint32_t id = pres->planes[k];
-        if (id == P[0].plane || id == P[1].plane) continue;
-        drmModeAtomicAddProperty(r, id, prop(id, DRM_MODE_OBJECT_PLANE, "FB_ID"), 0);
-        drmModeAtomicAddProperty(r, id, prop(id, DRM_MODE_OBJECT_PLANE, "CRTC_ID"), 0);
+    drmModeAtomicReq *r;
+    int ret = 0;
+    for (int attempt = 0; attempt < 2; attempt++) {
+        r = drmModeAtomicAlloc();
+        for (uint32_t k = 0; k < pres->count_planes; k++) {
+            uint32_t id = pres->planes[k];
+            if (id == P[0].plane || id == P[1].plane) continue;
+            drmModeAtomicAddProperty(r, id, prop(id, DRM_MODE_OBJECT_PLANE, "FB_ID"), 0);
+            drmModeAtomicAddProperty(r, id, prop(id, DRM_MODE_OBJECT_PLANE, "CRTC_ID"), 0);
+        }
+        for (int i = 0; i < 2; i++) {
+            panel *p = &P[i];
+            drmModeAtomicAddProperty(r, p->conn, prop(p->conn, DRM_MODE_OBJECT_CONNECTOR, "CRTC_ID"), p->crtc);
+            drmModeAtomicAddProperty(r, p->crtc, prop(p->crtc, DRM_MODE_OBJECT_CRTC, "MODE_ID"), p->mode_blob);
+            drmModeAtomicAddProperty(r, p->crtc, prop(p->crtc, DRM_MODE_OBJECT_CRTC, "ACTIVE"), 1);
+            add_fb(r, p, &blk.b[0]);
+            p->scan = &blk.b[0];
+        }
+        ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_ALLOW_MODESET, 0);
+        drmModeAtomicFree(r);
+        if (ret) { char w[96]; snprintf(w, sizeof w, "modeset failed: %s", strerror(-ret)); give_up(w); return; }
+        /* The display controller can be stuck in an underrun loop when we get it: sway stopped while its buffers
+         * were still being scanned out, the controller read freed memory, and one video port then raised
+         * POST_BUF_EMPTY ~84,000 times a second (~60% of a core) until a full modeset. The modeset above keeps the
+         * mode, so it doesn't clear that. A normal controller raises at most a few interrupts in 30 ms; if it's
+         * storming, switch both panels off and on again (a slow panel power cycle, so only then).
+         * DSFLIP_TEST_REMODESET=1: take that path anyway (testing). */
+        if (attempt) break;
+        long long a = vop_irqs(); usleep(30000); long long b = vop_irqs();
+        if (!(a >= 0 && b - a > 100) && !getenv("DSFLIP_TEST_REMODESET")) break;
+        LOG("[dsflip] display controller interrupt storm (%lld in 30 ms): switching the panels off and on\n", b - a);
+        r = drmModeAtomicAlloc();
+        for (int i = 0; i < 2; i++) drmModeAtomicAddProperty(r, P[i].crtc, prop(P[i].crtc, DRM_MODE_OBJECT_CRTC, "ACTIVE"), 0);
+        if (drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_ALLOW_MODESET, 0)) LOG("[dsflip] switching the panels off failed\n");
+        drmModeAtomicFree(r);
     }
-    for (int i = 0; i < 2; i++) {
-        panel *p = &P[i];
-        drmModeAtomicAddProperty(r, p->conn, prop(p->conn, DRM_MODE_OBJECT_CONNECTOR, "CRTC_ID"), p->crtc);
-        drmModeAtomicAddProperty(r, p->crtc, prop(p->crtc, DRM_MODE_OBJECT_CRTC, "MODE_ID"), p->mode_blob);
-        drmModeAtomicAddProperty(r, p->crtc, prop(p->crtc, DRM_MODE_OBJECT_CRTC, "ACTIVE"), 1);
-        add_fb(r, p, &blk.b[0]);
-        p->scan = &blk.b[0];
-    }
-    int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_ALLOW_MODESET, 0);
-    drmModeAtomicFree(r);
-    if (ret) { char w[96]; snprintf(w, sizeof w, "modeset failed: %s", strerror(-ret)); give_up(w); return; }
 
     /* can the top plane scale the 800x480 menu down itself? */
     dbuf t; memset(&t, 0, sizeof t);

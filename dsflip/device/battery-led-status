@@ -2,7 +2,7 @@
 # ROCKNIXDS: ROCKNIX's RG DS battery LED monitor (quirks/devices/Anbernic RG DS/bin/battery_led_status, GPL-2.0,
 # Copyright (C) 2026 ROCKNIX), the same LEDs, thresholds, overrides and 1 s poll, without starting processes.
 #
-# ROCKNIX's loop starts ~15 processes a second: $(cat ...) for two sysfs files, awk (get_setting) for the LED
+# ROCKNIX's loop starts ~12 processes a second: $(cat ...) for two sysfs files, awk (get_setting) for the LED
 # brightness setting twice per poll, subshells for its helpers, and sleep. Measured with its children: 6.5% of a
 # core, half of what an idle menu used after the 1.4 menu work. Here sysfs is read with bash's read, the brightness
 # setting is re-read from system.cfg only when the file changed (bash, no awk), and the poll waits in read -t on a

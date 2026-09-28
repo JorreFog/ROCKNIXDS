@@ -9,7 +9,16 @@
 # Runs when ES starts (ES's start scripts: after ROCKNIX's autostart, so at boot it isn't overridden), after every
 # game ES launches (game-end scripts) and after a DS session (restore.sh; ES is stopped during those).
 # Off: touch /storage/.config/rocknixds-menu-performance (the menus keep ROCKNIX's performance governor).
+# --after-es-idle: first wait (up to 60 s) until ES answers that it's idle, so its start runs at the full clock
+# (callers start that from a transient unit: ES may wait for its scripts).
 [ -e /storage/.config/rocknixds-menu-performance ] && exit 0
+if [ "$1" = --after-es-idle ]; then
+    i=0
+    while [ $i -lt 120 ]; do
+        curl -s -m 1 localhost:1234/isIdle 2>/dev/null | grep -q true && break
+        sleep 0.5; i=$((i + 1))
+    done
+fi
 C=/sys/devices/system/cpu/cpufreq/policy0
 grep -qw schedutil $C/scaling_available_governors 2>/dev/null && echo schedutil > $C/scaling_governor
 exit 0

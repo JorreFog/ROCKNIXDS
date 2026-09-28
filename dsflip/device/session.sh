@@ -28,11 +28,10 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
     echo 0 > /sys/class/graphics/fb0/blank 2>/dev/null   # a blanked console powers the panels down under us
     echo "$(ms) ms: display released by VT switch (sway on tty$(cat /tmp/dsflip-vt) stays up)"
   else
-    # the panels off through sway first: stopping sway while its buffers were still being scanned out let the display
-    # controller read freed memory (IOMMU page fault) and left one video port in an underrun loop, POST_BUF_EMPTY,
-    # ~84,000 interrupts/s on CPU 0 (~60% of a core) until the next modeset off/on (measured 2026-09-28)
-    S=$(ls /var/run/0-runtime-dir/sway-ipc.*.sock 2>/dev/null | head -n1)
-    [ -n "$S" ] && XDG_RUNTIME_DIR=/var/run/0-runtime-dir swaymsg -s "$S" output '*' power off >/dev/null 2>&1
+    # Stopping sway while its buffers are still being scanned out can leave the display controller in an underrun
+    # loop (~84,000 interrupts/s, ~60% of a core, until a full modeset; seen once in ~40 starts). Switching the
+    # panels off through sway first prevented it but made every launch ~0.6 s slower (libdsflip then has to power
+    # the panels up), so libdsflip checks for the storm when it takes the display and cures it only then.
     systemctl stop essway.service sway.service
     echo "$(ms) ms: ES and sway stopped"
   fi
@@ -83,7 +82,7 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
   # the unit's timeout. Kill it at once (what the exit hotkey does), put the governor back and leave: starting
   # sway/ES from inside a unit that systemd is stopping waits behind that stop (measured: 40 s), so the unit's
   # ExecStopPost (restore.sh) brings them back instead.
-  trap 'kill -9 $P 2>/dev/null; wait $P; record; [ -n "$GPU_GOV" ] && echo "$GPU_GOV" > $GPU/governor 2>/dev/null; echo "$(date) stopped by the unit: restore.sh brings sway + ES back"; exit 0' TERM INT
+  trap 'kill -9 $P 2>/dev/null; wait $P; [ -s /tmp/dsflip-cpu-max ] && cat /tmp/dsflip-cpu-max > $CPU/scaling_max_freq 2>/dev/null; record; [ -n "$GPU_GOV" ] && echo "$GPU_GOV" > $GPU/governor 2>/dev/null; echo "$(date) stopped by the unit: restore.sh brings sway + ES back"; exit 0' TERM INT
   # libdsflip couldn't take the display: don't leave black panels. It decides within ~6 s at worst (3 s for DRM
   # master, 3 s for the shader); no verdict in 10 s means it isn't loaded or hangs.
   v=; i=0
@@ -104,6 +103,10 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
       fi ;;
   esac
   wait $P; rc=$?
+  # the full CPU clock back at once: libdsflip's governor may have lowered the limit, and everything until restore.sh
+  # (play stats, sway and ES starting) ran at it (the way back to the menu was ~1.2 s slower)
+  cpu_full() { [ -s /tmp/dsflip-cpu-max ] && cat /tmp/dsflip-cpu-max > $CPU/scaling_max_freq 2>/dev/null; }
+  cpu_full
   echo "drastic exited: $rc"
   if [ ! -s $NOTICE ]; then
     case $rc in

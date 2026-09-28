@@ -238,7 +238,7 @@ stays under 65%, up at once, down after 2 s.
   made the drain bursty (drops 0.18/s) and add latency: not taken. Switching the rate mid-stream made the drain
   uneven for the rest of the session, which is why it's set before DraStic starts.
 
-- **ROCKNIX's battery LED monitor (2026-09-28):** a bash loop that started ~15 processes a second ($(cat) for sysfs,
+- **ROCKNIX's battery LED monitor (2026-09-28):** a bash loop that started ~12 processes a second ($(cat) for sysfs,
   awk via get_setting twice per poll, subshells, sleep): 6.5% of a core with its children, half of the idle menu's
   remaining CPU. battery-led-status is the same monitor (LEDs, thresholds, 1 s poll, overrides) reading sysfs with
   bash's read, re-reading system.cfg only when it changed and waiting in read -t: 0.4% (the rest is the fuel gauge's

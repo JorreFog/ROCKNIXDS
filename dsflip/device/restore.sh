@@ -17,7 +17,6 @@ if [ -s /tmp/dsflip-cpu-max ]; then                  # the CPU clock limit libds
     cat /tmp/dsflip-cpu-max > /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq 2>/dev/null
     rm -f /tmp/dsflip-cpu-max
 fi
-[ -x /storage/.config/drastic/dsflip/menu-power.sh ] && /storage/.config/drastic/dsflip/menu-power.sh   # the menus' governor
 XDG_RUNTIME_DIR=$RT pw-metadata -n settings 0 clock.force-rate 0 >/dev/null 2>&1          # PipeWire's own rate again
 sway_has_outputs() {
     SOCK=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
@@ -62,6 +61,9 @@ if [ -n "$a" ] && [ -n "$b" ] && [ $((b - a)) -gt 2000 ]; then
     XDG_RUNTIME_DIR=$RT swaymsg -s "$S" output '*' power off >/dev/null 2>&1; sleep 0.3
     XDG_RUNTIME_DIR=$RT swaymsg -s "$S" output '*' power on >/dev/null 2>&1
 fi
+# The menus' CPU governor (menu-power.sh), once ES is up: sway's and ES's start are CPU-heavy, and switching to
+# schedutil before them made the way back to the menu ~0.8 s slower. Its own transient unit, like the notice below.
+systemd-run --collect --quiet /storage/.config/drastic/dsflip/menu-power.sh --after-es-idle >/dev/null 2>&1
 # session.sh's message about why the game ended early: show it in ES once ES answers. From a transient unit of its
 # own, because this script may be running as dsflip-game's ExecStopPost, whose processes die when it finishes.
 # The mv makes it show once even though this script runs twice after a normal exit (session.sh + ExecStopPost).
