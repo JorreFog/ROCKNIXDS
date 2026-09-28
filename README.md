@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<p align="center"><b>Full-speed 2× DraStic and a DSi-style dual-screen frontend for the Anbernic RG DS on ROCKNIX.</b></p>
+<p align="center"><b>Full-speed 2× DraStic and a DSi-style dual-screen frontend for the Anbernic RG DS (and, new and untested, the RG DS Plus) on ROCKNIX.</b></p>
 
 <p align="center">
   <img src="docs/img/es-home-ds.png" width="265" alt="Main menu: the selected system with its icon, counts and play stats on the top screen, system carousel on the bottom">
@@ -24,6 +24,31 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
   3D boxes and RetroAchievements progress, and a patched ES build.
 - The **panel timing fix**, the older **vsync pacing shim**, and the measurement tools (including a DS
   stress-test ROM) behind all the numbers below.
+
+### RG DS Plus (experimental, not yet tested on the hardware)
+
+The RG DS Plus has the same RK3568 SoC and the same layout (DSI-2 = top panel, one Goodix touchscreen on the bottom
+panel at i2c-5, same buttons), but two **1024×768** panels. ROCKNIX supports it
+([ROCKNIX/distribution#3322](https://github.com/ROCKNIX/distribution/pull/3322)), and ROCKNIXDS now adapts to it
+from what the kernel reports, instead of assuming 640×480. Everything below comes from the Plus's device tree and
+the RG DS; none of it has run on a Plus yet, so please report what you see.
+
+- **libdsflip** takes each panel's size from its DRM mode: the display controller scales 256×192 / 512×384
+  to 1024×768 (exactly 4× / 2×), the menu goes to 1024×768, touch maps 1024×768 panel pixels to the DS
+  screen, and the RetroAchievements pop-ups are drawn 1.6× larger so they look the same.
+- **Shaders:** 1024×768 is an exact multiple of the DS screen, so **ds-crisp** is pixel-exact 4× and
+  **ds-integer** / **ds-grid-2x** fill the whole panel (no border). Shaders draw 2.56× more pixels than on the
+  RG DS, so the GPU runs at full clock with any shader; **ds-fsr** is estimated at ~24 ms per frame there and will
+  drop frames.
+- **Theme:** ES runs on a 3072×768 canvas (same 4:1 shape as the RG DS's 1920×480, so the theme scales as is,
+  and its SVG art stays sharp); menus and popups are sized to one 1024 px screen; the boot splash has a
+  2048×768 version that says *RG DS Plus*.
+- **`--with-60hz`** retunes the Plus from 60.17 Hz to 60.003 Hz (horizontal front porch 120 → 122, vertical
+  16 → 17; the porches only grow). It first checks that the panels' pixel clock is the 62769231 Hz (816 MHz / 13)
+  it was worked out for, and changes nothing otherwise.
+- Things to check first on a Plus: both panels show ES across both screens; a DS game fills both panels; a
+  stylus tap lands where you touch; `/storage/.config/drastic/dsflip/dsflip.log` says `ready` and
+  `toast plane: N (1024x115)`; with a shader, `[shader] submit` stays well under 16 ms.
 
 ### New in 1.3
 
@@ -67,7 +92,7 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 
 ## Install
 
-On an Anbernic RG DS running ROCKNIX, ssh in as `root` (default password
+On an Anbernic RG DS (or RG DS Plus) running ROCKNIX, ssh in as `root` (default password
 `rocknix`) and run:
 
 ```sh
@@ -93,7 +118,7 @@ its art, the theme draws a card with the game's name or box art.
 
 | Option | |
 |---|---|
-| `--with-60hz` | also retune both panels to 60.000 Hz (edits the device tree in `/flash`, backed up; needs a reboot) |
+| `--with-60hz` | also retune both panels to 60 Hz (60.0013 Hz on the RG DS, 60.0027 Hz on the Plus; edits the device tree in `/flash`, backed up; needs a reboot) |
 | `--no-theme` / `--no-dsflip` / `--no-hires` | skip that part |
 | `--uninstall` | undo what the installer changed; settings you made since the install are kept. Add `--restore-files` to put back the whole config files from the install-time backups instead |
 | `--version` | print the installed ROCKNIXDS version (also in `/storage/.config/rocknixds-version`) |

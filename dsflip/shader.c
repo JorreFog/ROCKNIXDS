@@ -2,7 +2,7 @@
 //
 // ES passes the choice as DSHOOK_SHADER (what ROCKNIX's libdrastouch reads). "bilinear"/"none"/unset keeps
 // libdsflip's zero-copy path. Anything else: each DS screen buffer DraStic finished is drawn with that
-// fragment shader into a panel-sized (640x480) dumb buffer, which is then scanned out 1:1 instead of the
+// fragment shader into a panel-sized (640x480 on the RG DS, 1024x768 on the Plus) dumb buffer, which is then scanned out 1:1 instead of the
 // DraStic buffer. Same inputs as stock: u_texture (GL_LINEAR), u_texture_size = DS buffer size,
 // u_output_size = panel size, v_texcoord, SWIZ(); gl_FragCoord.y is flipped to count from the bottom,
 // as it does in stock's window, so pixel masks keep stock's phase.
@@ -12,7 +12,7 @@
 // <name>.frag, the same files the stock path uses.
 //
 // GL runs only on the presenter thread, in a surfaceless context (it renders only into imported dumb buffers).
-// The RG DS's GPU runs ARM's libmali (mali_kbase, /dev/mali0; there is no DRM render node), so libmali's EGL in
+// The RG DS's GPU (the Plus has the same RK3568 SoC) runs ARM's libmali (mali_kbase, /dev/mali0; there is no DRM render node), so libmali's EGL in
 // /usr/lib/mali is preferred over the system (Mesa) one. Everything is dlopen()ed: a missing or failing GL
 // stack just means no shader (zero-copy stays).
 #define _GNU_SOURCE
@@ -111,9 +111,20 @@ static GLenum up_fmt; int shader_copy_mode;      /* set by the caller before sha
 static GLuint up_tex[2]; static int up_w[2], up_h[2];
 static GLuint prog; static GLint u_tex, u_tsize, u_osize, u_fch;
 /* a shader that draws the DS screen into part of the panel (ds-integer) says where, in panel pixels, with a line
- * "dsflip-viewport: x y w h" in its source; libdsflip maps touches into that rectangle */
-static int vp[4];
-int shader_viewport(int *v) { if (vp[2] <= 0 || vp[3] <= 0) return 0; for (int i = 0; i < 4; i++) v[i] = vp[i]; return 1; }
+ * "dsflip-viewport: x y w h" in its source; libdsflip maps touches into that rectangle. "dsflip-viewport: integer"
+ * means the largest whole multiple of 256x192 that fits the panel, centred: 512x384 at 64,48 on the RG DS's 640x480,
+ * all of it on the RG DS Plus's 1024x768 (4x) */
+static int vp[4], vp_integer;
+int shader_viewport(int *v, int pw, int ph) {
+    if (vp_integer) {
+        int k = pw / 256 < ph / 192 ? pw / 256 : ph / 192; if (k < 1) k = 1;
+        vp[2] = 256 * k; vp[3] = 192 * k; vp[0] = (pw - vp[2]) / 2; vp[1] = (ph - vp[3]) / 2;
+        if (vp[2] == pw && vp[3] == ph) return 0;       /* fills the panel: nothing to map */
+    }
+    if (vp[2] <= 0 || vp[3] <= 0) return 0;
+    for (int i = 0; i < 4; i++) v[i] = vp[i];
+    return 1;
+}
 static int drm_fd;
 
 /* ---- shader sources ---- */
@@ -283,10 +294,13 @@ int shader_init(int fd, const char *name) {
     const char *from = "libdrastouch";
     if (!fs) { fs = slurp(path, &n); from = path; }
     if (!fs) { SLOG("[shader] unknown shader \"%s\" (not built into libdrastouch, no %s)\n", name, path); return 0; }
-    { const char *m = strstr(fs, "dsflip-viewport:");
+    { const char *m = strstr(fs, "dsflip-viewport:"); char word[16];
+      vp_integer = 0;
       if (m && sscanf(m + 16, "%d %d %d %d", &vp[0], &vp[1], &vp[2], &vp[3]) == 4)
           SLOG("[shader] draws the DS screen at %d,%d %dx%d of the panel (touch follows)\n", vp[0], vp[1], vp[2], vp[3]);
-      else vp[2] = vp[3] = 0; }
+      else if (m && sscanf(m + 16, "%15s", word) == 1 && !strcmp(word, "integer")) {
+          vp_integer = 1; SLOG("[shader] draws the DS screen at a whole-number scale, centred (touch follows)\n");
+      } else vp[2] = vp[3] = 0; }
     char *ffs = flip_fragcoord(fs);
     const char *pre = up_fmt == 0x1908 && shader_copy_mode ? "#define SWIZ(c) (c).bgra\nuniform highp float dsf_fch;\n"
                       "#define dsf_FragCoord() vec4(gl_FragCoord.x, dsf_fch - gl_FragCoord.y, gl_FragCoord.zw)\n"

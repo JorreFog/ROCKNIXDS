@@ -1,7 +1,8 @@
 #!/bin/sh
 # ROCKNIXDS: ES runs this (scripts/theme-changed/) with the new and the old theme when a theme is picked.
-# The launcher sizes ES's canvas for the theme when ES starts: 1920x480 across both panels for dii-ess-aye, stock
-# ROCKNIX's layout (the top panel, bottom panel off) for any other theme, which is drawn for one 640x480 screen.
+# The launcher sizes ES's canvas for the theme when ES starts: three panels wide across both panels for dii-ess-aye
+# (1920x480 on the RG DS, 3072x768 on the Plus), stock ROCKNIX's layout (the top panel, bottom panel off) for any
+# other theme, which is drawn for one screen.
 # ES keeps its canvas when the theme changes, so restart ES once the new choice is saved. The wait runs in its own
 # unit: restarting ES stops everything in ES's own unit, this script included.
 NEW=$1 OLD=$2

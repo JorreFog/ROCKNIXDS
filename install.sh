@@ -1,12 +1,12 @@
 #!/bin/sh
-# ROCKNIXDS installer (Anbernic RG DS on ROCKNIX): dual-screen dii-ess-aye theme + patched EmulationStation + libdsflip (DraStic
-# straight to both panels) + hires 3D. Run ON the Anbernic RG DS as root (ssh in, default password: rocknix):
+# ROCKNIXDS installer (Anbernic RG DS or RG DS Plus on ROCKNIX): dual-screen dii-ess-aye theme + patched EmulationStation +
+# libdsflip (DraStic straight to both panels) + hires 3D. Run ON the device as root (ssh in, default password: rocknix):
 #
 #   curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh | sh
 #   curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh | sh -s -- --with-60hz
 #
 # Options:
-#   --with-60hz     also retune both panels to 60.000 Hz (edits the device tree in /flash; backed up; reboot needed)
+#   --with-60hz     also retune both panels to 60 Hz (edits the device tree in /flash; backed up; reboot needed)
 #   --no-theme      skip the theme + patched ES
 #   --no-dsflip     skip libdsflip (keep the stock DraStic display path)
 #   --no-hires      don't switch on hires 3D for Nintendo DS
@@ -51,8 +51,13 @@ die() { printf '\033[1;31mERROR:\033[0m %s\n' "$*"; exit 1; }
 # ---- sanity checks -----------------------------------------------------------------------------------
 [ "$(id -u)" = 0 ] || die "run as root (ssh root@<device>)"
 grep -qi rocknix /etc/os-release 2>/dev/null || die "this isn't ROCKNIX"
-[ -f /flash/device_trees/rk3568-anbernic-rg-ds.dtb ] || tr -d '\0' < /proc/device-tree/model 2>/dev/null | grep -qi "rg.\?ds" \
-    || die "this doesn't look like an Anbernic RG DS"
+MODEL=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)
+case "$MODEL" in
+*"RG DS Plus"*) DEVICE="RG DS Plus" ;;    # 2x 1024x768, same RK3568 and panel/touch layout: supported, not yet hardware-tested
+*) [ -f /flash/device_trees/rk3568-anbernic-rg-ds.dtb ] || echo "$MODEL" | grep -qi "rg.\?ds" \
+       || die "this doesn't look like an Anbernic RG DS or RG DS Plus"
+   DEVICE="RG DS" ;;
+esac
 
 systemctl is-active -q dsflip-game.service 2>/dev/null && die "a DS game is running: quit it first"
 
@@ -131,7 +136,7 @@ if [ $UNINSTALL = 1 ]; then
     systemctl restart sway.service 2>/dev/null || true; sleep 2
     es_start
     mv $BACKUP $BACKUP.undone-$(date +%Y%m%d-%H%M%S)
-    say "Done. (The 60 Hz DTB, if applied, stays: restore /storage/rg-ds.dtb.bak to /flash by hand to undo it.)"
+    say "Done. (The 60 Hz DTB, if applied, stays: restore the /storage/*.dtb.bak it made to /flash/device_trees by hand to undo it.)"
     exit 0
 fi
 
@@ -146,6 +151,8 @@ else
 fi
 [ -f "$SRC/dsflip/libdsflip.so" ] || die "download incomplete"
 mkdir -p $BACKUP
+say "Device: Anbernic $DEVICE"
+[ "$DEVICE" = "RG DS Plus" ] && say "Note: RG DS Plus support is new and hasn't been tested on the hardware yet. Please report what works on GitHub."
 
 es_stop
 
@@ -242,7 +249,7 @@ fi
 
 # ---- 60 Hz panels (opt-in) -----------------------------------------------------------------------------
 if [ $WITH_60HZ = 1 ]; then
-    say "Retuning both panels to 60.000 Hz"
+    say "Retuning both panels to 60 Hz"
     sh "$SRC/dii-ess-aye/device/apply-60hz-dtb.sh" || say "60 Hz step skipped (see message above)"
     NEED_REBOOT=1
 fi

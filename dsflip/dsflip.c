@@ -4,7 +4,9 @@
 // via SDL_LockTexture/UnlockTexture, draws both with SDL_RenderCopy, then SDL_RenderPresent.
 // This hook hands DraStic *DRM dumb buffers* on Lock (XRGB8888 has the same memory layout as
 // SDL's ARGB8888), so DraStic writes straight into scanout memory: no upload, no GL, no copy.
-// The VOP2 display controller scales each buffer to 640x480 in hardware.
+// The VOP2 display controller scales each buffer to the panel in hardware: 640x480 on the RG DS,
+// 1024x768 on the RG DS Plus (same RK3568, same DSI-2 = top / i2c-5 touch layout; everything here
+// takes the size from the panel's mode, nothing assumes 640x480).
 //
 // DraStic's menu is one 800x480 RGB565 streaming texture filled with SDL_UpdateTexture; it is
 // copied into an RGB565 dumb buffer and shown on the bottom panel (the top keeps the game frame).
@@ -92,8 +94,8 @@ static int fd = -1, efd = -1, ok;
 static FILE *lg;
 static panel P[2];                      /* [0] = top, [1] = bottom */
 static stex T[6]; static int nt;
-static stex blk;                        /* black 640x480 buffer for an unused panel */
-static int menu_hw;                     /* VOP2 scales the 800x480 menu itself */
+static stex blk;                        /* black panel-sized buffer for an unused panel */
+static int menu_hw;                     /* VOP2 scales the 800x480 menu itself (down to 640x480, up to the Plus's 1024x768) */
 /* mu (buffers, panels, pacing) and tmu (the touch/event queue) are priority-inheriting mutexes: the presenter and
  * the audio pump run SCHED_FIFO while DraStic's threads and the RetroAchievements HTTP threads don't, and the old
  * spin lock (sched_yield) could spin above a preempted normal-priority holder until the kernel's RT throttle let
@@ -127,7 +129,7 @@ static SDL_Rect route_dst[2]; static int touch_rect_ok;   /* touch only while a 
 static int menu_touch;                                     /* DraStic's menu is on the bottom panel (no touch: see touch_emit) */
 static int vp_x, vp_y, vp_w, vp_h;                         /* where a shader draws the DS screen on the panel (0x0: all of it) */
 static int touch_outside;                                  /* the current touch began outside that rectangle: ignore it */
-int shader_viewport(int *v);
+int shader_viewport(int *v, int pw, int ph);
 static void *window;
 static int cursor_log;                  /* DSFLIP_CURSOR_LOG=1: log where DraStic draws its 32x32 stylus cursor */
 /* stats */
@@ -283,8 +285,9 @@ static void release(dbuf *b) {
 
 /* toast: a small overlay plane on the top panel (RetroAchievements pop-ups), committed together with the
  * game frames. Rendered into one of two buffers, never the one being scanned out. */
-#define TOAST_W 640
-#define TOAST_H 72
+/* the card is laid out for the RG DS's 640 px panel (640x72); on a wider panel (the Plus: 1024) it spans the panel
+ * and ui.c scales its layout by the same factor, so it's drawn at full resolution instead of being upscaled */
+static int TOAST_W = 640, TOAST_H = 72;
 static uint32_t tp_plane, tp_fb, tp_crtc, tp_sx, tp_sy, tp_sw, tp_sh, tp_cx, tp_cy, tp_cw, tp_ch;
 static dbuf toast[2];
 static int toast_cur, toast_shown, toast_want, toast_dirty;
@@ -728,7 +731,7 @@ static void touch_emit(int down_change, int down, int x, int y, int xmax, int ym
      * A touch that starts outside it (on the bezel) is ignored until it lifts; one that slides out is clamped. */
     int x0 = 0, y0 = 0, w = xmax + 1, h = ymax + 1;
     if (vp_w > 0 && vp_h > 0) {
-        int pw = P[1].mode.hdisplay ? P[1].mode.hdisplay : 640, ph = P[1].mode.vdisplay ? P[1].mode.vdisplay : 480;
+        int pw = P[1].mode.hdisplay ? P[1].mode.hdisplay : 640, ph = P[1].mode.vdisplay ? P[1].mode.vdisplay : 480;   /* 1024x768 on the Plus */
         x0 = vp_x * (xmax + 1) / pw; y0 = vp_y * (ymax + 1) / ph; w = vp_w * (xmax + 1) / pw; h = vp_h * (ymax + 1) / ph;
     }
     if (down_change && down) touch_outside = x < x0 || x >= x0 + w || y < y0 || y >= y0 + h;
@@ -764,9 +767,10 @@ static void *tap_fifo_thread(void *a) {
         FILE *f = fopen("/tmp/dsflip-tap", "r"); if (!f) return 0;
         int x, y;
         while (fscanf(f, "%d %d", &x, &y) == 2) {
-            touch_emit(1, 1, x, y, 639, 479);
+            int xm = P[1].mode.hdisplay ? P[1].mode.hdisplay - 1 : 639, ym = P[1].mode.vdisplay ? P[1].mode.vdisplay - 1 : 479;
+            touch_emit(1, 1, x, y, xm, ym);
             usleep(150000);
-            touch_emit(1, 0, x, y, 639, 479);
+            touch_emit(1, 0, x, y, xm, ym);
             LOG("[tap] injected panel %d,%d%s\n", x, y, menu_touch ? " (menu: ignored)" : "");
         }
         fclose(f);
@@ -941,6 +945,7 @@ __attribute__((constructor)) static void init(void) {
     LOG("[dsflip] menu scaling: %s\n", menu_hw ? "hardware" : "CPU nearest");
 
     /* toast plane: a free overlay plane that can go on the top panel's CRTC with ARGB8888 */
+    if (P[0].mode.hdisplay > 640) { TOAST_W = P[0].mode.hdisplay; TOAST_H = (72 * TOAST_W + 320) / 640; }
     for (int k = 0; k < 2; k++) if (mkbuf(&toast[k], TOAST_W, TOAST_H, DRM_FORMAT_ARGB8888, 32)) { toast[0].map = 0; break; }
     for (uint32_t k = 0; k < pres->count_planes && !tp_plane && toast[0].map; k++) {
         drmModePlane *pl = drmModeGetPlane(fd, pres->planes[k]);
@@ -959,7 +964,7 @@ __attribute__((constructor)) static void init(void) {
         }
         drmModeFreePlane(pl);
     }
-    LOG("[dsflip] toast plane: %u\n", tp_plane);
+    LOG("[dsflip] toast plane: %u (%dx%d)\n", tp_plane, TOAST_W, TOAST_H);
     signal(SIGUSR2, on_usr2);
     { const char *q = getenv("DSFLIP_QUEUE"); if (q && *q == '0') queue_on = 0; }
     const char *pm = getenv("DSFLIP_PACING");
@@ -980,7 +985,7 @@ __attribute__((constructor)) static void init(void) {
     for (int k = 0; k < 300 && !shader_done; k++) usleep(10000);
     if (shader_nm) LOG("[dsflip] shader input: %s\n", shader_copy_mode ? "upload from memory" : "dma-buf import");
     anim_log = getenv("DSFLIP_UI_DEMO") != 0;
-    { int v[4]; if (shader_on && shader_viewport(v)) { vp_x = v[0]; vp_y = v[1]; vp_w = v[2]; vp_h = v[3]; } }
+    { int v[4]; if (shader_on && shader_viewport(v, P[1].mode.hdisplay, P[1].mode.vdisplay)) { vp_x = v[0]; vp_y = v[1]; vp_w = v[2]; vp_h = v[3]; } }
     const char *inv = getenv("DSFLIP_TOUCH_INVERT");        /* "x", "y", "xy" or unset/"none" */
     if (inv) { touch_inv_x = strchr(inv, 'x') != 0; touch_inv_y = strchr(inv, 'y') != 0; }
     const char *tp = getenv("DSFLIP_TOUCH");

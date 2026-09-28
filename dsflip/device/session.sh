@@ -41,13 +41,21 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
   GPU=/sys/class/devfreq/fde60000.gpu
   GPU_GOV=$(cat $GPU/governor 2>/dev/null)
   GPU_MIN=$(cat $GPU/min_freq 2>/dev/null)
+  # The RG DS Plus (1024x768 panels) has 2.56x the pixels per frame for a shader to draw on the same GPU, so
+  # every shader starts at the full clock there (not measured on the Plus yet; the RG DS numbers above scale
+  # to ~7 ms per frame for lcd1x-nds-color at 800 MHz)
+  PANEL=; for m in /sys/class/drm/card*-DSI-*/modes; do read -r PANEL < "$m" 2>/dev/null && [ -n "$PANEL" ] && break; done
+  BIG=; [ "${PANEL%%x*}" -gt 640 ] 2>/dev/null && BIG=1
   case "${DSHOOK_SHADER:-none}" in
     none|bilinear) GOV=powersave; MIN= ;;
     # ds-fsr (FSR 1.0) needs ~9.5 ms of GPU per frame: under simple_ondemand it sat at 800 MHz 97% of the time
     # and dropped frames while ramping up from the floor at the start, so it gets the full clock from the start
     ds-fsr) GOV=${DSFLIP_SHADER_GOV:-performance}; MIN=$DSFLIP_SHADER_GPU_MIN ;;
-    *) GOV=${DSFLIP_SHADER_GOV:-simple_ondemand}; MIN=${DSFLIP_SHADER_GPU_MIN:-400000000} ;;
+    *) if [ -n "$BIG" ]; then GOV=${DSFLIP_SHADER_GOV:-performance}; MIN=$DSFLIP_SHADER_GPU_MIN
+       else GOV=${DSFLIP_SHADER_GOV:-simple_ondemand}; MIN=${DSFLIP_SHADER_GPU_MIN:-400000000}; fi ;;
   esac
+  [ -n "$BIG" ] && [ "$DSHOOK_SHADER" = ds-fsr ] &&
+    echo "note: ds-fsr costs ~2.5x more at ${PANEL} (~24 ms per frame, estimated): expect dropped frames; ds-crisp is exact 4x here"
   [ -n "$GPU_GOV" ] && { echo "$GPU_GOV" > /tmp/dsflip-gpu-governor; echo "$GPU_MIN" > /tmp/dsflip-gpu-min; echo $GOV > $GPU/governor 2>/dev/null; [ -n "$MIN" ] && echo $MIN > $GPU/min_freq 2>/dev/null; }
   rm -f $STATE $NOTICE
   cd $D

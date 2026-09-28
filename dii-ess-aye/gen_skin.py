@@ -369,12 +369,13 @@ logo = open(os.path.join(HERE, "rocknix_logo.paths")).read()
 logo = logo.replace('fill="RED"', 'fill="url(#rk)"').replace('fill="GREY"', 'fill="url(#nx)"')
 logo_defs = f'<defs>{grad("rk", [(0, "#ff6b6b"), (1, "#e8403f")])}{grad("nx", [(0, "#f2f3f5"), (1, "#c9ccd1")])}</defs>'
 # top: logo 400 px wide (native 500 x ~95) centred at y 205, device name, divider
-write("../splash/splash_top.svg", 640, 480, base + f'''
+for fn, device in (("splash_top.svg", "Anbernic RG DS"), ("splash_top_plus.svg", "Anbernic RG DS Plus")):
+    write("../splash/" + fn, 640, 480, base + f'''
 {logo_defs}
 <ellipse cx="320" cy="200" rx="300" ry="120" fill="url(#glow)"/>
 <g transform="translate({320 - WW * (540 / WW) / 2:.2f} {200 - WH * (540 / WW) / 2:.2f}) scale({540 / WW:.5f})">{WIDE}</g>
 <path d="M200,288 H440" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
-{glyph_run("Anbernic RG DS", 320, 320, 15, "#a9afb8")}''')
+{glyph_run(device, 320, 320, 15, "#a9afb8")}''')
 # bottom: the DS card (100x104, drawn 1.6x) with the logo on its label, in the selection frame; Loading + dots
 card = open(os.path.join(OUT, "game_slot.svg")).read().split(">", 1)[1].rsplit("</svg>", 1)[0]
 ls = 62 / SW   # stacked logo 62 px wide on the 76 px label

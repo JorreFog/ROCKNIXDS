@@ -162,26 +162,31 @@ static void draw_text(canvas *c, const char *t, float x, int y, float px, uint32
 }
 
 /* ---------- the two layouts ---------- */
+/* laid out in the RG DS's 640 px panel units; the overlay is as wide as the top panel, so on the Plus (1024) every
+ * size is scaled by 1.6 and the card looks the same, drawn at the panel's full resolution */
+static float ui_s = 1.0f;
+static int S(float v) { return (int)lroundf(v * ui_s); }
+
 static void render_popup(canvas *c, const popup *p) {
-    int x0 = 8, y0 = 4, x1 = c->w - 8, y1 = c->h - 4;
-    fill_rrect(c, x0, y0, x1, y1, 12, 0x1b1d21, 0.95f);
-    stroke_rrect(c, x0, y0, x1, y1, 12, 0x464a52, 1.0f);
-    int tx = x0 + 18;
-    if (p->badge) { draw_image(c, p->badge, p->bw, p->bh, x0 + 6, y0 + 6, (y1 - y0) - 12, 8); tx = x0 + (y1 - y0) + 8; }
-    else fill_rrect(c, x0 + 6, y0 + 10, x0 + 10, y1 - 10, 2, p->accent, 1.0f);   /* accent bar */
-    float maxw = (float)(x1 - 14 - tx);
-    draw_text(c, p->l1, (float)tx, y0 + 25, 19.0f, p->accent, maxw);
-    draw_text(c, p->l2, (float)tx, y0 + 52, 22.0f, 0xf2f3f5, maxw);
+    int x0 = S(8), y0 = S(4), x1 = c->w - S(8), y1 = c->h - S(4);
+    fill_rrect(c, x0, y0, x1, y1, 12 * ui_s, 0x1b1d21, 0.95f);
+    stroke_rrect(c, x0, y0, x1, y1, 12 * ui_s, 0x464a52, 1.0f);
+    int tx = x0 + S(18);
+    if (p->badge) { draw_image(c, p->badge, p->bw, p->bh, x0 + S(6), y0 + S(6), (y1 - y0) - S(12), 8 * ui_s); tx = x0 + (y1 - y0) + S(8); }
+    else fill_rrect(c, x0 + S(6), y0 + S(10), x0 + S(10), y1 - S(10), 2 * ui_s, p->accent, 1.0f);   /* accent bar */
+    float maxw = (float)(x1 - S(14) - tx);
+    draw_text(c, p->l1, (float)tx, y0 + S(25), 19.0f * ui_s, p->accent, maxw);
+    draw_text(c, p->l2, (float)tx, y0 + S(52), 22.0f * ui_s, 0xf2f3f5, maxw);
 }
 
 static void render_pill(canvas *c) {
-    float tw = text_width(prog_text, 20.0f, 64);
-    int h = 40, bs = prog_badge ? 30 : 0, w = 14 + bs + (bs ? 8 : 0) + (int)ceilf(tw) + 14;
-    int x1 = c->w - 8, x0 = x1 - w, y0 = 4, y1 = y0 + h;
-    fill_rrect(c, x0, y0, x1, y1, 20, 0x1b1d21, 0.92f);
-    stroke_rrect(c, x0, y0, x1, y1, 20, 0x464a52, 1.0f);
-    if (prog_badge) draw_image(c, prog_badge, prog_bw, prog_bh, x0 + 8, y0 + 5, bs, 6);
-    draw_text(c, prog_text, (float)(x0 + 14 + bs + (bs ? 2 : 0)), y0 + 27, 20.0f, 0xf2f3f5, tw + 2);
+    float tw = text_width(prog_text, 20.0f * ui_s, 64);
+    int h = S(40), bs = prog_badge ? S(30) : 0, w = S(14) + bs + (bs ? S(8) : 0) + (int)ceilf(tw) + S(14);
+    int x1 = c->w - S(8), x0 = x1 - w, y0 = S(4), y1 = y0 + h;
+    fill_rrect(c, x0, y0, x1, y1, 20 * ui_s, 0x1b1d21, 0.92f);
+    stroke_rrect(c, x0, y0, x1, y1, 20 * ui_s, 0x464a52, 1.0f);
+    if (prog_badge) draw_image(c, prog_badge, prog_bw, prog_bh, x0 + S(8), y0 + S(5), bs, 6 * ui_s);
+    draw_text(c, prog_text, (float)(x0 + S(14) + bs + (bs ? S(2) : 0)), y0 + S(27), 20.0f * ui_s, 0xf2f3f5, tw + 2);
 }
 
 static void render(void) {                            /* with mx held */
@@ -192,6 +197,7 @@ static void render(void) {                            /* with mx held */
     if (show) {
         for (int y = 0; y < h; y++) memset((char *)px + y * pitch, 0, (size_t)w * 4);
         canvas c = { px, pitch, w, h };
+        ui_s = w / 640.0f;
         if (qn) render_popup(&c, &q[0]); else render_pill(&c);
     }
     dsflip_overlay_end(show);

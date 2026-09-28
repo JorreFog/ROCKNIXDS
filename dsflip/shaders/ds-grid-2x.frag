@@ -19,6 +19,10 @@
 // classic integer-scaling trade and it is the only way to get an authentic, even LCD
 // grid out of a 2.5x panel.
 //
+// The scale is the largest whole number that fits: 2x (bordered) on the RG DS, 4x (the whole 1024x768 panel,
+// no border) on the RG DS Plus. libdsflip maps touch into the same rectangle:
+// dsflip-viewport: integer
+//
 // Scaling is plain nearest, which is exact here -- at an integer ratio there is nothing
 // to reconstruct, so there is no blending, no wobble and no shimmer.
 //

@@ -27,7 +27,10 @@ if [ -f /tmp/dsflip-vt ]; then
     chvt "${VT:-1}"
     if wait_outputs; then
         S=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
-        [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" '[app_id="emulationstation"] floating enable, fullscreen disable, resize set 1920 480, move absolute position 0 0' >/dev/null 2>&1
+        # the theme's canvas: three panels wide (1920x480 on the RG DS, 3072x768 on the RG DS Plus)
+        PANEL=; for m in /sys/class/drm/card*-DSI-*/modes; do read -r PANEL < "$m" 2>/dev/null && [ -n "$PANEL" ] && break; done
+        case "$PANEL" in [0-9]*x[0-9]*) ;; *) PANEL=640x480 ;; esac
+        [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" "[app_id=\"emulationstation\"] floating enable, fullscreen disable, resize set $((${PANEL%%x*} * 3)) ${PANEL#*x}, move absolute position 0 0" >/dev/null 2>&1
     else
         echo "$(date) sway has no outputs after the VT switch: restarting it"
         systemctl restart sway.service; wait_outputs

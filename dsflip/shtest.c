@@ -1,5 +1,5 @@
 // shtest.c: runs shader.c outside DraStic (no DRM master needed): a test image through a shader into a
-// panel-sized dumb buffer, written as PPM. shtest <shader> <srcw> <srch> <out.ppm>
+// panel-sized dumb buffer, written as PPM. shtest <shader> <srcw> <srch> <out.ppm>   (env OUT=WxH: panel size, 640x480)
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -29,6 +29,7 @@ static buf mk(int w, int h) {
 int main(int argc, char **argv) {
     if (argc < 5) return 2;
     int sw = atoi(argv[2]), sh = atoi(argv[3]), dw = 640, dh = 480;
+    if (getenv("OUT")) sscanf(getenv("OUT"), "%dx%d", &dw, &dh);   /* OUT=1024x768: the RG DS Plus's panel (shader cost there) */
     fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
     fprintf(stderr, "init...\n");
     shader_copy_mode = getenv("COPY") != 0;
