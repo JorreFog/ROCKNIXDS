@@ -1,0 +1,4 @@
+#!/bin/sh
+# ROCKNIXDS: the menus' CPU governor (see menu-power.sh). Runs at boot.
+[ -x /storage/.config/drastic/dsflip/menu-power.sh ] && /storage/.config/drastic/dsflip/menu-power.sh
+exit 0

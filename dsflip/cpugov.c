@@ -139,7 +139,7 @@ static void *gov_thread(void *a) {
         }
         else if (fps < 58.5 && fps > 5 && umax > 0.5) { why = "slow"; if (want <= cur) want = fit(cur + 1); }   /* +1 step */
         if (why && want > cur) { set_clock(want, why, umax, fps); low = 0; }
-        else if (want < cur) { if (++low >= DOWN_AFTER) { set_clock(step_down(cur), "light", umax, fps); low = 0; } }
+        else if (want < cur && fps >= 59) { if (++low >= DOWN_AFTER)   /* never while below full speed */ { set_clock(step_down(cur), "light", umax, fps); low = 0; } }
         else low = 0;
         if (verbose) dsflip_log("[cpugov] window: busiest %.0f%% peak frame %.0f%% fps %.1f drops %d at %d MHz, fits %d\n",
                                 umax * 100, peak * 100, fps, dropped, cur / 1000, want / 1000);

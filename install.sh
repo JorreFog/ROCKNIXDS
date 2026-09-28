@@ -112,7 +112,10 @@ if [ $UNINSTALL = 1 ]; then
         [ -f $ESF ] && sed -i -E '/value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"/d' $ESF   # our shader entries
     fi
     rm -f /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
-    rmdir /storage/.config/emulationstation/scripts/theme-changed /storage/.config/emulationstation/scripts 2>/dev/null
+    rm -f /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh /storage/.config/autostart/rocknixds-menu-power
+    echo performance > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor 2>/dev/null   # ROCKNIX's menu governor
+    rmdir /storage/.config/emulationstation/scripts/theme-changed /storage/.config/emulationstation/scripts/game-end \
+          /storage/.config/emulationstation/scripts 2>/dev/null
     rm -f $VERSION_FILE /storage/.config/rocknixds-es-notice /storage/.config/rocknixds-stock-es /storage/.config/rocknixds-any-rocknix
     if [ -e $BACKUP/.had-no-launcher-wrapper ] && [ -e $DRASTIC/drastic.real ]; then
         rm -f $DRASTIC/drastic $DRASTIC/drastic.dvsync; mv $DRASTIC/drastic.real $DRASTIC/drastic   # stock layout again
@@ -212,7 +215,7 @@ if [ $DSFLIP_ON = 1 ]; then
     mkdir -p $WORK/dsflip
     cp "$SRC/dsflip/libdsflip.so" "$SRC/dsflip/device/session.sh" "$SRC/dsflip/device/restore.sh" \
        "$SRC/dsflip/device/drastic-wrapper.sh" "$SRC/dsflip/device/install.sh" "$SRC/dsflip/device/es-features.sh" \
-       "$SRC/dsflip/device/fast-switch" "$SRC/dsflip/device/playstats.py" $WORK/dsflip/
+       "$SRC/dsflip/device/fast-switch" "$SRC/dsflip/device/playstats.py" "$SRC/dsflip/device/menu-power.sh" $WORK/dsflip/
     sh $WORK/dsflip/install.sh
 
     # DS-pixel-aware shaders for DraStic (sharp and LCD-grid looks that work at 1x and 2x) + their ES entries
@@ -231,6 +234,12 @@ if [ $DSFLIP_ON = 1 ]; then
     mkdir -p /storage/.config/autostart
     cp "$SRC/dsflip/device/autostart-rocknixds-es-features" /storage/.config/autostart/rocknixds-es-features
     chmod +x /storage/.config/autostart/rocknixds-es-features
+    # the menus on schedutil instead of ROCKNIX's performance (menu-power.sh): at boot and after every game
+    cp "$SRC/dsflip/device/autostart-rocknixds-menu-power" /storage/.config/autostart/rocknixds-menu-power
+    mkdir -p /storage/.config/emulationstation/scripts/game-end
+    cp "$SRC/dsflip/device/game-end-menu-power.sh" /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh
+    chmod +x /storage/.config/autostart/rocknixds-menu-power /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh
+    $DRASTIC/dsflip/menu-power.sh
 fi
 
 # ---- hires 3D ----------------------------------------------------------------------------------------

@@ -179,6 +179,19 @@ PipeWire costs ~9% of a core (a `data-loop` thread inside DraStic + pipewire's o
 heavier games, so libdsflip gets its own governor (`cpugov.c`): the lowest clock at which DraStic's busiest thread
 stays under 65%, up at once, down after 2 s.
 
+**Done so far (2026-09-28, on `beta`):**
+- `cpugov.c` (see above), tuned on real play: average load alone let single frames run late (fixed ds-crisp caps:
+  1416 MHz 0.24-0.44 drops/s, 1104 MHz 0.26-0.90, vs 0.00-0.04 at 1992), so it also watches the heaviest frame, the
+  frame rate over 1 s and the queue's drops, and keeps away for 30 s from a clock that dropped a frame. Result:
+  ds-crisp 1660 MHz average at 0.04 drops/s, no shader 1729 MHz at 0.09; the 3D stress ROM's heavy levels 51.4 fps
+  (fixed 1992: 51.0), where it goes to 1992 and stays. Heavier games get the full clock, lighter ones less.
+- Shaders import DraStic's frames (no upload), see section 6.
+- The menus: ROCKNIX leaves the CPU at `performance` in ES (nothing applies a governor at boot, and its launcher
+  sets performance after every game; `system.cpugovernor` is the games' default, not the menus'). `menu-power.sh`
+  puts the menus on schedutil at boot, after every ES game (game-end script) and after DS sessions (restore.sh).
+  Verified: after a launch the governor read performance in the hook and schedutil after it.
+  `touch /storage/.config/rocknixds-menu-performance` keeps ROCKNIX's behaviour.
+
 Found on the way: ROCKNIX's `powerstate` service re-applies a GPU profile whenever the battery status flips
 (charger plugged/unplugged, or a weak charger flapping), which overrode the session's GPU clock mid-game; session.sh
 now puts it back (7e2ff35). ES idle in the menu: CPU at 1992 MHz by the `performance` setting (schedutil: 763 MHz

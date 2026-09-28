@@ -17,6 +17,7 @@ if [ -s /tmp/dsflip-cpu-max ]; then                  # the CPU clock limit libds
     cat /tmp/dsflip-cpu-max > /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq 2>/dev/null
     rm -f /tmp/dsflip-cpu-max
 fi
+[ -x /storage/.config/drastic/dsflip/menu-power.sh ] && /storage/.config/drastic/dsflip/menu-power.sh   # the menus' governor
 sway_has_outputs() {
     SOCK=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
     [ -n "$SOCK" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$SOCK" -t get_outputs 2>/dev/null | grep -q '"active": true'
