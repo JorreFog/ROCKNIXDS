@@ -8,6 +8,14 @@
 <p align="center"><b>Full-speed 2× DraStic and a DSi-style dual-screen frontend for the Anbernic RG DS on ROCKNIX.</b></p>
 
 <p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/img/demo-dark.webp">
+    <img src="docs/img/demo-light.webp" width="372" alt="Animation: the DSi-style menu scrolling through systems and the DS game list on both screens, then Pokémon HeartGold resuming where it was quit (a 'Resumed where you left off' pop-up) and the player walking">
+  </picture>
+</p>
+<p align="center"><sub>Recorded on the device: the menu and game list, then HeartGold picking up where the exit hotkey left it (new in 1.5).</sub></p>
+
+<p align="center">
   <img src="docs/img/es-home-ds.png" width="265" alt="Main menu: the selected system with its icon, counts and play stats on the top screen, system carousel on the bottom">
   <img src="docs/img/es-games-ds.png" width="265" alt="Game list: 3D box, screenshot and RetroAchievements progress on top, real DS cartridges on the bottom">
   <img src="docs/img/gameplay-hires-ds.png" width="265" alt="Pokémon HeartGold at 2x internal resolution on both panels">
