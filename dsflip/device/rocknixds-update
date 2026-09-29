@@ -1,0 +1,51 @@
+#!/bin/sh
+# rocknixds-update check|install|notify -- ROCKNIXDS updates, from EmulationStation (UPDATES & DOWNLOADS > ROCKNIXDS)
+# and the rocknixds-update-check timer.
+#   check    one line: "UPDATE <what>" when the channel has something newer than what's installed, else a message
+#   install  runs the channel's installer in its own unit (it stops the menu and brings it back when it's done)
+#   notify   check, and pop up a notification in the menu once per new update (the timer; off with the menu switch)
+# Channel: rocknixds.channel in system.cfg, "stable" (the latest release) or "beta" (the beta branch). What's
+# installed: /storage/.config/rocknixds/installed-id, written by install.sh (a release tag or a beta commit).
+REPO=JorreFog/ROCKNIXDS
+CFG=/storage/.config/system/configs/system.cfg
+STATE=/storage/.config/rocknixds
+setting() { grep "^$1=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2-; }
+CH=$(setting rocknixds.channel); [ "$CH" = beta ] || CH=stable
+
+latest() {  # "<id> <label>": the latest release's tag (stable) or the beta branch's newest commit
+    if [ $CH = stable ]; then
+        t=$(curl -fsSL --max-time 15 https://api.github.com/repos/$REPO/releases/latest 2>/dev/null |
+            sed -n 's/^ *"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)
+        [ -n "$t" ] && echo "$t ROCKNIXDS ${t#v}"
+    else
+        c=$(curl -fsSL --max-time 15 https://api.github.com/repos/$REPO/commits/beta 2>/dev/null |
+            sed -n 's/^  "sha": *"\([0-9a-f]*\)".*/\1/p' | head -n1)
+        [ -n "$c" ] && echo "$c ROCKNIXDS beta $(echo $c | cut -c1-7)"
+    fi
+}
+
+case "$1" in
+check|notify)
+    l=$(latest)
+    [ -n "$l" ] || { echo "COULDN'T REACH GITHUB: CHECK THE NETWORK"; exit 1; }
+    id=${l%% *} label=${l#* }
+    if [ "$id" = "$(cat $STATE/installed-id 2>/dev/null)" ]; then echo "ROCKNIXDS IS UP TO DATE ($label)"; exit 0; fi
+    if [ "$1" = notify ]; then
+        [ "$(setting rocknixds.autocheck)" = 0 ] && exit 0
+        [ "$(cat $STATE/notified-id 2>/dev/null)" = "$id" ] && exit 0          # once per update
+        # the menu's API; unreachable while a game runs: tried again at the next check
+        curl -fs --max-time 5 -X POST --data-binary "$label is available: Updates & downloads > ROCKNIXDS" \
+            http://localhost:1234/notify >/dev/null 2>&1 && echo "$id" > $STATE/notified-id
+    fi
+    echo "UPDATE $label"
+    ;;
+install)
+    B=main; [ $CH = beta ] && B=beta
+    systemctl is-active -q rocknixds-update && { echo "AN UPDATE IS ALREADY RUNNING"; exit 1; }
+    systemd-run --quiet --unit=rocknixds-update --collect sh -c \
+        "curl -fsSL https://raw.githubusercontent.com/$REPO/$B/install.sh | RGDS_BRANCH=$B sh > /storage/rocknixds-update.log 2>&1"
+    echo "STARTED"
+    ;;
+*)
+    echo "usage: rocknixds-update check|install|notify" >&2; exit 2 ;;
+esac

@@ -36,6 +36,16 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 
 ### New in 1.5 (beta)
 
+- **Settings that break ROCKNIXDS are gone from the menus:** the dual-screen layout options, the CPU/GPU governors,
+  the GPU driver, video mode and rotation, DTB overlays, the developer options, factory reset and the emulator-config
+  reset, and the DS system's emulator choice (DS games run on ROCKNIXDS's DraStic only). Development: `touch
+  /storage/.config/rocknixds/unlocked` and restart the menu to see everything.
+- **Updates from the menu:** *Updates & downloads > ROCKNIXDS* shows the installed version, the channel (stable
+  releases or beta), checks and installs; a timer checks every 6 hours and pops up a notification once per new
+  update (switch it off there). ROCKNIX's own OS updates are hidden: a new ROCKNIX can need a new ROCKNIXDS.
+- **A second theme, [canvas-ds](https://github.com/toniremi/canvas-ds)** by toniremi (made for the RG DS's two
+  screens), downloaded from upstream at a verified version (`--no-canvas` skips the ~180 MB). Only verified themes
+  can be picked.
 - **Pick up where you left off.** The exit hotkey now saves your place (a savestate of its own, never one of your
   slots) and quits; the next start of that game resumes there, once. ES: the DS system's or game's *resume on quit*
   option (on by default). Quitting from DraStic's own menu doesn't save. A resume state older than the game's own save
@@ -324,6 +334,14 @@ Standalone DraStic has no RetroAchievements support, so `libdsflip` brings its o
 - **Softcore only.** Hardcore needs savestates, cheats and fast-forward locked, which can't be enforced
   from outside DraStic.
 
+### Watching real play: `tools/rgds-monitor.py`
+
+On a PC: `python3 tools/rgds-monitor.py <device ip>` (remembered after the first time; `RGDS_SSH="<ssh command>"`
+for a wrapper). A live view over ssh of the game, fps and dropped frames, frame pacing, CPU and GPU clocks and load,
+DraStic's own CPU use, temperatures and battery; it reconnects on its own. Everything is logged to `~/rgds-logs/`:
+a file per day and one per game session with a summary at its end (`rgds-monitor.py report <file>`). `--no-ui`
+logs without the live view. The device side only reads files, so it doesn't change what it measures.
+
 ### How it was measured
 
 These tools are in SuperDrastic's [`tools/`](https://github.com/JorreFog/SuperDrastic/tree/main/tools) now; `stressrom/` is in both.
@@ -433,6 +451,9 @@ the top panel, the bottom panel, and an unused third.
     ScreenScraper scraper work as in stock ES (1.3's menu showed "Unauthenticated", 401).
   - `es-rgds-firstview.patch` (1.5): writes `$RGDS_ES_DRAWN` once ES's first view is complete (three frames drawn, no
     texture still loading), so the launcher shows ES's window then, instead of a fixed second after ES answers.
+  - `es-rgds-lockdown.patch` (1.5): leaves out the settings that break ROCKNIXDS, offers only the themes in
+    `/storage/.config/rocknixds/themes.allow`, and replaces ROCKNIX's OS updater with ROCKNIXDS's (UPDATES &
+    DOWNLOADS > ROCKNIXDS). `touch /storage/.config/rocknixds/unlocked` shows everything again.
   - `es-rgds-powersaver.patch` (1.4): with the power saver on "enhanced" (the installer sets it), an idle menu
     draws nothing; this wakes ES once a minute so the clock and battery stay current, and polls input once per
     frame instead of every millisecond while idle (SDL can't block with a gamepad open: ~760 wake-ups/s -> ~66),

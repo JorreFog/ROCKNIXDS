@@ -1,0 +1,11 @@
+# ROCKNIXDS: a few minutes after boot, then every 6 hours
+[Unit]
+Description=ROCKNIXDS update check
+
+[Timer]
+OnBootSec=4min
+OnUnitActiveSec=6h
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

@@ -8,6 +8,7 @@
 # Options:
 #   --with-60hz     also retune both panels to 60.000 Hz (edits the device tree in /flash; backed up; reboot needed)
 #   --no-theme      skip the theme + patched ES
+#   --no-canvas     skip the second theme, canvas-ds (a ~180 MB download, once)
 #   --no-dsflip     skip libdsflip (keep the stock DraStic display path)
 #   --no-hires      don't switch on hires 3D for Nintendo DS
 #   --uninstall     undo what this installer changed, leaving settings made since the install alone
@@ -20,6 +21,8 @@ set -e
 REPO=JorreFog/ROCKNIXDS
 BRANCH=${RGDS_BRANCH:-main}
 THEME_UPSTREAM=beebono/dii-ess-aye
+CANVAS_UPSTREAM=toniremi/canvas-ds
+CANVAS_COMMIT=ab3ba47ab8                  # the canvas-ds version verified on the RG DS's dual-screen setup
 THEME_COMMIT=9fd5eee                     # the upstream commit the overlay was made against
 ES_THEMES=/storage/.config/emulationstation/themes
 THEME=$ES_THEMES/dii-ess-aye
@@ -31,11 +34,12 @@ WORK=/storage/.rgds-install
 ESF=/storage/.config/emulationstation/es_features.cfg
 VERSION_FILE=/storage/.config/rocknixds-version
 
-WITH_60HZ=0 THEME_ON=1 DSFLIP_ON=1 HIRES_ON=1 UNINSTALL=0 RESTORE_FILES=0
+WITH_60HZ=0 THEME_ON=1 CANVAS_ON=1 DSFLIP_ON=1 HIRES_ON=1 UNINSTALL=0 RESTORE_FILES=0
 for a in "$@"; do
     case $a in
     --with-60hz) WITH_60HZ=1 ;;
     --no-theme) THEME_ON=0 ;;
+    --no-canvas) CANVAS_ON=0 ;;
     --no-dsflip) DSFLIP_ON=0 ;;
     --no-hires) HIRES_ON=0 ;;
     --uninstall) UNINSTALL=1 ;;
@@ -136,10 +140,19 @@ if [ $UNINSTALL = 1 ]; then
         else printf '#!/bin/sh\nexec /storage/.config/drastic/drastic.real "$@"\n' > $DRASTIC/drastic; chmod +x $DRASTIC/drastic; fi
     fi
     [ -e $DRASTIC/dsflip/vt-switch ] && es_del HideWindow      # fast-switch on set it; ROCKNIX's default again
+    # ROCKNIX's DS emulators again (lockdown), while es-features.sh is still there
+    [ -f $DRASTIC/dsflip/es-features.sh ] && sh $DRASTIC/dsflip/es-features.sh --unlock-nds
     rm -rf $DRASTIC/dsflip
     [ -f $BACKUP/.shaders-added ] && while read -r b; do rm -f "$DRASTIC/shaders/$b"; done < $BACKUP/.shaders-added
     [ -e $BACKUP/.esf-created ] && rm -f $ESF $ESF.rocknixds-old
     rm -f /storage/.config/autostart/rocknixds-es-features
+    # lockdown and updates: ROCKNIX's DS emulators and settings menus again
+    systemctl stop rocknixds-update-check.timer 2>/dev/null
+    rm -f /storage/.config/system.d/rocknixds-update-check.service /storage/.config/system.d/rocknixds-update-check.timer \
+          /storage/.config/system.d/timers.target.wants/rocknixds-update-check.timer
+    rmdir /storage/.config/system.d/timers.target.wants 2>/dev/null; systemctl daemon-reload
+    rm -rf /storage/.config/rocknixds
+    [ -e $ES_THEMES/canvas-ds/.rocknixds-commit ] && rm -rf $ES_THEMES/canvas-ds      # the one this installer downloaded
     [ -e $BACKUP/.theme-installed-by-us ] && rm -rf $THEME
     [ -d $BACKUP/theme-previous ] && mv $BACKUP/theme-previous $THEME
     systemctl restart sway.service 2>/dev/null || true; sleep 2
@@ -239,6 +252,26 @@ if [ $THEME_ON = 1 ]; then
     case "$(es_get PowerSaverMode $ES_SETTINGS)" in ""|default) es_set PowerSaverMode enhanced ;; esac
 fi
 
+# ---- canvas-ds: a second dual-screen theme ---------------------------------------------------------------
+# toniremi/canvas-ds (made for ROCKNIX on the RG DS, after dii-ess-aye's layout), downloaded from upstream at the
+# commit verified here: its theme files only (its scripts set up the launcher and sway, which ROCKNIXDS does itself).
+# Only the themes in /storage/.config/rocknixds/themes.allow can be picked (the patched ES), and both are listed.
+if [ $THEME_ON = 1 ] && [ $CANVAS_ON = 1 ]; then
+    C=$ES_THEMES/canvas-ds
+    if [ "$(cat $C/.rocknixds-commit 2>/dev/null)" != $CANVAS_COMMIT ]; then
+        say "Downloading the canvas-ds theme ($CANVAS_UPSTREAM@$CANVAS_COMMIT, ~180 MB, once)"
+        rm -rf $WORK/canvas; mkdir -p $WORK/canvas
+        if curl -fsSL "https://codeload.github.com/$CANVAS_UPSTREAM/tar.gz/$CANVAS_COMMIT" |
+           tar xz -C $WORK/canvas --exclude='*/previews' --exclude='*/customization examples' --exclude='*/scripts'; then
+            [ -d $C ] && [ ! -e $C/.rocknixds-commit ] && backup_once $C      # someone's own copy: keep it
+            rm -rf $C; mv $WORK/canvas/canvas-ds-* $C && echo $CANVAS_COMMIT > $C/.rocknixds-commit
+        else
+            say "canvas-ds couldn't be downloaded: skipped (the install goes on)"
+        fi
+        rm -rf $WORK/canvas
+    fi
+fi
+
 # ---- libdsflip ---------------------------------------------------------------------------------------
 if [ $DSFLIP_ON = 1 ]; then
     say "Installing libdsflip as the default DraStic launcher"
@@ -310,8 +343,33 @@ if [ $WITH_60HZ = 1 ]; then
     NEED_REBOOT=1
 fi
 
+# ---- lockdown and updates ------------------------------------------------------------------------------
+# The patched ES leaves out the settings that break the dual-screen setup or ROCKNIXDS's DraStic, offers only the
+# themes in themes.allow, and its UPDATES & DOWNLOADS menu updates ROCKNIXDS (rocknixds-update) instead of ROCKNIX.
+# DS games run on ROCKNIXDS's DraStic only (es-features.sh keeps es_systems.cfg's nds entry to it, at every boot).
+say "Locking the settings that would break ROCKNIXDS; ROCKNIXDS updates"
+RD=/storage/.config/rocknixds
+mkdir -p $RD
+cp "$SRC/dsflip/device/rocknixds-update" $RD/ && chmod +x $RD/rocknixds-update
+printf 'dii-ess-aye\ncanvas-ds\n' > $RD/themes.allow
+[ -f $SYSCFG ] && sed -i '/^nds\(\[.*\]\)\{0,1\}\.\(emulator\|core\)=/d' $SYSCFG       # a per-game RetroArch/melonDS choice
+[ -f $SYSCFG ] && { grep -q '^rocknixds.channel=' $SYSCFG || set_cfg rocknixds.channel "$([ "$BRANCH" = beta ] && echo beta || echo stable)"
+                    grep -q '^rocknixds.autocheck=' $SYSCFG || set_cfg rocknixds.autocheck 1; }
+cp "$SRC/dsflip/device/rocknixds-update-check.service" "$SRC/dsflip/device/rocknixds-update-check.timer" /storage/.config/system.d/
+mkdir -p /storage/.config/system.d/timers.target.wants
+ln -sf ../rocknixds-update-check.timer /storage/.config/system.d/timers.target.wants/rocknixds-update-check.timer
+systemctl daemon-reload; systemctl start rocknixds-update-check.timer 2>/dev/null
+# what's installed, for the update check: the release tag (main) or the branch's commit (beta)
+if [ -n "$RGDS_SRC" ]; then ID=local
+elif [ "$BRANCH" = main ]; then
+    ID=$(curl -fsSL --max-time 15 https://api.github.com/repos/$REPO/releases/latest 2>/dev/null | sed -n 's/^ *"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)
+else
+    ID=$(curl -fsSL --max-time 15 https://api.github.com/repos/$REPO/commits/$BRANCH 2>/dev/null | sed -n 's/^  "sha": *"\([0-9a-f]*\)".*/\1/p' | head -n1)
+fi
+echo "${ID:-unknown}" > $RD/installed-id; rm -f $RD/notified-id
+
 RGDS_VERSION=$(cat "$SRC/VERSION" 2>/dev/null || echo unknown)
-echo "$RGDS_VERSION" > $VERSION_FILE
+echo "$RGDS_VERSION$([ "$BRANCH" = main ] || echo " ($BRANCH)")" > $VERSION_FILE
 rm -rf $WORK
 es_start
 say "Installed ROCKNIXDS $RGDS_VERSION. Start a DS game from EmulationStation as usual."

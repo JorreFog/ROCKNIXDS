@@ -81,6 +81,21 @@ libdsflip now also lives on its own as [SuperDrastic](https://github.com/JorreFo
   ds-crisp); at 1× it smooths 3D edges (closest sharp filter to the real 2× render) but rounds pixel art. Next: make
   ds-fsr fall back to the ds-crisp path at 2× and label it "for 1×" in ES.
 
+## 6. Lockdown, updates, themes, monitoring (added 2026-09-29)
+
+- **Done:** es-rgds-lockdown.patch (ES): the settings that break the dual-screen setup, the power handling or
+  DraStic are left out (list in the patch; `rocknixds/unlocked` shows them), the theme list offers only
+  `rocknixds/themes.allow`, ROCKNIX's OS updater and theme downloader are hidden. The DS system offers ROCKNIXDS's
+  DraStic only (es-features.sh edits es_systems.cfg at every boot; uninstall puts ROCKNIX's list back). Verified on
+  the device by screenshots of the menus.
+- **Done:** ROCKNIXDS updates: *Updates & downloads > ROCKNIXDS* (version, stable/beta channel, automatic check
+  switch, check now + install) and rocknixds-update-check.timer (4 min after boot, then every 6 h; one notification
+  per update through ES's /notify). install.sh records what it installed (release tag or beta commit).
+- **Done:** canvas-ds (toniremi) as a second dual-screen theme at a pinned commit; the launcher and the theme hook
+  know both dual-screen themes. Known: DS screenshots (both screens side by side) are ~37 px wider than its image box
+  on the top screen, so ~18 px are cut at each side.
+- **Done:** tools/rgds-monitor.py (live stats + per-session logs of real play).
+
 ## 4. Parked branches
 
 - `standalone-wip`: superseded by SuperDrastic.

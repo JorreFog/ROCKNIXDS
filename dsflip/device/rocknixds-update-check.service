@@ -1,0 +1,10 @@
+# ROCKNIXDS: look for a ROCKNIXDS update and notify the menu (rocknixds-update notify; off: the menu's
+# UPDATES & DOWNLOADS > ROCKNIXDS > CHECK FOR UPDATES AUTOMATICALLY)
+[Unit]
+Description=ROCKNIXDS update check
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/storage/.config/rocknixds/rocknixds-update notify

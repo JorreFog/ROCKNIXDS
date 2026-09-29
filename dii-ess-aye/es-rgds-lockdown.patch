@@ -1,0 +1,308 @@
+From 8a897f443a4f0b68a9d0ef8fff86502abc63e5de Mon Sep 17 00:00:00 2001
+From: JorreFog <305496122+JorreFog@users.noreply.github.com>
+Date: Tue, 29 Sep 2026 10:13:39 +0200
+Subject: [PATCH] es-rgds-lockdown: hide settings that break ROCKNIXDS,
+ verified themes only, ROCKNIXDS updates
+
+Leaves out the dual-screen layout options (bottom screen content, display mode, this device is), the
+global and per-DS-system CPU/GPU governors, video mode and screen rotation, multiscreens, the frontend
+developer options, factory reset and the standalone emulator config reset (it wipes DraStic's folder),
+the DS system's emulator choice, the theme downloader and ROCKNIX's own OS updates. The theme list offers
+only the themes in /storage/.config/rocknixds/themes.allow. UPDATES & DOWNLOADS gets a ROCKNIXDS section
+(installed version, stable/beta channel, automatic checks, check now + install) driven by
+/storage/.config/rocknixds/rocknixds-update. touch /storage/.config/rocknixds/unlocked shows everything.
+---
+ es-app/src/guis/GuiMenu.cpp | 108 ++++++++++++++++++++++++++++--------
+ 1 file changed, 84 insertions(+), 24 deletions(-)
+
+diff --git a/es-app/src/guis/GuiMenu.cpp b/es-app/src/guis/GuiMenu.cpp
+index b06e8fb20..03dcb641f 100644
+--- a/es-app/src/guis/GuiMenu.cpp
++++ b/es-app/src/guis/GuiMenu.cpp
+@@ -36,6 +36,23 @@
+ 
+ #include "SystemConf.h"
+ #include "ApiSystem.h"
++
++// ROCKNIXDS: the settings that break the RG DS's dual-screen setup or ROCKNIXDS's DraStic are left out of the menus,
++// the theme list offers only the themes verified on it (rocknixds/themes.allow), and the updates menu updates
++// ROCKNIXDS instead of ROCKNIX. `touch /storage/.config/rocknixds/unlocked` shows everything again (development).
++#define RGDS_DIR "/storage/.config/rocknixds"
++#define RGDS_UPDATER RGDS_DIR "/rocknixds-update"
++static bool rgdsLocked() { return !Utils::FileSystem::exists(RGDS_DIR "/unlocked"); }
++static bool rgdsNds(const std::string& configName) { return rgdsLocked() && Utils::String::startsWith(configName, "nds"); }
++static std::string rgdsRun(const std::string& cmd)   // the command's last line of output
++{
++	std::string last; char buf[512];
++	FILE* p = popen(cmd.c_str(), "r");
++	if (!p) return last;
++	while (fgets(buf, sizeof buf, p)) if (buf[0] != '\n') last = buf;
++	pclose(p);
++	return Utils::String::trim(last);
++}
+ #include "InputManager.h"
+ #include "AudioManager.h"
+ #include "FavoriteMusicManager.h"
+@@ -209,7 +226,7 @@ GuiMenu::GuiMenu(Window *window, bool animate) : GuiComponent(window), mMenu(win
+ 
+ 		if (ApiSystem::getInstance()->isScriptingSupported(ApiSystem::BATOCERASTORE) || ApiSystem::getInstance()->isScriptingSupported(ApiSystem::THEMESDOWNLOADER) ||
+ 			(ApiSystem::getInstance()->isScriptingSupported(ApiSystem::THEBEZELPROJECT) && ApiSystem::getInstance()->isScriptingSupported(ApiSystem::DECORATIONS)) ||
+-			ApiSystem::getInstance()->isScriptingSupported(ApiSystem::UPGRADE))
++			ApiSystem::getInstance()->isScriptingSupported(ApiSystem::UPGRADE) || Utils::FileSystem::exists(RGDS_UPDATER))
+ 			addEntry(_("UPDATES & DOWNLOADS"), true, [this] { openUpdatesSettings(); }, "iconUpdates");
+ 
+ 		addEntry(_("SYSTEM SETTINGS").c_str(), true, [this] { openSystemSettings(); }, "iconSystem");
+@@ -308,7 +325,7 @@ void GuiMenu::openResetOptions()
+ 		}, _("NO"), nullptr));
+ 	});
+ 
+-	s->addEntry(_("RESET STANDALONE EMULATOR CONFIGS TO DEFAULT"), true, [window] {
++	if (!rgdsLocked()) s->addEntry(_("RESET STANDALONE EMULATOR CONFIGS TO DEFAULT"), true, [window] {
+ 	window->pushGui(new GuiMsgBox(window, _("WARNING: STANDALONE EMULATOR CONFIGS WILL RESET TO DEFAULT\n\nNO BACKUP WILL BE CREATED!\n\nRESET STANDALONE EMULATOR CONFIGS TO DEFAULT?"), _("YES"),
+ 		[] {
+ 		Utils::Platform::runSystemCommand("/usr/bin/run \"/usr/bin/factoryreset standalone\"", "", nullptr);
+@@ -340,7 +357,7 @@ void GuiMenu::openResetOptions()
+ 		});
+ 	}
+ 
+-	s->addEntry(_("FACTORY RESET"), true, [window] {
++	if (!rgdsLocked()) s->addEntry(_("FACTORY RESET"), true, [window] {
+ 	window->pushGui(new GuiMsgBox(window, _("WARNING: YOUR DATA AND ALL OTHER CONFIGURATIONS WILL BE RESET TO DEFAULTS!\n\nIF YOU WANT TO KEEP YOUR SETTINGS MAKE A BACKUP AND SAVE IT ON AN EXTERNAL DRIVE BEFORE RUNING THIS OPTION!\n\nEJECT YOUR GAME CARD BEFORE PROCEEDING!\n\nRESET SYSTEM AND RESTART?"), _("YES"),
+ 		[] {
+ 		Utils::Platform::runSystemCommand("/usr/bin/run \"/usr/bin/factoryreset ALL\"", "", nullptr);
+@@ -1291,7 +1308,7 @@ void GuiMenu::openUpdatesSettings(bool selectTorrentService)
+ 	}
+ 
+ 	// Themes installer/browser
+-	if (ApiSystem::getInstance()->isScriptingSupported(ApiSystem::THEMESDOWNLOADER))
++	if (ApiSystem::getInstance()->isScriptingSupported(ApiSystem::THEMESDOWNLOADER) && !rgdsLocked())   // unverified themes
+ 	{
+ 		updateGui->addEntry(_("THEMES"), true, [this]
+ 		{
+@@ -1314,7 +1331,46 @@ void GuiMenu::openUpdatesSettings(bool selectTorrentService)
+ 		});
+ 	}
+ 
+-	if (ApiSystem::getInstance()->isScriptingSupported(ApiSystem::UPGRADE))
++	if (Utils::FileSystem::exists(RGDS_UPDATER))
++	{
++		// ROCKNIXDS updates: the channel and the automatic check are rocknixds.channel / rocknixds.autocheck in
++		// system.cfg, read by rocknixds-update (which the check timer runs too); installing restarts the menu
++		updateGui->addGroup(_("ROCKNIXDS"));
++		auto theme = ThemeData::getMenuTheme();
++		std::string ver = Utils::String::trim(Utils::FileSystem::readAllText("/storage/.config/rocknixds-version"));
++		updateGui->addWithLabel(_("INSTALLED VERSION"), std::make_shared<TextComponent>(mWindow, ver.empty() ? "?" : ver, theme->Text.font, theme->Text.color));
++		auto channel = std::make_shared<OptionListComponent<std::string>>(mWindow, _("UPDATE CHANNEL"), false);
++		std::string ch = SystemConf::getInstance()->get("rocknixds.channel");
++		channel->add(_("STABLE RELEASES"), "stable", ch != "beta");
++		channel->add(_("BETA (TESTING)"), "beta", ch == "beta");
++		updateGui->addWithLabel(_("UPDATE CHANNEL"), channel);
++		updateGui->addSaveFunc([channel] { SystemConf::getInstance()->set("rocknixds.channel", channel->getSelected()); });
++		updateGui->addSwitch(_("CHECK FOR UPDATES AUTOMATICALLY"), "rocknixds.autocheck", false);
++		updateGui->addEntry(_("CHECK FOR UPDATES NOW"), false, [this, channel]
++		{
++			if (!checkNetwork())
++				return;
++			SystemConf::getInstance()->set("rocknixds.channel", channel->getSelected());
++			SystemConf::getInstance()->saveSystemConf();
++			Window* window = mWindow;
++			window->pushGui(new GuiLoading<std::string>(window, _("CHECKING FOR UPDATES"), [](auto gui)
++			{
++				return rgdsRun(RGDS_UPDATER " check");
++			}, [window](std::string result)
++			{
++				if (Utils::String::startsWith(result, "UPDATE "))
++					window->pushGui(new GuiMsgBox(window, _("A ROCKNIXDS UPDATE IS AVAILABLE:") + "\n" + result.substr(7) + "\n\n" +
++						_("INSTALL IT NOW? THE MENU CLOSES WHILE IT INSTALLS AND COMES BACK WHEN IT'S DONE."), _("YES"), []
++					{
++						rgdsRun(RGDS_UPDATER " install");   // detached: the installer restarts the menu
++					}, _("NO"), nullptr));
++				else
++					window->pushGui(new GuiMsgBox(window, result.empty() ? _("COULDN'T CHECK FOR UPDATES") : result, _("OK"), nullptr));
++			}));
++		});
++	}
++
++	if (ApiSystem::getInstance()->isScriptingSupported(ApiSystem::UPGRADE) && !rgdsLocked())   // ROCKNIX OS updates: ROCKNIXDS's updater decides
+ 	{
+ 		updateGui->addGroup(_("SOFTWARE UPDATES"));
+ 
+@@ -1378,7 +1434,7 @@ void GuiMenu::openUpdatesSettings(bool selectTorrentService)
+ 		  }
+ 	}
+ 
+-	if (ApiSystem::getInstance()->isScriptingSupported(ApiSystem::UPGRADEVIATORRENT))
++	if (ApiSystem::getInstance()->isScriptingSupported(ApiSystem::UPGRADEVIATORRENT) && !rgdsLocked())
+ 	{
+ 	  updateGui->addGroup(_("SOFTWARE UPDATES VIA TORRENT"));
+ 
+@@ -1862,7 +1918,7 @@ void GuiMenu::openSystemSettings()
+ 		if (!bottomScreenType->hasSelection())
+ 			bottomScreenType->selectFirstItem();
+ 
+-		s->addWithLabel(_("BOTTOM SCREEN CONTENT"), bottomScreenType);
++		if (!rgdsLocked()) s->addWithLabel(_("BOTTOM SCREEN CONTENT"), bottomScreenType);
+ 		s->addSaveFunc([bottomScreenType]
+ 		{
+ 			if (bottomScreenType->changed())
+@@ -1905,7 +1961,7 @@ void GuiMenu::openSystemSettings()
+         if (!cfound)
+             optionsDisplayModes->add(selectedDisplayMode, selectedDisplayMode, true);
+ 
+-        s->addWithLabel(_("DISPLAY MODE"), optionsDisplayModes);
++        if (!rgdsLocked()) s->addWithLabel(_("DISPLAY MODE"), optionsDisplayModes);
+         s->addSaveFunc([selectedDisplayMode, optionsDisplayModes]
+         {
+             if (optionsDisplayModes->changed())
+@@ -1998,7 +2054,7 @@ void GuiMenu::openSystemSettings()
+ 		for(std::stringstream ss(Utils::Platform::GetShOutput(R"(/usr/bin/device-switch --options)")); getline(ss, a, ' '); ) {
+ 			optionsDeviceSwitch->add(a, a, a == selectedDevice);
+ 		}
+-		s->addWithLabel(_("THIS DEVICE IS"), optionsDeviceSwitch);
++		if (!rgdsLocked()) s->addWithLabel(_("THIS DEVICE IS"), optionsDeviceSwitch);
+ 
+ 		s->addSaveFunc([this, window, devSwitchScript, optionsDeviceSwitch, selectedDevice] {
+ 			if (optionsDeviceSwitch->changed()) {
+@@ -2075,7 +2131,7 @@ void GuiMenu::openSystemSettings()
+ 		optionsFanProfile->add(_("MODERATE"),"moderate", selectedFanProfile == "moderate");
+ 		optionsFanProfile->add(_("AGGRESSIVE"),"aggressive", selectedFanProfile == "aggressive");
+ 		optionsFanProfile->add(_("CUSTOM"),"custom", selectedFanProfile == "custom");
+-		s->addWithLabel(_("COOLING PROFILE"), optionsFanProfile);
++		if (!rgdsLocked()) s->addWithLabel(_("COOLING PROFILE"), optionsFanProfile);
+ 		s->addSaveFunc([this, optionsFanProfile, selectedFanProfile]
+ 		{
+ 			if (optionsFanProfile->changed()) {
+@@ -2100,7 +2156,7 @@ void GuiMenu::openSystemSettings()
+ 	}
+ 	if (!cfound)
+ 		optionsGovernors->add(selectedGovernors, selectedGovernors, true);
+-	s->addWithLabel(_("DEFAULT SCALING GOVERNOR"), optionsGovernors);
++	if (!rgdsLocked()) s->addWithLabel(_("DEFAULT SCALING GOVERNOR"), optionsGovernors);
+ 	s->addSaveFunc([selectedGovernors, optionsGovernors]
+ 	{
+ 		if (optionsGovernors->changed()) {
+@@ -2130,7 +2186,7 @@ void GuiMenu::openSystemSettings()
+ 	if (!selectedGpuGovernorFound)
+ 		optionsGpuGovernors->selectFirstItem(); // Preselect 'default' 
+ 
+-	s->addWithLabel(_("DEFAULT GPU SCALING GOVERNOR"), optionsGpuGovernors);
++	if (!rgdsLocked()) s->addWithLabel(_("DEFAULT GPU SCALING GOVERNOR"), optionsGpuGovernors);
+ 	s->addSaveFunc([selectedGpuGovernor, optionsGpuGovernors]
+ 	{
+ 		if (optionsGpuGovernors->changed()) {
+@@ -2230,7 +2286,7 @@ void GuiMenu::openSystemSettings()
+ 		for(std::stringstream ss(Utils::Platform::GetShOutput(R"(/usr/bin/gpudriver --options)")); getline(ss, a, ' '); ) {
+ 			optionsGpuDriver->add(a, a, a == selectedGpuDriver);
+ 		}
+-		s->addWithLabel(_("GPU DRIVER"), optionsGpuDriver);
++		if (!rgdsLocked()) s->addWithLabel(_("GPU DRIVER"), optionsGpuDriver);   // libdsflip and this ES are built for libmali
+ 		s->addSaveFunc([this, window, gpuDriverScript, optionsGpuDriver, selectedGpuDriver] {
+ 			if (optionsGpuDriver->changed()) {
+ 				Utils::Platform::runSystemCommand(gpuDriverScript + " " + optionsGpuDriver->getSelected(), "", nullptr);
+@@ -2242,7 +2298,7 @@ void GuiMenu::openSystemSettings()
+ 		});
+         }
+ 
+-	if (Utils::FileSystem::exists("/usr/bin/dtb_overlay")) {
++	if (Utils::FileSystem::exists("/usr/bin/dtb_overlay") && !rgdsLocked()) {   // DTB overlays: see dtbOverlayItem
+ 		s->addGroup(_("TWEAKS"));
+ 		dtbOverlayItem(mWindow, s, "undervolt-cpu");
+ 		dtbOverlayItem(mWindow, s, "custom");
+@@ -2415,7 +2471,7 @@ void GuiMenu::openSystemSettings()
+ 	if (ApiSystem::getInstance()->isScriptingSupported(ApiSystem::RESOLUTION))
+ 	{
+ 	    auto videoModeOptionList = createVideoResolutionModeOptionList(mWindow, "es", "resolution");
+-	    s->addWithDescription(_("VIDEO MODE"), _("Sets the display's resolution for emulationstation."), videoModeOptionList);
++	    if (!rgdsLocked()) s->addWithDescription(_("VIDEO MODE"), _("Sets the display's resolution for emulationstation."), videoModeOptionList);
+ 	    s->addSaveFunc([this, videoModeOptionList] { SystemConf::getInstance()->set("es.resolution", videoModeOptionList->getSelected()); });
+ 	}
+ #endif
+@@ -2547,7 +2603,7 @@ void GuiMenu::openSystemSettings()
+ 	optionsRotation->add(_("180 DEGREES"),    "2", selectedRotation == "2");
+ 	optionsRotation->add(_("270 DEGREES"),        "3", selectedRotation == "3");
+ 
+-	s->addWithLabel(_("SCREEN ROTATION"), optionsRotation);
++	if (!rgdsLocked()) s->addWithLabel(_("SCREEN ROTATION"), optionsRotation);
+ 
+ 	s->addSaveFunc([this, optionsRotation, selectedRotation, s]
+ 	{
+@@ -2763,7 +2819,7 @@ void GuiMenu::openSystemSettings()
+ #endif
+ 
+ #ifdef BATOCERA
+-        s->addEntry(_("MULTISCREENS"), true, [this] { openMultiScreensSettings(); });
++        if (!rgdsLocked()) s->addEntry(_("MULTISCREENS"), true, [this] { openMultiScreensSettings(); });
+ #endif
+ 
+ #ifdef BATOCERA
+@@ -3037,7 +3093,7 @@ void GuiMenu::openSystemSettings()
+ 	
+ 	// Developer options
+ 	if (isFullUI) {
+-		s->addEntry(_("FRONTEND DEVELOPER OPTIONS"), true, [this] { openDeveloperSettings(); });
++		if (!rgdsLocked()) s->addEntry(_("FRONTEND DEVELOPER OPTIONS"), true, [this] { openDeveloperSettings(); });
+ 
+ 		// Security
+ 		s->addEntry(_("SECURITY"), true, [this, s]
+@@ -3130,7 +3186,7 @@ void GuiMenu::dtbOverlayItem(Window* mWindow, GuiSettings *s, const std::string
+ 		optionsDtb->add(option, option, option == selectedDtb);
+ 	}
+ 
+-	s->addWithLabel(_(title.c_str()), optionsDtb);
++	if (!rgdsLocked()) s->addWithLabel(_(title.c_str()), optionsDtb);   // DTB overlays can keep the RG DS from booting
+ 
+ 	s->addSaveFunc([this, mWindow, overlayScript, setDtb, optionsDtb] {
+ 	if (optionsDtb->changed()) {
+@@ -3201,7 +3257,7 @@ void GuiMenu::openSystemOptionsConfiguration(Window* mWindow, std::string config
+ 	if (!cfound)
+ 		optionsGovernors->add(selectedGovernors, selectedGovernors, true);
+ 
+-	guiSystemOptions->addWithLabel(_("CPU SCALING GOVERNOR"), optionsGovernors);
++	if (!rgdsNds(configName)) guiSystemOptions->addWithLabel(_("CPU SCALING GOVERNOR"), optionsGovernors);   // ROCKNIXDS sets the clocks for DS games
+ 
+ 	guiSystemOptions->addSaveFunc([configName, selectedGovernors, optionsGovernors]
+ 	{
+@@ -3231,7 +3287,7 @@ void GuiMenu::openSystemOptionsConfiguration(Window* mWindow, std::string config
+ 	if (!selectedGpuGovernorFound)
+ 		optionsGpuGovernors->selectFirstItem(); // Preselect 'default' 
+ 	
+-	guiSystemOptions->addWithLabel(_("GPU SCALING GOVERNOR"), optionsGpuGovernors);
++	if (!rgdsNds(configName)) guiSystemOptions->addWithLabel(_("GPU SCALING GOVERNOR"), optionsGpuGovernors);
+ 	guiSystemOptions->addSaveFunc([configName, selectedGpuGovernor, optionsGpuGovernors]
+ 	{
+ 		if (optionsGpuGovernors->changed()) {
+@@ -5065,8 +5121,12 @@ void GuiMenu::openUISettings()
+ 		auto theme_set = std::make_shared<OptionListComponent<std::string> >(mWindow, _("THEME SET"), false);
+ 
+ 		std::vector<std::string> themeList;
++		std::vector<std::string> allowed;   // ROCKNIXDS: only the themes verified on the RG DS's dual-screen setup
++		if (rgdsLocked())
++			allowed = Utils::String::split(Utils::FileSystem::readAllText(RGDS_DIR "/themes.allow"), '\n', true);
+ 		for (auto it = themeSets.begin(); it != themeSets.end(); it++)
+-			themeList.push_back(it->first);
++			if (allowed.empty() || it->first == selectedSet->first || std::find(allowed.begin(), allowed.end(), it->first) != allowed.end())
++				themeList.push_back(it->first);
+ 
+ 		std::sort(themeList.begin(), themeList.end(), [](const std::string& a, const std::string& b) -> bool { return Utils::String::toLower(a).compare(Utils::String::toLower(b)) < 0; });
+ 
+@@ -6183,7 +6243,7 @@ void GuiMenu::popSpecificConfigurationGui(Window* mWindow, std::string title, st
+ 
+ 		});
+ 
+-		systemConfiguration->addWithLabel(_("Emulator"), emulChoice);
++		if (!rgdsNds(configName)) systemConfiguration->addWithLabel(_("Emulator"), emulChoice);   // DS games: ROCKNIXDS's DraStic only
+ 	}
+ 
+ 	// System settings
+@@ -6203,7 +6263,7 @@ void GuiMenu::popSpecificConfigurationGui(Window* mWindow, std::string title, st
+ 	if (systemData->isFeatureSupported(currentEmulator, currentCore, EmulatorFeatures::videomode))
+ 	{
+ 		auto videoResolutionMode_choice = createVideoResolutionModeOptionList(mWindow, configName);
+-		systemConfiguration->addWithDescription(_("VIDEO MODE"), _("Sets the display's resolution. Does not affect the rendering resolution."), videoResolutionMode_choice);
++		if (!rgdsLocked()) systemConfiguration->addWithDescription(_("VIDEO MODE"), _("Sets the display's resolution. Does not affect the rendering resolution."), videoResolutionMode_choice);
+ 		systemConfiguration->addSaveFunc([configName, videoResolutionMode_choice] { SystemConf::getInstance()->set(configName + ".videomode", videoResolutionMode_choice->getSelected()); });
+ 	}
+ 
+-- 
+2.55.0
+

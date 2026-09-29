@@ -32,12 +32,13 @@ REVEAL_DELAY=1          # stock ES only: after it answers its API, before its wi
                         # top panel is still black (ES hasn't drawn its first view); at 1 s both panels are complete.
                         # The patched ES says when its first view is complete instead ($RGDS_ES_DRAWN).
 
-# Which layout: this theme spans one 1920x480 canvas over both panels. Any other theme is drawn for one 640x480
-# screen, so it gets stock ROCKNIX's layout: ES fullscreen on the top panel, the bottom panel off. (1.3 forced the
-# 1920 canvas on every theme, stretching them over both screens.) theme-changed.sh restarts ES when the choice
-# switches between the two.
+# Which layout: the dual-screen themes (this one and canvas-ds, made for the same layout) span one 1920x480 canvas
+# over both panels. Any other theme is drawn for one 640x480 screen, so it gets stock ROCKNIX's layout: ES fullscreen
+# on the top panel, the bottom panel off. (1.3 forced the 1920 canvas on every theme, stretching them over both
+# screens.) theme-changed.sh restarts ES when the choice switches between the two. Keep the list in sync with it.
+DUAL_THEMES="dii-ess-aye canvas-ds"
 THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
-if [ -z "$THEME_SET" ] || [ "$THEME_SET" = dii-ess-aye ]; then
+if [ -z "$THEME_SET" ] || case " $DUAL_THEMES " in *" $THEME_SET "*) true ;; *) false ;; esac; then
     ES_ARGS="--resolution 1920 480"
     LAYOUT='[app_id="emulationstation"] floating enable, fullscreen disable, move absolute position 0 0'
     OUTPUTS='output DSI-1 power on'

@@ -1,6 +1,8 @@
 #!/bin/sh
 # es-features.sh: puts ROCKNIXDS's ds-* shaders into EmulationStation's DraStic "shader" option, and adds its
-# "resume on quit" option (nds.resume_on_quit, read by session.sh; unset = on).
+# "resume on quit" option (nds.resume_on_quit, read by session.sh; unset = on). It also keeps the DS system on
+# ROCKNIXDS's DraStic: es_systems.cfg's nds entry offers only drastic/drastic-sa (ROCKNIX also lists RetroArch cores
+# and standalone melonDS, which don't use libdsflip). --unlock-nds puts ROCKNIX's list back (uninstall).
 # Run by the installer and at every boot (autostart hook rocknixds-es-features), before ES starts.
 #
 # ES reads /storage/.config/emulationstation/es_features.cfg instead of ROCKNIX's read-only
@@ -14,7 +16,6 @@
 SYS=${ESF_SYSTEM:-/usr/config/emulationstation/es_features.cfg}
 ESF=${ESF_USER:-/storage/.config/emulationstation/es_features.cfg}
 STATE=${ESF_STATE:-/storage/rgds-rocknix-backup}     # the installer's backup dir: .esf-created, .esf-system-md5
-[ -f "$SYS" ] || exit 0
 
 # our choices go at the end of the drastic-sa core's <feature name="shader">, indented like its other choices;
 # any earlier copy of them is dropped first, so this is idempotent. The resume option follows the shader option.
@@ -45,6 +46,33 @@ add_ours() {
         { print }
         END { if (!added) exit 3 }'
 }
+
+# the DS system's emulators: DraStic only (ROCKNIX's own copy of the list when unlocking)
+ESS=${ESS_USER:-/storage/.config/emulationstation/es_systems.cfg}
+ESS_SYS=${ESS_SYSTEM:-/usr/config/emulationstation/es_systems.cfg}
+nds_block() {  # the nds system's <emulators> block from $1
+    awk '/<system>/ { s = 0 } /<name>nds<\/name>/ { s = 1 } s && /<emulators>/ { e = 1 } e { print } e && /<\/emulators>/ { exit }' "$1"
+}
+if [ -f "$ESS" ]; then
+    if [ "$1" = --unlock-nds ]; then nds_block "$ESS_SYS" > "$ESS.block"
+    else
+        ind=$(nds_block "$ESS" | head -n1 | sed 's/<emulators>.*//')
+        { echo "$ind<emulators>"; echo "$ind	<emulator name=\"drastic\">"; echo "$ind		<cores>"
+          echo "$ind			<core default=\"true\">drastic-sa</core>"; echo "$ind		</cores>"; echo "$ind	</emulator>"
+          echo "$ind</emulators>"; } | sed 's/\\t/\t/g' > "$ESS.block"
+    fi
+    if [ -s "$ESS.block" ]; then
+        awk -v blk="$ESS.block" '
+            /<system>/ { s = 0 } /<name>nds<\/name>/ { s = 1 }
+            s && /<emulators>/ { while ((getline l < blk) > 0) print l; skip = 1; next }
+            skip { if (/<\/emulators>/) skip = 0; next }
+            { print }' "$ESS" > "$ESS.new"
+        if cmp -s "$ESS.new" "$ESS"; then rm -f "$ESS.new"; else mv "$ESS.new" "$ESS"; echo "es-features: DS emulators in $ESS ${1:+un}locked"; fi
+    fi
+    rm -f "$ESS.block"
+fi
+[ "$1" = --unlock-nds ] && exit 0
+[ -f "$SYS" ] || exit 0
 
 SRC=$ESF
 if [ -e "$STATE/.esf-created" ]; then
