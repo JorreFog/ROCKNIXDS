@@ -5,6 +5,11 @@
 HERE=$(cd "$(dirname "$0")" && pwd)
 SSH=${RGDS_SSH:-ssh root@${RGDS_HOST:?set RGDS_HOST or RGDS_SSH}}
 TAG=${1:?tag}; SECS=${2:?secs}; shift 2
+# never alongside a real game (hgpower.sh checks too): the run presses keys on the real gamepad, and kmsrun.sh's
+# cleanup would start sway and ES on top of the game's display
+if $SSH 'systemctl is-active -q dsflip-game || pidof drastic.real >/dev/null || pidof drastic >/dev/null'; then
+    echo "power.sh: a game is running on the device: not starting" >&2; exit 3
+fi
 for f in tools/powerprobe.py tools/hgpower.sh tools/padkey.py tools/kmsrun.sh; do
     $SSH "cat > /storage/dsflip/$(basename $f)" < "$HERE/../$f"
 done

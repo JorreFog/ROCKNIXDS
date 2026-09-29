@@ -11,6 +11,11 @@
 # Writes /storage/dsflip/probe/<tag>.json (powerprobe) and <tag>.txt (that plus the frame stats).
 D=/storage/dsflip L=$D/logs CFGD=/storage/.config/drastic P=/storage/dsflip/probe
 TAG=$1 SECS=$2; shift 2
+# never alongside a real game: padkey.py and walker.py write into the real gamepad's evdev node, which every reader
+# sees, so a player's DraStic would get the load-state press (L2) and the walking (it did once)
+if systemctl is-active -q dsflip-game || pidof drastic.real >/dev/null || pidof drastic >/dev/null; then
+    echo "hgpower: a game is running: not starting" >&2; exit 3
+fi
 mkdir -p $P $D/roms
 SS=/storage/roms/savestates/nds
 GAME=hg; for a in "$@"; do case $a in GAME=*) GAME=${a#*=} ;; esac; done
