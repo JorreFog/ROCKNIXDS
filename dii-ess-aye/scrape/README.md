@@ -19,7 +19,9 @@ renders everything the theme shows and pushes it through ES's local HTTP API, wi
 | description, genre, developer, publisher, release date | the bubble and the game list card | `nds-meta.json.gz` (LaunchBox overviews), only where ES has nothing |
 
 Games are matched by name: the ROM's file name (No-Intro style) for libretro, a normalised title for LaunchBox,
-with a fuzzy fallback and a preference for USA/World/Europe releases. Media a game already has is kept unless
+with a fuzzy fallback; retail releases before kiosk demos, betas and the like, then the ROM's own region, then
+USA/World/Europe. A game ES hasn't hashed yet (a newly copied ROM) gets its RetroAchievements ID here: the RA hash
+is computed on the device (rcheevos' DS method) and looked up on RA, so its strip is made in the same run. Media a game already has is kept unless
 `--force`; text fields are only ever filled where empty. `--game <substring>` limits it, `--no-push` and `--dry-run`
 render or list without touching the device, `--no-ra` skips RetroAchievements (it needs the account set up in ES).
 Downloads are cached under `--out` (default `media-out/`).

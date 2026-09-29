@@ -85,25 +85,94 @@ def norm(name):
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]", " ", n)).strip()
 
 
-def region_rank(name):
+REGION_WORDS = {"USA": "USA", "U": "USA", "Europe": "Europe", "E": "Europe", "World": "World", "Japan": "Japan", "J": "Japan",
+                "Australia": "Australia", "Canada": "Canada"}
+# kiosk demos, betas and the like share the retail game's name once the brackets are stripped, and sort first
+# ("(USA) (Demo)" < "(USA, Australia)"): Mario Kart DS got the kiosk demo's box and screenshots
+NON_RETAIL = re.compile(r"\((?:[^)]*\b(?:Demo|Kiosk|Beta|Proto|Prototype|Sample|Preview|Debug|Pirate|Unl|Aftermarket|"
+                        r"Program|Competition|Taikenban|Trial)\b[^)]*)\)", re.I)
+
+
+def own_region(name):
+    """the region a ROM's file name says it is, if any: "(Europe)", "(E)", "(USA, Europe)" ..."""
+    for tag in re.findall(r"\(([^)]*)\)", name):
+        for part in re.split(r"[,\s]+", tag):
+            if part in REGION_WORDS:
+                return REGION_WORDS[part]
+    return None
+
+
+def region_rank(name, prefer=None):
+    """0 for the ROM's own region, then USA, World, Europe, ..."""
+    if prefer and (f"({prefer}" in name or f", {prefer}" in name):
+        return 0
     for i, r in enumerate(REGION_RANK):
         if f"({r}" in name or f", {r}" in name:
-            return i
-    return len(REGION_RANK)
+            return i + 1
+    return len(REGION_RANK) + 1
 
 
 def best_match(wanted, candidates, cutoff=0.82):
-    """candidates: list of display names. Exact normalised match first, then the closest by ratio."""
-    w = norm(wanted)
+    """candidates: list of display names. Exact normalised match first, then the closest by ratio. Among equals:
+    retail releases before demos and betas, then the ROM's own region, then USA, World, Europe, ..."""
+    w, prefer = norm(wanted), own_region(wanted)
+    rank = lambda c: (1 if NON_RETAIL.search(c) else 0, region_rank(c, prefer))
     exact = [c for c in candidates if norm(c) == w]
     if exact:
-        return sorted(exact, key=region_rank)[0], 1.0
-    keyed = {norm(c): c for c in sorted(candidates, key=region_rank, reverse=True)}   # later (better region) wins
+        return sorted(exact, key=rank)[0], 1.0
+    keyed = {norm(c): c for c in sorted(candidates, key=rank, reverse=True)}   # later (better) wins
     close = difflib.get_close_matches(w, list(keyed), n=5, cutoff=cutoff)
     if not close:
         return None, 0
-    pick = sorted(close, key=lambda k: (-difflib.SequenceMatcher(None, w, k).ratio(), region_rank(keyed[k])))[0]
+    pick = sorted(close, key=lambda k: (-difflib.SequenceMatcher(None, w, k).ratio(), rank(keyed[k])))[0]
     return keyed[pick], difflib.SequenceMatcher(None, w, pick).ratio()
+
+
+# ---------- RetroAchievements IDs ----------
+# ES knows a game's RetroAchievements ID only once it has hashed the ROM (its "find all games with achievements"
+# job); a newly copied game has none, so ra-fetch.py skipped it. The RA hash is computed on the device the way
+# rcheevos does it for DS (the first 0x160 header bytes, the ARM9 and ARM7 code and 0xA00 bytes of icon/title, a
+# SuperCard header skipped), RA says which game it belongs to, and ES is given both.
+RA_HASH = r"""
+import hashlib, json, sys
+out = {}
+for p in json.load(sys.stdin):
+    try:
+        f = open(p, "rb"); h = f.read(512); off = 0
+        if h[0:4] == b"\x2e\x00\x00\xea" and h[0xb0:0xb4] == b"\x44\x46\x96\x00":
+            off = 512; f.seek(off); h = f.read(512)
+        u = lambda o: int.from_bytes(h[o:o + 4], "little")
+        if u(0x2c) + u(0x3c) > 16 << 20: raise ValueError("ARM9 + ARM7 code over 16 MB")
+        m = hashlib.md5(h[:0x160])
+        for o, n in ((u(0x20), u(0x2c)), (u(0x30), u(0x3c)), (u(0x68), 0xa00)):
+            f.seek(off + o); m.update(f.read(n))
+        out[p] = m.hexdigest()
+    except Exception as e:
+        out[p] = "error: %s" % e
+print(json.dumps(out))
+"""
+
+
+def fill_cheevos_ids(dev, games):
+    todo = [g for g in games if not int(g.get("cheevosId") or 0)]
+    if not todo:
+        return
+    paths = {g["id"]: g["path"] if g["path"].startswith("/") else "/storage/roms/nds/" + g["path"].lstrip("./") for g in todo}
+    hashes = json.loads(dev.run("python3 -c " + shlex.quote(RA_HASH), data=json.dumps(list(paths.values())).encode()))
+    for g in todo:
+        h = hashes.get(paths[g["id"]], "")
+        if not re.fullmatch(r"[0-9a-f]{32}", h):
+            log(f"  {g['name']}: no RetroAchievements hash ({h or 'not read'})"); continue
+        try:
+            rid = int(json.loads(http(f"https://retroachievements.org/dorequest.php?r=gameid&m={h}")).get("GameID") or 0)
+        except (OSError, ValueError) as e:
+            log(f"  {g['name']}: RetroAchievements lookup failed ({e})"); continue
+        if rid:
+            dev.push_meta(g["id"], {"cheevosHash": h.upper(), "cheevosId": str(rid)})   # upper case, as ES stores it
+            g["cheevosId"] = rid
+            log(f"  {g['name']}: RetroAchievements game {rid} (hash {h})")
+        else:
+            log(f"  {g['name']}: RetroAchievements doesn't know this ROM (hash {h})")
 
 
 # ---------- sources ----------
@@ -157,7 +226,8 @@ def cart_image(index, name, cache):
     match, score = best_match(name, list(index))
     if not match:
         return None, "no LaunchBox entry"
-    cands = sorted(index[match], key=lambda c: (0 if c[1].lower().endswith(".png") else 1,
+    own = {"USA": "North America", "Europe": "Europe", "Japan": "Japan", "Australia": "Australia"}.get(own_region(name) or "")
+    cands = sorted(index[match], key=lambda c: (0 if c[1].lower().endswith(".png") else 1, 0 if own and c[0] == own else 1,
                                                 LB_REGIONS.index(c[0]) if c[0] in LB_REGIONS else len(LB_REGIONS)))
     has_cutout = any(c[1].lower().endswith(".png") for c in cands)
     for region, fn in cands:
@@ -210,6 +280,7 @@ def main():
     ra, ra_info = {}, {}
     if not a.no_ra:
         try:
+            fill_cheevos_ids(dev, games)
             src = open(os.path.join(HERE, "ra-fetch.py"), "rb").read()
             # its output is the per-game summary (or why it failed): show it, a silent failure left old strips in place
             fetched = dev.run("cat > /tmp/ra-fetch.py && rm -rf /tmp/ra && python3 /tmp/ra-fetch.py /tmp/ra 2>&1; "
