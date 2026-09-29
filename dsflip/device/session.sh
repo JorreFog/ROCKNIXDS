@@ -82,6 +82,24 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
     export DSFLIP_RESUME_FILE="$RSTATE" DSFLIP_RESUME_LOAD=$RLOAD
     echo "-USR1 drastic" > /tmp/.process-kill-data    # ROCKNIX's exit hotkey: killall $(cat this); start_drastic.sh set -9
   fi
+  # Power profile (ES: the game's or DS system's "power profile"; unset = balanced). libdsflip's CPU governor picks
+  # the clock within the profile's range; the frame queue trades a refresh of input latency for riding out late
+  # frames, and the wait keeps a full queue from dropping early ones (measured 2026-09-29, Black 2 at 2x, walking:
+  # fixed 1416 MHz with a 2-frame queue + wait 0.07 hitches/s, 1104 MHz 0.13/s; without the wait 0.11-3.2 and 0.73).
+  #   performance: 1104-1992 MHz, 1-frame queue (the lowest latency)
+  #   balanced:    1104-1416 MHz, 2-frame queue + 20 ms wait
+  #   battery:     1104 MHz, 3-frame queue + 20 ms wait (more cover for the late frames a low clock makes)
+  # DSFLIP_* already in the environment (tests, systemctl set-environment) win over the profile.
+  PROF=$(grep -F "nds[\"$GAME\"].power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ -n "$PROF" ] || PROF=$(grep "^nds.power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  case "$PROF" in
+    performance) Q=1 QW=0 CMAX= ;;
+    battery) Q=3 QW=20 CMAX=1104000 ;;
+    *) PROF=balanced Q=2 QW=20 CMAX=1416000 ;;
+  esac
+  export DSFLIP_QUEUE=${DSFLIP_QUEUE:-$Q} DSFLIP_QUEUE_WAIT=${DSFLIP_QUEUE_WAIT:-$QW}
+  [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX}
+  echo "power profile: $PROF (queue $DSFLIP_QUEUE, wait ${DSFLIP_QUEUE_WAIT} ms, CPU max ${DSFLIP_CPU_MAX:-hardware})"
   cd $D
   # no wait for the display: libdsflip retries DRM master itself while seatd lets go of it (~0.4 s after sway)
   SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log \

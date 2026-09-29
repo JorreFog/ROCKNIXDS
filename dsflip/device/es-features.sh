@@ -1,6 +1,7 @@
 #!/bin/sh
 # es-features.sh: puts ROCKNIXDS's ds-* shaders into EmulationStation's DraStic "shader" option, and adds its
-# "resume on quit" option (nds.resume_on_quit, read by session.sh; unset = on). It also keeps the DS system on
+# "resume on quit" option (nds.resume_on_quit, read by session.sh; unset = on) and its "power profile" option
+# (nds.power_profile: balanced, performance or battery; unset = balanced; session.sh). It also keeps the DS system on
 # ROCKNIXDS's DraStic: es_systems.cfg's nds entry offers only drastic/drastic-sa (ROCKNIX also lists RetroArch cores
 # and standalone melonDS, which don't use libdsflip). --unlock-nds puts ROCKNIX's list back (uninstall).
 # Run by the installer and at every boot (autostart hook rocknixds-es-features), before ES starts.
@@ -21,7 +22,7 @@ STATE=${ESF_STATE:-/storage/rgds-rocknix-backup}     # the installer's backup di
 # any earlier copy of them is dropped first, so this is idempotent. The resume option follows the shader option.
 add_ours() {
     grep -vE 'value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"' "$1" | awk '
-        /<feature name="resume on quit"/ { skip = 1 }
+        /<feature name="resume on quit"/ || /<feature name="power profile"/ { skip = 1 }
         skip { if (/<\/feature>/) skip = 0; next }
         /<core name="drastic-sa"/ { core = 1 }
         core && /<\/core>/ { core = 0 }
@@ -40,6 +41,11 @@ add_ours() {
             print fi "<feature name=\"resume on quit\">"
             print ind "<choice name=\"on (save your place on the exit hotkey)\" value=\"1\" />"
             print ind "<choice name=\"off\" value=\"0\" />"
+            print fi "</feature>"
+            print fi "<feature name=\"power profile\">"
+            print ind "<choice name=\"balanced (up to 1416 MHz, +1 frame latency)\" value=\"balanced\" />"
+            print ind "<choice name=\"performance (up to 1992 MHz, lowest latency)\" value=\"performance\" />"
+            print ind "<choice name=\"battery saver (1104 MHz, +2 frames latency)\" value=\"battery\" />"
             print fi "</feature>"
             next
         }
