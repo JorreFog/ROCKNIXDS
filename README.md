@@ -54,7 +54,17 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
   a while a minute of dropped frames (up to 32 a second, at any CPU clock) in about one of ten two-minute runs.
   Gone: 0.01-0.02 drops/s in 200 s HeartGold runs.
 - **The CPU clock remembers each game:** clocks that dropped frames are skipped from the start of the next session
-  instead of being found again by dropping frames.
+  instead of being found again by dropping frames. Only drops that really come from the CPU count: in real play
+  most didn't, and they used to hold the clock at its top for most of a session.
+- **Power profiles.** *Game settings > Per system advanced configuration > Nintendo DS > Power profile* (at the
+  bottom of Game settings), or per game (hold A on it > *Advanced game options*):
+  - *balanced* (the default): CPU up to 1416 MHz, one more frame of queue (+17 ms input latency), and a full queue
+    holds DraStic for a moment instead of dropping a frame;
+  - *performance*: CPU up to 1992 MHz and the shortest queue, for the lowest latency;
+  - *battery saver*: CPU at 1104 MHz, three frames of queue (+33 ms).
+
+  Measured (Black 2 at 2x, walking): 1416 MHz with balanced's queue 0.07 hitches/s and no dropped frames, about
+  what performance gets while averaging ~1570 MHz and going up to 1992.
 - **Back to the menu ~0.5 s sooner** after a DS game, and ROCKNIX's charger watcher no longer starts a process every
   2 s (2.2% -> 0.13% of a core).
 - **The DraStic engine is its own project now: [SuperDrastic](https://github.com/JorreFog/SuperDrastic)**, for any Linux firmware. The installer
