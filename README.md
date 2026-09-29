@@ -340,7 +340,10 @@ On a PC: `python3 tools/rgds-monitor.py <device ip>` (remembered after the first
 for a wrapper). A live view over ssh of the game, fps and dropped frames, frame pacing, CPU and GPU clocks and load,
 DraStic's own CPU use, temperatures and battery; it reconnects on its own. Everything is logged to `~/rgds-logs/`:
 a file per day and one per game session with a summary at its end (`rgds-monitor.py report <file>`). `--no-ui`
-logs without the live view. The device side only reads files, so it doesn't change what it measures.
+logs without the live view. The device side only reads files, so it doesn't change what it measures. While it runs,
+[http://localhost:8765](http://localhost:8765) shows it all live in a browser: charts of the last 5 minutes (fps with the
+dropped frames, frame pacing, CPU and GPU clocks, temperatures, battery current), the events (CPU governor steps,
+sessions) and the logged sessions with their summaries and logs (`--port N`, `--no-web`; it only listens on this PC).
 
 ### How it was measured
 

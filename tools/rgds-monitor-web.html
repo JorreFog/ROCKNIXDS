@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RG DS monitor</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f6f7f9; --card: #ffffff; --ink: #1c1f24; --ink2: #5b6270; --ink3: #8a909c; --line: #e3e6eb; --grid: #eef0f3;
+  --s1: #2f6fd6; --s2: #e07b1f; --bad: #d23c3c; --ok: #2c9a55; --warn: #c98a12;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111317; --card: #1a1d23; --ink: #e8eaee; --ink2: #a7adb8; --ink3: #767d8a; --line: #2a2e36; --grid: #22262d;
+          --s1: #6ea1f5; --s2: #f0a15a; --bad: #f06a6a; --ok: #58c283; --warn: #e3b04a; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--card); }
+header h1 { font-size: 16px; margin: 0; font-weight: 650; }
+.pill { font-size: 12px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--ink2); }
+.pill.ok { color: var(--ok); border-color: var(--ok); } .pill.bad { color: var(--bad); border-color: var(--bad); }
+#game { font-weight: 600; } #gamesub { color: var(--ink2); font-size: 13px; }
+main { padding: 16px; display: grid; gap: 16px; max-width: 1280px; margin: 0 auto; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.kpi, .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.kpi .label { color: var(--ink2); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.kpi .value { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.kpi .sub { color: var(--ink2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 12px; }
+.card h2 { font-size: 13px; margin: 0 0 6px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+.card h2 .read { color: var(--ink2); font-weight: 500; font-variant-numeric: tabular-nums; }
+.legend { display: flex; gap: 12px; font-size: 12px; color: var(--ink2); margin-bottom: 4px; }
+.legend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+canvas { width: 100%; height: 150px; display: block; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 12px; }
+ul.events { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow: auto; font-size: 13px; }
+ul.events li { padding: 4px 0; border-bottom: 1px solid var(--grid); }
+ul.events time { color: var(--ink3); font-variant-numeric: tabular-nums; margin-right: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { color: var(--ink2); font-weight: 500; }
+td.game { white-space: normal; }
+a { color: var(--s1); }
+.tablewrap { overflow-x: auto; }
+@media (max-width: 480px) { .charts, .cols { grid-template-columns: 1fr; } canvas { height: 130px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>RG DS monitor</h1>
+  <span id="conn" class="pill">connecting</span>
+  <div><div id="game">—</div><div id="gamesub"></div></div>
+</header>
+<main>
+  <section class="kpis">
+    <div class="kpi"><div class="label">Frames per second</div><div class="value" id="k-fps">—</div><div class="sub" id="k-fps-sub"></div></div>
+    <div class="kpi"><div class="label">Dropped frames</div><div class="value" id="k-drops">—</div><div class="sub" id="k-drops-sub"></div></div>
+    <div class="kpi"><div class="label">CPU</div><div class="value" id="k-cpu">—</div><div class="sub" id="k-cpu-sub"></div></div>
+    <div class="kpi"><div class="label">GPU</div><div class="value" id="k-gpu">—</div><div class="sub" id="k-gpu-sub"></div></div>
+    <div class="kpi"><div class="label">Temperature</div><div class="value" id="k-temp">—</div><div class="sub" id="k-temp-sub"></div></div>
+    <div class="kpi"><div class="label">Battery</div><div class="value" id="k-bat">—</div><div class="sub" id="k-bat-sub"></div></div>
+  </section>
+  <section class="charts">
+    <div class="card"><h2>Frames per second <span class="read" id="r-fps"></span></h2><canvas id="c-fps"></canvas></div>
+    <div class="card"><h2>Longest frame each second (ms) <span class="read" id="r-pace"></span></h2>
+      <div class="legend"><span><i style="background:var(--s1)"></i>top screen</span><span><i style="background:var(--s2)"></i>bottom screen</span></div><canvas id="c-pace"></canvas></div>
+    <div class="card"><h2>CPU clock (MHz) <span class="read" id="r-cpu"></span></h2>
+      <div class="legend"><span><i style="background:var(--s1)"></i>clock</span><span><i style="background:var(--s2)"></i>limit set by the governor</span></div><canvas id="c-cpu"></canvas></div>
+    <div class="card"><h2>GPU clock (MHz, average over each second) <span class="read" id="r-gpu"></span></h2><canvas id="c-gpu"></canvas></div>
+    <div class="card"><h2>Temperature (°C) <span class="read" id="r-temp"></span></h2>
+      <div class="legend"><span><i style="background:var(--s1)"></i>CPU</span><span><i style="background:var(--s2)"></i>GPU</span></div><canvas id="c-temp"></canvas></div>
+    <div class="card"><h2>Battery current (mA, negative = draining) <span class="read" id="r-bat"></span></h2><canvas id="c-bat"></canvas></div>
+  </section>
+  <section class="cols">
+    <div class="card"><h2>Events</h2><ul class="events" id="events"></ul></div>
+    <div class="card"><h2>Game sessions <span class="read">logged on this PC</span></h2><div class="tablewrap"><table id="sessions"><thead><tr>
+      <th>Started</th><th>Game</th><th>Min</th><th>FPS avg</th><th>Drops/s</th><th>CPU MHz</th><th>Max °C</th><th>mAh</th><th></th></tr></thead><tbody></tbody></table></div></div>
+  </section>
+</main>
+<script>
+"use strict";
+const WINDOW = 300;                       // seconds on screen
+const pts = [];                           // {t, fps, dropped, maxiv, cpu, cpuMax, gpu, tc, tg, ma}
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmtT = t => new Date(t * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"});
+let hover = null;                         // time under the pointer, or null
+
+function point(s) {
+  const tmp = s.temp || {}, b = s.bat || {};
+  return { t: s.t, fps: s.fps, dropped: s.dropped, maxiv: s.maxiv, cpu: s.cpu_mhz, cpuMax: s.cpu_max_mhz,
+           gpu: s.gpu_avg_mhz ?? s.gpu_mhz, tc: tmp.cpu, tg: tmp.gpu, ma: b.ma };
+}
+
+// a line chart over the last WINDOW seconds; series: [{get, color, dash}], refs: [{y, label}]
+function chart(id, series, opt) {
+  const cv = $(id), dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== w * dpr || cv.height !== h * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  if (!pts.length) return;
+  const tEnd = pts[pts.length - 1].t, t0 = tEnd - WINDOW, L = 40, R = 8, T = 6, B = 18;
+  const vis = pts.filter(p => p.t >= t0);
+  let lo = opt.min, hi = opt.max;
+  if (lo === undefined || hi === undefined) {
+    const vals = []; for (const p of vis) for (const s of series) { const v = s.get(p); if (v != null) vals.push(v); }
+    if (!vals.length) return;
+    const mn = Math.min(...vals), mx = Math.max(...vals), pad = Math.max(1, (mx - mn) * 0.15);
+    if (lo === undefined) lo = Math.floor(mn - pad); if (hi === undefined) hi = Math.ceil(mx + pad);
+  }
+  const X = t => L + (t - t0) / WINDOW * (w - L - R), Y = v => T + (1 - (v - lo) / (hi - lo)) * (h - T - B);
+  g.font = "11px system-ui, sans-serif"; g.fillStyle = css("--ink3"); g.strokeStyle = css("--grid"); g.lineWidth = 1;
+  for (let i = 0; i <= 3; i++) {                                // recessive grid + y labels
+    const v = lo + (hi - lo) * i / 3, y = Math.round(Y(v)) + 0.5;
+    g.beginPath(); g.moveTo(L, y); g.lineTo(w - R, y); g.stroke();
+    g.fillText(Math.round(v), 4, y + 4);
+  }
+  for (let m = 0; m <= 5; m++) { const t = tEnd - m * 60; g.fillText(m ? `-${m} min` : "now", X(t) - (m ? 16 : 22), h - 4); }
+  for (const r of opt.refs || []) {                             // reference lines (target frame rate, refresh)
+    if (r.y < lo || r.y > hi) continue;
+    const y = Math.round(Y(r.y)) + 0.5; g.save(); g.setLineDash([4, 4]); g.strokeStyle = css("--ink3");
+    g.beginPath(); g.moveTo(L, y); g.lineTo(w - R, y); g.stroke(); g.restore();
+  }
+  if (opt.marks) {                                              // dropped frames: small ticks along the bottom
+    g.fillStyle = css("--bad");
+    for (const p of vis) if (p.dropped > 0) { const x = X(p.t); g.fillRect(x - 1, h - B - Math.min(14, 3 + p.dropped * 2), 2, Math.min(14, 3 + p.dropped * 2)); }
+  }
+  for (const s of series) {
+    g.strokeStyle = css(s.color); g.lineWidth = 2; g.setLineDash(s.dash ? [5, 4] : []); g.lineJoin = "round";
+    g.beginPath(); let on = false, prevT = null;
+    for (const p of vis) {
+      const v = s.get(p);
+      if (v == null || (prevT !== null && p.t - prevT > 3)) { on = false; if (v == null) continue; }   // gaps stay gaps
+      const x = X(p.t), y = Y(Math.max(lo, Math.min(hi, v)));
+      on ? g.lineTo(x, y) : g.moveTo(x, y); on = true; prevT = p.t;
+    }
+    g.stroke();
+  }
+  g.setLineDash([]);
+  if (hover !== null && hover >= t0) {                          // crosshair at the pointer
+    const x = Math.round(X(hover)) + 0.5; g.strokeStyle = css("--ink3"); g.beginPath(); g.moveTo(x, T); g.lineTo(x, h - B); g.stroke();
+  }
+}
+
+function nearest(t) { let best = null; for (const p of pts) if (best === null || Math.abs(p.t - t) < Math.abs(best.t - t)) best = p; return best; }
+function readouts() {
+  const p = hover !== null ? nearest(hover) : pts[pts.length - 1];
+  if (!p) return;
+  const at = hover !== null ? fmtT(p.t) + ": " : "";
+  $("r-fps").textContent = p.fps != null ? at + p.fps.toFixed(1) + (p.dropped ? `, ${p.dropped} dropped` : "") : "";
+  $("r-pace").textContent = p.maxiv ? at + `${p.maxiv[0].toFixed(1)} / ${p.maxiv[1].toFixed(1)}` : "";
+  $("r-cpu").textContent = p.cpu != null ? at + `${p.cpu} (limit ${p.cpuMax})` : "";
+  $("r-gpu").textContent = p.gpu != null ? at + p.gpu : "";
+  $("r-temp").textContent = p.tc != null ? at + `${p.tc.toFixed(1)} / ${p.tg != null ? p.tg.toFixed(1) : "—"}` : "";
+  $("r-bat").textContent = p.ma != null ? at + p.ma.toFixed(0) : "";
+}
+function drawAll() {
+  chart("c-fps", [{get: p => p.fps, color: "--s1"}], {min: 0, max: 65, refs: [{y: 60}], marks: true});
+  chart("c-pace", [{get: p => p.maxiv && p.maxiv[0], color: "--s1"}, {get: p => p.maxiv && p.maxiv[1], color: "--s2"}], {min: 0, max: 60, refs: [{y: 16.7}, {y: 33.3}]});
+  chart("c-cpu", [{get: p => p.cpu, color: "--s1"}, {get: p => p.cpuMax, color: "--s2", dash: true}], {min: 0, max: 2100});
+  chart("c-gpu", [{get: p => p.gpu, color: "--s1"}], {min: 0, max: 850});
+  chart("c-temp", [{get: p => p.tc, color: "--s1"}, {get: p => p.tg, color: "--s2"}], {});
+  chart("c-bat", [{get: p => p.ma, color: "--s1"}], {refs: [{y: 0}]});
+  readouts();
+}
+for (const id of ["c-fps", "c-pace", "c-cpu", "c-gpu", "c-temp", "c-bat"]) {
+  const cv = $(id);
+  cv.addEventListener("mousemove", e => {
+    if (!pts.length) return;
+    const r = cv.getBoundingClientRect(), tEnd = pts[pts.length - 1].t;
+    hover = tEnd - WINDOW + (e.clientX - r.left - 40) / (r.width - 48) * WINDOW; drawAll();
+  });
+  cv.addEventListener("mouseleave", () => { hover = null; drawAll(); });
+}
+window.addEventListener("resize", drawAll);
+
+function kpis(s) {
+  const g = s.game, sess = s.session, b = s.bat || {}, tmp = s.temp || {};
+  $("game").textContent = g ? (g.name || g.rom) : "In the menu";
+  $("gamesub").textContent = g ? [g.system, g.shader && "shader " + g.shader, sess && "session " + Math.floor((s.t - sess.start) / 60) + ":" + String(Math.floor(s.t - sess.start) % 60).padStart(2, "0")].filter(Boolean).join(" · ") : "";
+  $("k-fps").textContent = s.fps != null ? s.fps.toFixed(1) : "—";
+  $("k-fps-sub").textContent = sess && sess.fps_avg != null ? `session avg ${sess.fps_avg.toFixed(2)} · ${sess.below.toFixed(1)}% of seconds < 59.5` : "";
+  $("k-drops").textContent = sess && sess.seconds ? (sess.drops / sess.seconds).toFixed(3) + "/s" : "—";
+  $("k-drops-sub").textContent = sess ? `${sess.drops} this session` + (s.late != null ? ` · late latches ${s.late}/10 s` : "") : "";
+  $("k-cpu").textContent = s.cpu_mhz + " MHz";
+  $("k-cpu-sub").textContent = `load ${(s.cpu_load || []).map(v => v + "%").join(" ")}` + (s.game_cpu != null ? ` · game ${s.game_cpu}% of a core` : "");
+  $("k-gpu").textContent = (s.gpu_avg_mhz ?? s.gpu_mhz) + " MHz";
+  $("k-gpu-sub").textContent = `now ${s.gpu_mhz} MHz`;
+  $("k-temp").textContent = tmp.cpu != null ? tmp.cpu.toFixed(1) + " °C" : "—";
+  $("k-temp-sub").textContent = tmp.gpu != null ? `GPU ${tmp.gpu.toFixed(1)} °C` : "";
+  $("k-bat").textContent = b.pct != null ? b.pct + "%" : "—";
+  $("k-bat-sub").textContent = `${b.status || ""} · ${b.ma != null ? b.ma.toFixed(0) : "—"} mA · ${b.v != null ? b.v.toFixed(2) : "—"} V`;
+}
+function event(e) {
+  const li = document.createElement("li");
+  li.innerHTML = `<time>${fmtT(e.t)}</time>`; li.appendChild(document.createTextNode(e.text));
+  $("events").prepend(li); while ($("events").children.length > 100) $("events").lastChild.remove();
+}
+function conn(c) { const el = $("conn"); el.textContent = c; el.className = "pill " + (c === "connected" ? "ok" : "bad"); }
+
+async function sessions() {
+  try {
+    const list = await (await fetch("api/sessions")).json(), tb = $("sessions").tBodies[0]; tb.innerHTML = "";
+    for (const s of list) {
+      const tr = document.createElement("tr"), m = s.summary || {};
+      const cells = [new Date(s.start * 1000).toLocaleString([], {month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"}),
+        s.game, m.seconds != null ? Math.round(m.seconds / 60) : "…", m.fps_avg ?? "", m.drops_per_s ?? "", m.cpu_mhz_avg ?? "",
+        m.temp_max ? Math.round(Math.max(...Object.values(m.temp_max))) : "", m.mah_drawn ?? ""];
+      cells.forEach((c, i) => { const td = document.createElement("td"); td.textContent = c; if (i === 1) td.className = "game"; tr.appendChild(td); });
+      const td = document.createElement("td"), a = document.createElement("a"); a.href = "logs/" + encodeURIComponent(s.file); a.textContent = "log"; a.download = s.file;
+      td.appendChild(a); tr.appendChild(td); tb.appendChild(tr);
+    }
+  } catch (e) {}
+}
+
+const es = new EventSource("events");
+es.onmessage = m => {
+  const d = JSON.parse(m.data);
+  if (d.type === "hello") { pts.length = 0; for (const s of d.history) pts.push(point(s)); for (const e of d.events) event(e); if (d.history.length) kpis(d.history[d.history.length - 1]); conn(d.conn); }
+  else if (d.type === "sample") { pts.push(point(d)); while (pts.length && pts[0].t < d.t - WINDOW * 3) pts.shift(); kpis(d); conn(d.conn); }
+  else if (d.type === "event") { event(d); if (d.session) sessions(); }
+  else if (d.type === "conn") conn(d.conn);
+  drawAll();
+};
+es.onerror = () => conn("monitor not running");
+sessions(); setInterval(sessions, 60000);
+</script>
+</body>
+</html>

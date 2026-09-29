@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """rgds-monitor: live stats from an RG DS running ROCKNIXDS, logged per game session (run on a PC).
 
-usage: rgds-monitor.py [host] [--no-ui] [--logdir DIR]
+usage: rgds-monitor.py [host] [--no-ui] [--logdir DIR] [--port N | --no-web]
        rgds-monitor.py report FILE.jsonl...
 
 Connects with ssh and keeps reconnecting (the device sleeping, rebooting or leaving Wi-Fi is fine). The host is
@@ -10,9 +10,12 @@ supplies a password). Once a second: the game, fps and dropped frames, frame pac
 DraStic's own CPU use, temperatures and battery. Every sample is appended to <logdir>/<date>.jsonl; each game
 session gets its own <logdir>/<start>_<game>.jsonl (its samples and libdsflip's log lines as they were written) with
 a summary line at the end. `report` prints the summary of saved sessions. q quits.
+While it runs, http://localhost:8765 shows the same live, with charts of the last 5 minutes, the events and the
+logged sessions (rgds-monitor-web.html, next to this file; it only listens on this PC).
 The device side reads files only (no processes started), so the measuring doesn't change what it measures.
 """
-import curses, json, os, shlex, subprocess, sys, threading, time
+import collections, curses, json, os, queue, shlex, subprocess, sys, threading, time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 COLLECTOR = r'''
 import json, os, sys, time, urllib.request
@@ -170,6 +173,76 @@ def report(files):
         print(p + ":\n  " + (fmt_summary(sess) if sess else "no summary (the session was still running, or the file is a day log)"))
 
 
+class Web:
+    """the live page: GET / (the page), /events (server-sent events: the history, then every sample and event),
+    /api/sessions (the logged sessions and their summaries), /logs/<file> (a session log)"""
+    def __init__(self, port, logdir):
+        self.logdir, self.hist, self.events, self.subs, self.lock = logdir, collections.deque(maxlen=900), collections.deque(maxlen=100), set(), threading.Lock()
+        self.conn = "connecting"
+        page = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rgds-monitor-web.html")
+        self.page = open(page, "rb").read()
+        web = self
+
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+            def send(self, code, body, ctype):
+                self.send_response(code); self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(body)
+            def do_GET(self):
+                path = self.path.split("?")[0]
+                if path == "/": return self.send(200, web.page, "text/html; charset=utf-8")
+                if path == "/api/sessions": return self.send(200, json.dumps(web.sessions()).encode(), "application/json")
+                if path.startswith("/logs/"):
+                    name = os.path.basename(__import__("urllib.parse").parse.unquote(path[6:]))
+                    f = os.path.join(web.logdir, name)
+                    if name.endswith(".jsonl") and os.path.isfile(f): return self.send(200, open(f, "rb").read(), "application/x-ndjson")
+                    return self.send(404, b"not found", "text/plain")
+                if path == "/events":
+                    self.send_response(200); self.send_header("Content-Type", "text/event-stream"); self.send_header("Cache-Control", "no-store"); self.end_headers()
+                    q = queue.Queue(maxsize=600)
+                    with web.lock:
+                        hello = {"type": "hello", "history": list(web.hist), "events": list(web.events), "conn": web.conn}
+                        web.subs.add(q)
+                    try:
+                        self.wfile.write(b"data: " + json.dumps(hello).encode() + b"\n\n"); self.wfile.flush()
+                        while True:
+                            try: msg = q.get(timeout=15)
+                            except queue.Empty: msg = None
+                            self.wfile.write((b"data: " + msg.encode() + b"\n\n") if msg else b": keepalive\n\n"); self.wfile.flush()
+                    except (BrokenPipeError, ConnectionResetError, OSError): pass
+                    finally:
+                        with web.lock: web.subs.discard(q)
+                    return
+                self.send(404, b"not found", "text/plain")
+        self.server = ThreadingHTTPServer(("127.0.0.1", port), H); self.server.daemon_threads = True
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def publish(self, msg, keep=None):
+        data = json.dumps(msg)
+        with self.lock:
+            if keep is not None: keep.append(msg)
+            for q in list(self.subs):
+                try: q.put_nowait(data)
+                except queue.Full: self.subs.discard(q)
+
+    def sessions(self):
+        out = []
+        for name in sorted(os.listdir(self.logdir), reverse=True)[:200]:
+            if not name.endswith(".jsonl") or "_" not in name: continue
+            f = os.path.join(self.logdir, name)
+            try:
+                with open(f, "rb") as fh:
+                    first = json.loads(fh.readline() or b"{}")
+                    fh.seek(max(0, os.path.getsize(f) - 4096)); last = fh.read().splitlines()[-1]
+                summ = json.loads(last) if last else {}
+            except (OSError, ValueError, IndexError): continue
+            g = first.get("game") or {}
+            out.append({"file": name, "start": first.get("t", 0), "game": g.get("name") or g.get("rom") or "?",
+                        "summary": summ if summ.get("summary") else None})
+            if len(out) >= 50: break
+        return out
+
+
 def spark(vals, lo=40, hi=61):
     bars = " ▁▂▃▄▅▆▇█"
     return "".join(bars[max(0, min(8, int((v - lo) / (hi - lo) * 8)))] for v in vals)
@@ -179,6 +252,10 @@ def main():
     args = [a for a in sys.argv[1:]]
     if args and args[0] == "report": return report(args[1:])
     ui = "--no-ui" not in args; args = [a for a in args if a != "--no-ui"]
+    port = 8765
+    if "--port" in args:
+        i = args.index("--port"); port = int(args[i + 1]); del args[i:i + 2]
+    if "--no-web" in args: port = 0; args.remove("--no-web")
     logdir = os.path.expanduser("~/rgds-logs")
     if "--logdir" in args:
         i = args.index("--logdir"); logdir = os.path.expanduser(args[i + 1]); del args[i:i + 2]
@@ -192,6 +269,18 @@ def main():
 
     state = {"conn": "connecting", "sample": None, "st": {}, "fpshist": [], "session": None, "last": None, "quit": False}
     lock = threading.Lock()
+    web = None
+    if port:
+        try:
+            web = Web(port, logdir); url = f"http://localhost:{port}"
+        except OSError as e:
+            url = f"(web page off: port {port}: {e.strerror})"
+    else:
+        url = ""
+    if not ui and url: print("live page: " + url, flush=True)
+
+    def event(t, text, session=False):
+        if web: web.publish({"type": "event", "t": t, "text": text, "session": session}, web.events)
 
     def reader():
         while not state["quit"]:
@@ -206,24 +295,45 @@ def main():
             except OSError:
                 pass
             with lock: state["conn"] = "disconnected: retrying"
+            if web: web.conn = state["conn"]; web.publish({"type": "conn", "conn": state["conn"]})
             time.sleep(3)
 
     def handle(s):
         with lock:
             state["conn"] = "connected"
             st = state["st"]; st["fps_new"] = any(l.startswith("[dsflip] present/s=") for l in s.get("log", []))
+            gov = st.get("cpugov")
             parse_log(s.get("log", []), st)
+            if st.get("cpugov") != gov and st.get("cpugov"): event(s["t"], "CPU governor: " + st["cpugov"])
             if st["fps_new"]: state["fpshist"] = (state["fpshist"] + [st["fps"]])[-60:]
             with open(os.path.join(logdir, time.strftime("%Y-%m-%d") + ".jsonl"), "a") as f: f.write(json.dumps(s) + "\n")
             g, sess = s.get("game"), state["session"]
-            if sess and (not g or g.get("rom") != sess.game.get("rom")):
+            # the game is briefly unseen while ES hands over to DraStic (and while DraStic starts): a session ends
+            # only after 6 s without it, or when another game appears
+            if g: state["seen"] = s["t"]
+            gone = not g and s["t"] - state.get("seen", 0) > 6
+            if sess and (gone or (g and g.get("rom") != sess.game.get("rom"))):
                 state["last"] = fmt_summary(sess.close(s["t"])); state["session"] = sess = None
                 if not ui: print("session ended: " + state["last"], flush=True)
+                event(s["t"], "Session ended: " + state["last"], True)
             if g and not sess:
                 state["session"] = sess = Session(logdir, g, s["t"]); st.clear(); state["fpshist"] = []
                 if not ui: print("session started: " + sess.path, flush=True)
-            if sess: sess.add(s, st)
+                event(s["t"], f"Session started: {g.get('name') or g.get('rom')}" + (f" (shader {g['shader']})" if g.get("shader") else ""), True)
+            if sess and (g or gone): sess.add(s, st)
+            elif sess and not g: sess.add(dict(s, game=sess.game), st)      # the handover gap still belongs to it
             state["sample"] = s
+            if web:
+                web.conn = "connected"
+                msg = dict(s); msg.pop("log", None)
+                msg.update({"type": "sample", "conn": "connected", "late": st.get("late"), "missed": st.get("missed"),
+                            "fps": st.get("fps") if st.get("fps_new") else None, "dropped": st.get("dropped") if st.get("fps_new") else None,
+                            "maxiv": st.get("maxiv") if st.get("fps_new") else None})
+                if sess:
+                    n = len(sess.fps)
+                    msg["session"] = {"start": sess.t0, "drops": sess.drops, "seconds": n, "fps_avg": sum(sess.fps) / n if n else None,
+                                      "below": 100 * sum(1 for v in sess.fps if v < 59.5) / n if n else 0}
+                web.publish(msg, web.hist)
 
     threading.Thread(target=reader, daemon=True).start()
     if not ui:
@@ -240,7 +350,7 @@ def main():
             if scr.getch() in (ord("q"), ord("Q")): break
             with lock:
                 s, st, sess = state["sample"], dict(state["st"]), state["session"]
-                lines = [f"RG DS monitor  {host or 'RGDS_SSH'}  [{state['conn']}]   logs: {logdir}   q quits", ""]
+                lines = [f"RG DS monitor  {host or 'RGDS_SSH'}  [{state['conn']}]   logs: {logdir}   {'live page: ' + url + '   ' if url else ''}q quits", ""]
                 if s:
                     g = s.get("game")
                     gname = (g.get("rom") or g.get("name")) + f"  ({g.get('system')}{', shader ' + g['shader'] if g.get('shader') else ''})" if g else "(menu)"
