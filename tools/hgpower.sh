@@ -4,7 +4,8 @@
 # One power/CPU/GPU measurement of a DS game session, as the player gets it: the INSTALLED libdsflip, GPU clock set
 # the way session.sh sets it, HeartGold from savestate 0, walking (walker.py). An isolated copy of the ROM, the
 # savestate and the save (HGtest.*) is used, so the real save is never written.
-# Options: DSFLIP_SHADER=<name> (default none), CPUGOV=<governor> (default: as configured), CPUMAX=<kHz>,
+# Options: GAME=hg|b2 (HeartGold, default, or Black 2: B2test.*, a heavier game), DSFLIP_SHADER=<name> (default
+#          none), CPUGOV=<governor> (default: as configured), CPUMAX=<kHz>,
 #          GPUGOV=<governor> / GPUMIN=<Hz> (override session.sh's choice), HIRES=0 (1x), LIB=<libdsflip.so to test
 #          instead of the installed one>, any DSFLIP_* variable.
 # Writes /storage/dsflip/probe/<tag>.json (powerprobe) and <tag>.txt (that plus the frame stats).
@@ -12,11 +13,17 @@ D=/storage/dsflip L=$D/logs CFGD=/storage/.config/drastic P=/storage/dsflip/prob
 TAG=$1 SECS=$2; shift 2
 mkdir -p $P $D/roms
 SS=/storage/roms/savestates/nds
-[ -f $D/roms/HGtest.nds ] || cp "/storage/roms/nds/Pokemon - HeartGold Version (USA).nds" $D/roms/HGtest.nds
-cp "$SS/Pokemon - HeartGold Version (USA)_0.dss" $SS/HGtest_0.dss
-cp "/storage/roms/nds/Pokemon - HeartGold Version (USA).dsv" /storage/roms/nds/HGtest.dsv
+GAME=hg; for a in "$@"; do case $a in GAME=*) GAME=${a#*=} ;; esac; done
+case $GAME in
+  b2) SRC="Pokemon Black Version 2 (DSi Enhanced)" TEST=B2test ;;
+  *)  SRC="Pokemon - HeartGold Version (USA)" TEST=HGtest ;;
+esac
+[ -f $D/roms/$TEST.nds ] || cp "/storage/roms/nds/$SRC.nds" $D/roms/$TEST.nds
+cp "$SS/${SRC}_0.dss" $SS/${TEST}_0.dss
+cp "/storage/roms/nds/$SRC.dsv" /storage/roms/nds/$TEST.dsv
 SHADER=none CPUGOV= CPUMAX= GPUGOV= GPUMIN= HIRES= PWRATE= LIB=$CFGD/dsflip/libdsflip.so
 for a in "$@"; do case $a in
+  GAME=*) ;;
   DSFLIP_SHADER=*) SHADER=${a#*=} ;; CPUGOV=*) CPUGOV=${a#*=} ;; CPUMAX=*) CPUMAX=${a#*=} ;;
   GPUGOV=*) GPUGOV=${a#*=} ;; GPUMIN=*) GPUMIN=${a#*=} ;; HIRES=*) HIRES=${a#*=} ;; PWRATE=*) PWRATE=${a#*=} ;;
   LIB=*) LIB=${a#*=} ;;
@@ -43,7 +50,7 @@ CFG=$CFGD/config/drastic.cfg
 [ "$HIRES" = 0 ] && { cp $CFG /tmp/drastic.cfg.hgpower; sed -i "s/^hires_3d = .*/hires_3d = 0/" $CFG; }
 cd $CFGD
 ( export SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$L/hp-$TAG.log DSFLIP_SHADER=$SHADER "$@"
-  LD_PRELOAD=$LIB exec ./drastic.real $D/roms/HGtest.nds >$L/hp-$TAG.out 2>&1 ) &
+  LD_PRELOAD=$LIB exec ./drastic.real $D/roms/$TEST.nds >$L/hp-$TAG.out 2>&1 ) &
 PID=$!
 # ROCKNIX's powerstate re-applies a GPU profile when the charger status flips: keep this run's choice (as session.sh)
 ( while kill -0 $PID 2>/dev/null; do sleep 2; [ "$(cat $G/governor)" = $GOV ] || echo $GOV > $G/governor; done ) &
@@ -66,5 +73,5 @@ echo $OLD_GG > $G/governor; echo $OLD_GMIN > $G/min_freq
 [ -n "$PWRATE" ] && PWM 0
 # the audio pump's lines over the run (ring range, rate trim, underruns)
 grep "\[audio\] pump [0-9]" $L/hp-$TAG.log | tail -n 4 >> $P/$TAG.txt
-rm -f /storage/roms/nds/HGtest.dsv $SS/HGtest_0.dss
+rm -f /storage/roms/nds/$TEST.dsv $SS/${TEST}_0.dss
 cat $P/$TAG.txt
