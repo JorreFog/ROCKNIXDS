@@ -69,6 +69,15 @@ case differed (fixed in SuperDrastic main, for its next release; bump `SUPERDRAS
 
 libdsflip now also lives on its own as [SuperDrastic](https://github.com/JorreFog/SuperDrastic) (libsuperdrastic.so, a generic launcher, the integration guide; tested on the RG DS in all three display handovers). ROCKNIXDS should install SuperDrastic's release instead of carrying its own copy of the library (dsflip/ then keeps only the ROCKNIX session scripts), so fixes land once.
 
+## 5. Added 2026-09-29
+
+- **Done: resume on quit.** The exit hotkey sends SIGUSR1 (session.sh writes `-USR1 drastic` into ROCKNIX's
+  /tmp/.process-kill-data); SuperDrastic saves to `<savestates>/<game>.resume.dss` and quits, and the next start
+  loads it once. End-to-end on the device through ES and the hotkey's own command: saved in 0.83 s, ES back 3.9 s
+  after the press (~0.8 s more than a plain quit), resumed on the next start, slot 0 and the in-game save unchanged.
+  Needs the SuperDrastic release that has it (after 0.1.0): bump `SUPERDRASTIC`.
+- **README video/GIF** of both screens.
+
 ## 4. Parked branches
 
 - `standalone-wip`: superseded by SuperDrastic.

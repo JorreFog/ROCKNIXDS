@@ -28,6 +28,10 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 
 ### New in 1.5 (beta)
 
+- **Pick up where you left off.** The exit hotkey now saves your place (a savestate of its own, never one of your
+  slots) and quits; the next start of that game resumes there, once. ES: the DS system's or game's *resume on quit*
+  option (on by default). Quitting from DraStic's own menu doesn't save. A resume state older than the game's own save
+  file is dropped.
 - **No more stutter storms in DS games.** A pacing bug could leave libdsflip committing every frame late, and after
   a while a minute of dropped frames (up to 32 a second, at any CPU clock) in about one of ten two-minute runs.
   Gone: 0.01-0.02 drops/s in 200 s HeartGold runs.

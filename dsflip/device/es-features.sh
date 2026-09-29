@@ -1,5 +1,6 @@
 #!/bin/sh
-# es-features.sh: puts ROCKNIXDS's ds-* shaders into EmulationStation's DraStic "shader" option.
+# es-features.sh: puts ROCKNIXDS's ds-* shaders into EmulationStation's DraStic "shader" option, and adds its
+# "resume on quit" option (nds.resume_on_quit, read by session.sh; unset = on).
 # Run by the installer and at every boot (autostart hook rocknixds-es-features), before ES starts.
 #
 # ES reads /storage/.config/emulationstation/es_features.cfg instead of ROCKNIX's read-only
@@ -16,9 +17,11 @@ STATE=${ESF_STATE:-/storage/rgds-rocknix-backup}     # the installer's backup di
 [ -f "$SYS" ] || exit 0
 
 # our choices go at the end of the drastic-sa core's <feature name="shader">, indented like its other choices;
-# any earlier copy of them is dropped first, so this is idempotent
+# any earlier copy of them is dropped first, so this is idempotent. The resume option follows the shader option.
 add_ours() {
     grep -vE 'value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"' "$1" | awk '
+        /<feature name="resume on quit"/ { skip = 1 }
+        skip { if (/<\/feature>/) skip = 0; next }
         /<core name="drastic-sa"/ { core = 1 }
         core && /<\/core>/ { core = 0 }
         core && /<feature name="shader"/ { shader = 1 }
@@ -31,7 +34,13 @@ add_ours() {
             print ind "<choice name=\"ds-grid-2x (pixel-perfect + even DS grid)\" value=\"ds-grid-2x\" />"
             print ind "<choice name=\"ds-fsr (FSR 1.0, smooth edges)\" value=\"ds-fsr\" />"
             print ind "<choice name=\"ds-integer (pixel-perfect 2x + bezel)\" value=\"ds-integer\" />"
-            shader = 0; added = 1
+            shader = 0; added = 1; resume = 1
+            print; fi = ind; sub(/  $/, "", fi)
+            print fi "<feature name=\"resume on quit\">"
+            print ind "<choice name=\"on (save your place on the exit hotkey)\" value=\"1\" />"
+            print ind "<choice name=\"off\" value=\"0\" />"
+            print fi "</feature>"
+            next
         }
         { print }
         END { if (!added) exit 3 }'

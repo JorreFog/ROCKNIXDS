@@ -65,6 +65,23 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   rm -f $STATE $NOTICE
   # test launches (smoke.sh, switchtime.sh) don't teach libdsflip's CPU governor anything about the player's games
   [ -e /tmp/rocknixds-testing ] && export DSFLIP_CPUGOV_MEMORY=0
+  # Resume on quit (ES: the game's or DS system's "resume on quit", on unless set off): the exit hotkey sends SIGUSR1
+  # instead of killing DraStic, libdsflip saves a savestate to <savestates>/<game>.resume.dss (never one of the
+  # player's slots) and quits; the next start of the game loads it, once. A resume state older than the game's own
+  # save file is dropped: loading it would put back an older in-game save too (backup_in_savestates).
+  CFG=/storage/.config/system/configs/system.cfg GAME=$(basename "$ROM")
+  RES=$(grep -F "nds[\"$GAME\"].resume_on_quit=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ -n "$RES" ] || RES=$(grep "^nds.resume_on_quit=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  if [ "$RES" != 0 ] && { [ ! -e /tmp/rocknixds-testing ] || [ -e /tmp/rocknixds-testing-resume ]; }; then
+    RSTATE="/storage/roms/savestates/nds/${GAME%.*}.resume.dss" DSV="$(dirname "$ROM")/${GAME%.*}.dsv"
+    RLOAD=0
+    if [ -f "$RSTATE" ]; then
+      if [ -f "$DSV" ] && [ "$DSV" -nt "$RSTATE" ]; then rm -f "$RSTATE"; echo "resume state older than the game's save: dropped"
+      else RLOAD=1; echo "resuming from $RSTATE"; fi
+    fi
+    export DSFLIP_RESUME_FILE="$RSTATE" DSFLIP_RESUME_LOAD=$RLOAD
+    echo "-USR1 drastic" > /tmp/.process-kill-data    # ROCKNIX's exit hotkey: killall $(cat this); start_drastic.sh set -9
+  fi
   cd $D
   # no wait for the display: libdsflip retries DRM master itself while seatd lets go of it (~0.4 s after sway)
   SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log \
@@ -114,7 +131,7 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   echo "$(up) drastic exited: $rc"
   if [ ! -s $NOTICE ]; then
     case $rc in
-      0|137|143) why= ;;              # Exit DraStic in its menu; ROCKNIX's exit hotkey (kill -9); a stop
+      0|137|138|143) why= ;;          # Exit DraStic in its menu; the exit hotkey (kill -9, or SIGUSR1 = resume); a stop
       132) why="illegal instruction" ;;
       134) why="it aborted" ;;
       135) why="bus error" ;;
