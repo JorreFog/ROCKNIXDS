@@ -92,8 +92,11 @@ libdsflip now also lives on its own as [SuperDrastic](https://github.com/JorreFo
   switch, check now + install) and rocknixds-update-check.timer (4 min after boot, then every 6 h; one notification
   per update through ES's /notify). install.sh records what it installed (release tag or beta commit).
 - **Done:** canvas-ds (toniremi) as a second dual-screen theme at a pinned commit; the launcher and the theme hook
-  know both dual-screen themes. Known: DS screenshots (both screens side by side) are ~37 px wider than its image box
-  on the top screen, so ~18 px are cut at each side.
+  know both dual-screen themes. Verified on the device, both screens, system view and DS game list: all 9 colour
+  schemes (custom is the author's template: its wallpapers say where to put your own), grid and carousel, all 10
+  grid sizes, both icon styles, the font sizes, metadata on/off. One adaptation: its game-list image box was 672 px
+  wide, 32 px more than the top screen, so DS screenshots (both screens side by side) were cut; the installer caps it
+  at 614 px (4:3 images and box art unchanged).
 - **Done:** tools/rgds-monitor.py (live stats + per-session logs of real play).
 
 ## 4. Parked branches

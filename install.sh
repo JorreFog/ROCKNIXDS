@@ -270,6 +270,11 @@ if [ $THEME_ON = 1 ] && [ $CANVAS_ON = 1 ]; then
         fi
         rm -rf $WORK/canvas
     fi
+    # its game lists size the top screen's image to at most 672x288 px of the 1920 px canvas: a DS screenshot (both
+    # screens side by side, 8:3) came out 672 px wide, 32 px more than the top screen, cut at its left edge and
+    # spilling onto the bottom one. 614 px keeps it on the top screen; 4:3 screenshots and box art are limited by the
+    # height and don't change. (Verified on the RG DS in all colour schemes, views and grid sizes.)
+    [ -f $C/aspect-ratio-4-3.xml ] && sed -i 's|<maxSize>0.35 0.6</maxSize>|<maxSize>0.32 0.6</maxSize>|' $C/aspect-ratio-4-3.xml
 fi
 
 # ---- libdsflip ---------------------------------------------------------------------------------------
