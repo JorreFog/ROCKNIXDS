@@ -1,42 +1,28 @@
-# Builds libdsflip.so from source the way dsflip/build.sh documents: clang + lld against a Debian trixie arm64
-# sysroot (glibc 2.41, the same as ROCKNIX 20260901 on the RG DS), then checks what it built and keeps it as an
-# artifact. The patched EmulationStation isn't built here: that needs ROCKNIX's whole build system.
-name: build
+# The DraStic engine (libdsflip) is built and released by SuperDrastic (https://github.com/JorreFog/SuperDrastic);
+# install.sh installs the release pinned in SUPERDRASTIC. This checks that the pinned package downloads, matches its
+# checksum and holds what install.sh takes from it, and that the scripts parse. The patched EmulationStation isn't
+# built here: that needs ROCKNIX's whole build system.
+name: check
 on:
   push:
     branches: [beta, main]
-    paths: ['dsflip/**', 'VERSION', '.github/workflows/build.yml']
   pull_request:
-    paths: ['dsflip/**', 'VERSION', '.github/workflows/build.yml']
   workflow_dispatch:
 
 jobs:
-  libdsflip:
+  check:
     runs-on: ubuntu-latest
-    container: debian:trixie
     steps:
       - uses: actions/checkout@v4
-      - name: Toolchain and arm64 sysroot
+      - name: The pinned SuperDrastic release
         run: |
-          apt-get update
-          apt-get install -y --no-install-recommends clang lld llvm ca-certificates
-          dpkg --add-architecture arm64
-          apt-get update
-          mkdir -p /tmp/deb && cd /tmp/deb
-          apt-get download libc6:arm64 libc6-dev:arm64 linux-libc-dev libdrm-dev:arm64 libdrm2:arm64 \
-                           libgcc-14-dev:arm64 libgcc-s1:arm64
-          for d in *.deb; do dpkg-deb -x "$d" /sysroot; done
-          ln -s usr/lib /sysroot/lib
-      - name: Build
-        run: sh dsflip/build.sh /sysroot
-      - name: Check
+          set -- $(grep -v '^#' SUPERDRASTIC); V=$1 SUM=$2
+          curl -fsSL -o sd.tar.gz "https://github.com/JorreFog/SuperDrastic/releases/download/v$V/superdrastic-$V-aarch64.tar.gz"
+          echo "$SUM  sd.tar.gz" | sha256sum -c -
+          tar tzf sd.tar.gz | grep -q '/libsuperdrastic.so$'
+          tar tzf sd.tar.gz | grep -q '/shaders/ds-crisp.frag$'
+      - name: Scripts parse
         run: |
-          llvm-readelf -h dsflip/libdsflip.so | grep -q 'AArch64' || { echo "not an AArch64 library"; exit 1; }
-          newest=$(llvm-readelf -V dsflip/libdsflip.so | grep -o 'GLIBC_2\.[0-9]*' | sort -uV | tail -n1)
-          echo "needs up to $newest"
-          [ "$(printf '%s\nGLIBC_2.41\n' "$newest" | sort -V | tail -n1)" = GLIBC_2.41 ] || { echo "needs glibc newer than the device's 2.41"; exit 1; }
-          llvm-nm -D --defined-only dsflip/libdsflip.so | grep -q ' SDL_RenderPresent$' || { echo "SDL hooks missing"; exit 1; }
-      - uses: actions/upload-artifact@v4
-        with:
-          name: libdsflip-${{ github.sha }}
-          path: dsflip/libdsflip.so
+          for f in install.sh dsflip/device/*.sh dsflip/device/fast-switch dsflip/device/powerstate dsflip/device/battery-led-status tools/*.sh; do
+            case "$(head -n1 "$f")" in *bash*) bash -n "$f" ;; *) sh -n "$f" ;; esac || { echo "syntax error in $f"; exit 1; }
+          done

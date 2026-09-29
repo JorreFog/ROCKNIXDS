@@ -5,7 +5,7 @@
 HERE=$(cd "$(dirname "$0")" && pwd)
 SSH=${RGDS_SSH:-ssh root@${RGDS_HOST:?set RGDS_HOST or RGDS_SSH}}
 TAG=${1:?tag}; SECS=${2:?secs}; shift 2
-for f in tools/powerprobe.py tools/hgpower.sh dsflip/padkey.py dsflip/kmsrun.sh; do
+for f in tools/powerprobe.py tools/hgpower.sh tools/padkey.py tools/kmsrun.sh; do
     $SSH "cat > /storage/dsflip/$(basename $f)" < "$HERE/../$f"
 done
 $SSH "cat > /storage/dsflip/walker.py" <<'PY'

@@ -1,4 +1,0 @@
-Sat Sep 26 20:35:40 EDT 2026 start: /storage/roms/nds/Pokemon - HeartGold Version (USA).nds (shader: lcd1x-nds-color)
-/storage/.config/drastic/dsflip/session.sh: line 36: 490056 Killed                     SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log LD_PRELOAD=$D/dsflip/libdsflip.so $D/dsflip/drastic "$ROM" > $D/dsflip/drastic.out 2>&1
-drastic exited: 137
-Sat Sep 26 20:36:23 EDT 2026 restored

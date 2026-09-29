@@ -32,8 +32,9 @@ What it doesn't cover (these keep their own terms):
   beebono/dii-ess-aye (https://github.com/beebono/dii-ess-aye), which has no
   license. The parts that come from it stay under its author's terms; our own
   additions in them are MIT like the rest.
-- dsflip/third_party/rcheevos: MIT, see its LICENSE.
-- dsflip/third_party/stb: public domain or MIT (see the end of each file).
-- dsflip/shaders/ds-fsr.frag contains AMD FidelityFX Super Resolution 1.0:
+- libdsflip is installed from SuperDrastic
+  (https://github.com/JorreFog/SuperDrastic), MIT. Its third-party parts
+  are listed in its THIRD_PARTY.md: rcheevos (MIT), stb (public domain or
+  MIT), and ds-fsr.frag, which contains AMD FidelityFX Super Resolution 1.0:
   MIT, Copyright (c) 2021 Advanced Micro Devices, Inc. (notice in the file).
 - Fonts named in the README keep the SIL Open Font License.

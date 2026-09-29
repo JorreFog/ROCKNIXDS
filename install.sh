@@ -158,7 +158,28 @@ else
     curl -fsSL "https://codeload.github.com/$REPO/tar.gz/$BRANCH" | tar xz -C $WORK
     SRC=$(echo $WORK/*/)
 fi
-[ -f "$SRC/dsflip/libdsflip.so" ] || die "download incomplete"
+[ -f "$SRC/dsflip/device/session.sh" ] || die "download incomplete"
+
+# ---- SuperDrastic: the DraStic engine (libdsflip), from its pinned release ------------------------------
+# (RGDS_SUPERDRASTIC=<superdrastic-*-aarch64.tar.gz>: a local package instead, for testing or offline installs)
+SD=
+if [ $DSFLIP_ON = 1 ]; then
+    set -- $(grep -v '^#' "$SRC/SUPERDRASTIC"); SD_VER=$1 SD_SUM=$2
+    [ -n "$SD_VER" ] || die "no SuperDrastic version in SUPERDRASTIC"
+    SD_TGZ=$WORK/superdrastic.tar.gz
+    if [ -n "$RGDS_SUPERDRASTIC" ]; then
+        say "Using local SuperDrastic package $RGDS_SUPERDRASTIC"; cp "$RGDS_SUPERDRASTIC" $SD_TGZ || die "can't read $RGDS_SUPERDRASTIC"
+    else
+        say "Downloading SuperDrastic $SD_VER"
+        curl -fsSL -o $SD_TGZ "https://github.com/JorreFog/SuperDrastic/releases/download/v$SD_VER/superdrastic-$SD_VER-aarch64.tar.gz" \
+            || die "couldn't download SuperDrastic $SD_VER"
+        set -- $(sha256sum $SD_TGZ)
+        [ "$1" = "$SD_SUM" ] || die "SuperDrastic $SD_VER download doesn't match its checksum"
+    fi
+    mkdir -p $WORK/sd && tar xzf $SD_TGZ -C $WORK/sd --strip-components=1 || die "SuperDrastic package damaged"
+    [ -f $WORK/sd/libsuperdrastic.so ] || die "no libsuperdrastic.so in the SuperDrastic package"
+    SD=$WORK/sd
+fi
 mkdir -p $BACKUP
 
 es_stop
@@ -227,7 +248,8 @@ if [ $DSFLIP_ON = 1 ]; then
     backup_once $DRASTIC/drastic
     [ -e $DRASTIC/drastic.real ] || touch $BACKUP/.had-no-launcher-wrapper
     mkdir -p $WORK/dsflip
-    cp "$SRC/dsflip/libdsflip.so" "$SRC/dsflip/device/session.sh" "$SRC/dsflip/device/restore.sh" \
+    cp $SD/libsuperdrastic.so $WORK/dsflip/libdsflip.so     # the name ROCKNIXDS's scripts and older installs use
+    cp "$SRC/dsflip/device/session.sh" "$SRC/dsflip/device/restore.sh" \
        "$SRC/dsflip/device/drastic-wrapper.sh" "$SRC/dsflip/device/install.sh" "$SRC/dsflip/device/es-features.sh" \
        "$SRC/dsflip/device/fast-switch" "$SRC/dsflip/device/playstats.py" "$SRC/dsflip/device/menu-power.sh" \
        "$SRC/dsflip/device/battery-led-status" "$SRC/dsflip/device/powerstate" $WORK/dsflip/
@@ -235,7 +257,7 @@ if [ $DSFLIP_ON = 1 ]; then
 
     # DS-pixel-aware shaders for DraStic (sharp and LCD-grid looks that work at 1x and 2x) + their ES entries
     mkdir -p $DRASTIC/shaders
-    for f in "$SRC"/dsflip/shaders/*.frag; do
+    for f in $SD/shaders/*.frag; do
         b=$(basename "$f")
         if [ -e $DRASTIC/shaders/$b ]; then backup_once $DRASTIC/shaders/$b
         else grep -qx "$b" $BACKUP/.shaders-added 2>/dev/null || echo "$b" >> $BACKUP/.shaders-added; fi

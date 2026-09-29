@@ -59,6 +59,14 @@ itself (ROCKNIX's runemu.sh and start_drastic.sh take ~2.3 s before our unit sta
 
 ## 3. SuperDrastic
 
+**Done (2026-09-29):** SuperDrastic 0.1.0 released; `install.sh` downloads the version pinned in `SUPERDRASTIC`,
+checks its sha256 and installs `libsuperdrastic.so` as `libdsflip.so` plus the package's shaders
+(`RGDS_SUPERDRASTIC=<tarball>`: a local package). The library source, shaders, `third_party/` and the bring-up tools
+left this repo; `tools/padkey.py` and `tools/kmsrun.sh` stayed for the harness, the shader benchmark moved to
+SuperDrastic. CI checks the pinned package. Tested on the device: the install from this checkout put the release's
+library in place byte for byte, smoke test passed. Found on the way: the RA token was never used when the username's
+case differed (fixed in SuperDrastic main, for its next release; bump `SUPERDRASTIC` then).
+
 libdsflip now also lives on its own as [SuperDrastic](https://github.com/JorreFog/SuperDrastic) (libsuperdrastic.so, a generic launcher, the integration guide; tested on the RG DS in all three display handovers). ROCKNIXDS should install SuperDrastic's release instead of carrying its own copy of the library (dsflip/ then keeps only the ROCKNIX session scripts), so fixes land once.
 
 ## 4. Parked branches

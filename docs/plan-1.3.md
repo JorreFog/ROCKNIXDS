@@ -51,7 +51,7 @@ the ES launcher show a popup on return, see I8). Test: start a game while sway i
 
 ### B4. Real-time presenter + spin lock can stall (medium) — DONE
 
-`mu` is a spin lock built on `sched_yield` ([`dsflip.c:93`](../dsflip/dsflip.c)). The presenter runs
+`mu` is a spin lock built on `sched_yield` ([`dsflip.c:93`](https://github.com/JorreFog/ROCKNIXDS/blob/v1.3/dsflip/dsflip.c)). The presenter runs
 `SCHED_FIFO` 10 and the audio pump `SCHED_FIFO` 20, while DraStic's main thread (which takes `mu` in
 Lock/Unlock/Present) and the RetroAchievements HTTP threads run at normal priority. If a normal-priority holder
 is preempted on a core and the presenter starts spinning on that same core, `sched_yield` never hands the CPU
@@ -68,7 +68,7 @@ HeartGold run shows the same drop rate as before.
 
 When DraStic recreates a screen texture (the hires toggle in its menu does this), the recycled slot's buffers
 in `READY`/`QUEUED`/`SCANOUT` state are zeroed and immediately re-allocated by `mkbuf`
-([`dsflip.c:1069`](../dsflip/dsflip.c)), while `P[i].ready/queued/scan` still point at the same struct. A `READY`
+([`dsflip.c:1069`](https://github.com/JorreFog/ROCKNIXDS/blob/v1.3/dsflip/dsflip.c)), while `P[i].ready/queued/scan` still point at the same struct. A `READY`
 one goes into the next commit with `fb = 0` (rejected commit, frames dropped); a `SCANOUT` one is later
 `release()`d to `FREE` while DraStic may already be writing into the new buffer at that slot. In practice the
 toggle happens from DraStic's menu, when the screen buffers are already off screen, so it is hard to hit.
@@ -79,7 +79,7 @@ game with `DSFLIP_LOG` at debug; no "commit rejected" lines.
 
 ### B6. A new pop-up can draw into the buffer still being scanned out (low)
 
-`dsflip_toast` picks `toast[toast_cur]` when `toast_shown` is 0 ([`dsflip.c:397`](../dsflip/dsflip.c)). Right
+`dsflip_toast` picks `toast[toast_cur]` when `toast_shown` is 0 ([`dsflip.c:397`](https://github.com/JorreFog/ROCKNIXDS/blob/v1.3/dsflip/dsflip.c)). Right
 after a toast expires, the "hide" commit is issued (`toast_shown = 0`) but its flip hasn't landed, so the plane
 still shows that buffer; a toast arriving in that window (two unlocks in a row) writes into it: one torn frame
 of a disappearing pop-up.
@@ -89,7 +89,7 @@ of a disappearing pop-up.
 ### B7. Shader start race decides the wrong buffer type (low)
 
 `SDL_CreateTexture` chooses memory buffers (upload path) or dumb buffers (dma-buf import) from `shader_on`,
-and `init()` waits at most 3 s for the shader worker ([`dsflip.c:985`](../dsflip/dsflip.c)). If libmali takes
+and `init()` waits at most 3 s for the shader worker ([`dsflip.c:985`](https://github.com/JorreFog/ROCKNIXDS/blob/v1.3/dsflip/dsflip.c)). If libmali takes
 longer on a cold start, the first textures get the import path, which is the one the copy mode was added to
 avoid (the GPU IOMMU mapping interrupts every core), and the log still says "upload from memory".
 
@@ -136,7 +136,7 @@ and a new DraStic choice both flow in), a user's own copy (only reordered), a fi
 
 ### B11. No version in the logs or the RetroAchievements user agent (low) — DONE
 
-`ra.c` still reports `dsflip/1.0` ([`ra.c:299`](../dsflip/ra.c)) and `dsflip.log` has no header line, so a bug
+`ra.c` still reports `dsflip/1.0` ([`ra.c:299`](https://github.com/JorreFog/ROCKNIXDS/blob/v1.3/dsflip/ra.c)) and `dsflip.log` has no header line, so a bug
 report can't tell which build produced it. Tester reports in #1 needed exactly this.
 
 **Plan:** a `VERSION` file at the repo root, baked into `libdsflip.so` (`-DDSFLIP_VERSION=`), written as the
@@ -145,7 +145,7 @@ prints it with `--version`.
 
 ### B12. `dsflip.log` is overwritten every launch (medium, the tester lost their evidence) — DONE
 
-The log opens with `"w"` ([`dsflip.c:854`](../dsflip/dsflip.c)). The beta tester attached a log that only
+The log opens with `"w"` ([`dsflip.c:854`](https://github.com/JorreFog/ROCKNIXDS/blob/v1.3/dsflip/dsflip.c)). The beta tester attached a log that only
 covered their last game, so the RetroAchievements question in #1 couldn't be answered.
 
 **Plan:** rotate: `dsflip.log` → `dsflip.log.1` … `.3` at start, and let `session.sh` append the ROM name and
@@ -284,7 +284,7 @@ achievements, "1 of 187 unlocked" read from memory, where before the whole set w
 
 ### I5. libdsflip robustness
 
-- **DONE 2026-09-27:** Reopen the touch device if the read ends ([`dsflip.c:832`](../dsflip/dsflip.c)), for suspend/resume.
+- **DONE 2026-09-27:** Reopen the touch device if the read ends ([`dsflip.c:832`](https://github.com/JorreFog/ROCKNIXDS/blob/v1.3/dsflip/dsflip.c)), for suspend/resume.
 - A `DSFLIP_DEBUG=1` that adds per-frame lines, off by default, instead of the many one-off env switches.
 - Handle a `SDL_CreateTexture` allocation failure by falling back to passthrough for that texture instead of
   leaving `s->tex = 0` with a half-built slot.

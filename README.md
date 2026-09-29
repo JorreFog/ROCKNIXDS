@@ -26,6 +26,18 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 - The **panel timing fix**, the older **vsync pacing shim**, and the measurement tools (including a DS
   stress-test ROM) behind all the numbers below.
 
+### New in 1.5 (beta)
+
+- **No more stutter storms in DS games.** A pacing bug could leave libdsflip committing every frame late, and after
+  a while a minute of dropped frames (up to 32 a second, at any CPU clock) in about one of ten two-minute runs.
+  Gone: 0.01-0.02 drops/s in 200 s HeartGold runs.
+- **The CPU clock remembers each game:** clocks that dropped frames are skipped from the start of the next session
+  instead of being found again by dropping frames.
+- **Back to the menu ~0.5 s sooner** after a DS game, and ROCKNIX's charger watcher no longer starts a process every
+  2 s (2.2% -> 0.13% of a core).
+- **The DraStic engine is its own project now: [SuperDrastic](https://github.com/JorreFog/SuperDrastic)**, for any Linux firmware. The installer
+  installs its release (the version pinned in [`SUPERDRASTIC`](SUPERDRASTIC)); `dsflip/` keeps the ROCKNIX scripts.
+
 ### New in 1.4
 
 - **Longer battery life and a cooler handheld.** A menu left alone uses a sixth of the CPU it did in 1.3 (10% of one core instead of 57%), at under a quarter of the clock; DS games run the CPU at the
@@ -143,6 +155,11 @@ To go back to the stock DraStic display path without uninstalling: `touch /stora
 
 ## `dsflip/`: DraStic straight to the panels
 
+libdsflip is built and released as [SuperDrastic](https://github.com/JorreFog/SuperDrastic) since 1.5 (its source, shaders and test tools live there);
+the installer puts the release pinned in [`SUPERDRASTIC`](SUPERDRASTIC) on the device as `libdsflip.so`.
+[`dsflip/device/`](dsflip/device) holds what makes it ROCKNIX's DS launcher: the game session, the way back to ES,
+play stats and the power services.
+
 ### Why stock was slow
 
 DraStic's 3D is rendered **on the CPU**. On stock ROCKNIX every frame then takes a long way to the screens:
@@ -206,11 +223,11 @@ It's installed as the default DraStic launcher: start any DS game from Emulation
 - To go back to the previous launcher: `touch /storage/.config/drastic/nodsflip`.
 - 2× resolution is ES's per-system/per-game *hires 3D* option (`nds.hires_3d=1`).
 
-GitHub Actions builds `libdsflip.so` from source on every change (`.github/workflows/build.yml`: Debian trixie arm64
-sysroot, the device's glibc) and keeps it as a build artifact.
+SuperDrastic's GitHub Actions build and release the library; this repo's checks that the pinned release downloads
+and matches its checksum.
 
-Install from a checkout: copy `dsflip/libdsflip.so` plus `dsflip/device/{session.sh,drastic-wrapper.sh,install.sh}`
-to the device and run `sh install.sh`.
+Install from a checkout: `RGDS_SRC=<checkout> sh install.sh` on the device, with
+`RGDS_SUPERDRASTIC=<superdrastic-*-aarch64.tar.gz>` to use a local SuperDrastic package instead of downloading it.
 
 **Microphone.** libdsflip captures the mic over ALSA and holds DraStic's own "fake mic" control while you blow or
 speak, like ROCKNIX's `libdrastouch` does: an RMS level per block against an adaptive noise floor, with ES's DraStic
@@ -229,7 +246,7 @@ stock path uses:
 - **Any other choice** (sharp-bilinear, sharp-shimmerless, quilez, scanlines, lcd3x, lcd1x+nds-color, and
   `.frag` files in `/storage/.config/drastic/shaders/`) runs that shader on the GPU.
   Each screen is drawn into a 640×480 buffer that is then scanned out, with the same inputs as stock.
-- **Our shaders** ([`dsflip/shaders/`](dsflip/shaders), installed and added to ES's menu by `install.sh`):
+- **Our shaders** ([SuperDrastic's `shaders/`](https://github.com/JorreFog/SuperDrastic/tree/main/shaders), installed and added to ES's menu by `install.sh`):
 
   | Shader | Look |
   |---|---|
@@ -274,7 +291,7 @@ stock path uses:
 ### RetroAchievements
 
 Standalone DraStic has no RetroAchievements support, so `libdsflip` brings its own, built on RA's official
-[rcheevos](https://github.com/RetroAchievements/rcheevos) library (`dsflip/ra.c`):
+[rcheevos](https://github.com/RetroAchievements/rcheevos) library ([`src/ra.c`](https://github.com/JorreFog/SuperDrastic/blob/main/src/ra.c) in SuperDrastic):
 
 - **Login** uses ROCKNIX's own settings: turn RetroAchievements on and enter your account in ES
   (*Settings → RetroAchievements*). After the first login only RA's login token is kept on the device.
@@ -286,7 +303,7 @@ Standalone DraStic has no RetroAchievements support, so `libdsflip` brings its o
   read-only view of that, so it follows the game wherever it places DTCM.
 - **Pop-ups** (unlocks with the achievement's badge, the game summary with its icon, offline/online) are cards in the
   theme's DSi font that drop in from the top edge and slide back up, and a small pill shows progress on tracked achievements ("3/5"). Badges and icons are
-  downloaded once per game into `/storage/.config/drastic/dsflip/badges/`. `dsflip/ui.c` draws them on a thread of
+  downloaded once per game into `/storage/.config/drastic/dsflip/badges/`. [`src/ui.c`](https://github.com/JorreFog/SuperDrastic/blob/main/src/ui.c) draws them on a thread of
   its own (stb_truetype, stb_image) into a spare hardware overlay plane of the top panel, so they cost the game
   nothing. `DSFLIP_UI_DEMO=1` shows a sample unlock and progress pill after a game loads.
 - **Unlock sound** (since 1.4): the one picked in ES > Game settings > RetroAchievements settings > Unlock sound
@@ -296,6 +313,8 @@ Standalone DraStic has no RetroAchievements support, so `libdsflip` brings its o
   from outside DraStic.
 
 ### How it was measured
+
+These tools are in SuperDrastic's [`tools/`](https://github.com/JorreFog/SuperDrastic/tree/main/tools) now; `stressrom/` is in both.
 
 | Tool | What it does |
 |---|---|
@@ -313,10 +332,9 @@ Build (desktop, aarch64 cross):
 
 ```sh
 python3 stressrom/build.py                 # stress ROMs -> stressrom/out/*.nds
-dsflip/build.sh /path/to/aarch64-sysroot   # libdsflip.so (display + touch + RetroAchievements)
 ```
 
-`build.sh` explains how to make the sysroot: Debian trixie arm64 `libc6`/`libc6-dev`/`linux-libc-dev`/
+The library: SuperDrastic's `build.sh /path/to/aarch64-sysroot` (-> `build/libsuperdrastic.so`). Its `build.sh` explains how to make the sysroot: Debian trixie arm64 `libc6`/`libc6-dev`/`linux-libc-dev`/
 `libdrm-dev`/`libgcc-14-dev`, plus `libdrm.so.2` and `libgcc_s.so.1` from the device. A real aarch64 glibc
 sysroot matters: rcheevos uses pthread types whose size differs from x86's.
 
@@ -479,7 +497,7 @@ dark-background and a light-background version, a stacked version for small squa
 
 **RetroAchievements**
 - [RetroAchievements](https://retroachievements.org) and [rcheevos](https://github.com/RetroAchievements/rcheevos)
-  (MIT): achievement logic, ROM hashing and the server API, vendored unmodified in `dsflip/third_party`.
+  (MIT): achievement logic, ROM hashing and the server API, vendored unmodified in SuperDrastic's `src/third_party`.
 
 **Frontend**
 - [dii-ess-aye](https://github.com/beebono/dii-ess-aye) by **beebono**: the DSi-style dual-screen theme this reskin
