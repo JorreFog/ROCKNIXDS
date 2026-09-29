@@ -136,6 +136,7 @@ volatile int dsflip_presents;           /* SDL_RenderPresent calls since start (
 volatile long long dsflip_frame_work_max; /* the heaviest frame's CPU time on DraStic's main thread (ns) since
                                            cpugov.c last took it: a frame over 16.7 ms is a late frame */
 volatile int dsflip_queue_drops;        /* frames dropped from the queue since start (cpugov.c) */
+volatile int dsflip_screen_w;           /* DraStic's screen texture width, 256 or 512 (cpugov.c: 1x or 2x) */
 void cpugov_start(void);
 static int st_drop_src, st_drop_q, st_drop_buf;
 static long long st_evt_max, st_c2f_max; static int st_c2f_long; /* vblank->event delivery; commit->flip (>1 refresh) */   /* drops by cause: replaced before shading, queue overflow, no buffer */
@@ -269,6 +270,7 @@ static double latch_margin = LATCH_MARGIN;  /* adaptive: +400 us per latch that 
                                                -400 us per clean 10 s */
 static double bot_off;                  /* bottom panel's vblank phase relative to the top's, us in (-P/2, P/2] */
 static int bot_n, latch_skipped;        /* bottom phase samples; a latch was skipped because a flip was pending */
+static int in_latch, commit_latch;      /* a commit is being made at the latch point; the last commit was */
 
 
 static void drop_fence(dbuf *b) { if (b && b->fence >= 0) { close(b->fence); b->fence = -1; } }
@@ -359,10 +361,15 @@ static void try_commit(void) {         /* called with mu held */
     }
     if (P[0].ready || P[1].ready) ready_since = now_us();
     if (with_toast) { toast_dirty = 0; toast_shown = toast_want; }
-    commit_t = now_us(); commit_vref = vbl_ref;
+    commit_t = now_us(); commit_vref = vbl_ref; commit_latch = in_latch;
     pending_mask = mask;                /* one flip event per CRTC in the commit */
     st_commit++;
 }
+
+/* where in the refresh cycle (after the top panel's vblank) `t` is, and the last point of the cycle at which a commit
+ * still makes both panels' next vblanks (arm_latch's upper bound) */
+static double phase_of(long long t) { double ph = fmod((double)(t - vbl_ref), period); return ph < 0 ? ph + period : ph; }
+static double latch_hi(void) { return period + fmin(0, bot_off) - latch_margin; }
 
 static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned crtc, void *u) {
     (void)f; (void)seq; (void)u;
@@ -392,7 +399,14 @@ static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned c
         if (P[i].scan != P[i].queued) release(P[i].scan);
         P[i].scan = P[i].queued; P[i].scan->state = SCANOUT; P[i].queued = 0;
     }
-    if (!pending_mask && (!pacing_latch || ph_n < 120 || latch_skipped)) { latch_skipped = 0; try_commit(); }
+    if (!pending_mask && (!pacing_latch || ph_n < 120 || latch_skipped)) {
+        /* a skipped latch catches up now, but only while a commit still makes both panels' next vblanks: later in
+         * the cycle (after the bottom panel's flip, when its vblank comes first) it misses one, the next latch finds
+         * that flip pending, catches up after it again, and so on: every latch "late" from then on, and the margin
+         * grew each time until the latch zone was squeezed into the frames' arrivals (drop storms, measured) */
+        if (latch_skipped && pacing_latch && ph_n >= 120 && vbl_ref && phase_of(now_us()) > latch_hi()) latch_skipped = 0;
+        else { latch_skipped = 0; try_commit(); }
+    }
     unlock(&mu);
 }
 
@@ -466,7 +480,7 @@ static void arm_latch(void) {         /* with mu held: next latch point after no
          * to a sliver after the later one's. The bottom panel's vblank is ~0.8 ms off the top's; ignoring that made
          * one panel miss every commit near the edge, which kept a flip pending at every latch: 30 fps bursts. */
         /* lo: the previous flip's event must have arrived before the latch, or the latch counts as late */
-        double lo = fmax(0, bot_off) + 1000, hi = period + fmin(0, bot_off) - latch_margin;
+        double lo = fmax(0, bot_off) + 1000, hi = latch_hi();
         if (l < lo || l > hi) {         /* pick the allowed edge that is farther (circularly) from the presents... */
             double m = fmod(mean + 2 * period, period);
             double dlo = fabs(remainder(lo - m, period)), dhi = fabs(remainder(hi - m, period));
@@ -609,12 +623,17 @@ static void *presenter(void *a) {
         if (tfd >= 0 && (pf[2].revents & POLLIN)) {                        /* latch point reached */
             uint64_t v; if (read(tfd, &v, 8) < 0) {}
             lock(&mu);
-            if (pending_mask) {                 /* the previous commit missed a vblank: commit as soon as its */
+            long long now = now_us();
+            if (pending_mask && vbl_ref && commit_t >= now - (long long)phase_of(now)) {
+                /* this cycle's frames went out already (a catch-up commit after a late flip): nothing to do */
+            } else if (pending_mask) {          /* the previous commit missed a vblank: commit as soon as its */
                 st_late++;                      /* flip lands (one repeat, not a 30 fps lock), and if the latch */
                 latch_skipped = 1;              /* was near the vblank edge, widen the margin */
-                /* not during warm-up: a shader's first frames are slow and would pin the margin at max */
-                if (latch_off > period / 2 && latch_margin < 5000 && ph_n >= 600) latch_margin += 400;
-            } else try_commit();
+                /* only when a latch commit missed (a catch-up or safety-net commit made elsewhere in the cycle says
+                 * nothing about the margin), and not during warm-up: a shader's first frames are slow and would pin
+                 * the margin at max */
+                if (commit_latch && latch_off > period / 2 && latch_margin < 5000 && ph_n >= 600) latch_margin += 400;
+            } else { in_latch = 1; try_commit(); in_latch = 0; }
             if (P[0].ready || P[1].ready) arm_latch();
             unlock(&mu);
         }
@@ -1100,6 +1119,7 @@ void *SDL_CreateTexture(void *rn, uint32_t fmt, int access, int w, int h) {
             memset(b, 0, sizeof *b); b->fence = -1;
         }
         s->tex = t; s->kind = screen ? K_SCREEN : K_MENU; s->w = w; s->h = h; s->writing = s->written = -1;
+        if (screen) dsflip_screen_w = w;
         s->nb = screen ? NBUF : 3;
         int bw = w, bh = h;
         if (!screen && !menu_hw) { bw = P[1].mode.hdisplay; bh = P[1].mode.vdisplay; }

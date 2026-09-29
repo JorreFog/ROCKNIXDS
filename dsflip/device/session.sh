@@ -63,6 +63,8 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # at 1608 MHz). Set before DraStic opens its stream: switching mid-stream made the drain uneven for the session.
   XDG_RUNTIME_DIR=/var/run/0-runtime-dir pw-metadata -n settings 0 clock.force-rate 44100 >/dev/null 2>&1
   rm -f $STATE $NOTICE
+  # test launches (smoke.sh, switchtime.sh) don't teach libdsflip's CPU governor anything about the player's games
+  [ -e /tmp/rocknixds-testing ] && export DSFLIP_CPUGOV_MEMORY=0
   cd $D
   # no wait for the display: libdsflip retries DRM master itself while seatd lets go of it (~0.4 s after sway)
   SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log \

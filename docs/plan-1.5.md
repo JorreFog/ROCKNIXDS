@@ -33,9 +33,24 @@ itself (ROCKNIX's runemu.sh and start_drastic.sh take ~2.3 s before our unit sta
   first 40 s). Same treatment as `battery-led-status`: a fork-free copy behind a systemd drop-in that hands back to
   ROCKNIX's script if that ever changes (md5 79dcb5ee1f43876d5c1dff429f87b36b), including `ledcontrol discharging`
   done in-process when the battery is above 97%.
-- **The CPU governor's first minute**: it finds its level by trying lower clocks, and each clock that turns out too
-  low costs 2-4 frames once (a 30 s smoke test showed 0.20 drops/s, a 90 s run 0.02-0.07). Ideas: descend more
-  slowly, start from the last session's level for the same game, or learn per game.
+- **Done (2026-09-29): the CPU governor remembers**, per game, shader and resolution, the clocks that dropped frames
+  (`dsflip/cpugov/`), so a session starts with them banned for as long as their strikes say (30 s for one, doubling,
+  up to 10 min) instead of finding them again by dropping frames, mostly in its first minute. Two minutes at a clock
+  or lower without a drop forgive it a strike; drops at the top clock aren't held against anything; nothing is
+  stepped down before DraStic's resolution has settled (it starts at 1x and switches to 2x a second later). Tested
+  with a seeded memory: bans held from the start, new drops saved, a clock forgiven after 120 s. Test launches
+  don't write it (`DSFLIP_CPUGOV_MEMORY=0` under /tmp/rocknixds-testing).
+- **Done (2026-09-29): drop storms from the frame pacing.** Measuring the governor turned up the bigger cause of
+  dropped frames: minute-long storms (up to 32 drops/s, at the full CPU clock) in ~1 of 10 two-minute runs, 1.3 and
+  1.4 alike. The cause: after one late latch, libdsflip committed as soon as the pending flip landed; when that was
+  the bottom panel's flip (its vblank comes first when the panels are ~8 ms apart), the commit missed the bottom's
+  next vblank, so the next latch was late too: every latch "late" from then on (`late=600` per 10 s in the pace
+  log, seen in 2 of 2 runs within 90 s). Each late latch also widened the commit margin (to 4.5-5.3 ms, though
+  the top panel never missed: `missed=0`), which squeezed the latch into the window where DraStic's frames
+  arrive: the storms. Now a catch-up commit is made only while it still makes both panels' next vblanks, a
+  latch that finds this cycle's own commit pending isn't late, and the margin grows only when a commit made at
+  the latch missed. HeartGold ds-crisp, 200 s: late latches 0-1 per 10 s all run, margin at 1300 us, 0.02 drops/s
+  (before: 1.93 in the run with a storm).
 - **Skipping unchanged frames with a shader**: needs a way to know a frame didn't change without reading DraStic's
   uncached buffers back.
 - **ds-fsr** (5.3 ms per panel at 800 MHz, 4.3 in the 1.4 comparison session): a two-pass version that analyses each
