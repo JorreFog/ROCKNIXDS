@@ -75,7 +75,7 @@ libdsflip now also lives on its own as [SuperDrastic](https://github.com/JorreFo
   /tmp/.process-kill-data); SuperDrastic saves to `<savestates>/<game>.resume.dss` and quits, and the next start
   loads it once. End-to-end on the device through ES and the hotkey's own command: saved in 0.83 s, ES back 3.9 s
   after the press (~0.8 s more than a plain quit), resumed on the next start, slot 0 and the in-game save unchanged.
-  Needs the SuperDrastic release that has it (after 0.1.0): bump `SUPERDRASTIC`.
+  In SuperDrastic 0.2.0, which `SUPERDRASTIC` pins (re-tested through the installer: same results).
 - **Done: README animation** of both screens (docs/demo_anim.py).
 - **Done: does ds-fsr look better?** [filters-1.5.md](filters-1.5.md): at 2× no (same picture, 8-9× the GPU time of
   ds-crisp); at 1× it smooths 3D edges (closest sharp filter to the real 2× render) but rounds pixel art. Next: make
