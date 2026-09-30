@@ -99,6 +99,15 @@ libdsflip now also lives on its own as [SuperDrastic](https://github.com/JorreFo
   at 614 px (4:3 images and box art unchanged).
 - **Done:** tools/rgds-monitor.py (live stats + per-session logs of real play).
 
+## 7. Performance logs from devices (beta 3)
+
+Asked once, the first time the menu appears (ES start script, A on the pad is yes and B is no; the message box
+itself only has OK, so B is read from the gamepad). `nds.share_performance_logs` is the answer, and the Nintendo DS
+*Share performance logs* option (AUTO asks again). While a game runs, `perf-session.py` takes the same once-a-second
+sample as `tools/rgds-monitor.py`. `restore.sh` closes the session once (it runs twice) and, on yes, commits the
+file to the `device-logs` branch. The beta SHA the updater compares does not include those commits. No GitHub token
+is stored in the repository; the device reads `/storage/.config/rocknixds/upload.token`.
+
 ## 4. Parked branches
 
 - `standalone-wip`: superseded by SuperDrastic.

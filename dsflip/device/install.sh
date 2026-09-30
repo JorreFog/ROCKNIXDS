@@ -17,6 +17,12 @@ mkdir -p $D/dsflip
 cp "$HERE/libdsflip.so" "$HERE/session.sh" "$HERE/restore.sh" $D/dsflip/
 [ -f "$HERE/es-features.sh" ] && cp "$HERE/es-features.sh" $D/dsflip/
 [ -f "$HERE/playstats.py" ] && cp "$HERE/playstats.py" $D/dsflip/
+[ -f "$HERE/perf-session.py" ] && cp "$HERE/perf-session.py" $D/dsflip/
+if [ -f "$HERE/es-share-logs.sh" ]; then
+    mkdir -p /storage/.config/emulationstation/scripts/start
+    cp "$HERE/es-share-logs.sh" /storage/.config/emulationstation/scripts/start/rocknixds-share-logs.sh
+    chmod +x /storage/.config/emulationstation/scripts/start/rocknixds-share-logs.sh
+fi
 [ -f "$HERE/menu-power.sh" ] && cp "$HERE/menu-power.sh" $D/dsflip/
 [ -f "$HERE/battery-led-status" ] && cp "$HERE/battery-led-status" $D/dsflip/ && chmod +x $D/dsflip/battery-led-status
 [ -f "$HERE/powerstate" ] && cp "$HERE/powerstate" $D/dsflip/ && chmod +x $D/dsflip/powerstate

@@ -73,6 +73,17 @@ fi
 # The menus' CPU governor (menu-power.sh), once ES is up: sway's and ES's start are CPU-heavy, and switching to
 # schedutil before them made the way back to the menu ~0.8 s slower. Its own transient unit, like the notice below.
 systemd-run --collect --quiet /storage/.config/drastic/dsflip/menu-power.sh --after-es-idle >/dev/null 2>&1
+# The performance log (same samples as tools/rgds-monitor.py). mv so it closes once: this script runs twice after a
+# normal exit (session.sh and the unit's ExecStopPost). The upload continues beside the menu.
+P=/tmp/dsflip-perf/active
+if [ -d "$P" ] && mv "$P" /tmp/dsflip-perf/closing.$$ 2>/dev/null; then
+    C=/tmp/dsflip-perf/closing.$$
+    # a transient unit, so it outlives this script (ExecStopPost kills whatever it started). Foreground only if
+    # systemd-run itself fails: the log would otherwise be deleted with the unit.
+    if ! systemd-run --collect --quiet python3 -u /storage/.config/drastic/dsflip/perf-session.py finish "$C" >/dev/null 2>&1; then
+        python3 -u /storage/.config/drastic/dsflip/perf-session.py finish "$C" >> /storage/.config/drastic/dsflip/last-session.log 2>&1
+    fi
+fi
 # session.sh's message about why the game ended early: show it in ES once ES answers. From a transient unit of its
 # own, because this script may be running as dsflip-game's ExecStopPost, whose processes die when it finishes.
 # The mv makes it show once even though this script runs twice after a normal exit (session.sh + ExecStopPost).

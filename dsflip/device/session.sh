@@ -5,6 +5,14 @@
 # The exit hotkey (killall -9 drastic) works because DraStic runs through a symlink named "drastic".
 D=/storage/.config/drastic
 LOG=$D/dsflip/last-session.log
+stop_perf() {  # once-a-second sampler (perf-session.py); restore.sh closes and uploads the log, once
+  pid=$(cat /tmp/dsflip-perf/active/pid 2>/dev/null) || return 0
+  kill "$pid" 2>/dev/null
+  i=0
+  while kill -0 "$pid" 2>/dev/null && [ $i -lt 40 ]; do sleep 0.05; i=$((i + 1)); done
+  kill -9 "$pid" 2>/dev/null
+  rm -f /tmp/dsflip-perf/active/pid
+}
 STATE=/tmp/dsflip-state          # libdsflip's verdict: "ready" or "passthrough: <why>"
 NOTICE=/tmp/dsflip-notice        # why the game ended early; restore.sh shows it in ES once ES is back
 ROM="$1"
@@ -101,6 +109,22 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   export DSFLIP_QUEUE=${DSFLIP_QUEUE:-$Q} DSFLIP_QUEUE_WAIT=${DSFLIP_QUEUE_WAIT:-$QW}
   [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX}
   echo "power profile: $PROF (queue $DSFLIP_QUEUE, wait ${DSFLIP_QUEUE_WAIT} ms, CPU max ${DSFLIP_CPU_MAX:-hardware})"
+  # Performance log, the same samples tools/rgds-monitor.py takes, and only after the player allowed the upload
+  # (first launch asks; Nintendo DS > Share performance logs changes it). restore.sh uploads on quit. Test
+  # launches don't record.
+  if [ ! -e /tmp/rocknixds-testing ] && [ -f $D/dsflip/perf-session.py ]; then
+    sv=$(grep -F "nds[\"$GAME\"].share_performance_logs=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+    [ -n "$sv" ] || sv=$(grep '^nds\.share_performance_logs=' $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+    case "$sv" in
+      1|yes)
+        rm -rf /tmp/dsflip-perf/active
+        mkdir -p /tmp/dsflip-perf/active
+        ROCKNIXDS_PROFILE=$PROF ROCKNIXDS_ROM="$GAME" \
+          nice -n 19 python3 -u $D/dsflip/perf-session.py sample /tmp/dsflip-perf/active &
+        echo $! > /tmp/dsflip-perf/active/pid
+        ;;
+    esac
+  fi
   cd $D
   # no wait for the display: libdsflip retries DRM master itself while seatd lets go of it (~0.4 s after sway)
   SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log \
@@ -122,7 +146,7 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # the unit's timeout. Kill it at once (what the exit hotkey does), put the governor back and leave: starting
   # sway/ES from inside a unit that systemd is stopping waits behind that stop (measured: 40 s), so the unit's
   # ExecStopPost (restore.sh) brings them back instead.
-  trap 'kill -9 $P 2>/dev/null; wait $P; [ -s /tmp/dsflip-cpu-max ] && cat /tmp/dsflip-cpu-max > $CPU/scaling_max_freq 2>/dev/null; record; [ -n "$GPU_GOV" ] && echo "$GPU_GOV" > $GPU/governor 2>/dev/null; echo "$(date) stopped by the unit: restore.sh brings sway + ES back"; exit 0' TERM INT
+  trap 'kill -9 $P 2>/dev/null; wait $P; stop_perf; [ -s /tmp/dsflip-cpu-max ] && cat /tmp/dsflip-cpu-max > $CPU/scaling_max_freq 2>/dev/null; record; [ -n "$GPU_GOV" ] && echo "$GPU_GOV" > $GPU/governor 2>/dev/null; echo "$(date) stopped by the unit: restore.sh brings sway + ES back"; exit 0' TERM INT
   # libdsflip couldn't take the display: don't leave black panels. It decides within ~6 s at worst (3 s for DRM
   # master, 3 s for the shader); no verdict in 10 s means it isn't loaded or hangs.
   v=; i=0
@@ -162,6 +186,7 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   fi
   # the play stats (Python, ~0.3 s) are written while sway starts, not before it: restore.sh starts ES only once
   # they're done (ES reads them when it starts)
+  stop_perf
   RECORD_PID=
   if [ -s $NOTICE ]; then echo "notice: $(cat $NOTICE)"; else record & RECORD_PID=$!; fi
   RECORD_PID=$RECORD_PID $D/dsflip/restore.sh   # governor back, sway (checked for outputs), ES, then the notice

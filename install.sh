@@ -15,6 +15,8 @@
 #   --restore-files with --uninstall: put back whole config files from the install-time backups instead
 #   --version       print the ROCKNIXDS version this installer belongs to
 # Env: RGDS_SRC=/path/to/checkout installs from a local copy instead of downloading.
+#      ROCKNIXDS_UPLOAD_TOKEN, if set, is stored on the device for the performance-log upload (mode 600) and is
+#      not printed. Leave it unset to keep an existing token.
 # Everything it replaces is backed up under /storage/rgds-rocknix-backup/ first.
 set -e
 
@@ -117,7 +119,8 @@ if [ $UNINSTALL = 1 ]; then
     fi
     rm -f /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
     rm -f /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh /storage/.config/autostart/rocknixds-menu-power \
-          /storage/.config/emulationstation/scripts/start/rocknixds-menu-power.sh
+          /storage/.config/emulationstation/scripts/start/rocknixds-menu-power.sh \
+          /storage/.config/emulationstation/scripts/start/rocknixds-share-logs.sh
     if [ -f /storage/.config/system.d/batteryledstatus.service.d/rocknixds.conf ]; then      # ROCKNIX's LED monitor again
         rm -f /storage/.config/system.d/batteryledstatus.service.d/rocknixds.conf
         rmdir /storage/.config/system.d/batteryledstatus.service.d 2>/dev/null
@@ -293,7 +296,8 @@ if [ $DSFLIP_ON = 1 ]; then
     cp $SD/libsuperdrastic.so $WORK/dsflip/libdsflip.so     # the name ROCKNIXDS's scripts and older installs use
     cp "$SRC/dsflip/device/session.sh" "$SRC/dsflip/device/restore.sh" \
        "$SRC/dsflip/device/drastic-wrapper.sh" "$SRC/dsflip/device/install.sh" "$SRC/dsflip/device/es-features.sh" \
-       "$SRC/dsflip/device/fast-switch" "$SRC/dsflip/device/playstats.py" "$SRC/dsflip/device/menu-power.sh" \
+       "$SRC/dsflip/device/fast-switch" "$SRC/dsflip/device/playstats.py" "$SRC/dsflip/device/perf-session.py" \
+       "$SRC/dsflip/device/es-share-logs.sh" "$SRC/dsflip/device/menu-power.sh" \
        "$SRC/dsflip/device/battery-led-status" "$SRC/dsflip/device/powerstate" $WORK/dsflip/
     sh $WORK/dsflip/install.sh
 
@@ -376,6 +380,17 @@ else
     ID=$(curl -fsSL --max-time 15 https://api.github.com/repos/$REPO/commits/$BRANCH 2>/dev/null | sed -n 's/^  "sha": *"\([0-9a-f]*\)".*/\1/p' | head -n1)
 fi
 echo "${ID:-unknown}" > $RD/installed-id; rm -f $RD/notified-id
+# The performance-log upload (beta 3) reads this file. It is never fetched from the repository.
+if [ -n "$ROCKNIXDS_UPLOAD_TOKEN" ]; then
+    oldmask=$(umask)
+    umask 077
+    printf '%s\n' "$ROCKNIXDS_UPLOAD_TOKEN" > $RD/upload.token
+    chmod 600 $RD/upload.token
+    umask "$oldmask"
+    unset ROCKNIXDS_UPLOAD_TOKEN
+fi
+if [ -s $RD/upload.token ]; then say "Performance-log upload token: present"
+else say "Performance-log upload token: not set (logs stay on the device until $RD/upload.token exists)"; fi
 
 RGDS_VERSION=$(cat "$SRC/VERSION" 2>/dev/null || echo unknown)
 echo "$RGDS_VERSION$([ "$BRANCH" = main ] || echo " ($BRANCH)")" > $VERSION_FILE
