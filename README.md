@@ -36,6 +36,12 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 
 ### New in 1.5 (beta)
 
+- **Beta 5.** The CPU stays at 816 MHz through a single heavy frame when the screen is still at 60 fps and
+  nothing was dropped (battery sessions were leaving 816 after one spike the queue had already hidden). The
+  volume rocker shows a card on the top screen during a game. *Resume on quit*, *power profile* and *share
+  performance logs* use short values so they fit the options panel. "Launch this game at startup" runs once
+  per boot instead of again every time you quit. The "UPDATE AVAILABLE" pill for a ROCKNIX OS build no longer
+  sits on the game list while OS updates are hidden.
 - **Performance logs upload with no token on the device** (beta 4). Quitting a game publishes the session on the
   [`device-logs`](https://github.com/JorreFog/ROCKNIXDS/tree/device-logs) branch. The handheld posts the file to a
   queue and a GitHub Action commits it, so it does not need a write token. A log kept from beta 3 is sent the next
