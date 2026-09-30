@@ -45,8 +45,11 @@ REVEAL_DELAY=1          # after ES answers its API, before its window is shown. 
 # restarts ES when the choice switches between the two.
 THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
 if [ -z "$THEME_SET" ] || [ "$THEME_SET" = dii-ess-aye ]; then
-    ES_ARGS="--resolution $CANVAS_W $PH"
-    LAYOUT='[app_id="emulationstation"] floating enable, fullscreen disable, move absolute position 0 0'
+    # --windowed: without it ES asks for a fullscreen window and Wayland sizes that to one panel, then the
+    # 3-panel theme is scaled onto the 2-panel desktop (the top panel showed only a clipped edge, the bottom
+    # a cropped logo). The canvas is three panels wide; the right third hangs off the 2-panel desktop.
+    ES_ARGS="--resolution $CANVAS_W $PH --windowed"
+    LAYOUT="[app_id=\"emulationstation\"] floating enable, fullscreen disable, resize set ${CANVAS_W} px ${PH} px, move absolute position 0 0"
     OUTPUTS='output DSI-1 power on'
 else
     ES_ARGS=
@@ -119,6 +122,10 @@ fi
         sleep 0.1
     done
     sleep $REVEAL_DELAY
+    # Pin the panels side by side before placing the canvas. A desktop that is not exactly two panels wide
+    # crops the left third (top) and the middle third (bottom).
+    swaymsg -s "$SOCK" "output DSI-2 pos 0 0" >/dev/null 2>&1
+    swaymsg -s "$SOCK" "output DSI-1 pos $PW 0" >/dev/null 2>&1
     swaymsg -s "$SOCK" "$OUTPUTS" >/dev/null 2>&1
     if [ -n "$ES_ARGS" ]; then
         swaymsg -s "$SOCK" "[app_id=\"emulationstation\"] scratchpad show, floating enable, fullscreen disable, move absolute position 0 0, focus" >/dev/null 2>&1

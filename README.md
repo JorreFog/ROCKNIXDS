@@ -25,7 +25,7 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 - The **panel timing fix**, the older **vsync pacing shim**, and the measurement tools (including a DS
   stress-test ROM) behind all the numbers below.
 
-### RG DS Plus (experimental, not yet tested on the hardware)
+### RG DS Plus (experimental)
 
 The RG DS Plus has the same RK3568 SoC and the same layout (DSI-2 = top panel, one Goodix touchscreen on the bottom
 panel at i2c-5, same buttons), but two **1024×768** panels. ROCKNIX supports it
@@ -41,8 +41,11 @@ the RG DS; none of it has run on a Plus yet, so please report what you see.
   RG DS, so the GPU runs at full clock with any shader; **ds-fsr** is estimated at ~24 ms per frame there and will
   drop frames.
 - **Theme:** ES runs on a 3072×768 canvas (same 4:1 shape as the RG DS's 1920×480, so the theme scales as is,
-  and its SVG art stays sharp); menus and popups are sized to one 1024 px screen; the boot splash has a
-  2048×768 version that says *RG DS Plus*.
+  and its SVG art stays sharp). The two panels are a 2048×768 desktop, so the window is created windowed at
+  that canvas size and pinned at the top-left: the left third is the top panel, the middle third is the bottom
+  panel, and the right third hangs off the desktop. A fullscreen window was being scaled onto the 2048-wide
+  desktop instead, which left a clipped clock on the top panel and a cropped logo on the bottom (1.4-plus-alpha.2).
+  Menus and popups are sized to one 1024 px screen; the boot splash has a 2048×768 version that says *RG DS Plus*.
 - **`--with-60hz`** retunes the Plus from 60.17 Hz to 60.003 Hz (horizontal front porch 120 → 122, vertical
   16 → 17; the porches only grow). It first checks that the panels' pixel clock is the 62769231 Hz (816 MHz / 13)
   it was worked out for, and changes nothing otherwise.
