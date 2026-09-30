@@ -1,0 +1,35 @@
+# Scheduled workflows run from the default branch only, so this file lives on main.
+# ROCKNIXDS on the device posts a performance session to ntfy.sh when a game quits;
+# this commits that file onto device-logs. It never pushes main or beta.
+name: device performance logs
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: importer
+      - uses: actions/checkout@v4
+        with:
+          ref: device-logs
+          path: device-logs
+      - run: python3 importer/.github/ingest-perf.py device-logs
+      - name: commit imported logs
+        working-directory: device-logs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data/device
+          if git diff --cached --quiet; then
+            echo "nothing new"
+            exit 0
+          fi
+          git commit -m "perf: import device logs"
+          git push origin HEAD:device-logs
