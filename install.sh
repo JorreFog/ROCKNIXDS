@@ -180,15 +180,19 @@ if [ $DSFLIP_ON = 1 ]; then
     set -- $(grep -v '^#' "$SRC/SUPERDRASTIC"); SD_VER=$1 SD_SUM=$2
     [ -n "$SD_VER" ] || die "no SuperDrastic version in SUPERDRASTIC"
     SD_TGZ=$WORK/superdrastic.tar.gz
+    VENDORED="$SRC/dsflip/superdrastic-$SD_VER-aarch64.tar.gz"
     if [ -n "$RGDS_SUPERDRASTIC" ]; then
         say "Using local SuperDrastic package $RGDS_SUPERDRASTIC"; cp "$RGDS_SUPERDRASTIC" $SD_TGZ || die "can't read $RGDS_SUPERDRASTIC"
+    elif [ -f "$VENDORED" ]; then
+        say "Using the SuperDrastic $SD_VER package shipped with this ROCKNIXDS"
+        cp "$VENDORED" $SD_TGZ
     else
         say "Downloading SuperDrastic $SD_VER"
         curl -fsSL -o $SD_TGZ "https://github.com/JorreFog/SuperDrastic/releases/download/v$SD_VER/superdrastic-$SD_VER-aarch64.tar.gz" \
             || die "couldn't download SuperDrastic $SD_VER"
-        set -- $(sha256sum $SD_TGZ)
-        [ "$1" = "$SD_SUM" ] || die "SuperDrastic $SD_VER download doesn't match its checksum"
     fi
+    set -- $(sha256sum $SD_TGZ)
+    [ "$1" = "$SD_SUM" ] || die "SuperDrastic $SD_VER doesn't match its checksum"
     mkdir -p $WORK/sd && tar xzf $SD_TGZ -C $WORK/sd --strip-components=1 || die "SuperDrastic package damaged"
     [ -f $WORK/sd/libsuperdrastic.so ] || die "no libsuperdrastic.so in the SuperDrastic package"
     SD=$WORK/sd

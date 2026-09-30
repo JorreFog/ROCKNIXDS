@@ -86,9 +86,10 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # the clock within the profile's range; the frame queue trades a refresh of input latency for riding out late
   # frames, and the wait keeps a full queue from dropping early ones (measured 2026-09-29, Black 2 at 2x, walking:
   # fixed 1416 MHz with a 2-frame queue + wait 0.07 hitches/s, 1104 MHz 0.13/s; without the wait 0.11-3.2 and 0.73).
-  #   performance: 1104-1992 MHz, 1-frame queue (the lowest latency)
-  #   balanced:    1104-1416 MHz, 2-frame queue + 20 ms wait
-  #   battery:     1104 MHz, 3-frame queue + 20 ms wait (more cover for the late frames a low clock makes)
+  #   performance: 816-1992 MHz, 1-frame queue (the lowest latency)
+  #   balanced:    816-1416 MHz, 2-frame queue + 20 ms wait
+  #   battery:     816-1104 MHz, 3-frame queue + 20 ms wait (more cover for the late frames a low clock makes)
+  # The 816 MHz floor is libdsflip's (repeated frames are not counted as drops). DSFLIP_CPU_MIN overrides it.
   # DSFLIP_* already in the environment (tests, systemctl set-environment) win over the profile.
   PROF=$(grep -F "nds[\"$GAME\"].power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$PROF" ] || PROF=$(grep "^nds.power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)

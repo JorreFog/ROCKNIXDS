@@ -36,6 +36,11 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 
 ### New in 1.5 (beta)
 
+- **The CPU governor can try 816 MHz** (beta 2). A still scene there used to overflow the frame queue and the
+  governor treated every repeat as the game falling behind, so it refused to stay. A repeated picture is now
+  discarded and logged as `dup=` instead. Balanced runs 816–1416 MHz, performance 816–1992, battery saver up to
+  1104. A frame that actually changed still raises the clock. Not measured on the device yet: if 816 and 1104
+  show the same battery current, the saving is small.
 - **Settings that break ROCKNIXDS are gone from the menus:** the dual-screen layout options, the CPU/GPU governors,
   the GPU driver, video mode and rotation, DTB overlays, the developer options, factory reset and the emulator-config
   reset, and the DS system's emulator choice (DS games run on ROCKNIXDS's DraStic only). Development: `touch
@@ -58,10 +63,10 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
   most didn't, and they used to hold the clock at its top for most of a session.
 - **Power profiles.** *Game settings > Per system advanced configuration > Nintendo DS > Power profile* (at the
   bottom of Game settings), or per game (hold A on it > *Advanced game options*):
-  - *balanced* (the default): CPU up to 1416 MHz, one more frame of queue (+17 ms input latency), and a full queue
+  - *balanced* (the default): CPU 816–1416 MHz, one more frame of queue (+17 ms input latency), and a full queue
     holds DraStic for a moment instead of dropping a frame;
-  - *performance*: CPU up to 1992 MHz and the shortest queue, for the lowest latency;
-  - *battery saver*: CPU at 1104 MHz, three frames of queue (+33 ms).
+  - *performance*: CPU 816–1992 MHz and the shortest queue, for the lowest latency;
+  - *battery saver*: CPU up to 1104 MHz, three frames of queue (+33 ms).
 
   Measured (Black 2 at 2x, walking): 1416 MHz with balanced's queue 0.07 hitches/s and no dropped frames, about
   what performance gets while averaging ~1570 MHz and going up to 1992.

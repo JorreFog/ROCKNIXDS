@@ -45,7 +45,7 @@ add_ours() {
             print fi "<feature name=\"power profile\">"
             print ind "<choice name=\"balanced (up to 1416 MHz, +1 frame latency)\" value=\"balanced\" />"
             print ind "<choice name=\"performance (up to 1992 MHz, lowest latency)\" value=\"performance\" />"
-            print ind "<choice name=\"battery saver (1104 MHz, +2 frames latency)\" value=\"battery\" />"
+            print ind "<choice name=\"battery saver (up to 1104 MHz, +2 frames latency)\" value=\"battery\" />"
             print fi "</feature>"
             next
         }
