@@ -172,9 +172,12 @@ its measure-first phases are in [`docs/drastic-2x-plan.md`](docs/drastic-2x-plan
   frames arrive and commits the newest one at the opposite phase. The latch avoids a zone around *both*
   panels' vblanks: a commit must land ≥1.3 ms before the earlier (bottom) one, and the margin grows if a
   commit still misses. `DSFLIP_PACING=immediate` gives the old behaviour.
-- **Presenter thread with a one-frame queue.** `SDL_RenderPresent` never blocks. At 2× DraStic's frame times
+- **Presenter thread with a short queue.** `SDL_RenderPresent` never blocks. At 2× DraStic's frame times
   alternate unevenly, so a frame can wait one refresh in the queue and each refresh still shows one frame; a
-  third frame drops the oldest. An unchanged panel keeps its buffer. `DSFLIP_QUEUE=0` gives a plain mailbox.
+  further frame drops the oldest. A repeated picture (the frame didn't change) is the one dropped, and that
+  does not count as the game falling behind, so a still scene can sit at a lower clock. An unchanged panel
+  keeps its buffer. `DSFLIP_QUEUE=0` is a mailbox, `DSFLIP_QUEUE=2` lets two frames wait (a catch-up burst),
+  `DSFLIP_DUPCHECK=0` turns the repeat check off.
 - **DraStic's menu.** It's an 800×480 RGB565 texture, shown on the bottom panel with hardware scaling while
   the top panel keeps the last game frame. It takes no touch: DraStic's menu loop reads only key and joystick
   events (there is no mouse or finger handling in the binary), so it is navigated with the d-pad and buttons.
@@ -334,7 +337,8 @@ Logged every 10 s during real play (HeartGold at 2×, walking around, 5–6 min 
 - **CPU:** ROCKNIX runs DraStic with the `performance` governor, so up to 1.3 all four cores sat at their
   1992 MHz maximum the whole time (the table above is from then). Since 1.4, libdsflip sets the clock the game
   needs and no lower: HeartGold at 2× averages ~1600–1800 MHz with the same smoothness (see the
-  [optimization report](docs/optimization-1.4.md#a-cpu-governor-inside-libdsflip)). DraStic uses roughly 70% of
+  [optimization report](docs/optimization-1.4.md#a-cpu-governor-inside-libdsflip)). The floor is 816 MHz;
+  a real dropped frame still raises the clock, and `DSFLIP_CPU_MIN=1104000` is the previous floor. DraStic uses roughly 70% of
   one core in total at 1992 MHz: the main (emulation) thread at 36–41%, plus 3D/helper threads at ~13–15%,
   ~11–13% and ~5%.
 - **GPU:** with libdsflip and no shader, nothing is rendered on the GPU during play: no texture upload, no shader and no
