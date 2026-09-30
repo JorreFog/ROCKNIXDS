@@ -36,15 +36,16 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 
 ### New in 1.5 (beta)
 
+- **Performance logs upload with no token on the device** (beta 4). Quitting a game publishes the session on the
+  [`device-logs`](https://github.com/JorreFog/ROCKNIXDS/tree/device-logs) branch. The handheld posts the file to a
+  queue and a GitHub Action commits it, so it does not need a write token. A log kept from beta 3 is sent the next
+  time a game quits. A copy stays on the device at `/storage/.config/rocknixds/logs/`.
 - **Performance logs, if you allow them** (beta 3). The first time the menu appears it asks: A uploads a log to
   this repository when you quit a game, B does not. The log is the same record as
   [`tools/rgds-monitor.py`](tools/rgds-monitor.py): once a second, frames per second, dropped frames, CPU and GPU
-  clocks, temperature, battery and the game file name, with a summary line at the end. Sessions are committed on
-  the [`device-logs`](https://github.com/JorreFog/ROCKNIXDS/tree/device-logs) branch (`docs/data/device/`), so this
-  beta does not move on every quit. Change the answer later under *Nintendo DS > Share performance logs*. The
-  upload reads a token from `/storage/.config/rocknixds/upload.token` on the device (a fine-grained personal access
-  token for this repository, contents read and write). That token is not in the git tree. Without it the log stays
-  on the device, under `/storage/.config/rocknixds/logs/`.
+  clocks, temperature, battery and the game file name, with a summary line at the end. Sessions land on
+  `device-logs` (`docs/data/device/`), so this beta does not move on every quit. Change the answer later under
+  *Nintendo DS > Share performance logs*.
 - **The CPU governor can try 816 MHz** (beta 2). A still scene there used to overflow the frame queue and the
   governor treated every repeat as the game falling behind, so it refused to stay. A repeated picture is now
   discarded and logged as `dup=` instead. Balanced runs 816–1416 MHz, performance 816–1992, battery saver up to

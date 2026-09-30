@@ -380,7 +380,8 @@ else
     ID=$(curl -fsSL --max-time 15 https://api.github.com/repos/$REPO/commits/$BRANCH 2>/dev/null | sed -n 's/^  "sha": *"\([0-9a-f]*\)".*/\1/p' | head -n1)
 fi
 echo "${ID:-unknown}" > $RD/installed-id; rm -f $RD/notified-id
-# The performance-log upload (beta 3) reads this file. It is never fetched from the repository.
+# Optional: a token here commits the performance log directly. Without it the handheld still queues the log
+# and the repository imports it. The token is never fetched from the repository.
 if [ -n "$ROCKNIXDS_UPLOAD_TOKEN" ]; then
     oldmask=$(umask)
     umask 077
@@ -389,8 +390,6 @@ if [ -n "$ROCKNIXDS_UPLOAD_TOKEN" ]; then
     umask "$oldmask"
     unset ROCKNIXDS_UPLOAD_TOKEN
 fi
-if [ -s $RD/upload.token ]; then say "Performance-log upload token: present"
-else say "Performance-log upload token: not set (logs stay on the device until $RD/upload.token exists)"; fi
 
 RGDS_VERSION=$(cat "$SRC/VERSION" 2>/dev/null || echo unknown)
 echo "$RGDS_VERSION$([ "$BRANCH" = main ] || echo " ($BRANCH)")" > $VERSION_FILE

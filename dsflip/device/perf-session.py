@@ -10,15 +10,19 @@ A session file is the monitor's JSON lines (game, fps, drops, clocks, load, temp
 dsflip.log lines) and, at the end, the same summary object. Quit is a hard exit here, so the session closes in
 finish instead of after the monitor's 6 s gap (that gap is only for an SSH connection dropping).
 
-Upload commits the file to the device-logs branch of JorreFog/ROCKNIXDS (docs/data/device/<id>/). The beta
-branch the updater tracks is left alone. The token is read from
-/storage/.config/rocknixds/upload.token and is never written into the repository. Nothing is sampled or
-uploaded until nds.share_performance_logs is 1.
+Upload publishes the file on the device-logs branch of JorreFog/ROCKNIXDS (docs/data/device/<id>/). The beta
+branch the updater tracks is left alone. The handheld posts the log to a queue (.github/ingest-perf.py on main
+commits it); a token in /storage/.config/rocknixds/upload.token is optional and commits directly. Nothing is
+sampled or uploaded until nds.share_performance_logs is 1.
 """
 import json, os, re, shutil, signal, sys, time, urllib.error, urllib.request
 
 REPO = "JorreFog/ROCKNIXDS"
 BRANCH = "device-logs"
+# Keep in step with .github/ingest-perf.py on main. The topic is public: it can only receive logs, not push code.
+QUEUE_TOPIC = "rocknixds-perf-c4a91e7b2d08f653"
+QUEUE = os.environ.get("ROCKNIXDS_PERF_QUEUE", "https://ntfy.sh/" + QUEUE_TOPIC)
+LOGNAME = re.compile(r"^[0-9]{8}-[0-9]{6}_[A-Za-z0-9._-]{1,80}\.jsonl$")
 API = os.environ.get("ROCKNIXDS_PERF_API", "https://api.github.com/repos/" + REPO)
 CFG = os.environ.get("ROCKNIXDS_SYSCFG", "/storage/.config/system/configs/system.cfg")
 STATE = os.environ.get("ROCKNIXDS_STATE", "/storage/.config/rocknixds")
@@ -61,8 +65,8 @@ def rd(p, d=""):
 
 def redact(line):
     line = _GHTOK.sub("[redacted]", line)
-    line = _SECRET.sub(r"\1\2[redacted]", line)
-    return _RAUSER.sub(r"\1[redacted]", line)
+    line = _RAUSER.sub(r"\1[redacted]", line)  # before the token= rule, which would eat "token as <name>"
+    return _SECRET.sub(r"\1\2[redacted]", line)
 
 
 def parse_log(lines, st):
@@ -527,18 +531,55 @@ def es_post(path, text, timeout=5):
     urllib.request.urlopen(req, timeout=timeout).read()
 
 
-def note_missing_token():
-    flag = os.path.join(STATE, "upload-token-noted")
-    if os.path.exists(flag):
+def notify_once(flag, msg):
+    path = os.path.join(STATE, flag)
+    if os.path.exists(path):
         return
-    msg = "Performance log kept on this device. Uploading to GitHub needs a token in " + os.path.join(STATE, "upload.token") + "."
     for _ in range(20):
         try:
             es_post("/notify", msg)
-            open(flag, "w").write("1\n")
+            open(path, "w").write("1\n")
             return
         except Exception:
             time.sleep(1)
+
+
+def github_has(dev, name):
+    """True when device-logs already has this session. Unknown (rate limit, offline) is False."""
+    if os.environ.get("ROCKNIXDS_PERF_SKIP_GITHUB_CHECK"):
+        return False
+    if not re.fullmatch(r"[0-9a-f]{8,32}", dev or "") or not LOGNAME.fullmatch(name or ""):
+        return False
+    url = "https://api.github.com/repos/%s/contents/docs/data/device/%s/%s?ref=%s" % (REPO, dev, name, BRANCH)
+    req = urllib.request.Request(url, method="GET")
+    req.add_header("User-Agent", "ROCKNIXDS")
+    req.add_header("Accept", "application/vnd.github+json")
+    try:
+        urllib.request.urlopen(req, timeout=15).read()
+        return True
+    except Exception:
+        return False
+
+
+def recently_queued(path, window=900):
+    try:
+        return time.time() - float(open(path + ".queued").read().strip()) < window
+    except (OSError, ValueError):
+        return False
+
+
+def queue_log(dev, name, text):
+    """Hand the session to the queue the repository imports. No write token on the device."""
+    data = text.encode()
+    if len(data) > 8000000:
+        raise ValueError("log is too large")
+    req = urllib.request.Request(QUEUE, data=data, method="PUT")
+    req.add_header("Filename", name)
+    req.add_header("Title", dev)
+    req.add_header("Content-Type", "application/octet-stream")
+    req.add_header("User-Agent", "ROCKNIXDS")
+    with urllib.request.urlopen(req, timeout=60) as r:
+        r.read()
 
 
 def logs_dir():
@@ -550,42 +591,59 @@ def logs_dir():
 def prune(d):
     names = sorted(n for n in os.listdir(d) if n.endswith(".jsonl"))
     for n in names[:-40]:
-        for suf in ("", ".uploaded", ".upload-error"):
+        for suf in ("", ".uploaded", ".upload-error", ".queued"):
             try:
                 os.remove(os.path.join(d, n + suf))
             except OSError:
                 pass
 
 
-def try_upload(path, text, summary):
-    """True when GitHub has the file. A missing token keeps the local copy and says so once."""
-    if os.path.exists("/tmp/rocknixds-testing"):
-        note("not uploaded (test launch): " + os.path.basename(path))
-        return False
-    tok = token()
-    if not tok:
-        note("not uploaded (no token): " + os.path.basename(path))
-        note_missing_token()
-        return False
-    dev = summary.get("device") or device_id()
-    rel = "docs/data/device/%s/%s" % (dev, os.path.basename(path))
+def mark_uploaded(path, text):
     try:
-        sha = upload_text(rel, text, commit_message(summary), tok)
-    except Exception as e:
-        code = getattr(e, "code", "")
-        body = getattr(e, "body", str(e))[:200].replace(tok, "[redacted]")
-        note("upload failed %s: %s" % (code, body))
-        try:
-            open(path + ".upload-error", "w").write("%s %s\n" % (code, body))
-        except OSError:
-            pass
-        return False
-    try:
-        open(path + ".uploaded", "w").write(sha + "\n")
+        open(path + ".uploaded", "w").write(text + "\n")
         os.remove(path + ".upload-error")
     except OSError:
         pass
-    note("uploaded %s %s" % (rel, sha[:12]))
+
+
+def try_upload(path, text, summary):
+    """True when the session is on GitHub or accepted by the queue. The local copy always stays."""
+    if os.path.exists("/tmp/rocknixds-testing"):
+        note("not uploaded (test launch): " + os.path.basename(path))
+        return False
+    dev = summary.get("device") or device_id()
+    name = os.path.basename(path)
+    if github_has(dev, name):
+        mark_uploaded(path, "github")
+        note("already on device-logs: " + name)
+        return True
+    tok = token()
+    if tok:
+        rel = "docs/data/device/%s/%s" % (dev, name)
+        try:
+            sha = upload_text(rel, text, commit_message(summary), tok)
+            mark_uploaded(path, sha)
+            note("uploaded %s %s" % (rel, sha[:12]))
+            return True
+        except Exception as e:
+            body = getattr(e, "body", str(e))[:200].replace(tok, "[redacted]")
+            note("direct upload failed %s: %s" % (getattr(e, "code", ""), body))
+    if recently_queued(path):
+        return True
+    if not LOGNAME.fullmatch(name) or not re.fullmatch(r"[0-9a-f]{8,32}", dev or ""):
+        note("not queued (bad name): " + name)
+        return False
+    try:
+        queue_log(dev, name, text)
+    except Exception as e:
+        note("queue failed: " + str(e)[:200])
+        notify_once("upload-failed-noted", "Performance log stayed on the device. The upload did not go through.")
+        return False
+    try:
+        open(path + ".queued", "w").write(str(time.time()))
+    except OSError:
+        pass
+    note("queued " + name)
     return True
 
 
@@ -883,10 +941,17 @@ def selftest():
             box["patched"] = body["sha"]
             self._send(200, {})
 
+        def do_PUT(self):
+            n = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(n)
+            box["put"] = {"title": self.headers.get("Title"), "filename": self.headers.get("Filename"), "body": raw.decode()}
+            self._send(200, {"id": "queued"})
+
     httpd = http.server.HTTPServer(("127.0.0.1", 0), H)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    global API, CFG, STATE
+    global API, CFG, STATE, QUEUE
     API = "http://127.0.0.1:%d" % httpd.server_address[1]
+    os.environ["ROCKNIXDS_PERF_SKIP_GITHUB_CHECK"] = "1"
     tmp = tempfile.mkdtemp()
     try:
         CFG = os.path.join(tmp, "system.cfg")
@@ -921,6 +986,14 @@ def selftest():
         summ = json.loads(text.strip().splitlines()[-1])
         assert summ["profile"] == "balanced" and summ["queue"] == 2 and summ["device"] == "abc123def456"
         assert not os.path.isdir(d)
+        os.remove(os.path.join(STATE, "upload.token"))
+        QUEUE = API
+        queued = os.path.join(STATE, "logs", "20231114-221320_Heart_Gold.nds.jsonl")
+        open(queued, "w").write(text)
+        assert try_upload(queued, text, summ)
+        assert box["put"]["title"] == "abc123def456"
+        assert box["put"]["filename"] == "20231114-221320_Heart_Gold.nds.jsonl"
+        assert "hunter2" not in box["put"]["body"] and '"summary": true' in box["put"]["body"]
     finally:
         httpd.shutdown()
         shutil.rmtree(tmp)
