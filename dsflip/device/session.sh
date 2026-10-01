@@ -151,8 +151,9 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # its main thread and its 3D helpers then waited on each other's condition variables forever, from the first 3D
   # frame on); 2: DraStic's own threads are left alone (its main thread is moved to CPU 3 only), libdsflip's,
   # Mali's and PipeWire's threads go to 0-2; 3: like 2 without touching DraStic at all; 0: off.
-  if [ "${DSFLIP_PIN:-1}" != 0 ] && [ "$(cat /sys/devices/system/cpu/online 2>/dev/null)" = 0-3 ] && command -v taskset >/dev/null; then
-    echo "CPU placement: mode ${DSFLIP_PIN}"
+  PIN=${DSFLIP_PIN:-1}
+  if [ "$PIN" != 0 ] && [ "$(cat /sys/devices/system/cpu/online 2>/dev/null)" = 0-3 ] && command -v taskset >/dev/null; then
+    echo "CPU placement: mode $PIN"
     ( n=0; while kill -0 $P 2>/dev/null; do
         # Not before DraStic's 3D helper threads exist and have run: a thread created while the main thread is
         # confined to one CPU inherits that CPU, can't run alongside it, and DraStic's first hand-off to its
@@ -163,7 +164,7 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
         if [ $ran -lt 2 ]; then sleep 0.5; continue; fi
         [ $n -eq 0 ] && sleep 3          # and then a moment more: the pool's first hand-offs are the race
         for t in /proc/$P/task/[0-9]*; do tid=${t##*/}; c=$(cat $t/comm 2>/dev/null)
-          case "$DSFLIP_PIN" in
+          case "$PIN" in
             1) if [ "$tid" = "$P" ]; then taskset -p -c 3 $tid; else taskset -p -c 0-2 $tid; fi ;;
             2) if [ "$tid" = "$P" ]; then taskset -p -c 3 $tid; else case "$c" in drastic*) ;; *) taskset -p -c 0-2 $tid ;; esac; fi ;;
             3) case "$c" in drastic*) ;; *) taskset -p -c 0-2 $tid ;; esac ;;
@@ -174,7 +175,7 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
         done >/dev/null 2>&1
         n=$((n + 1)); if [ $n -lt 10 ]; then sleep 1; else sleep 10; fi
       done ) &
-    PIN=$!
+    PINNER=$!
   fi
   # ROCKNIX's powerstate service re-applies a GPU profile whenever the battery status flips between charging and
   # discharging ("auto" on AC, system.gpuperf on battery): plugging or unplugging mid-game, or a weak charger that
@@ -198,7 +199,7 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # the unit's timeout. Kill it at once (what the exit hotkey does), put the governor back and leave: starting
   # sway/ES from inside a unit that systemd is stopping waits behind that stop (measured: 40 s), so the unit's
   # ExecStopPost (restore.sh) brings them back instead.
-  trap '[ -n "$WATCH" ] && kill $WATCH 2>/dev/null; [ -n "$PIN" ] && kill $PIN 2>/dev/null; kill -9 $P 2>/dev/null; wait $P; [ -s /tmp/dsflip-cpu-max ] && cat /tmp/dsflip-cpu-max > $CPU/scaling_max_freq 2>/dev/null; record; [ -n "$GPU_GOV" ] && echo "$GPU_GOV" > $GPU/governor 2>/dev/null; echo "$(date) stopped by the unit: restore.sh brings sway + ES back"; exit 0' TERM INT
+  trap '[ -n "$WATCH" ] && kill $WATCH 2>/dev/null; [ -n "$PINNER" ] && kill $PINNER 2>/dev/null; kill -9 $P 2>/dev/null; wait $P; [ -s /tmp/dsflip-cpu-max ] && cat /tmp/dsflip-cpu-max > $CPU/scaling_max_freq 2>/dev/null; record; [ -n "$GPU_GOV" ] && echo "$GPU_GOV" > $GPU/governor 2>/dev/null; echo "$(date) stopped by the unit: restore.sh brings sway + ES back"; exit 0' TERM INT
   # libdsflip couldn't take the display: don't leave black panels. It decides within ~6 s at worst (3 s for DRM
   # master, 3 s for the shader); no verdict in 10 s means it isn't loaded or hangs.
   v=; i=0
@@ -220,7 +221,7 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   esac
   [ -n "$WATCH" ] && kill $WATCH 2>/dev/null
   wait $P; rc=$?
-  [ -n "$PIN" ] && kill $PIN 2>/dev/null
+  [ -n "$PINNER" ] && kill $PINNER 2>/dev/null
   # the full CPU clock back at once: libdsflip's governor may have lowered the limit, and everything until restore.sh
   # (play stats, sway and ES starting) ran at it (the way back to the menu was ~1.2 s slower)
   cpu_full() { [ -s /tmp/dsflip-cpu-max ] && cat /tmp/dsflip-cpu-max > $CPU/scaling_max_freq 2>/dev/null; }
