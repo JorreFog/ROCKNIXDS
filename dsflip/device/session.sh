@@ -143,11 +143,27 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # is a repeated frame and a gap in the game's audio. The interrupts stay where the kernel put them (all on CPU 0,
   # ~5% of it): moving them off CPU 3 as well made the display controller's interrupt stop firing on some starts
   # (flips never completed, the game froze at its first frames) and once took the whole device down.
+  # DSFLIP_PIN=1: the main thread to CPU 3 and every other DraStic thread to 0-2 (froze DraStic on 3 of 4 starts:
+  # its main thread and its 3D helpers then waited on each other's condition variables forever, from the first 3D
+  # frame on); 2: DraStic's own threads are left alone (its main thread is moved to CPU 3 only), libdsflip's,
+  # Mali's and PipeWire's threads go to 0-2; 3: like 2 without touching DraStic at all; 0: off.
   if [ "${DSFLIP_PIN:-1}" != 0 ] && [ "$(cat /sys/devices/system/cpu/online 2>/dev/null)" = 0-3 ] && command -v taskset >/dev/null; then
-    echo "CPU placement: DraStic's main thread on CPU 3, the rest on 0-2"
+    echo "CPU placement: mode ${DSFLIP_PIN}"
     ( n=0; while kill -0 $P 2>/dev/null; do
-        for t in /proc/$P/task/[0-9]*; do tid=${t##*/}
-          if [ "$tid" = "$P" ]; then taskset -p -c 3 $tid; else taskset -p -c 0-2 $tid; fi
+        # Not before DraStic's 3D helper threads exist and have run: a thread created while the main thread is
+        # confined to one CPU inherits that CPU, can't run alongside it, and DraStic's first hand-off to its
+        # helpers is lost -- main and helpers then wait on each other forever (froze 8 of 9 starts, 2026-10-01).
+        ran=0; for t in /proc/$P/task/[0-9]*; do
+          [ "${t##*/}" != "$P" ] && [ "$(cat $t/comm 2>/dev/null)" = drastic ] && [ "$(awk '{print $14 + $15}' $t/stat 2>/dev/null)" -gt 0 ] 2>/dev/null && ran=$((ran + 1))
+        done
+        if [ $ran -lt 2 ]; then sleep 0.5; continue; fi
+        [ $n -eq 0 ] && sleep 3          # and then a moment more: the pool's first hand-offs are the race
+        for t in /proc/$P/task/[0-9]*; do tid=${t##*/}; c=$(cat $t/comm 2>/dev/null)
+          case "$DSFLIP_PIN" in
+            1) if [ "$tid" = "$P" ]; then taskset -p -c 3 $tid; else taskset -p -c 0-2 $tid; fi ;;
+            2) if [ "$tid" = "$P" ]; then taskset -p -c 3 $tid; else case "$c" in drastic*) ;; *) taskset -p -c 0-2 $tid ;; esac; fi ;;
+            3) case "$c" in drastic*) ;; *) taskset -p -c 0-2 $tid ;; esac ;;
+          esac
         done >/dev/null 2>&1
         for pp in $(pidof pipewire pipewire-pulse wireplumber 2>/dev/null); do
           for t in /proc/$pp/task/[0-9]*; do taskset -p -c 0-2 ${t##*/}; done
