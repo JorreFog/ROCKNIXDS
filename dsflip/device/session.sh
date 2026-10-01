@@ -65,9 +65,19 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # A file left by a session that never got restored holds the real limit: keep it.
   CPU=/sys/devices/system/cpu/cpufreq/policy0
   [ -f /tmp/dsflip-cpu-max ] || cat $CPU/scaling_max_freq > /tmp/dsflip-cpu-max 2>/dev/null
+  # cpugov.c sets the clock through scaling_max_freq, which only pins it under the "performance" governor (it turns
+  # itself off under any other). ROCKNIX's RG DS builds ran DS games on performance; the RG DS Plus nightly
+  # (20260930) defaults system.cpugovernor to ondemand, which left the clock floating between 408 MHz and the
+  # profile's limit with cpugov off ("[cpugov] off: governor is ondemand"): Mario Kart ran at 58.8 fps and the
+  # audio underran. Run the session on performance whatever ROCKNIX's setting; restore.sh puts the menu's back.
+  [ -f /tmp/dsflip-cpu-governor ] || cat $CPU/scaling_governor > /tmp/dsflip-cpu-governor 2>/dev/null
+  echo performance > $CPU/scaling_governor 2>/dev/null
   # PipeWire at DraStic's 44.1 kHz for the session (restore.sh resets it): at its usual 48 kHz every cycle resampled
   # DraStic's audio, and DraStic's audio threads cost ~9% of a core; at 44.1 kHz ~5% (measured 2026-09-28, HeartGold
-  # at 1608 MHz). Set before DraStic opens its stream: switching mid-stream made the drain uneven for the session.
+  # at 1608 MHz). The RG DS Plus nightly only allows 48000 until 44100 is added, and then force-rate is ignored:
+  # the output pulled ~3% faster than the pump could follow and the ring underran a few times a second.
+  # Set before DraStic opens its stream: switching mid-stream made the drain uneven for the session.
+  XDG_RUNTIME_DIR=/var/run/0-runtime-dir pw-metadata -n settings 0 clock.allowed-rates '[ 44100 48000 ]' >/dev/null 2>&1
   XDG_RUNTIME_DIR=/var/run/0-runtime-dir pw-metadata -n settings 0 clock.force-rate 44100 >/dev/null 2>&1
   rm -f $STATE $NOTICE
   # test launches (smoke.sh, switchtime.sh) don't teach libdsflip's CPU governor anything about the player's games
