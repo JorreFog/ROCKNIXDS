@@ -154,7 +154,9 @@ switches itself off and the clock floats); PipeWire stays at 48 kHz for a DS ses
 it was never set; the volume indicator works again (ROCKNIX's key service had no bus address and its
 mako-notify waited on the key pipe), with libdsflip drawing its own while a game runs; and DraStic's emulation
 thread runs on a CPU of its own (its 3D helpers, libdsflip's and PipeWire's threads on the other three, interrupts
-off that core), which took Black 2 from 1.7-2.6 repeated frames a second to about one every 12 s.
+off that core, its 3D helper threads one per core), which took Black 2 from 1.7-2.6 repeated frames a second to
+about one every 12 s and Dragon Quest Monsters from 3.6 to 0.2; and the clock governor counts all of DraStic's
+threads, not only the busiest, so games whose work is in the 3D helpers are not stepped down as light.
 
 It installs the dii-ess-aye theme (downloaded from [upstream](https://github.com/beebono/dii-ess-aye) at the pinned
 commit, then this repo's overlay), the patched EmulationStation, `libdsflip` as the default DraStic launcher, and
