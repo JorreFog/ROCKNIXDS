@@ -19,6 +19,7 @@ if [ -s /tmp/dsflip-cpu-max ]; then                  # the CPU clock limit libds
     cat /tmp/dsflip-cpu-max > /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq 2>/dev/null
     rm -f /tmp/dsflip-cpu-max
 fi
+for i in /proc/irq/[0-9]*/smp_affinity; do echo f > "$i" 2>/dev/null; done   # interrupts on every CPU again (session.sh)
 if [ -s /tmp/dsflip-cpu-governor ]; then             # the governor session.sh switched to performance
     cat /tmp/dsflip-cpu-governor > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor 2>/dev/null
     rm -f /tmp/dsflip-cpu-governor
