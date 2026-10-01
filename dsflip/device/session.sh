@@ -137,12 +137,13 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
     LD_PRELOAD=$D/dsflip/libdsflip.so $D/dsflip/drastic "$ROM" > $D/dsflip/drastic.out 2>&1 &
   P=$!; TG=$(date +%s)
   # CPU placement (DSFLIP_PIN=0 turns it off): DraStic's main (emulation) thread alone on CPU 3; its 3D helper
-  # threads, libdsflip's and PipeWire's threads on CPUs 0-2; the device interrupts off CPU 3 (restore.sh puts them
-  # back). Measured on the RG DS Plus 2026-10-01 (Black 2, balanced, 1416 MHz): the main thread was runnable but not
-  # running ~10% of the time on every core (its helpers 8-9%), DraStic presented 58.8-59.3 frames/s where the RG DS
-  # logs show 59.8-59.9, and every frame lost that way is a repeated frame and a gap in the game's audio.
+  # threads, libdsflip's and PipeWire's threads on CPUs 0-2. Measured on the RG DS Plus 2026-10-01 (Black 2,
+  # balanced, 1416 MHz): the main thread was runnable but not running ~10% of the time on every core (its helpers
+  # 8-9%), DraStic presented 58.8-59.3 frames/s where the RG DS logs show 59.8-59.9, and every frame lost that way
+  # is a repeated frame and a gap in the game's audio. The interrupts stay where the kernel put them (all on CPU 0,
+  # ~5% of it): moving them off CPU 3 as well made the display controller's interrupt stop firing on some starts
+  # (flips never completed, the game froze at its first frames) and once took the whole device down.
   if [ "${DSFLIP_PIN:-1}" != 0 ] && [ "$(cat /sys/devices/system/cpu/online 2>/dev/null)" = 0-3 ] && command -v taskset >/dev/null; then
-    for i in /proc/irq/[0-9]*/smp_affinity; do echo 7 > "$i" 2>/dev/null; done
     echo "CPU placement: DraStic's main thread on CPU 3, the rest on 0-2"
     ( n=0; while kill -0 $P 2>/dev/null; do
         for t in /proc/$P/task/[0-9]*; do tid=${t##*/}
