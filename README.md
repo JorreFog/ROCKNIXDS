@@ -140,6 +140,13 @@ On an Anbernic RG DS running ROCKNIX, ssh in as `root` (default password
 curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh | sh
 ```
 
+The RG DS Plus (two 1024×768 panels) uses the `plus-beta` branch. Same installer, sized from the panels
+(canvas 3072×768). Its update channel follows that branch, not the RG DS stable or beta builds:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/plus-beta/install.sh | RGDS_BRANCH=plus-beta sh
+```
+
 It installs the dii-ess-aye theme (downloaded from [upstream](https://github.com/beebono/dii-ess-aye) at the pinned
 commit, then this repo's overlay), the patched EmulationStation, `libdsflip` as the default DraStic launcher, and
 switches on 2× resolution for DS. It also adds the ds-* shaders to ES's shader menu, and keeps them there when a

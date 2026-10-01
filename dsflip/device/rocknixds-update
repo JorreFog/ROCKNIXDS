@@ -4,23 +4,25 @@
 #   check    one line: "UPDATE <what>" when the channel has something newer than what's installed, else a message
 #   install  runs the channel's installer in its own unit (it stops the menu and brings it back when it's done)
 #   notify   check, and pop up a notification in the menu once per new update (the timer; off with the menu switch)
-# Channel: rocknixds.channel in system.cfg, "stable" (the latest release) or "beta" (the beta branch). What's
+# Channel: rocknixds.channel in system.cfg: "stable" (the latest release), "beta" (the beta branch),
+# or "plus" (the RG DS Plus beta branch). What's
 # installed: /storage/.config/rocknixds/installed-id, written by install.sh (a release tag or a beta commit).
 REPO=JorreFog/ROCKNIXDS
 CFG=/storage/.config/system/configs/system.cfg
 STATE=/storage/.config/rocknixds
 setting() { grep "^$1=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2-; }
-CH=$(setting rocknixds.channel); [ "$CH" = beta ] || CH=stable
+CH=$(setting rocknixds.channel); case "$CH" in beta|plus) ;; *) CH=stable ;; esac
 
-latest() {  # "<id> <label>": the latest release's tag (stable) or the beta branch's newest commit
+latest() {  # "<id> <label>": stable = latest release, beta = the beta branch, plus = the Plus beta branch
     if [ $CH = stable ]; then
         t=$(curl -fsSL --max-time 15 https://api.github.com/repos/$REPO/releases/latest 2>/dev/null |
             sed -n 's/^ *"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)
         [ -n "$t" ] && echo "$t ROCKNIXDS ${t#v}"
     else
-        c=$(curl -fsSL --max-time 15 https://api.github.com/repos/$REPO/commits/beta 2>/dev/null |
+        BR=beta; [ $CH = plus ] && BR=plus-beta
+        c=$(curl -fsSL --max-time 15 https://api.github.com/repos/$REPO/commits/$BR 2>/dev/null |
             sed -n 's/^  "sha": *"\([0-9a-f]*\)".*/\1/p' | head -n1)
-        [ -n "$c" ] && echo "$c ROCKNIXDS beta $(echo $c | cut -c1-7)"
+        [ -n "$c" ] && echo "$c ROCKNIXDS $BR $(echo $c | cut -c1-7)"
     fi
 }
 
@@ -40,7 +42,7 @@ check|notify)
     echo "UPDATE $label"
     ;;
 install)
-    B=main; [ $CH = beta ] && B=beta
+    B=main; [ $CH = beta ] && B=beta; [ $CH = plus ] && B=plus-beta
     systemctl is-active -q rocknixds-update && { echo "AN UPDATE IS ALREADY RUNNING"; exit 1; }
     systemd-run --quiet --unit=rocknixds-update --collect sh -c \
         "curl -fsSL https://raw.githubusercontent.com/$REPO/$B/install.sh | RGDS_BRANCH=$B sh > /storage/rocknixds-update.log 2>&1"

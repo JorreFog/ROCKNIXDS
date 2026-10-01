@@ -1,5 +1,5 @@
 #!/bin/sh
-# ROCKNIXDS installer (Anbernic RG DS on ROCKNIX): dual-screen dii-ess-aye theme + patched EmulationStation + libdsflip (DraStic
+# ROCKNIXDS installer (Anbernic RG DS or RG DS Plus on ROCKNIX): dual-screen dii-ess-aye theme + patched EmulationStation + libdsflip (DraStic
 # straight to both panels) + hires 3D. Run ON the Anbernic RG DS as root (ssh in, default password: rocknix):
 #
 #   curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh | sh
@@ -55,8 +55,13 @@ die() { printf '\033[1;31mERROR:\033[0m %s\n' "$*"; exit 1; }
 # ---- sanity checks -----------------------------------------------------------------------------------
 [ "$(id -u)" = 0 ] || die "run as root (ssh root@<device>)"
 grep -qi rocknix /etc/os-release 2>/dev/null || die "this isn't ROCKNIX"
-[ -f /flash/device_trees/rk3568-anbernic-rg-ds.dtb ] || tr -d '\0' < /proc/device-tree/model 2>/dev/null | grep -qi "rg.\?ds" \
-    || die "this doesn't look like an Anbernic RG DS"
+MODEL=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)
+case "$MODEL" in
+*"RG DS Plus"*) DEVICE="RG DS Plus" ;;
+*) [ -f /flash/device_trees/rk3568-anbernic-rg-ds.dtb ] || echo "$MODEL" | grep -qi "rg.\?ds" \
+       || die "this doesn't look like an Anbernic RG DS or RG DS Plus"
+   DEVICE="RG DS" ;;
+esac
 
 systemctl is-active -q dsflip-game.service 2>/dev/null && die "a DS game is running: quit it first"
 
@@ -113,7 +118,13 @@ if [ $UNINSTALL = 1 ]; then
                 if [ -n "$old" ]; then es_set $k "$old"; else es_del $k; fi
             done
         fi
-        [ -f $ESF ] && sed -i -E '/value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"/d' $ESF   # our shader entries
+        if [ -f $ESF ]; then
+            sed -i -E '/value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"/d' $ESF   # our shader entries
+            # resume on quit / power profile feature blocks (same shape as es-features.sh's skip)
+            awk '/<feature name="resume on quit"/ || /<feature name="power profile"/ { skip = 1 }
+                 skip { if (/<\/feature>/) skip = 0; next }
+                 { print }' $ESF > $ESF.uninst && mv $ESF.uninst $ESF
+        fi
     fi
     rm -f /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
     rm -f /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh /storage/.config/autostart/rocknixds-menu-power \
@@ -196,6 +207,7 @@ fi
 mkdir -p $BACKUP
 
 es_stop
+say "Device: Anbernic $DEVICE"
 
 # ---- theme + patched EmulationStation -----------------------------------------------------------------
 if [ $THEME_ON = 1 ]; then
@@ -210,6 +222,16 @@ if [ $THEME_ON = 1 ]; then
     rm -rf $THEME; mkdir -p $ES_THEMES
     cp -a $WORK/theme $THEME
     cp -a "$SRC/dii-ess-aye/overlay/." $THEME/
+    # Upstream only loads the RG DS layout when the canvas is 1920 wide. The Plus canvas is 3072, and this
+    # theme's coordinates are fractions of a 3-panel canvas, so both widths use theme-rgds.xml.
+    cat > $THEME/theme.xml << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<theme>
+    <formatVersion>7</formatVersion>
+
+    <include>./theme-rgds.xml</include>
+</theme>
+EOF
     mkdir -p $THEME/bin
     cp "$SRC/dii-ess-aye/emulationstation-rgds" $THEME/bin/emulationstation
     # the ROCKNIX build (OS_VERSION) the patched ES was compiled against: on any other, the launcher checks it links
@@ -358,8 +380,12 @@ mkdir -p $RD
 cp "$SRC/dsflip/device/rocknixds-update" $RD/ && chmod +x $RD/rocknixds-update
 printf 'dii-ess-aye\ncanvas-ds\n' > $RD/themes.allow
 [ -f $SYSCFG ] && sed -i '/^nds\(\[.*\]\)\{0,1\}\.\(emulator\|core\)=/d' $SYSCFG       # a per-game RetroArch/melonDS choice
-[ -f $SYSCFG ] && { grep -q '^rocknixds.channel=' $SYSCFG || set_cfg rocknixds.channel "$([ "$BRANCH" = beta ] && echo beta || echo stable)"
-                    grep -q '^rocknixds.autocheck=' $SYSCFG || set_cfg rocknixds.autocheck 1; }
+if [ -f $SYSCFG ] && [ "$DEVICE" = "RG DS Plus" ]; then
+    set_cfg rocknixds.channel plus          # follow plus-beta, not the RG DS stable/beta builds
+elif [ -f $SYSCFG ]; then
+    grep -q '^rocknixds.channel=' $SYSCFG || set_cfg rocknixds.channel "$([ "$BRANCH" = beta ] && echo beta || echo stable)"
+fi
+[ -f $SYSCFG ] && { grep -q '^rocknixds.autocheck=' $SYSCFG || set_cfg rocknixds.autocheck 1; }
 cp "$SRC/dsflip/device/rocknixds-update-check.service" "$SRC/dsflip/device/rocknixds-update-check.timer" /storage/.config/system.d/
 mkdir -p /storage/.config/system.d/timers.target.wants
 ln -sf ../rocknixds-update-check.timer /storage/.config/system.d/timers.target.wants/rocknixds-update-check.timer

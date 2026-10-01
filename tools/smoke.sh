@@ -39,8 +39,16 @@ $SSH "touch /tmp/rocknixds-testing"; trap '$SSH "rm -f /tmp/rocknixds-testing" 2
 $SSH "curl -s -X POST --data-binary '$ROM' localhost:1234/launch" >/dev/null
 sleep 12
 $SSH 'systemctl is-active -q dsflip-game' && ok "game unit is running" || bad "game unit didn't start"
-if $SSH "grep -q '^\[dsflip\] ready' $D/dsflip.log"; then ok "libdsflip took the display"; else bad "libdsflip didn't take the display (passthrough?)"; fi
-$SSH "head -n 20 $D/dsflip.log" > "$OUT/start.log"
+# DraStic's children inherit LD_PRELOAD. The volume watcher runs `sh -c pactl subscribe` via popen,
+# and that shell's constructor renames dsflip.log aside, then writes a passthrough line of its own.
+# The game's log is whichever name still has the DRM-master line.
+LOG=$($SSH 'f='"$D"'/dsflip.log
+  for c in "$f" "$f.1" "$f.2" "$f.3"; do
+    if grep -q "DRM master" "$c" 2>/dev/null || grep -q "^\[dsflip\] ready" "$c" 2>/dev/null; then echo "$c"; exit 0; fi
+  done
+  echo "$f"')
+if $SSH "grep -q '^\[dsflip\] ready' '$LOG' || grep -q 'DRM master' '$LOG'"; then ok "libdsflip took the display"; else bad "libdsflip didn't take the display (passthrough?)"; fi
+$SSH "head -n 20 '$LOG'" > "$OUT/start.log"
 grep -m1 '^\[dsflip\] libdsflip' "$OUT/start.log" | sed 's/^/  ..   /' || info "no version line (pre-1.3 build)"
 grep -m1 '^\[shader\]' "$OUT/start.log" | sed 's/^/  ..   /'
 grep -m1 '^\[audio\] pump' "$OUT/start.log" | sed 's/^/  ..   /'
@@ -49,7 +57,13 @@ grep -m1 '^\[audio\] pump' "$OUT/start.log" | sed 's/^/  ..   /'
 $SSH "$RT arecord -q -D default -d 4 -f S16_LE -r 44100 -c 1 /tmp/smoke-game.wav 2>/dev/null; $RT timeout 4 pw-record -P '{ stream.capture.sink = true }' --rate 44100 --channels 1 --format s16 /tmp/smoke-mon.wav >/dev/null 2>&1" &
 sleep $SECS
 wait
-$SSH "grep '^\[dsflip\] present/s' $D/dsflip.log | tail -n $SECS" > "$OUT/present.log"
+# re-pick: another child may have rotated the name again while the game ran
+LOG=$($SSH 'f='"$D"'/dsflip.log
+  for c in "$f" "$f.1" "$f.2" "$f.3"; do
+    if grep -q "DRM master" "$c" 2>/dev/null || grep -q "^\[dsflip\] ready" "$c" 2>/dev/null; then echo "$c"; exit 0; fi
+  done
+  echo "$f"')
+$SSH "grep '^\[dsflip\] present/s' '$LOG' | tail -n $SECS" > "$OUT/present.log"
 python3 - "$OUT/present.log" "$SECS" <<'EOF' || fail=1
 import re, sys
 lines = open(sys.argv[1]).read().splitlines()
@@ -62,10 +76,10 @@ print(f"  {'ok  ' if 58 <= avg <= 62 else 'FAIL'} {avg:.1f} presents/s over {n} 
 print(f"  {'ok  ' if drops <= 0.5 else 'FAIL'} {drops:.2f} dropped frames/s ({sum(dr)} in {n} s)")
 sys.exit(0 if 58 <= avg <= 62 and drops <= 0.5 else 1)
 EOF
-AUD=$($SSH "grep '^\[audio\] pump' $D/dsflip.log | tail -n1")
+AUD=$($SSH "grep '^\[audio\] pump' '$LOG' | tail -n1")
 info "${AUD:-no audio pump line}"
 case "$AUD" in *"underruns 0,"*) ok "no audio underruns" ;; "") ;; *) bad "audio underruns reported" ;; esac
-RA=$($SSH "grep -E '^\[ra\] (game |logged|RetroAchievements off|login|game load)' $D/dsflip.log | tail -n1")
+RA=$($SSH "grep -E '^\[ra\] (game |logged|RetroAchievements off|login|game load)' '$LOG' | tail -n1")
 info "RetroAchievements: ${RA:-nothing logged}"
 
 # audio: the sink monitor is what DraStic actually plays (must have signal); the mic hears the speaker (advisory:
@@ -89,7 +103,8 @@ sys.exit(0 if m > 0.005 else 1)
 EOF
 
 # what's on the panels
-$SSH "rm -f /storage/dsflip/logs/scan*.raw; mkdir -p /storage/dsflip/logs; kill -USR2 \$(pidof drastic.real); sleep 1; cd /storage/dsflip/logs && tar cf - scan0.raw scan1.raw 2>/dev/null" | tar xf - -C "$OUT" 2>/dev/null
+# Production sessions exec the dsflip/drastic symlink, so /proc/*/comm is "drastic" (not drastic.real).
+$SSH "rm -f /storage/dsflip/logs/scan*.raw; mkdir -p /storage/dsflip/logs; kill -USR2 \$(pidof drastic || pidof drastic.real); sleep 1; cd /storage/dsflip/logs && tar cf - scan0.raw scan1.raw 2>/dev/null" | tar xf - -C "$OUT" 2>/dev/null
 python3 - "$OUT" <<'EOF' || bad "scanout dump missing"
 import sys, os
 out = sys.argv[1]
@@ -112,7 +127,7 @@ print("  ok   scanout buffers dumped" + ("" if Image else " (no Pillow: raw only
 EOF
 
 # quit like the exit hotkey, then ES must come back
-$SSH 'kill -9 $(pidof drastic.real) 2>/dev/null; for i in $(seq 1 40); do sleep 1; [ "$(systemctl is-active dsflip-game)" != active ] && curl -s localhost:1234/isIdle 2>/dev/null | grep -q true && exit 0; done; exit 1' \
+$SSH 'kill -9 $(pidof drastic || pidof drastic.real) 2>/dev/null; for i in $(seq 1 40); do sleep 1; [ "$(systemctl is-active dsflip-game)" != active ] && curl -s localhost:1234/isIdle 2>/dev/null | grep -q true && exit 0; done; exit 1' \
     && ok "ES is back after quitting" || bad "ES didn't come back within 40 s"
 $SSH "tail -n 4 $D/last-session.log" > "$OUT/session.log"
 echo "== $( [ $fail = 0 ] && echo PASSED || echo FAILED ), details in $OUT"

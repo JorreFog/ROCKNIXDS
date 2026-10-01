@@ -218,6 +218,9 @@ def side_by_side(img):
 
 
 def png_bytes(img):
+    # Drop iCCP. ES loads these with SDL_image, which fails the whole file when libpng
+    # rejects the profile ("invalid data"), then retries the load every frame.
+    img.info.pop("icc_profile", None)
     b = io.BytesIO(); img.save(b, "PNG", optimize=True); return b.getvalue()
 
 

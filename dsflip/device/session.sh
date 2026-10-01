@@ -46,13 +46,20 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   GPU=/sys/class/devfreq/fde60000.gpu
   GPU_GOV=$(cat $GPU/governor 2>/dev/null)
   GPU_MIN=$(cat $GPU/min_freq 2>/dev/null)
+  # The RG DS Plus (1024x768) has 2.56x the pixels per frame for a shader on the same GPU, so every shader
+  # starts at the full clock there. ds-fsr at that size is about 24 ms per frame: expect drops; ds-crisp is 4x.
+  PANEL=; for m in /sys/class/drm/card*-DSI-*/modes; do read -r PANEL < "$m" 2>/dev/null && [ -n "$PANEL" ] && break; done
+  BIG=; [ "${PANEL%%x*}" -gt 640 ] 2>/dev/null && BIG=1
   case "${DSHOOK_SHADER:-none}" in
     none|bilinear) GOV=powersave; MIN= ;;
     # ds-fsr (FSR 1.0) needs ~9.5 ms of GPU per frame: under simple_ondemand it sat at 800 MHz 97% of the time
     # and dropped frames while ramping up from the floor at the start, so it gets the full clock from the start
     ds-fsr) GOV=${DSFLIP_SHADER_GOV:-performance}; MIN=$DSFLIP_SHADER_GPU_MIN ;;
-    *) GOV=${DSFLIP_SHADER_GOV:-simple_ondemand}; MIN=${DSFLIP_SHADER_GPU_MIN:-400000000} ;;
+    *) if [ -n "$BIG" ]; then GOV=${DSFLIP_SHADER_GOV:-performance}; MIN=$DSFLIP_SHADER_GPU_MIN
+       else GOV=${DSFLIP_SHADER_GOV:-simple_ondemand}; MIN=${DSFLIP_SHADER_GPU_MIN:-400000000}; fi ;;
   esac
+  [ -n "$BIG" ] && [ "$DSHOOK_SHADER" = ds-fsr ] &&
+    echo "note: ds-fsr costs ~2.5x more at ${PANEL} (~24 ms per frame, estimated): expect dropped frames; ds-crisp is exact 4x here"
   [ -n "$GPU_GOV" ] && { echo "$GPU_GOV" > /tmp/dsflip-gpu-governor; echo "$GPU_MIN" > /tmp/dsflip-gpu-min; echo $GOV > $GPU/governor 2>/dev/null; [ -n "$MIN" ] && echo $MIN > $GPU/min_freq 2>/dev/null; }
   # libdsflip's CPU governor (cpugov.c) lowers the CPU's clock limit while the game runs; restore.sh puts it back.
   # A file left by a session that never got restored holds the real limit: keep it.
@@ -108,11 +115,17 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # ROCKNIX's powerstate service re-applies a GPU profile whenever the battery status flips between charging and
   # discharging ("auto" on AC, system.gpuperf on battery): plugging or unplugging mid-game, or a weak charger that
   # flaps, would leave e.g. a zero-copy game with the GPU pinned at 800 MHz. It polls every 2 s; so do we.
-  [ -n "$GPU_GOV" ] && ( while kill -0 $P 2>/dev/null; do
-      sleep 2
-      kill -0 $P 2>/dev/null || break          # the game ended: restore.sh owns the governor now
-      [ "$(cat $GPU/governor 2>/dev/null)" = "$GOV" ] || { echo $GOV > $GPU/governor 2>/dev/null; echo "$(ms) ms: GPU governor changed by another service: back to $GOV"; }
-    done ) &
+  # Re-apply $GOV if powerstate swaps the profile (charger flap). Kill this watcher before
+  # putting the menu governor back: after `kill -0` succeeds it can still write $GOV once the game is gone.
+  WATCH=
+  if [ -n "$GPU_GOV" ]; then
+    ( while kill -0 $P 2>/dev/null; do
+        sleep 2
+        kill -0 $P 2>/dev/null || break
+        [ "$(cat $GPU/governor 2>/dev/null)" = "$GOV" ] || { echo $GOV > $GPU/governor 2>/dev/null; echo "$(ms) ms: GPU governor changed by another service: back to $GOV"; }
+      done ) &
+    WATCH=$!
+  fi
   # ES is stopped, so it can't record the session (play count, last played, time played): do what ES does after a
   # game. In VT mode ES is only waiting, and records it itself.
   # (not while /tmp/rocknixds-testing exists: the test tools launch games through ES and mustn't count as plays)
@@ -121,7 +134,7 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # the unit's timeout. Kill it at once (what the exit hotkey does), put the governor back and leave: starting
   # sway/ES from inside a unit that systemd is stopping waits behind that stop (measured: 40 s), so the unit's
   # ExecStopPost (restore.sh) brings them back instead.
-  trap 'kill -9 $P 2>/dev/null; wait $P; [ -s /tmp/dsflip-cpu-max ] && cat /tmp/dsflip-cpu-max > $CPU/scaling_max_freq 2>/dev/null; record; [ -n "$GPU_GOV" ] && echo "$GPU_GOV" > $GPU/governor 2>/dev/null; echo "$(date) stopped by the unit: restore.sh brings sway + ES back"; exit 0' TERM INT
+  trap '[ -n "$WATCH" ] && kill $WATCH 2>/dev/null; kill -9 $P 2>/dev/null; wait $P; [ -s /tmp/dsflip-cpu-max ] && cat /tmp/dsflip-cpu-max > $CPU/scaling_max_freq 2>/dev/null; record; [ -n "$GPU_GOV" ] && echo "$GPU_GOV" > $GPU/governor 2>/dev/null; echo "$(date) stopped by the unit: restore.sh brings sway + ES back"; exit 0' TERM INT
   # libdsflip couldn't take the display: don't leave black panels. It decides within ~6 s at worst (3 s for DRM
   # master, 3 s for the shader); no verdict in 10 s means it isn't loaded or hangs.
   v=; i=0
@@ -141,6 +154,7 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
         echo "The game didn't take over the screens within 10 seconds, so it was stopped. Logs: $D/dsflip" > $NOTICE
       fi ;;
   esac
+  [ -n "$WATCH" ] && kill $WATCH 2>/dev/null
   wait $P; rc=$?
   # the full CPU clock back at once: libdsflip's governor may have lowered the limit, and everything until restore.sh
   # (play stats, sway and ES starting) ran at it (the way back to the menu was ~1.2 s slower)

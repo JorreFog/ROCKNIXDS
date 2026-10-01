@@ -41,6 +41,9 @@ exec_always swaymsg '[app_id="emulationstation"]' floating enable, fullscreen di
 exec_always swaymsg '[app_id="emulationstation"]' focus
 exec_always swaymsg '[app_id="emulationstation"]' seat seat1 attach "1046:911:Goodix_Capacitive_TouchScreen"
 exec_always swaymsg '[app_id="emulationstation"]' seat seat1 fallback yes
+# Touch in ES: ROCKNIX's lines above put the touchscreens on seat1 only, and ES then gets no touch
+# at all. With them on seat0 as well, ES gets every touch (same as sway-config.theme / autostart).
+seat seat0 attach "1046:911:Goodix_Capacitive_TouchScreen"
 EOF
 
 swaymsg reload

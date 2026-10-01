@@ -35,7 +35,7 @@ add_ours() {
             print ind "<choice name=\"ds-grid + NDS color\" value=\"ds-grid-color\" />"
             print ind "<choice name=\"ds-grid-2x (pixel-perfect + even DS grid)\" value=\"ds-grid-2x\" />"
             print ind "<choice name=\"ds-fsr (FSR 1.0, smooth edges)\" value=\"ds-fsr\" />"
-            print ind "<choice name=\"ds-integer (pixel-perfect 2x + bezel)\" value=\"ds-integer\" />"
+            print ind "<choice name=\"ds-integer (pixel-perfect, bezel if needed)\" value=\"ds-integer\" />"
             shader = 0; added = 1; resume = 1
             print; fi = ind; sub(/  $/, "", fi)
             print fi "<feature name=\"resume on quit\">"

@@ -23,8 +23,18 @@ for i in $(seq 1 200); do
     sleep 0.05
 done
 
+# Panel size from the kernel's mode list: 640x480 on the RG DS, 1024x768 on the RG DS Plus.
+# The dual-screen canvas is three panels wide. The right third hangs off the two-panel desktop;
+# sway must not be asked to resize the window to that canvas (it clamps to the desktop and scales
+# the theme). The patched ES sizes its own window from --resolution.
+PANEL=
+for m in /sys/class/drm/card*-DSI-*/modes; do read -r PANEL < "$m" 2>/dev/null && [ -n "$PANEL" ] && break; done
+case "$PANEL" in [0-9]*x[0-9]*) ;; *) PANEL=640x480 ;; esac
+PW=${PANEL%%x*} PH=${PANEL#*x}
+CANVAS_W=$((PW * 3))
+
 # Patched ES (see es-rgds-uiwidth.patch): sizes popups, keyboard, sliders and the
-# game options panel against one 640px screen instead of the 1920px canvas.
+# game options panel against one panel (ES_UI_WIDTH) instead of the whole canvas.
 # Falls back to the stock binary if the patched one keeps crashing on startup.
 ES_BIN=/storage/.config/emulationstation/themes/dii-ess-aye/bin/emulationstation
 FAILS=/tmp/es-rgds-fails
@@ -32,14 +42,14 @@ REVEAL_DELAY=1          # stock ES only: after it answers its API, before its wi
                         # top panel is still black (ES hasn't drawn its first view); at 1 s both panels are complete.
                         # The patched ES says when its first view is complete instead ($RGDS_ES_DRAWN).
 
-# Which layout: the dual-screen themes (this one and canvas-ds, made for the same layout) span one 1920x480 canvas
-# over both panels. Any other theme is drawn for one 640x480 screen, so it gets stock ROCKNIX's layout: ES fullscreen
-# on the top panel, the bottom panel off. (1.3 forced the 1920 canvas on every theme, stretching them over both
-# screens.) theme-changed.sh restarts ES when the choice switches between the two. Keep the list in sync with it.
+# Which layout: the dual-screen themes (this one and canvas-ds) span one canvas over both panels
+# (1920x480 on the RG DS, 3072x768 on the Plus). Any other theme is drawn for one screen, so it gets
+# stock ROCKNIX's layout: ES fullscreen on the top panel, the bottom panel off. theme-changed.sh
+# restarts ES when the choice switches between the two. Keep the list in sync with it.
 DUAL_THEMES="dii-ess-aye canvas-ds"
 THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
 if [ -z "$THEME_SET" ] || case " $DUAL_THEMES " in *" $THEME_SET "*) true ;; *) false ;; esac; then
-    ES_ARGS="--resolution 1920 480"
+    ES_ARGS="--resolution $CANVAS_W $PH"
     LAYOUT='[app_id="emulationstation"] floating enable, fullscreen disable, move absolute position 0 0'
     OUTPUTS='output DSI-1 power on'
 else
@@ -76,7 +86,7 @@ elif [ "$(cat $FAILS 2>/dev/null || echo 0)" -ge 2 ]; then
     fi
 fi
 
-# Boot splash: a 1280x480 image across both panels while ES loads. The theme's sway config
+# Boot splash: both panels while ES loads (1280x480 on the RG DS, 2048x768 on the Plus). The theme's sway config
 # sends new swayimg windows to the scratchpad (so the first, unplaced frame never shows);
 # bring it back already placed, in one command. ES is revealed over it, then it is closed.
 # the patched ES writes this once its first view is complete (es-rgds-powersaver.patch); the reveal below waits for it
@@ -85,9 +95,14 @@ rm -f $RGDS_ES_DRAWN
 read u _ < /proc/uptime; echo "[$u] launcher start" > /tmp/es-rgds-launch.log    # the start's timeline, for switchtime.sh
 SOCK=$(ls /var/run/0-runtime-dir/sway-ipc.*.sock 2>/dev/null | head -n1)
 SPLASH=/storage/.config/emulationstation/themes/dii-ess-aye/assets/images/splash/rgds-splash.png
+SPLASH_G=1280,480
+if [ "$PW" -gt 640 ] && [ -f /storage/.config/emulationstation/themes/dii-ess-aye/assets/images/splash/rgds-splash-2048x768.png ]; then
+    SPLASH=/storage/.config/emulationstation/themes/dii-ess-aye/assets/images/splash/rgds-splash-2048x768.png
+    SPLASH_G=$((PW * 2)),$PH
+fi
 SPLASH_PID=
 if [ -f "$SPLASH" ] && [ -n "$SOCK" ] && command -v swayimg >/dev/null; then
-    swayimg -g 1280,480 -s real -c info.mode=off "$SPLASH" >/dev/null 2>&1 &
+    swayimg -g $SPLASH_G -s real -c info.mode=off "$SPLASH" >/dev/null 2>&1 &
     SPLASH_PID=$!
     for i in $(seq 1 60); do
         swaymsg -s "$SOCK" '[app_id="swayimg" title="rgds-splash"] scratchpad show, floating enable, border none, move absolute position 0 0' 2>/dev/null | grep -q true && break
@@ -122,6 +137,10 @@ fi
         done
         sleep $REVEAL_DELAY
     fi
+    # Pin the panels side by side before placing the canvas. A desktop that is not exactly two panels
+    # wide crops the top third and the middle third.
+    swaymsg -s "$SOCK" "output DSI-2 pos 0 0" >/dev/null 2>&1
+    swaymsg -s "$SOCK" "output DSI-1 pos $PW 0" >/dev/null 2>&1
     swaymsg -s "$SOCK" "$OUTPUTS" >/dev/null 2>&1
     if [ -n "$ES_ARGS" ]; then
         swaymsg -s "$SOCK" "[app_id=\"emulationstation\"] scratchpad show, floating enable, fullscreen disable, move absolute position 0 0, focus" >/dev/null 2>&1
@@ -173,7 +192,7 @@ walk(json.load(sys.stdin)); sys.exit(1)'; then
 ) &
 
 if [ -n "$USE_PATCHED" ]; then
-    export ES_UI_WIDTH=640
+    export ES_UI_WIDTH=$PW
     START=$(date +%s)
     "$ES_BIN" --log-path /var/log --no-splash $ES_ARGS
     RC=$?

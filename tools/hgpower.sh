@@ -53,12 +53,25 @@ PWM() { XDG_RUNTIME_DIR=/var/run/0-runtime-dir pw-metadata -n settings 0 clock.f
 [ -n "$PWRATE" ] && PWM $PWRATE
 CFG=$CFGD/config/drastic.cfg
 [ "$HIRES" = 0 ] && { cp $CFG /tmp/drastic.cfg.hgpower; sed -i "s/^hires_3d = .*/hires_3d = 0/" $CFG; }
+# A kill between the edits above and the restore at the end used to leave the GPU governor, PipeWire rate
+# or hires_3d changed. Put them back on any exit.
+restore_limits() {
+  [ -n "$GW" ] && kill $GW 2>/dev/null
+  [ -f /tmp/drastic.cfg.hgpower ] && mv /tmp/drastic.cfg.hgpower $CFG
+  echo "$OLD_CG" > $C/scaling_governor 2>/dev/null
+  echo "$OLD_CMAX" > $C/scaling_max_freq 2>/dev/null
+  echo "$OLD_GG" > $G/governor 2>/dev/null
+  echo "$OLD_GMIN" > $G/min_freq 2>/dev/null
+  [ -n "$PWRATE" ] && PWM 0
+}
+trap restore_limits EXIT INT TERM
 cd $CFGD
 ( export SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$L/hp-$TAG.log DSFLIP_SHADER=$SHADER "$@"
   LD_PRELOAD=$LIB exec ./drastic.real $D/roms/$TEST.nds >$L/hp-$TAG.out 2>&1 ) &
 PID=$!
 # ROCKNIX's powerstate re-applies a GPU profile when the charger status flips: keep this run's choice (as session.sh)
 ( while kill -0 $PID 2>/dev/null; do sleep 2; [ "$(cat $G/governor)" = $GOV ] || echo $GOV > $G/governor; done ) &
+GW=$!
 sleep 8; [ -f /tmp/drastic.cfg.hgpower ] && mv /tmp/drastic.cfg.hgpower $CFG
 python3 $D/padkey.py 312 0.6                 # load state 0 (L2 held)
 sleep 3; python3 $D/padkey.py 304 0.2; sleep 1; python3 $D/padkey.py 304 0.2; sleep 1   # B B: out of the save dialog
@@ -73,9 +86,8 @@ tail -n +$((M + 1)) $L/hp-$TAG.log | grep present/s | awk -v t=$TAG '
   END { if (n) printf "frames: %d s, %.1f presents/s, %.2f drops/s\n", n, p / n, d / n }' >> $P/$TAG.txt
 kill $W 2>/dev/null
 kill $PID; sleep 1; kill -9 $PID 2>/dev/null
-echo $OLD_CG > $C/scaling_governor; echo $OLD_CMAX > $C/scaling_max_freq
-echo $OLD_GG > $G/governor; echo $OLD_GMIN > $G/min_freq
-[ -n "$PWRATE" ] && PWM 0
+restore_limits
+trap - EXIT INT TERM
 # the audio pump's lines over the run (ring range, rate trim, underruns)
 grep "\[audio\] pump [0-9]" $L/hp-$TAG.log | tail -n 4 >> $P/$TAG.txt
 rm -f /storage/roms/nds/$TEST.dsv $SS/${TEST}_0.dss

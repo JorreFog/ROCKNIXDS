@@ -75,7 +75,9 @@ def main():
                 continue
             if img.mode != "RGBA" and any(c[1].lower().endswith(".png") for c in cands):
                 continue                  # a photo on a background; a cut-out exists
-            fit(img).save(os.path.join(out, g["id"] + ".png"))
+            fitted = fit(img)
+            fitted.info.pop("icc_profile", None)   # SDL_image rejects some iCCP profiles and ES then drops the cart
+            fitted.save(os.path.join(out, g["id"] + ".png"))
             print(f"{g['name']}: {region} {fn}")
             break
         else:

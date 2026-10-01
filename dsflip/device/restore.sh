@@ -20,6 +20,9 @@ if [ -s /tmp/dsflip-cpu-max ]; then                  # the CPU clock limit libds
     rm -f /tmp/dsflip-cpu-max
 fi
 XDG_RUNTIME_DIR=$RT pw-metadata -n settings 0 clock.force-rate 0 >/dev/null 2>&1          # PipeWire's own rate again
+# Resume-on-quit wrote "-USR1 drastic" for the exit hotkey; put ROCKNIX's default back so a later non-DS
+# launcher (or a session that skipped resume) is not left signalling USR1.
+[ -f /tmp/.process-kill-data ] && grep -q -- '-USR1 drastic' /tmp/.process-kill-data 2>/dev/null && echo "-9" > /tmp/.process-kill-data
 sway_has_outputs() {
     SOCK=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
     [ -n "$SOCK" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$SOCK" -t get_outputs 2>/dev/null | grep -q '"active": true'
@@ -34,7 +37,17 @@ if [ -f /tmp/dsflip-vt ]; then
     chvt "${VT:-1}"
     if wait_outputs; then
         S=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
-        [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" '[app_id="emulationstation"] floating enable, fullscreen disable, resize set 1920 480, move absolute position 0 0' >/dev/null 2>&1
+        # RG DS: the window is resized to the 1920 canvas (sway allows it past the 1280 desktop).
+        # Plus: a resize to 3072 is clamped to the 2048 desktop and the theme scales, so only un-fullscreen
+        # and pin at 0,0. The launcher's --resolution already made the window 3072x768.
+        PANEL=; for m in /sys/class/drm/card*-DSI-*/modes; do read -r PANEL < "$m" 2>/dev/null && [ -n "$PANEL" ] && break; done
+        case "$PANEL" in [0-9]*x[0-9]*) ;; *) PANEL=640x480 ;; esac
+        PW=${PANEL%%x*}
+        if [ "$PW" -gt 640 ]; then
+            [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" '[app_id="emulationstation"] floating enable, fullscreen disable, move absolute position 0 0' >/dev/null 2>&1
+        else
+            [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" '[app_id="emulationstation"] floating enable, fullscreen disable, resize set 1920 480, move absolute position 0 0' >/dev/null 2>&1
+        fi
     else
         echo "$(date) sway has no outputs after the VT switch: restarting it"
         systemctl restart sway.service; wait_outputs

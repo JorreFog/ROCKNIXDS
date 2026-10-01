@@ -48,7 +48,7 @@ while [ $k -le $N ]; do
     d=$(until_ 'grep -q "screen texture" $D/dsflip.log 2>/dev/null')
     sleep 6
     T0=$(now); KT=$(cut -d' ' -f1 /proc/uptime)
-    kill -9 $(pidof drastic.real) 2>/dev/null
+    kill -9 $(pidof drastic || pidof drastic.real) 2>/dev/null
     # the way back, all four polled together: each is recorded when it first holds (one after the other, a milestone
     # couldn't be seen before the previous one, e.g. ES answering before the game unit had ended)
     e= f= g= h=; i=0
