@@ -151,8 +151,10 @@ What the Plus beta adds for the Plus nightly (20260930) specifically: a DS sessi
 governor whatever ROCKNIX's setting (the nightly defaults to `ondemand`, under which libdsflip's clock governor
 switches itself off and the clock floats); PipeWire stays at 48 kHz for a DS session (the Plus's speaker amp runs
 48 kHz whatever rate it is given, so forcing DraStic's 44.1 kHz played everything 7% fast and the audio stuttered); DraStic's *threaded 3d* is switched on where
-it was never set; and the volume indicator works again (ROCKNIX's key service had no bus address and its
-mako-notify waited on the key pipe), with libdsflip drawing its own while a game runs.
+it was never set; the volume indicator works again (ROCKNIX's key service had no bus address and its
+mako-notify waited on the key pipe), with libdsflip drawing its own while a game runs; and DraStic's emulation
+thread runs on a CPU of its own (its 3D helpers, libdsflip's and PipeWire's threads on the other three, interrupts
+off that core), which took Black 2 from 1.7-2.6 repeated frames a second to about one every 12 s.
 
 It installs the dii-ess-aye theme (downloaded from [upstream](https://github.com/beebono/dii-ess-aye) at the pinned
 commit, then this repo's overlay), the patched EmulationStation, `libdsflip` as the default DraStic launcher, and
