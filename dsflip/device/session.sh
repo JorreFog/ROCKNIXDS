@@ -172,6 +172,9 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   cpu_full() { [ -s /tmp/dsflip-cpu-max ] && cat /tmp/dsflip-cpu-max > $CPU/scaling_max_freq 2>/dev/null; }
   cpu_full
   echo "$(up) drastic exited: $rc"
+  # the game's RetroAchievements strip, redrawn with the progress just made while sway and ES start (in its own
+  # unit, at a lower priority: ES doesn't wait for it)
+  [ "$v" = ready ] && [ ! -e /tmp/rocknixds-testing ] && [ -x $D/dsflip/media-auto.sh ] && $D/dsflip/media-auto.sh --ra-rom "$ROM"
   if [ ! -s $NOTICE ]; then
     case $rc in
       0|137|138|143) why= ;;          # Exit DraStic in its menu; the exit hotkey (kill -9, or SIGUSR1 = resume); a stop

@@ -4,23 +4,58 @@
 #   check    one line: "UPDATE <what>" when the channel has something newer than what's installed, else a message
 #   install  runs the channel's installer in its own unit (it stops the menu and brings it back when it's done)
 #   notify   check, and pop up a notification in the menu once per new update (the timer; off with the menu switch)
-# Channel: rocknixds.channel in system.cfg, "stable" (the latest release) or "beta" (the beta branch). What's
-# installed: /storage/.config/rocknixds/installed-id, written by install.sh (a release tag or a beta commit).
+# Channel: rocknixds.channel in system.cfg, "stable" (the latest release) or "beta". The menu only stores those
+# two. On an RG DS Plus, beta is the plus-beta branch: Plus beta 3 followed the original RG DS beta branch,
+# because the menu's Beta choice is stored as "beta" and the updater used plus-beta only when the value was
+# "plus", which the menu never writes. An earlier Plus install's "plus" is the same choice.
+# What's installed: /storage/.config/rocknixds/installed-id, written by install.sh (a release tag or a commit).
 REPO=JorreFog/ROCKNIXDS
 CFG=/storage/.config/system/configs/system.cfg
 STATE=/storage/.config/rocknixds
 setting() { grep "^$1=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2-; }
-CH=$(setting rocknixds.channel); [ "$CH" = beta ] || CH=stable
 
-latest() {  # "<id> <label>": the latest release's tag (stable) or the beta branch's newest commit
+rgds_plus() {   # the RG DS Plus: the model string, or a panel wider than the RG DS's 640
+    model=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)
+    case "$model" in *"RG DS Plus"*) return 0 ;; esac
+    for m in /sys/class/drm/card*-DSI-*/modes; do
+        [ -f "$m" ] || continue
+        read -r mode < "$m" 2>/dev/null || continue
+        w=${mode%%x*}
+        [ "$w" -gt 640 ] 2>/dev/null && return 0
+        break
+    done
+    return 1
+}
+
+CH=$(setting rocknixds.channel)
+PLUS=0; rgds_plus && PLUS=1
+if [ $PLUS = 1 ] && [ "$CH" = plus ]; then
+    # the menu shows "plus" as Stable and would save that; record the choice it understands
+    if [ -f $CFG ] && grep -q '^rocknixds.channel=' $CFG; then
+        sed -i 's|^rocknixds.channel=.*|rocknixds.channel=beta|' $CFG
+    elif [ -f $CFG ]; then
+        echo rocknixds.channel=beta >> $CFG
+    fi
+    CH=beta
+fi
+case "$CH" in beta|plus) ;; *) CH=stable ;; esac
+
+branch() {   # git branch this channel installs: Plus beta never comes from the RG DS beta branch
+    if [ "$CH" = stable ]; then echo main; return; fi
+    if [ "$PLUS" = 1 ] || [ "$CH" = plus ]; then echo plus-beta; return; fi
+    echo beta
+}
+
+latest() {  # "<id> <label>": the latest release's tag (stable) or the channel's newest commit
     if [ $CH = stable ]; then
         t=$(curl -fsSL --max-time 15 https://api.github.com/repos/$REPO/releases/latest 2>/dev/null |
             sed -n 's/^ *"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)
         [ -n "$t" ] && echo "$t ROCKNIXDS ${t#v}"
     else
-        c=$(curl -fsSL --max-time 15 https://api.github.com/repos/$REPO/commits/beta 2>/dev/null |
+        BR=$(branch)
+        c=$(curl -fsSL --max-time 15 https://api.github.com/repos/$REPO/commits/$BR 2>/dev/null |
             sed -n 's/^  "sha": *"\([0-9a-f]*\)".*/\1/p' | head -n1)
-        [ -n "$c" ] && echo "$c ROCKNIXDS beta $(echo $c | cut -c1-7)"
+        [ -n "$c" ] && echo "$c ROCKNIXDS $BR $(echo $c | cut -c1-7)"
     fi
 }
 
@@ -40,7 +75,7 @@ check|notify)
     echo "UPDATE $label"
     ;;
 install)
-    B=main; [ $CH = beta ] && B=beta
+    B=$(branch)
     systemctl is-active -q rocknixds-update && { echo "AN UPDATE IS ALREADY RUNNING"; exit 1; }
     systemd-run --quiet --unit=rocknixds-update --collect sh -c \
         "curl -fsSL https://raw.githubusercontent.com/$REPO/$B/install.sh | RGDS_BRANCH=$B sh > /storage/rocknixds-update.log 2>&1"

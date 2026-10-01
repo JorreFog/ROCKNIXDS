@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""ra-fetch.py <outdir>  (run ON the device)
+"""ra-fetch.py <outdir> [ES game id ...]  (run ON the device)
 
-For every game ES knows with a RetroAchievements id (cheevosId, which ES fills in itself), fetches the achievement
+For every game ES knows (or only the games named) with a RetroAchievements id (cheevosId, which ES fills in itself), fetches the achievement
 set and the user's unlocks from RetroAchievements' client API, with the account ROCKNIX already has
 (system.cfg: global.retroachievements.username / .token). The token stays on the device. Read-only: it uses
 r=patch (the set) and r=unlocks (softcore unlocks); it does not start a play session.
@@ -50,6 +50,9 @@ def main():
     if not user or not token:
         sys.exit("no RetroAchievements account in system.cfg")
     games = json.load(urllib.request.urlopen("http://localhost:1234/systems/nds/games"))
+    only = set(sys.argv[2:])
+    if only:
+        games = [g for g in games if g["id"] in only]
     result = {}
     for g in games:
         gid = int(g.get("cheevosId") or 0)

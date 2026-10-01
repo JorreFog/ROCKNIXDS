@@ -7,7 +7,6 @@ NINTENDO DS mark, plastic edge shading and sheen, and a soft drop shadow. Output
 "boxart" media (the theme shows it on the game list's top screen).
 """
 import sys
-import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 W, H = 420, 460
@@ -23,7 +22,25 @@ def coeffs(dst, src):
     for (x, y), (u, v) in zip(dst, src):
         A.append([x, y, 1, 0, 0, 0, -u * x, -u * y]); b.append(u)
         A.append([0, 0, 0, x, y, 1, -v * x, -v * y]); b.append(v)
-    return np.linalg.solve(np.array(A, float), np.array(b, float)).tolist()
+    return solve(A, b)
+
+
+def solve(A, b):
+    """A x = b for the 8x8 system above, Gaussian elimination with partial pivoting (no numpy: this also runs on
+    the device, whose Python has no numpy)."""
+    n = len(b)
+    M = [list(map(float, row)) + [float(v)] for row, v in zip(A, b)]
+    for c in range(n):
+        p = max(range(c, n), key=lambda r: abs(M[r][c]))
+        M[c], M[p] = M[p], M[c]
+        for r in range(c + 1, n):
+            f = M[r][c] / M[c][c]
+            for k in range(c, n + 1):
+                M[r][k] -= f * M[c][k]
+    x = [0.0] * n
+    for r in range(n - 1, -1, -1):
+        x[r] = (M[r][n] - sum(M[r][k] * x[k] for k in range(r + 1, n))) / M[r][r]
+    return x
 
 
 def warp(img, quad):

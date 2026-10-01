@@ -36,6 +36,14 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 
 ### New in 1.5 (beta)
 
+- **Beta 6.** The handheld fetches its own game art and RetroAchievements strips. Each time the menu opens, a
+  background job at idle priority scrapes games that are missing a 3D box, screenshot or cartridge (a game with no
+  match is tried again a week later; offline, the next time the menu opens) and redraws the RetroAchievements strip
+  of every game played since its strip was drawn. The strip of the game you just quit is redrawn while the menu
+  starts, so its progress bar shows what you just unlocked. The first run downloads Pillow for the device's Python
+  from PyPI (~6 MB, into `/storage/.config/rocknixds/pylib`). Switch it off with `rocknixds.automedia=0` in
+  `system.cfg`. The last run's log is `/storage/.config/rocknixds/media.log`. An RG DS Plus that takes this beta is
+  installed from the `plus-beta` branch instead, so it does not pick up an RG DS build.
 - **Beta 5.** The CPU stays at 816 MHz through a single heavy frame when the screen is still at 60 fps and
   nothing was dropped (battery sessions were leaving 816 after one spike the queue had already hidden). The
   volume rocker shows a card on the top screen during a game. *Resume on quit*, *power profile* and *share
@@ -168,8 +176,15 @@ ROCKNIX update changes that menu. Everything it replaces is backed up first unde
 (the folder keeps its old name so earlier installs can still be undone).
 Running it again upgrades an earlier version in place.
 
-Cartridge scans, 3D boxes, screenshots and the RetroAchievements strip are per-game media that the installer
-doesn't download. One command from a PC fetches and pushes all of it, no scraper account needed:
+Cartridge scans, 3D boxes, screenshots and the RetroAchievements strip are per-game media. The device fetches them
+itself: every time the menu opens (at boot and after a game), a background job at idle priority scrapes the games
+that are missing a 3D box, screenshot or cartridge (a game with no match is tried again a week later), and redraws
+the RetroAchievements strip of every game played since its strip was drawn. The strip of the game you just quit is
+redrawn while the menu starts, so its progress bar shows what you just unlocked. The first run downloads Pillow for
+the device's Python from PyPI (~6 MB, into `/storage/.config/rocknixds/pylib`). Switch it off with
+`rocknixds.automedia=0` in `system.cfg`; the last run's log is `/storage/.config/rocknixds/media.log`.
+
+The same tool also runs from a PC, for everything at once, no scraper account needed:
 
 ```sh
 python3 dii-ess-aye/scrape/rocknixds-media.py --device <RG DS ip>

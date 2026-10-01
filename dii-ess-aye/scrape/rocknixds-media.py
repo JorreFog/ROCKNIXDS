@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""rocknixds-media.py --device <ip> [options]   (run on a PC; needs python3, Pillow, numpy, ssh access as root)
+"""rocknixds-media.py --device <ip> [options]   (run on a PC; needs python3, Pillow, ssh access as root)
+rocknixds-media.py --local [--auto] [options]   (run on the device itself)
+rocknixds-media.py --ra-rom <rom>                (on the device, ES stopped: refresh that game's RetroAchievements strip)
 
 One command for every DS game's art and text on a ROCKNIXDS device, with no scraper account:
 
@@ -17,8 +19,18 @@ One command for every DS game's art and text on a ROCKNIXDS device, with no scra
 Games are matched by name (the ROM's No-Intro style file name for libretro, a normalised title for LaunchBox),
 with a fuzzy fallback and a preference for USA/World/Europe releases. Existing media is kept unless --force.
 
+On the device (--local) the same work runs without a PC. ROCKNIX's Python has no Pillow, so the first run
+downloads the Pillow wheel for the device's Python from PyPI (sha256-checked) into /storage/.config/rocknixds/pylib.
+--auto is what ROCKNIXDS runs in the background each time the menu opens (ES start and after a game,
+media-auto.sh): only games missing their 3D box, screenshot or cartridge are scraped (one that still has no match
+is retried after a week), and the RetroAchievements strip is redrawn for games played since it was last drawn.
+--ra-rom is run as a game ends, before ES is back: it redraws that game's strip in place (when it has one), so the
+progress the menu shows when it opens is the one just played.
+
 Options:
   --device IP         the RG DS (ssh root@IP; default password rocknix). RGDS_SSH overrides the ssh command.
+  --local             run on the device itself (instead of --device)
+  --auto              with --local: only what's missing, quietly, as the menu's background job does
   --game SUBSTRING    only games whose name or file matches
   --force             re-render and re-push media the game already has (text fields are still only filled where empty)
   --no-ra             skip RetroAchievements (needs the account set up in ES on the device)
@@ -26,8 +38,10 @@ Options:
   --out DIR           work directory (default: ./media-out)
   --dry-run           show what would be fetched and pushed, touch nothing
 """
-import argparse, difflib, gzip, html, io, json, os, re, shlex, shutil, subprocess, sys, unicodedata, urllib.parse, urllib.request
-from PIL import Image
+import argparse, difflib, gzip, hashlib, html, importlib.util, io, json, os, platform, re, shlex, shutil, subprocess, sys, \
+    tempfile, time, unicodedata, urllib.error, urllib.parse, urllib.request, zipfile
+
+Image = None                        # PIL.Image, imported by load_pil() (on the device it may have to be fetched first)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LR = "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20DS/"
@@ -38,6 +52,13 @@ LB_REGIONS = ["North America", "United States", "World", "Europe", "United Kingd
               "Germany", "France", "Spain", "Italy", "Japan", "Korea"]
 CARD_ASPECT, CARD_H = 0.9174, 480
 FONT_ON_DEVICE = "/storage/.config/emulationstation/themes/dii-ess-aye/assets/fonts/dsi_font.otf"
+LR_LIST_DAYS = 7                    # libretro's directory listings are fetched again after this long
+# on the device
+PYLIB = "/storage/.config/rocknixds/pylib"
+STATE = "/storage/.config/rocknixds/media-state.json"
+WORK_ON_DEVICE = "/storage/.cache/rocknixds-media"
+AUTO_ART = ("boxart", "image", "cartridge")     # a game missing any of these is scraped by --auto
+RETRY = 7 * 86400                   # --auto tries a game with no match (or no RetroAchievements hash) again after this
 
 
 def log(*a):
@@ -65,15 +86,83 @@ class Device:
     def push_media(self, gid, mtype, data):
         if self.dry:
             return "dry"
-        self.run(f"cat > /tmp/rgds-media.bin && curl -s -o /dev/null -w '%{{http_code}}' -X POST -H 'Content-Type: image/png' "
-                 f"--data-binary @/tmp/rgds-media.bin localhost:1234/systems/nds/games/{gid}/media/{mtype}", data=data)
-        return "ok"
+        code = self.run(f"cat > /tmp/rgds-media.bin && curl -s -o /dev/null -w '%{{http_code}}' -X POST -H 'Content-Type: image/png' "
+                        f"--data-binary @/tmp/rgds-media.bin localhost:1234/systems/nds/games/{gid}/media/{mtype}; "
+                        f"rm -f /tmp/rgds-media.bin", data=data).strip()
+        return "ok" if code.startswith("2") else f"failed (ES answered {code or 'nothing'})"
 
     def push_meta(self, gid, meta):
         if self.dry:
             return "dry"
         return self.run(f"curl -s -o /dev/null -w '%{{http_code}}' -X POST -H 'Content-Type: application/json' "
                         f"--data-binary {shlex.quote(json.dumps(meta))} localhost:1234/systems/nds/games/{gid}")
+
+    def es_up(self):
+        return "true" in self.run("curl -s -m 2 localhost:1234/isIdle || true")
+
+
+class Local(Device):
+    """The device itself: the same commands, run here instead of over ssh."""
+    def __init__(self, dry):
+        self.ssh, self.dry = ["sh", "-c"], dry
+
+
+# ---------- Pillow ----------
+def load_pil(local):
+    """Imports Pillow. On the device it lives in PYLIB (put on PYTHONPATH as well, for box3d.py and the other
+    tools run as subprocesses) and is fetched from PyPI the first time."""
+    global Image
+    if local:
+        sys.path.insert(0, PYLIB)
+        os.environ["PYTHONPATH"] = PYLIB + (os.pathsep + os.environ["PYTHONPATH"] if os.environ.get("PYTHONPATH") else "")
+    try:
+        from PIL import Image as I
+    except ImportError:
+        if not local:
+            sys.exit("needs Pillow: pip install pillow")
+        install_pillow(PYLIB)
+        sys.path_importer_cache.pop(PYLIB, None)        # looked up while it didn't exist yet
+        importlib.invalidate_caches()
+        from PIL import Image as I
+    Image = I
+
+
+def install_pillow(dest):
+    """The newest Pillow wheel for this Python and CPU (manylinux, within this glibc) from PyPI, into dest."""
+    tag = "cp%d%d" % sys.version_info[:2]
+    arch, glibc = platform.machine(), platform.libc_ver()[1] or "0.0"
+    have = tuple(int(x) for x in glibc.split(".")[:2])
+    meta = json.loads(http("https://pypi.org/pypi/pillow/json"))
+    best = None
+    for ver, files in meta.get("releases", {}).items():
+        if not re.fullmatch(r"[0-9]+(\.[0-9]+)*", ver):
+            continue                                            # no pre-releases
+        for f in files:
+            fn = f["filename"]
+            m = re.search(r"-%s-%s-(.*)\.whl$" % (tag, tag), fn)
+            if f.get("yanked") or not m:
+                continue
+            ok = [tuple(map(int, g)) for g in re.findall(r"manylinux_([0-9]+)_([0-9]+)_" + arch + r"(?=\.|$)", m.group(1))]
+            if any(v <= have for v in ok):
+                key = (tuple(map(int, ver.split("."))), fn)
+                if best is None or key > best[0]:
+                    best = (key, f)
+    if best is None:
+        raise RuntimeError(f"no Pillow wheel on PyPI for {tag} {arch} glibc {glibc}")
+    f = best[1]
+    log(f"Pillow isn't installed on this device: fetching {f['filename']}")
+    data = http(f["url"], timeout=120)
+    if hashlib.sha256(data).hexdigest() != f["digests"]["sha256"]:
+        raise RuntimeError("Pillow download doesn't match PyPI's checksum")
+    tmp = "%s.new%d" % (dest, os.getpid())        # the game-end refresh and the menu's job may both get here
+    zipfile.ZipFile(io.BytesIO(data)).extractall(tmp)
+    with open(os.path.join(tmp, ".wheel"), "w") as o:
+        o.write(f["filename"] + "\n")
+    shutil.rmtree(dest, ignore_errors=True)
+    try:
+        os.rename(tmp, dest)
+    except OSError:                                 # the other one was first
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 # ---------- naming ----------
@@ -154,9 +243,11 @@ print(json.dumps(out))
 
 
 def fill_cheevos_ids(dev, games):
+    """Returns the ids of the games whose lookup failed (offline, RA down): those are worth another try soon."""
     todo = [g for g in games if not int(g.get("cheevosId") or 0)]
+    failed = set()
     if not todo:
-        return
+        return failed
     paths = {g["id"]: g["path"] if g["path"].startswith("/") else "/storage/roms/nds/" + g["path"].lstrip("./") for g in todo}
     hashes = json.loads(dev.run("python3 -c " + shlex.quote(RA_HASH), data=json.dumps(list(paths.values())).encode()))
     for g in todo:
@@ -166,13 +257,14 @@ def fill_cheevos_ids(dev, games):
         try:
             rid = int(json.loads(http(f"https://retroachievements.org/dorequest.php?r=gameid&m={h}")).get("GameID") or 0)
         except (OSError, ValueError) as e:
-            log(f"  {g['name']}: RetroAchievements lookup failed ({e})"); continue
+            log(f"  {g['name']}: RetroAchievements lookup failed ({e})"); failed.add(g["id"]); continue
         if rid:
             dev.push_meta(g["id"], {"cheevosHash": h.upper(), "cheevosId": str(rid)})   # upper case, as ES stores it
             g["cheevosId"] = rid
             log(f"  {g['name']}: RetroAchievements game {rid} (hash {h})")
         else:
             log(f"  {g['name']}: RetroAchievements doesn't know this ROM (hash {h})")
+    return failed
 
 
 # ---------- sources ----------
@@ -190,9 +282,15 @@ class Libretro:
     def names(self, kind):
         if kind not in self.lists:
             p = os.path.join(self.cache, f"lr-{kind}.html")
-            if not os.path.exists(p):
-                with open(p, "wb") as f:
-                    f.write(http(LR + kind + "/"))
+            if not os.path.exists(p) or time.time() - os.path.getmtime(p) > LR_LIST_DAYS * 86400:
+                try:
+                    data = http(LR + kind + "/")
+                    with open(p + ".new", "wb") as f:
+                        f.write(data)
+                    os.replace(p + ".new", p)
+                except OSError:
+                    if not os.path.exists(p):
+                        raise                       # a failed refresh keeps the old list
             s = open(p, encoding="utf-8", errors="replace").read()
             self.lists[kind] = [html.unescape(urllib.parse.unquote(m))[:-4] for m in re.findall(r'href="([^"]+\.png)"', s)]
         return self.lists[kind]
@@ -201,8 +299,9 @@ class Libretro:
         p = os.path.join(self.cache, kind, name + ".png")
         if not os.path.exists(p):
             os.makedirs(os.path.dirname(p), exist_ok=True)
+            data = http(LR + kind + "/" + urllib.parse.quote(name) + ".png")     # no empty file left on a failure
             with open(p, "wb") as f:
-                f.write(http(LR + kind + "/" + urllib.parse.quote(name) + ".png"))
+                f.write(data)
         return Image.open(p).convert("RGBA")
 
 
@@ -218,6 +317,9 @@ def side_by_side(img):
 
 
 def png_bytes(img):
+    # Drop iCCP. ES loads these with SDL_image, which fails the whole file when libpng
+    # rejects the profile ("invalid data"), then retries the load every frame.
+    img.info.pop("icc_profile", None)
     b = io.BytesIO(); img.save(b, "PNG", optimize=True); return b.getvalue()
 
 
@@ -230,15 +332,18 @@ def cart_image(index, name, cache):
     cands = sorted(index[match], key=lambda c: (0 if c[1].lower().endswith(".png") else 1, 0 if own and c[0] == own else 1,
                                                 LB_REGIONS.index(c[0]) if c[0] in LB_REGIONS else len(LB_REGIONS)))
     has_cutout = any(c[1].lower().endswith(".png") for c in cands)
+    failed = False
     for region, fn in cands:
         p = os.path.join(cache, "lb", os.path.basename(fn))
         try:
             if not os.path.exists(p):
                 os.makedirs(os.path.dirname(p), exist_ok=True)
+                data = http(LB_IMG + fn)
                 with open(p, "wb") as f:
-                    f.write(http(LB_IMG + fn))
+                    f.write(data)
             img = Image.open(p)
         except OSError:
+            failed = True
             continue
         if img.mode != "RGBA" and has_cutout:
             continue                        # a photo on a background while a cut-out exists
@@ -247,29 +352,136 @@ def cart_image(index, name, cache):
         if bbox:
             img = img.crop(bbox)
         return img.resize((round(CARD_H * CARD_ASPECT), CARD_H), Image.LANCZOS), f"{match} [{region or 'no region'}]"
-    return None, f"{match}: no downloadable cart image"
+    return None, f"{match}: " + ("download failed" if failed else "no downloadable cart image")
 
 
 def run_tool(script, *args):
     subprocess.run([sys.executable, os.path.join(HERE, script), *args], check=True, capture_output=True)
 
 
+# ---------- state (--auto) ----------
+def load_state():
+    try:
+        with open(STATE) as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        st = {}
+    for k in ("tried", "rahash", "ra"):
+        st.setdefault(k, {})
+    return st
+
+
+def save_state(st):
+    os.makedirs(os.path.dirname(STATE), exist_ok=True)
+    with open(STATE + ".new", "w") as f:
+        json.dump(st, f, indent=1)
+    os.replace(STATE + ".new", STATE)
+
+
+# ---------- the strip of a game that just ended (--ra-rom) ----------
+RECOVERY = "/storage/.emulationstation/recovery"
+
+
+def gamelist_entry(rom):
+    """A ROM's <game> entry as ES will read it: its recovery file (while that belongs to this gamelist.xml), else
+    gamelist.xml (see playstats.py). Returns (entry, system root) or (None, None)."""
+    import xml.etree.ElementTree as ET
+    rom = os.path.abspath(rom)
+    parts = rom.split("/")
+    if "roms" not in parts[:-2]:
+        return None, None
+    i = parts.index("roms")
+    system, sysroot = parts[i + 1], "/".join(parts[:i + 2])
+    gamelist = os.path.join(sysroot, "gamelist.xml")
+    size = os.path.getsize(gamelist) if os.path.isfile(gamelist) else 0
+    rec = os.path.join(RECOVERY, system, os.path.splitext(os.path.relpath(rom, sysroot))[0] + ".xml")
+    for xml_file, need_hash in ((rec, True), (gamelist, False)):
+        try:
+            root = ET.parse(xml_file).getroot()
+        except (OSError, ET.ParseError):
+            continue
+        if need_hash and root.get("parentHash") != str(size):
+            continue
+        for g in root.findall("game"):
+            p = g.findtext("path", "")
+            if os.path.normpath(p if os.path.isabs(p) else os.path.join(sysroot, p)) == rom:
+                return g, sysroot
+    return None, None
+
+
+def ra_rom(rom):
+    """Redraws a game's RetroAchievements strip over its current file, while ES is stopped after the game (ES
+    reads it when it starts). A game without a strip yet gets one from --auto, through ES, once ES is up."""
+    g, sysroot = gamelist_entry(rom)
+    if g is None:
+        return log(f"{rom}: not in the gamelist")
+    rid, wheel = int(g.findtext("cheevosId", "0") or 0), g.findtext("wheel", "")
+    if rid <= 0 or not wheel:
+        return log(f"{rom}: no RetroAchievements set or no strip yet")
+    wheel = wheel if os.path.isabs(wheel) else os.path.normpath(os.path.join(sysroot, wheel))
+    if not os.path.isfile(wheel):
+        return log(f"{rom}: strip {wheel} missing")
+    spec = importlib.util.spec_from_file_location("ra_fetch", os.path.join(HERE, "ra-fetch.py"))
+    rf = importlib.util.module_from_spec(spec); spec.loader.exec_module(rf)
+    user, token = rf.cfg("global.retroachievements.username"), rf.cfg("global.retroachievements.token")
+    if not user or not token:
+        return log("no RetroAchievements account in system.cfg")
+    tmp = tempfile.mkdtemp(prefix="rgds-ra-")
+    try:
+        info = rf.fetch(user, token, rid, g.findtext("name", "") or os.path.basename(rom), tmp)
+        with open(os.path.join(tmp, "ra.json"), "w") as f:
+            json.dump({"strip": info}, f)
+        run_tool("ra_panel.py", os.path.join(tmp, "ra.json"), tmp, FONT_ON_DEVICE, os.path.join(tmp, "out"))
+        shutil.copyfile(os.path.join(tmp, "out", "strip.png"), wheel + ".new")
+        os.replace(wheel + ".new", wheel)
+        log(f"{info['name']}: {info['unlocked']} of {info['total']} achievements, strip {wheel} redrawn")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 # ---------- main ----------
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--device", required=True); ap.add_argument("--game", default="")
+    ap.add_argument("--device"); ap.add_argument("--local", action="store_true")
+    ap.add_argument("--auto", action="store_true"); ap.add_argument("--ra-rom")
+    ap.add_argument("--game", default="")
     ap.add_argument("--force", action="store_true"); ap.add_argument("--no-ra", action="store_true")
-    ap.add_argument("--no-push", action="store_true"); ap.add_argument("--out", default="media-out")
+    ap.add_argument("--no-push", action="store_true"); ap.add_argument("--out")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
-    dev = Device(a.device, a.dry_run or a.no_push)
-    out = os.path.abspath(a.out); cache = os.path.join(out, "cache"); os.makedirs(cache, exist_ok=True)
+    if a.ra_rom:
+        load_pil(True)
+        return ra_rom(a.ra_rom)
+    if bool(a.device) == a.local:
+        ap.error("give --device IP (from a PC) or --local (on the device)")
+    if a.auto and not a.local:
+        ap.error("--auto runs on the device: use it with --local")
+    auto = a.auto and not a.force
+    dev = Local(a.dry_run or a.no_push) if a.local else Device(a.device, a.dry_run or a.no_push)
+    out = os.path.abspath(a.out or (WORK_ON_DEVICE if a.local else "media-out"))
+    cache = os.path.join(out, "cache"); os.makedirs(cache, exist_ok=True)
+
+    every = dev.games()
+    games = [g for g in every if a.game.lower() in (g["name"] + g["path"]).lower()]
+    st, now = (load_state(), time.time()) if auto else (None, 0)
+    if auto:
+        # what's missing, from ES's own list (no network until there's something to do)
+        known = {g["path"] for g in every}
+        for k in ("tried", "rahash", "ra"):
+            st[k] = {p: v for p, v in st[k].items() if p in known}      # games since removed
+        art = {g["id"] for g in games if any(t not in g for t in AUTO_ART) and now - st["tried"].get(g["path"], 0) > RETRY}
+        unhashed = [g for g in games if not int(g.get("cheevosId") or 0) and now - st["rahash"].get(g["path"], 0) > RETRY]
+        # strips drawn by --auto are remembered with the game's last-played date (a game never drawn has no entry)
+        played = lambda g: int(g.get("cheevosId") or 0) and st["ra"].get(g["path"]) != g.get("lastplayed", "")
+        if not art and not unhashed and not any(played(g) for g in games):
+            save_state(st)
+            return log(f"{len(games)} game(s), nothing missing")
+    load_pil(a.local)
     lr = Libretro(cache)
     carts = json.load(open(os.path.join(HERE, "nds-carts.json")))["games"]
     with gzip.open(os.path.join(HERE, "nds-meta.json.gz"), "rt", encoding="utf-8") as f:
         meta_db = json.load(f)["games"]
 
-    games = [g for g in dev.games() if a.game.lower() in (g["name"] + g["path"]).lower()]
     log(f"{len(games)} game(s) on the device" + (f" matching '{a.game}'" if a.game else ""))
     font = os.path.join(cache, "dsi_font.otf")
     if not os.path.exists(font):
@@ -280,27 +492,60 @@ def main():
     ra, ra_info = {}, {}
     if not a.no_ra:
         try:
-            fill_cheevos_ids(dev, games)
-            src = open(os.path.join(HERE, "ra-fetch.py"), "rb").read()
-            # its output is the per-game summary (or why it failed): show it, a silent failure left old strips in place
-            fetched = dev.run("cat > /tmp/ra-fetch.py && rm -rf /tmp/ra && python3 /tmp/ra-fetch.py /tmp/ra 2>&1; "
-                              "echo \"exit $?\"", data=src)
-            log("RetroAchievements (fetched on the device):\n  " + fetched.strip().replace("\n", "\n  "))
-            tarball = dev.run("cd /tmp/ra && tar cf - .", binary=True)
-            radir = os.path.join(out, "ra"); shutil.rmtree(radir, ignore_errors=True); os.makedirs(radir)
-            subprocess.run(["tar", "xf", "-", "-C", radir], input=tarball, check=True)
-            if not os.path.exists(os.path.join(radir, "ra.json")):
-                raise RuntimeError("ra-fetch.py wrote no ra.json (see above)")
-            shutil.rmtree(os.path.join(out, "wheel"), ignore_errors=True)
-            run_tool("ra_panel.py", os.path.join(radir, "ra.json"), radir, font, os.path.join(out, "wheel"))
-            ra_info = json.load(open(os.path.join(radir, "ra.json")))
-            ra = {gid: os.path.join(out, "wheel", gid + ".png") for gid in ra_info}
+            if auto:
+                try:
+                    http("https://retroachievements.org/", timeout=10)
+                except urllib.error.HTTPError:
+                    pass                                            # it answered
+                except OSError as e:
+                    raise RuntimeError(f"RetroAchievements unreachable ({e})")
+                failed = fill_cheevos_ids(dev, unhashed)
+                for g in unhashed:
+                    if int(g.get("cheevosId") or 0):
+                        st["rahash"].pop(g["path"], None)
+                    elif g["id"] not in failed:
+                        st["rahash"][g["path"]] = now               # RA doesn't know it (or no hash): next week
+                ids = [g["id"] for g in games if played(g)]
+            else:
+                fill_cheevos_ids(dev, games)
+                ids = []                                            # all of them
+            if ids or not auto:
+                src = open(os.path.join(HERE, "ra-fetch.py"), "rb").read()
+                # its output is the per-game summary (or why it failed): show it, a silent failure left old strips in place
+                fetched = dev.run("cat > /tmp/ra-fetch.py && rm -rf /tmp/ra && python3 /tmp/ra-fetch.py /tmp/ra "
+                                  + " ".join(shlex.quote(i) for i in ids) + " 2>&1; echo \"exit $?\"", data=src)
+                log("RetroAchievements (fetched on the device):\n  " + fetched.strip().replace("\n", "\n  "))
+                tarball = dev.run("cd /tmp/ra && tar cf - . && cd / && rm -rf /tmp/ra /tmp/ra-fetch.py", binary=True)
+                radir = os.path.join(out, "ra"); shutil.rmtree(radir, ignore_errors=True); os.makedirs(radir)
+                subprocess.run(["tar", "xf", "-", "-C", radir], input=tarball, check=True)
+                if not os.path.exists(os.path.join(radir, "ra.json")):
+                    raise RuntimeError("ra-fetch.py wrote no ra.json (see above)")
+                shutil.rmtree(os.path.join(out, "wheel"), ignore_errors=True)
+                run_tool("ra_panel.py", os.path.join(radir, "ra.json"), radir, font, os.path.join(out, "wheel"))
+                ra_info = json.load(open(os.path.join(radir, "ra.json")))
+                ra = {gid: os.path.join(out, "wheel", gid + ".png") for gid in ra_info}
+                if auto:
+                    for g in games:                                 # a set with no achievements: no strip to draw
+                        i = ra_info.get(g["id"], {})
+                        if i and not i.get("error") and not os.path.exists(ra[g["id"]]):
+                            st["ra"][g["path"]] = g.get("lastplayed", "")
         except Exception as e:                                      # no account, offline, ...: the rest still runs
             log(f"RetroAchievements skipped: {e}")
 
+    if auto and art:
+        try:
+            lr.names("Named_Boxarts")
+        except OSError as e:                        # offline: nothing is marked as tried, the next menu tries again
+            log(f"libretro-thumbnails unreachable ({e}): art skipped this time")
+            art = set()
+    if auto:
+        games = [g for g in games if g["id"] in art or os.path.exists(ra.get(g["id"], "")) or ra_info.get(g["id"], {}).get("error")]
     for g in games:
+        if auto and not dev.es_up():
+            log("ES is gone (a game started?): stopping"); break
         gid, name, stem = g["id"], g["name"], os.path.splitext(os.path.basename(g["path"]))[0]
         have = lambda t: (t in g) and not a.force
+        do_art = not auto or gid in art
         log(f"\n== {name}  ({stem})")
         gdir = os.path.join(out, gid); os.makedirs(gdir, exist_ok=True)
         results = {}
@@ -314,7 +559,18 @@ def main():
         # libretro: cover, snap, title (by the ROM's name, No-Intro style)
         cover = None
         for kind, mtype in (("Named_Boxarts", "thumbnail"), ("Named_Snaps", "image"), ("Named_Titles", "titleshot")):
-            match, score = best_match(stem, lr.names(kind)) or best_match(name, lr.names(kind))
+            if not do_art:
+                break
+            needed = not have(mtype) or (kind == "Named_Boxarts" and not (have("boxart") and have("boxback")))
+            if not needed:
+                results[mtype] = "kept"; continue
+            try:
+                names = lr.names(kind)
+            except OSError as e:
+                results[mtype] = f"download failed ({e})"; continue
+            match, score = best_match(stem, names)
+            if not match:
+                match, score = best_match(name, names)
             if not match:
                 results[mtype] = "no match"; continue
             try:
@@ -340,7 +596,9 @@ def main():
                 run_tool(script, cp, op, *extra)
                 results[mtype] = dev.push_media(gid, mtype, open(op, "rb").read())
         # the real cartridge
-        if have("cartridge"):
+        if not do_art:
+            pass
+        elif have("cartridge"):
             results["cartridge"] = "kept"
         else:
             img, why = cart_image(carts, name, cache)
@@ -348,14 +606,16 @@ def main():
             if img is not None:
                 push("cartridge", img)
             else:
-                results["cartridge"] = "none"
+                results["cartridge"] = "download failed" if why.endswith("download failed") else "none"
         # RetroAchievements strip: always pushed, it shows progress, which changes between runs
         if gid in ra and os.path.exists(ra[gid]):
             results["wheel"] = dev.push_media(gid, "wheel", open(ra[gid], "rb").read())
+            if auto and results["wheel"] == "ok":
+                st["ra"][g["path"]] = g.get("lastplayed", "")
         elif gid in ra and ra_info.get(gid, {}).get("error"):
             results["wheel"] = "not updated (RetroAchievements error, see the top)"
         # text, only for fields ES has empty
-        match, _ = best_match(name, list(meta_db))
+        match, _ = best_match(name, list(meta_db)) if do_art else (None, 0)
         if match:
             m = meta_db[match]; fill = {}
             for k in ("desc", "genre", "developer", "publisher"):
@@ -370,6 +630,20 @@ def main():
             else:
                 results["metadata"] = "kept"
         log("  " + "  ".join(f"{k}={v}" for k, v in results.items()))
+        if auto:
+            shutil.rmtree(gdir, ignore_errors=True)
+            if do_art:
+                failed = any(str(v).startswith(("download failed", "failed")) for v in results.values())
+                if not any(t not in g and results.get(t) != "ok" for t in AUTO_ART):
+                    st["tried"].pop(g["path"], None)
+                elif not failed:
+                    st["tried"][g["path"]] = now        # no match anywhere for what's missing: try again next week
+            save_state(st)
+    if auto:
+        # only the listings and the font are kept between runs
+        for d in ("Named_Boxarts", "Named_Snaps", "Named_Titles", "lb", "ra", "wheel"):
+            shutil.rmtree(os.path.join(cache if d.startswith(("Named", "lb")) else out, d), ignore_errors=True)
+        return log("\ndone")
     log("\ndone" + (" (dry run, nothing pushed)" if a.dry_run else ("" if not a.no_push else " (nothing pushed)")) +
         f"; files under {out}. Restart ES or open the game list again to see the new art.")
 

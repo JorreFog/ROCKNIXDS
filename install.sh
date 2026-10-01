@@ -54,13 +54,43 @@ done
 say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31mERROR:\033[0m %s\n' "$*"; exit 1; }
 
+rgds_plus() {   # the RG DS Plus: the model string, or a panel wider than the RG DS's 640
+    model=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)
+    case "$model" in *"RG DS Plus"*) return 0 ;; esac
+    for m in /sys/class/drm/card*-DSI-*/modes; do
+        [ -f "$m" ] || continue
+        read -r mode < "$m" 2>/dev/null || continue
+        w=${mode%%x*}
+        [ "$w" -gt 640 ] 2>/dev/null && return 0
+        break
+    done
+    return 1
+}
+
 # ---- sanity checks -----------------------------------------------------------------------------------
 [ "$(id -u)" = 0 ] || die "run as root (ssh root@<device>)"
 grep -qi rocknix /etc/os-release 2>/dev/null || die "this isn't ROCKNIX"
-[ -f /flash/device_trees/rk3568-anbernic-rg-ds.dtb ] || tr -d '\0' < /proc/device-tree/model 2>/dev/null | grep -qi "rg.\?ds" \
-    || die "this doesn't look like an Anbernic RG DS"
+[ -f /flash/device_trees/rk3568-anbernic-rg-ds.dtb ] \
+    || [ -f /flash/device_trees/rk3568-anbernic-rg-ds-plus.dtb ] \
+    || tr -d '\0' < /proc/device-tree/model 2>/dev/null | grep -qi "rg.\?ds" \
+    || die "this doesn't look like an Anbernic RG DS or RG DS Plus"
 
 systemctl is-active -q dsflip-game.service 2>/dev/null && die "a DS game is running: quit it first"
+
+# The menu's Beta choice is stored as rocknixds.channel=beta, and an updater that follows this branch
+# would install the RG DS tree on a Plus. Send the Plus to plus-beta before anything here is changed.
+if rgds_plus && [ "$BRANCH" = beta ]; then
+    say "RG DS Plus: installing the plus-beta branch"
+    tmp=$(mktemp)
+    curl -fsSL "https://raw.githubusercontent.com/$REPO/plus-beta/install.sh" -o "$tmp" \
+        || die "couldn't download the Plus installer"
+    set +e
+    RGDS_BRANCH=plus-beta sh "$tmp" "$@"
+    rc=$?
+    set -e
+    rm -f "$tmp"
+    exit $rc
+fi
 
 es_stop()  { systemctl stop essway.service 2>/dev/null || true; trap 'systemctl start essway.service 2>/dev/null' EXIT; }
 es_start() { systemctl start essway.service 2>/dev/null || true; }
@@ -121,6 +151,11 @@ if [ $UNINSTALL = 1 ]; then
     rm -f /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh /storage/.config/autostart/rocknixds-menu-power \
           /storage/.config/emulationstation/scripts/start/rocknixds-menu-power.sh \
           /storage/.config/emulationstation/scripts/start/rocknixds-share-logs.sh
+    rm -f /storage/.config/emulationstation/scripts/start/rocknixds-media.sh \
+          /storage/.config/emulationstation/scripts/game-end/rocknixds-media.sh \
+          /storage/.config/emulationstation/scripts/game-start/rocknixds-media.sh
+    systemctl stop rocknixds-media.service rocknixds-media-ra.service 2>/dev/null
+    rm -rf /storage/.cache/rocknixds-media
     if [ -f /storage/.config/system.d/batteryledstatus.service.d/rocknixds.conf ]; then      # ROCKNIX's LED monitor again
         rm -f /storage/.config/system.d/batteryledstatus.service.d/rocknixds.conf
         rmdir /storage/.config/system.d/batteryledstatus.service.d 2>/dev/null
@@ -133,7 +168,8 @@ if [ $UNINSTALL = 1 ]; then
     fi
     echo performance > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor 2>/dev/null   # ROCKNIX's menu governor
     rmdir /storage/.config/emulationstation/scripts/theme-changed /storage/.config/emulationstation/scripts/game-end \
-          /storage/.config/emulationstation/scripts/start /storage/.config/emulationstation/scripts 2>/dev/null
+          /storage/.config/emulationstation/scripts/game-start /storage/.config/emulationstation/scripts/start \
+          /storage/.config/emulationstation/scripts 2>/dev/null
     rm -f $VERSION_FILE /storage/.config/rocknixds-es-notice /storage/.config/rocknixds-stock-es /storage/.config/rocknixds-any-rocknix
     if [ -e $BACKUP/.had-no-launcher-wrapper ] && [ -e $DRASTIC/drastic.real ]; then
         rm -f $DRASTIC/drastic $DRASTIC/drastic.dvsync; mv $DRASTIC/drastic.real $DRASTIC/drastic   # stock layout again
@@ -298,7 +334,8 @@ if [ $DSFLIP_ON = 1 ]; then
        "$SRC/dsflip/device/drastic-wrapper.sh" "$SRC/dsflip/device/install.sh" "$SRC/dsflip/device/es-features.sh" \
        "$SRC/dsflip/device/fast-switch" "$SRC/dsflip/device/playstats.py" "$SRC/dsflip/device/perf-session.py" \
        "$SRC/dsflip/device/es-share-logs.sh" "$SRC/dsflip/device/menu-power.sh" \
-       "$SRC/dsflip/device/battery-led-status" "$SRC/dsflip/device/powerstate" $WORK/dsflip/
+       "$SRC/dsflip/device/battery-led-status" "$SRC/dsflip/device/powerstate" \
+       "$SRC/dsflip/device/media-auto.sh" $WORK/dsflip/
     sh $WORK/dsflip/install.sh
 
     # DS-pixel-aware shaders for DraStic (sharp and LCD-grid looks that work at 1x and 2x) + their ES entries
@@ -326,6 +363,17 @@ if [ $DSFLIP_ON = 1 ]; then
         chmod +x /storage/.config/emulationstation/scripts/$ev/rocknixds-menu-power.sh
     done
     $DRASTIC/dsflip/menu-power.sh
+    # game art and RetroAchievements strips kept up to date on the device (media-auto.sh): the media tool, run in
+    # the background each time the menu opens (ES start, after a game) and stopped when a game starts
+    mkdir -p /storage/.config/rocknixds/media
+    for f in rocknixds-media.py ra-fetch.py ra_panel.py box3d.py labelart.py nds-carts.json nds-meta.json.gz; do
+        cp "$SRC/dii-ess-aye/scrape/$f" /storage/.config/rocknixds/media/
+    done
+    for ev in start game-end game-start; do
+        mkdir -p /storage/.config/emulationstation/scripts/$ev
+        cp "$SRC/dsflip/device/es-media.sh" /storage/.config/emulationstation/scripts/$ev/rocknixds-media.sh
+        chmod +x /storage/.config/emulationstation/scripts/$ev/rocknixds-media.sh
+    done
     # ROCKNIX's battery LED monitor started ~12 processes a second (6.5% of a core); the same monitor without them
     # (battery-led-status, which runs ROCKNIX's own if that ever changes) through a systemd drop-in
     if [ -f /usr/lib/systemd/system/batteryledstatus.service ]; then
