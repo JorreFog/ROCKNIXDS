@@ -13,11 +13,6 @@
 # Lower LED (amber:charging): amber = charging, off = discharging / full.
 # Overrides as in ROCKNIX's: THRESHOLD_LOW, THRESHOLD_CRITICAL, POLL_INTERVAL.
 
-# only while ROCKNIX's script is the one this follows: after a ROCKNIX update that changed it, run theirs instead
-ORIG="/usr/lib/autostart/quirks/devices/Anbernic RG DS/bin/battery_led_status"
-set -- $(md5sum "$ORIG" 2>/dev/null)
-[ "$1" = b4ce44b02bf400a915964f3f2e392f28 ] || exec /usr/bin/battery_led_status
-
 LED_PATH="/sys/class/leds"
 BAT=/sys/class/power_supply/battery
 CFG=/storage/.config/system/configs/system.cfg
@@ -38,6 +33,30 @@ read_brightness() {                 # led.brightness from system.cfg (get_settin
         mid) BRI=63 ;;
         min) BRI=15 ;;
         *)   BRI=255 ;;
+    esac
+}
+
+pick_leds() {                       # UPPER/LOWER from capacity and status; LOWER is 0 or BRI
+    local CAP=$1 STAT=$2
+    LOWER=0
+    if (( CAP <= THRESHOLD_CRITICAL )); then UPPER=blink_red
+    elif (( CAP <= THRESHOLD_LOW )); then UPPER=red
+    else UPPER=green; fi
+    case ${STAT} in
+        Charging)
+            # No blinking while charging, show battery level colour + amber lower
+            [ "${UPPER}" = "blink_red" ] && UPPER="red"
+            LOWER=${BRI}
+        ;;
+        Full|"Not charging")
+            UPPER="green"
+        ;;
+        Discharging)
+            :
+        ;;
+        *)
+            UPPER="green"
+        ;;
     esac
 }
 
@@ -67,6 +86,85 @@ led_lower() {
                      || echo ${BRI} >${LED_PATH}/amber:charging/brightness
 }
 
+selftest() {
+    local d
+    d=$(mktemp -d)
+    fail() { echo "battery-led-status selftest: $*" >&2; rm -rf "$d"; exit 1; }
+    CFG=$d/system.cfg
+    STAMP=$d/stamp
+    printf 'led.brightness=min\nled.brightness=mid\n' > "$CFG"
+    touch -d '2 minutes ago' "$CFG"
+    touch "$STAMP"
+    BRI=7
+    read_brightness
+    [ "$BRI" = 7 ] || fail "re-read system.cfg that had not changed"
+    touch "$CFG"
+    touch -d '2 minutes ago' "$STAMP"
+    read_brightness
+    [ "$BRI" = 63 ] || fail "mid brightness, got $BRI"
+    printf 'led.brightness=min\n' > "$CFG"
+    touch -d '2 minutes ago' "$STAMP"
+    read_brightness
+    [ "$BRI" = 15 ] || fail "min brightness, got $BRI"
+    printf 'led.brightness=high\n' > "$CFG"
+    touch -d '2 minutes ago' "$STAMP"
+    read_brightness
+    [ "$BRI" = 255 ] || fail "unknown brightness, got $BRI"
+
+    BRI=255
+    pick_leds 21 Discharging; [ "$UPPER $LOWER" = "green 0" ] || fail "21% discharging: $UPPER $LOWER"
+    pick_leds 20 Discharging; [ "$UPPER $LOWER" = "red 0" ] || fail "20% discharging: $UPPER $LOWER"
+    pick_leds 6 Discharging; [ "$UPPER $LOWER" = "red 0" ] || fail "6% discharging: $UPPER $LOWER"
+    pick_leds 5 Discharging; [ "$UPPER $LOWER" = "blink_red 0" ] || fail "5% discharging: $UPPER $LOWER"
+    pick_leds 0 Discharging; [ "$UPPER $LOWER" = "blink_red 0" ] || fail "0% discharging: $UPPER $LOWER"
+    pick_leds 5 Charging; [ "$UPPER $LOWER" = "red 255" ] || fail "5% charging: $UPPER $LOWER"
+    pick_leds 50 Charging; [ "$UPPER $LOWER" = "green 255" ] || fail "50% charging: $UPPER $LOWER"
+    pick_leds 3 Full; [ "$UPPER $LOWER" = "green 0" ] || fail "full: $UPPER $LOWER"
+    pick_leds 3 "Not charging"; [ "$UPPER $LOWER" = "green 0" ] || fail "not charging: $UPPER $LOWER"
+    pick_leds 4 Unknown; [ "$UPPER $LOWER" = "green 0" ] || fail "unknown status: $UPPER $LOWER"
+    THRESHOLD_LOW=30 THRESHOLD_CRITICAL=10
+    pick_leds 10 Discharging; [ "$UPPER" = blink_red ] || fail "override critical: $UPPER"
+    pick_leds 11 Discharging; [ "$UPPER" = red ] || fail "override low: $UPPER"
+    pick_leds 30 Discharging; [ "$UPPER" = red ] || fail "override low edge: $UPPER"
+    pick_leds 31 Discharging; [ "$UPPER" = green ] || fail "override normal: $UPPER"
+    THRESHOLD_LOW=20 THRESHOLD_CRITICAL=5
+
+    LED_PATH=$d/leds
+    mkdir -p "$LED_PATH/red:status" "$LED_PATH/green:power" "$LED_PATH/amber:charging"
+    echo timer > "$LED_PATH/red:status/trigger"
+    echo 0 > "$LED_PATH/red:status/brightness"
+    echo 9 > "$LED_PATH/green:power/brightness"
+    echo 9 > "$LED_PATH/amber:charging/brightness"
+    BRI=255
+    led_upper blink_red
+    [ "$(cat "$LED_PATH/red:status/trigger")" = timer ] || fail "blink changed the trigger"
+    [ "$(cat "$LED_PATH/green:power/brightness")" = 0 ] || fail "blink left green on"
+    [ "$(cat "$LED_PATH/red:status/brightness")" = 255 ] || fail "blink did not light red"
+    led_upper blink_red
+    [ "$(cat "$LED_PATH/red:status/brightness")" = 0 ] || fail "blink did not toggle off"
+    led_upper green
+    [ "$(cat "$LED_PATH/red:status/trigger")" = none ] || fail "green did not clear the red trigger"
+    [ "$(cat "$LED_PATH/green:power/brightness")" = 255 ] || fail "green brightness"
+    [ "$(cat "$LED_PATH/red:status/brightness")" = 0 ] || fail "green left red on"
+    BRI=15
+    led_lower 0
+    [ "$(cat "$LED_PATH/amber:charging/brightness")" = 0 ] || fail "amber off"
+    led_lower 255
+    [ "$(cat "$LED_PATH/amber:charging/brightness")" = 15 ] || fail "amber follows BRI, not the argument"
+    rm -rf "$d"
+    echo "battery-led-status selftest ok"
+}
+
+if [ "${1:-}" = "--selftest" ]; then
+    selftest
+    exit 0
+fi
+
+# only while ROCKNIX's script is the one this follows: after a ROCKNIX update that changed it, run theirs instead
+ORIG="/usr/lib/autostart/quirks/devices/Anbernic RG DS/bin/battery_led_status"
+set -- $(md5sum "$ORIG" 2>/dev/null)
+[ "$1" = b4ce44b02bf400a915964f3f2e392f28 ] || exec /usr/bin/battery_led_status
+
 # the poll's wait: read -t on a FIFO nobody writes (a builtin; sleep would be a process per poll)
 WAIT=/run/rocknixds-led-wait
 [ -p $WAIT ] || { rm -f $WAIT; mkfifo $WAIT; }
@@ -80,27 +178,7 @@ while true; do
     read -r CAP < $BAT/capacity
     read -r STAT < $BAT/status
     read_brightness
-    if (( CAP <= THRESHOLD_CRITICAL )); then UPPER=blink_red
-    elif (( CAP <= THRESHOLD_LOW )); then UPPER=red
-    else UPPER=green; fi
-    LOWER=0
-
-    case ${STAT} in
-        Charging)
-            # No blinking while charging, show battery level colour + amber lower
-            [ "${UPPER}" = "blink_red" ] && UPPER="red"
-            LOWER=${BRI}
-        ;;
-        Full|"Not charging")
-            UPPER="green"
-        ;;
-        Discharging)
-            :
-        ;;
-        *)
-            UPPER="green"
-        ;;
-    esac
+    pick_leds "$CAP" "$STAT"
 
     BRI_CHANGED=0
     [ "${BRI}" != "${PREV_BRI}" ] && BRI_CHANGED=1 && PREV_BRI="${BRI}"

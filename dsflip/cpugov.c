@@ -32,23 +32,16 @@ extern volatile int dsflip_presents;        /* dsflip.c: SDL_RenderPresent calls
 extern volatile long long dsflip_frame_work_max;   /* dsflip.c: heaviest frame's main-thread CPU ns since taken */
 extern volatile int dsflip_queue_drops;     /* dsflip.c: frames dropped because DraStic fell behind and caught up */
 
+#include "cpugov_decide.h"
+
 #define POL "/sys/devices/system/cpu/cpufreq/policy0/"
 #define WINDOW_MS 250
-#define TARGET 0.72                          /* load the busiest thread may reach at the chosen clock */
-#define HIGH 0.85                            /* above this at the current clock: go up now */
-#define PEAK_TARGET 0.80                     /* the heaviest frame in a window may take this much of 16.7 ms */
-#define PEAK_HIGH 0.95                       /* a frame this close to late: go up now */
-#define BAD_FOR_S 30                         /* a clock that dropped a frame isn't tried again for this long, doubled
-                                               for each further time it drops one (up to BAD_MAX_S) */
-#define BAD_MAX_S 600
 #define FPS_WINDOWS 4                        /* the frame rate is judged over 1 s: 250 ms holds only ~15 frames */
-#define DOWN_AFTER 8                         /* windows (2 s) in a row that fit a lower clock before stepping down */
 #define MAXT 64
 
 static int freqs[24], nf, cur, fmin_, fmax_;
 static long long bad_until[24];              /* per clock: don't step down to it before this (CLOCK_MONOTONIC ns) */
 static int strikes[24];                      /* per clock: how often it dropped frames this session */
-static long long now_ns;
 static int verbose;
 
 static int rd_int(const char *p) { FILE *f = fopen(p, "r"); int v = 0; if (f) { if (fscanf(f, "%d", &v) != 1) v = 0; fclose(f); } return v; }
@@ -66,21 +59,6 @@ static void set_clock(int khz, const char *why, double u, double fps) {
     dsflip_log("[cpugov] %d -> %d MHz (%s: busiest thread %.0f%%, heaviest frame %.0f%% of 16.7 ms, %.1f fps)\n",
                cur / 1000, khz / 1000, why, u * 100, last_peak * 100, fps);
     cur = khz;
-}
-
-/* the lowest available clock >= khz, within the bounds */
-static int fit(double khz) {
-    for (int i = 0; i < nf; i++) if (freqs[i] >= fmin_ && freqs[i] <= fmax_ && freqs[i] >= khz) return freqs[i];
-    return fmax_;
-}
-static int idx(int khz) { for (int i = 0; i < nf; i++) if (freqs[i] == khz) return i; return -1; }
-/* one step down, unless that clock dropped a frame recently: stepping down to it again, dropping, and going back up
- * was where most of the remaining drops came from (measured: ds-crisp 0.13/s bouncing 1416 <-> 1608) */
-static int step_down(int khz) {
-    int best = khz;
-    for (int i = 0; i < nf; i++) if (freqs[i] < khz && freqs[i] >= fmin_ && (best == khz || freqs[i] > best)) best = freqs[i];
-    int b = idx(best);
-    return b >= 0 && bad_until[b] > now_ns ? khz : best;
 }
 
 static long long thread_ns(int tid) {
@@ -113,7 +91,6 @@ static void *gov_thread(void *a) {
         nanosleep(&w, 0);
         struct timespec now; clock_gettime(CLOCK_MONOTONIC, &now);
         long long t = now.tv_sec * 1000000000LL + now.tv_nsec, dt = t_prev ? t - t_prev : 0;
-        now_ns = t;
         t_prev = t;
         double umax = 0;
         for (int k = 0; k < nt; k++) {
@@ -131,28 +108,12 @@ static void *gov_thread(void *a) {
         double peak = __atomic_exchange_n(&dsflip_frame_work_max, 0, __ATOMIC_RELAXED) / 16.67e6;
         last_peak = peak;
         int drops = dsflip_queue_drops, dropped = drops - drops_prev; drops_prev = drops;
-        double need = cur * umax / TARGET, needp = cur * peak / PEAK_TARGET;
-        int want = fit(need > needp ? need : needp);
-        const char *why = 0;
-        if (umax > HIGH) why = "busy";
-        else if (peak > PEAK_HIGH) why = "heavy frame";
-        else if (dropped) {
-            /* any drop, however light the frames look: at low clocks frames were dropped with the main thread's
-             * heaviest frame at only ~40% of a refresh (measured at 816 MHz in a still HeartGold dialog) */
-            why = "dropped"; if (want <= cur) want = fit(cur + 1);
-            int c = idx(cur);
-            if (c >= 0) {
-                long long ban = (long long)BAD_FOR_S << (strikes[c] < 5 ? strikes[c] : 5);
-                if (ban > BAD_MAX_S) ban = BAD_MAX_S;
-                bad_until[c] = t + ban * 1000000000LL; strikes[c]++;
-            }
-        }
-        else if (fps < 58.5 && fps > 5 && umax > 0.5) { why = "slow"; if (want <= cur) want = fit(cur + 1); }   /* +1 step */
-        if (why && want > cur) { set_clock(want, why, umax, fps); low = 0; }
-        else if (want < cur && fps >= 59) { if (++low >= DOWN_AFTER)   /* never while below full speed */ { set_clock(step_down(cur), "light", umax, fps); low = 0; } }
-        else low = 0;
+        struct cpugov_decision st = cpugov_decide(freqs, nf, fmin_, fmax_, bad_until, strikes,
+                                                   cur, umax, peak, dropped, fps, low, t);
+        low = st.low;
+        if (st.set_khz) set_clock(st.khz, st.why, umax, fps);
         if (verbose) dsflip_log("[cpugov] window: busiest %.0f%% peak frame %.0f%% fps %.1f drops %d at %d MHz, fits %d\n",
-                                umax * 100, peak * 100, fps, dropped, cur / 1000, want / 1000);
+                                umax * 100, peak * 100, fps, dropped, cur / 1000, st.want / 1000);
     }
     return 0;
 }
