@@ -163,9 +163,18 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
         done
         if [ $ran -lt 2 ]; then sleep 0.5; continue; fi
         [ $n -eq 0 ] && sleep 3          # and then a moment more: the pool's first hand-offs are the race
+        # DraStic's helper threads one per CPU, busiest first (Dragon Quest Monsters runs three 3D helpers at ~35%
+        # each; left to the scheduler on CPUs 0-2 they waited 17-19% of the time, and the main thread waits for the
+        # slowest of them): the k-th busiest helper goes to CPU k mod 3
+        if [ "$PIN" = 1 ]; then
+          k=0; for line in $(for t in /proc/$P/task/[0-9]*; do tid=${t##*/}; [ "$tid" = "$P" ] && continue
+                [ "$(cat $t/comm 2>/dev/null)" = drastic ] && echo "$(awk '{print $14 + $15}' $t/stat 2>/dev/null):$tid"; done | sort -t: -k1,1rn); do
+            taskset -p -c $((k % 3)) ${line#*:} >/dev/null 2>&1; k=$((k + 1))
+          done
+        fi
         for t in /proc/$P/task/[0-9]*; do tid=${t##*/}; c=$(cat $t/comm 2>/dev/null)
           case "$PIN" in
-            1) if [ "$tid" = "$P" ]; then taskset -p -c 3 $tid; else taskset -p -c 0-2 $tid; fi ;;
+            1) if [ "$tid" = "$P" ]; then taskset -p -c 3 $tid; else case "$c" in drastic*) ;; *) taskset -p -c 0-2 $tid ;; esac; fi ;;
             2) if [ "$tid" = "$P" ]; then taskset -p -c 3 $tid; else case "$c" in drastic*) ;; *) taskset -p -c 0-2 $tid ;; esac; fi ;;
             3) case "$c" in drastic*) ;; *) taskset -p -c 0-2 $tid ;; esac ;;
           esac
