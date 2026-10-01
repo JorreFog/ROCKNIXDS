@@ -4,8 +4,25 @@
 python3 dii-ess-aye/scrape/rocknixds-media.py --device <RG DS ip>
 ```
 
-Run it on a PC (python3, Pillow, numpy, ssh as root to the device). For every DS game ES knows it fetches and
-renders everything the theme shows and pushes it through ES's local HTTP API, with no scraper account:
+Run it on a PC (python3, Pillow, ssh as root to the device). For every DS game ES knows it fetches and
+renders everything the theme shows and pushes it through ES's local HTTP API, with no scraper account.
+
+It also runs on the device itself (`--local`); ROCKNIX's Python has no Pillow, so the first run there downloads the
+Pillow wheel for the device's Python from PyPI (checked against PyPI's sha256) into
+`/storage/.config/rocknixds/pylib`. The installer puts the tool in `/storage/.config/rocknixds/media` and runs it
+on its own (`dsflip/device/media-auto.sh`):
+
+- **every time the menu opens** (ES starts, a game ends): `--local --auto`, in the background at idle priority,
+  once ES is idle, stopped when a game starts. Only games missing their 3D box (`boxart`), screenshot (`image`) or
+  cartridge are scraped (everything else they're missing comes along); a game that still has no match is tried
+  again after a week, an offline device tries again at the next menu. The RetroAchievements strip is redrawn for
+  every game played since its strip was drawn (ES's `lastplayed`), and made for games that have none.
+- **when a game ends**, before ES is back (`session.sh`): `--ra-rom <rom>` redraws that game's strip over its
+  current file, so the menu opens on the progress just made (ES caches a picture it is showing by its file, so a
+  strip pushed while the game is selected would only show after moving off it).
+
+`rocknixds.automedia=0` in `system.cfg` switches both off. Logs: `/storage/.config/rocknixds/media.log` and
+`media-ra.log` (the last run of each); state: `media-state.json`.
 
 | ES media type | What the theme shows | Source |
 |---|---|---|

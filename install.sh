@@ -129,6 +129,11 @@ if [ $UNINSTALL = 1 ]; then
     rm -f /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
     rm -f /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh /storage/.config/autostart/rocknixds-menu-power \
           /storage/.config/emulationstation/scripts/start/rocknixds-menu-power.sh
+    rm -f /storage/.config/emulationstation/scripts/start/rocknixds-media.sh \
+          /storage/.config/emulationstation/scripts/game-end/rocknixds-media.sh \
+          /storage/.config/emulationstation/scripts/game-start/rocknixds-media.sh
+    systemctl stop rocknixds-media.service rocknixds-media-ra.service 2>/dev/null
+    rm -rf /storage/.cache/rocknixds-media
     if [ -f /storage/.config/system.d/batteryledstatus.service.d/rocknixds.conf ]; then      # ROCKNIX's LED monitor again
         rm -f /storage/.config/system.d/batteryledstatus.service.d/rocknixds.conf
         rmdir /storage/.config/system.d/batteryledstatus.service.d 2>/dev/null
@@ -146,7 +151,8 @@ if [ $UNINSTALL = 1 ]; then
     fi
     echo performance > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor 2>/dev/null   # ROCKNIX's menu governor
     rmdir /storage/.config/emulationstation/scripts/theme-changed /storage/.config/emulationstation/scripts/game-end \
-          /storage/.config/emulationstation/scripts/start /storage/.config/emulationstation/scripts 2>/dev/null
+          /storage/.config/emulationstation/scripts/game-start /storage/.config/emulationstation/scripts/start \
+          /storage/.config/emulationstation/scripts 2>/dev/null
     rm -f $VERSION_FILE /storage/.config/rocknixds-es-notice /storage/.config/rocknixds-stock-es /storage/.config/rocknixds-any-rocknix
     if [ -e $BACKUP/.had-no-launcher-wrapper ] && [ -e $DRASTIC/drastic.real ]; then
         rm -f $DRASTIC/drastic $DRASTIC/drastic.dvsync; mv $DRASTIC/drastic.real $DRASTIC/drastic   # stock layout again
@@ -321,7 +327,7 @@ if [ $DSFLIP_ON = 1 ]; then
     cp "$SRC/dsflip/device/session.sh" "$SRC/dsflip/device/restore.sh" \
        "$SRC/dsflip/device/drastic-wrapper.sh" "$SRC/dsflip/device/install.sh" "$SRC/dsflip/device/es-features.sh" \
        "$SRC/dsflip/device/fast-switch" "$SRC/dsflip/device/playstats.py" "$SRC/dsflip/device/menu-power.sh" \
-       "$SRC/dsflip/device/battery-led-status" "$SRC/dsflip/device/powerstate" $WORK/dsflip/
+       "$SRC/dsflip/device/battery-led-status" "$SRC/dsflip/device/powerstate" "$SRC/dsflip/device/media-auto.sh" $WORK/dsflip/
     sh $WORK/dsflip/install.sh
 
     # DS-pixel-aware shaders for DraStic (sharp and LCD-grid looks that work at 1x and 2x) + their ES entries
@@ -362,6 +368,17 @@ if [ $DSFLIP_ON = 1 ]; then
         chmod +x /storage/.config/emulationstation/scripts/$ev/rocknixds-menu-power.sh
     done
     $DRASTIC/dsflip/menu-power.sh
+    # game art and RetroAchievements strips kept up to date on the device (media-auto.sh): the media tool, run in
+    # the background each time the menu opens (ES start, after a game) and stopped when a game starts
+    mkdir -p /storage/.config/rocknixds/media
+    for f in rocknixds-media.py ra-fetch.py ra_panel.py box3d.py labelart.py nds-carts.json nds-meta.json.gz; do
+        cp "$SRC/dii-ess-aye/scrape/$f" /storage/.config/rocknixds/media/
+    done
+    for ev in start game-end game-start; do
+        mkdir -p /storage/.config/emulationstation/scripts/$ev
+        cp "$SRC/dsflip/device/es-media.sh" /storage/.config/emulationstation/scripts/$ev/rocknixds-media.sh
+        chmod +x /storage/.config/emulationstation/scripts/$ev/rocknixds-media.sh
+    done
     # ROCKNIX's battery LED monitor started ~12 processes a second (6.5% of a core); the same monitor without them
     # (battery-led-status, which runs ROCKNIX's own if that ever changes) through a systemd drop-in
     if [ -f /usr/lib/systemd/system/batteryledstatus.service ]; then
