@@ -124,6 +124,11 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
     *) PROF=balanced Q=2 QW=20 CMAX=1416000 ;;
   esac
   export DSFLIP_QUEUE=${DSFLIP_QUEUE:-$Q} DSFLIP_QUEUE_WAIT=${DSFLIP_QUEUE_WAIT:-$QW}
+  # The latch (the commit of both panels' frames) must come early enough before the EARLIER panel's vblank; on the
+  # Plus the bottom panel's vblank is 6.8 ms before the top's and a commit 1.2-1.5 ms ahead of it still missed it
+  # (bottom flip pending at the next latch: a repeated frame, 2-4 times a second, Black 2 2026-10-01), where the RG DS
+  # makes it with 0.6 ms. libdsflip widens the margin by itself on late latches; this is the floor it returns to.
+  [ -n "$BIG" ] && export DSFLIP_LATCH_MARGIN=${DSFLIP_LATCH_MARGIN:-3000}
   [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX}
   echo "power profile: $PROF (queue $DSFLIP_QUEUE, wait ${DSFLIP_QUEUE_WAIT} ms, CPU max ${DSFLIP_CPU_MAX:-hardware})"
   cd $D
