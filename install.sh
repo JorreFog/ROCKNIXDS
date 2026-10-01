@@ -56,11 +56,22 @@ die() { printf '\033[1;31mERROR:\033[0m %s\n' "$*"; exit 1; }
 [ "$(id -u)" = 0 ] || die "run as root (ssh root@<device>)"
 grep -qi rocknix /etc/os-release 2>/dev/null || die "this isn't ROCKNIX"
 MODEL=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)
+PANEL=
+for m in /sys/class/drm/card*-DSI-*/modes; do
+    [ -f "$m" ] || continue
+    read -r PANEL < "$m" 2>/dev/null && [ -n "$PANEL" ] && break
+done
 case "$MODEL" in
 *"RG DS Plus"*) DEVICE="RG DS Plus" ;;
-*) [ -f /flash/device_trees/rk3568-anbernic-rg-ds.dtb ] || echo "$MODEL" | grep -qi "rg.\?ds" \
-       || die "this doesn't look like an Anbernic RG DS or RG DS Plus"
-   DEVICE="RG DS" ;;
+*)
+    w=${PANEL%%x*}
+    if [ "$w" -gt 640 ] 2>/dev/null; then DEVICE="RG DS Plus"
+    else
+        [ -f /flash/device_trees/rk3568-anbernic-rg-ds.dtb ] || [ -f /flash/device_trees/rk3568-anbernic-rg-ds-plus.dtb ] \
+            || echo "$MODEL" | grep -qi "rg.\?ds" \
+            || die "this doesn't look like an Anbernic RG DS or RG DS Plus"
+        DEVICE="RG DS"
+    fi ;;
 esac
 
 systemctl is-active -q dsflip-game.service 2>/dev/null && die "a DS game is running: quit it first"
@@ -427,7 +438,10 @@ cp "$SRC/dsflip/device/rocknixds-update" $RD/ && chmod +x $RD/rocknixds-update
 printf 'dii-ess-aye\ncanvas-ds\n' > $RD/themes.allow
 [ -f $SYSCFG ] && sed -i '/^nds\(\[.*\]\)\{0,1\}\.\(emulator\|core\)=/d' $SYSCFG       # a per-game RetroArch/melonDS choice
 if [ -f $SYSCFG ] && [ "$DEVICE" = "RG DS Plus" ]; then
-    set_cfg rocknixds.channel plus          # follow plus-beta, not the RG DS stable/beta builds
+    # The menu only stores stable or beta. On a Plus, beta is this branch: rocknixds-update maps it to
+    # plus-beta. Plus beta 3 stored "plus", which the menu shows as Stable and overwrites with Stable,
+    # and a menu Beta choice stored "beta", which that updater downloaded from the RG DS beta branch.
+    set_cfg rocknixds.channel beta
 elif [ -f $SYSCFG ]; then
     grep -q '^rocknixds.channel=' $SYSCFG || set_cfg rocknixds.channel "$([ "$BRANCH" = beta ] && echo beta || echo stable)"
 fi

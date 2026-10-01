@@ -141,7 +141,9 @@ curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh 
 ```
 
 The RG DS Plus (two 1024×768 panels) uses the `plus-beta` branch. Same installer, sized from the panels
-(canvas 3072×768). Its update channel follows that branch, not the RG DS stable or beta builds:
+(canvas 3072×768). In *Updates & downloads > ROCKNIXDS*, **Beta** on a Plus downloads this branch.
+Plus beta 3.1 fixes that choice: it was downloading the original RG DS beta branch, because the menu stores
+the channel as `beta` and the updater treated that as the RG DS `beta` branch.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/plus-beta/install.sh | RGDS_BRANCH=plus-beta sh
