@@ -149,8 +149,8 @@ curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/plus-beta/instal
 
 What the Plus beta adds for the Plus nightly (20260930) specifically: a DS session runs on the `performance` CPU
 governor whatever ROCKNIX's setting (the nightly defaults to `ondemand`, under which libdsflip's clock governor
-switches itself off and the clock floats); PipeWire is allowed 44.1 kHz for the session (the nightly allows only
-48 kHz, which pulled DraStic's audio 3% too fast and made it stutter); DraStic's *threaded 3d* is switched on where
+switches itself off and the clock floats); PipeWire stays at 48 kHz for a DS session (the Plus's speaker amp runs
+48 kHz whatever rate it is given, so forcing DraStic's 44.1 kHz played everything 7% fast and the audio stuttered); DraStic's *threaded 3d* is switched on where
 it was never set; and the volume indicator works again (ROCKNIX's key service had no bus address and its
 mako-notify waited on the key pipe), with libdsflip drawing its own while a game runs.
 
