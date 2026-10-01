@@ -57,6 +57,7 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 #include <drm_fourcc.h>
+#include "vop_irq.h"
 
 #ifndef DSFLIP_VERSION
 #define DSFLIP_VERSION "dev"            /* build.sh passes the repo's VERSION file */
@@ -863,16 +864,9 @@ static void give_up(const char *why) {
 
 /* the display controller's interrupt count (/proc/interrupts, all CPUs), -1 if not found */
 static long long vop_irqs(void) {
-    FILE *f = fopen("/proc/interrupts", "r"); if (!f) return -1;
-    char line[512]; long long n = -1;
-    while (fgets(line, sizeof line, f)) {
-        if (!strstr(line, "fe040000.vop")) continue;
-        char *p = strchr(line, ':'); if (!p) break;
-        n = 0; p++;
-        for (;;) { char *e; long long v = strtoll(p, &e, 10); if (e == p) break; n += v; p = e; }
-        break;
-    }
-    fclose(f);
+    FILE *f = fopen("/proc/interrupts", "r");
+    long long n = vop_irq_count_fp(f);
+    if (f) fclose(f);
     return n;
 }
 
@@ -961,7 +955,7 @@ __attribute__((constructor)) static void init(void) {
          * DSFLIP_TEST_REMODESET=1: take that path anyway (testing). */
         if (attempt) break;
         long long a = vop_irqs(); usleep(30000); long long b = vop_irqs();
-        if (!(a >= 0 && b - a > 100) && !getenv("DSFLIP_TEST_REMODESET")) break;
+        if (!vop_irq_storm(a, b) && !getenv("DSFLIP_TEST_REMODESET")) break;
         LOG("[dsflip] display controller interrupt storm (%lld in 30 ms): switching the panels off and on\n", b - a);
         r = drmModeAtomicAlloc();
         for (int i = 0; i < 2; i++) drmModeAtomicAddProperty(r, P[i].crtc, prop(P[i].crtc, DRM_MODE_OBJECT_CRTC, "ACTIVE"), 0);

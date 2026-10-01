@@ -1,1 +1,3 @@
 dsflip/shtest
+__pycache__/
+*.pyc

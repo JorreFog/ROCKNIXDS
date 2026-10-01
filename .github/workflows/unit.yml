@@ -1,0 +1,28 @@
+# Host tests. The libdsflip.so build stays in build.yml; this is the logic that can be
+# checked without an arm64 sysroot or the handheld.
+name: unit tests
+on:
+  push:
+    branches: [beta, main]
+    paths:
+      - 'tests/**'
+      - 'dsflip/**'
+      - '.github/ingest-perf.py'
+      - 'dii-ess-aye/scrape/ra-fetch.py'
+      - '.github/workflows/unit.yml'
+  pull_request:
+    paths:
+      - 'tests/**'
+      - 'dsflip/**'
+      - '.github/ingest-perf.py'
+      - 'dii-ess-aye/scrape/ra-fetch.py'
+      - '.github/workflows/unit.yml'
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run
+        run: sh tests/run.sh
