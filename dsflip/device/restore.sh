@@ -23,8 +23,12 @@ if [ -s /tmp/dsflip-cpu-governor ]; then             # the governor session.sh s
     cat /tmp/dsflip-cpu-governor > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor 2>/dev/null
     rm -f /tmp/dsflip-cpu-governor
 fi
-XDG_RUNTIME_DIR=$RT pw-metadata -n settings 0 clock.force-rate 0 >/dev/null 2>&1          # PipeWire's own rate again
-XDG_RUNTIME_DIR=$RT pw-metadata -n settings 0 clock.allowed-rates '[ 48000 ]' >/dev/null 2>&1
+if [ -f /tmp/dsflip-pw-rates ]; then             # session.sh forced 44.1 kHz: PipeWire's own rate and rate list again
+    XDG_RUNTIME_DIR=$RT pw-metadata -n settings 0 clock.force-rate 0 >/dev/null 2>&1
+    if [ -s /tmp/dsflip-pw-rates ]; then XDG_RUNTIME_DIR=$RT pw-metadata -n settings 0 clock.allowed-rates "$(cat /tmp/dsflip-pw-rates)" >/dev/null 2>&1
+    else XDG_RUNTIME_DIR=$RT pw-metadata -n settings -d 0 clock.allowed-rates >/dev/null 2>&1; fi
+    rm -f /tmp/dsflip-pw-rates
+fi
 # Resume-on-quit wrote "-USR1 drastic" for the exit hotkey; put ROCKNIX's default back so a later non-DS
 # launcher (or a session that skipped resume) is not left signalling USR1.
 [ -f /tmp/.process-kill-data ] && grep -q -- '-USR1 drastic' /tmp/.process-kill-data 2>/dev/null && echo "-9" > /tmp/.process-kill-data

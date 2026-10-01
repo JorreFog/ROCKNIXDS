@@ -72,13 +72,22 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # audio underran. Run the session on performance whatever ROCKNIX's setting; restore.sh puts the menu's back.
   [ -f /tmp/dsflip-cpu-governor ] || cat $CPU/scaling_governor > /tmp/dsflip-cpu-governor 2>/dev/null
   echo performance > $CPU/scaling_governor 2>/dev/null
-  # PipeWire at DraStic's 44.1 kHz for the session (restore.sh resets it): at its usual 48 kHz every cycle resampled
-  # DraStic's audio, and DraStic's audio threads cost ~9% of a core; at 44.1 kHz ~5% (measured 2026-09-28, HeartGold
-  # at 1608 MHz). The RG DS Plus nightly only allows 48000 until 44100 is added, and then force-rate is ignored:
-  # the output pulled ~3% faster than the pump could follow and the ring underran a few times a second.
-  # Set before DraStic opens its stream: switching mid-stream made the drain uneven for the session.
-  XDG_RUNTIME_DIR=/var/run/0-runtime-dir pw-metadata -n settings 0 clock.allowed-rates '[ 44100 48000 ]' >/dev/null 2>&1
-  XDG_RUNTIME_DIR=/var/run/0-runtime-dir pw-metadata -n settings 0 clock.force-rate 44100 >/dev/null 2>&1
+  # PipeWire at DraStic's 44.1 kHz for the session (restore.sh puts its settings back): at its usual 48 kHz every
+  # cycle resampled DraStic's audio, and DraStic's audio threads cost ~9% of a core; at 44.1 kHz ~5% (measured
+  # 2026-09-28, HeartGold at 1608 MHz). Set before DraStic opens its stream: switching mid-stream made the drain
+  # uneven for the session. The nightly only allows 48000 (clock.allowed-rates), so 44100 is allowed first.
+  # NOT on the RG DS Plus: its speaker amp (aw88166 on I2S3) runs at 48 kHz whatever rate it is given (the I2S
+  # clock stays 12.288 MHz): with the graph at 44.1 kHz, 60 s of audio played in 55.75 s and the sink xrun'd, so
+  # DraStic was pulled ~3% fast against the display, held by the frame queue, and its ring underran (measured
+  # 2026-10-01; at the stock 48 kHz graph, resampled, 60 s took 60.3 s with no xruns). DSFLIP_PW_RATE=44100 forces it.
+  PWM="XDG_RUNTIME_DIR=/var/run/0-runtime-dir pw-metadata -n settings"
+  if grep -q aw88166 /proc/asound/cards 2>/dev/null && [ -z "$DSFLIP_PW_RATE" ]; then
+    echo "PipeWire kept at its own rate: the aw88166 speaker amp runs 48 kHz only"
+  else
+    eval $PWM 0 clock.allowed-rates 2>/dev/null | sed -n "s/.*value:'\([^']*\)'.*/\1/p" > /tmp/dsflip-pw-rates
+    eval $PWM 0 clock.allowed-rates "'[ 44100 48000 ]'" >/dev/null 2>&1
+    eval $PWM 0 clock.force-rate ${DSFLIP_PW_RATE:-44100} >/dev/null 2>&1
+  fi
   rm -f $STATE $NOTICE
   # test launches (smoke.sh, switchtime.sh) don't teach libdsflip's CPU governor anything about the player's games
   [ -e /tmp/rocknixds-testing ] && export DSFLIP_CPUGOV_MEMORY=0
