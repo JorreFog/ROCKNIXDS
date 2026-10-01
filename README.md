@@ -147,6 +147,13 @@ The RG DS Plus (two 1024×768 panels) uses the `plus-beta` branch. Same installe
 curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/plus-beta/install.sh | RGDS_BRANCH=plus-beta sh
 ```
 
+What the Plus beta adds for the Plus nightly (20260930) specifically: a DS session runs on the `performance` CPU
+governor whatever ROCKNIX's setting (the nightly defaults to `ondemand`, under which libdsflip's clock governor
+switches itself off and the clock floats); PipeWire is allowed 44.1 kHz for the session (the nightly allows only
+48 kHz, which pulled DraStic's audio 3% too fast and made it stutter); DraStic's *threaded 3d* is switched on where
+it was never set; and the volume indicator works again (ROCKNIX's key service had no bus address and its
+mako-notify waited on the key pipe), with libdsflip drawing its own while a game runs.
+
 It installs the dii-ess-aye theme (downloaded from [upstream](https://github.com/beebono/dii-ess-aye) at the pinned
 commit, then this repo's overlay), the patched EmulationStation, `libdsflip` as the default DraStic launcher, and
 switches on 2× resolution for DS. It also adds the ds-* shaders to ES's shader menu, and keeps them there when a

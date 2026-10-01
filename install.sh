@@ -139,6 +139,11 @@ if [ $UNINSTALL = 1 ]; then
         rmdir /storage/.config/system.d/powerstate.service.d 2>/dev/null
         systemctl daemon-reload; systemctl restart powerstate.service 2>/dev/null
     fi
+    if [ -f /storage/.config/system.d/input.service.d/rocknixds.conf ]; then                # the volume-key service's bus
+        rm -f /storage/.config/system.d/input.service.d/rocknixds.conf
+        rmdir /storage/.config/system.d/input.service.d 2>/dev/null
+        systemctl daemon-reload; systemctl restart input.service 2>/dev/null
+    fi
     echo performance > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor 2>/dev/null   # ROCKNIX's menu governor
     rmdir /storage/.config/emulationstation/scripts/theme-changed /storage/.config/emulationstation/scripts/game-end \
           /storage/.config/emulationstation/scripts/start /storage/.config/emulationstation/scripts 2>/dev/null
@@ -157,6 +162,10 @@ if [ $UNINSTALL = 1 ]; then
     [ -f $BACKUP/.shaders-added ] && while read -r b; do rm -f "$DRASTIC/shaders/$b"; done < $BACKUP/.shaders-added
     [ -e $BACKUP/.esf-created ] && rm -f $ESF $ESF.rocknixds-old
     rm -f /storage/.config/autostart/rocknixds-es-features
+    [ -e $BACKUP/.threaded-3d-set ] && { sed -i '/^nds\.threaded_3d=/d' $SYSCFG 2>/dev/null; rm -f $BACKUP/.threaded-3d-set; }
+    # ROCKNIX's own mako-notify again (the volume indicator stand-in, see dsflip/device/mako-notify.sh)
+    grep -q " /usr/bin/mako-notify " /proc/mounts && umount /usr/bin/mako-notify 2>/dev/null
+    rm -f /storage/.config/autostart/rocknixds-mako-notify
     # lockdown and updates: ROCKNIX's DS emulators and settings menus again
     systemctl stop rocknixds-update-check.timer 2>/dev/null
     rm -f /storage/.config/system.d/rocknixds-update-check.service /storage/.config/system.d/rocknixds-update-check.timer \
@@ -328,9 +337,22 @@ if [ $DSFLIP_ON = 1 ]; then
     if [ -f $ESF ]; then backup_once $ESF
     elif [ -f /usr/config/emulationstation/es_features.cfg ]; then touch $BACKUP/.esf-created; fi
     sh $DRASTIC/dsflip/es-features.sh
+    # DraStic's threaded 3D (ES: Nintendo DS > threaded 3d) is off until the player sets it; on, the 3D work leaves
+    # the main (emulation) thread, which is what sets the clock a game needs (the RG DS measurements behind the
+    # power profiles were made with it on; a fresh RG DS Plus install had it off and Mario Kart ran at 58.8 fps at
+    # 1104 MHz). Set it on once where it has never been set; uninstall removes it again.
+    if ! grep -q '^nds\.threaded_3d=' $SYSCFG 2>/dev/null; then set_cfg nds.threaded_3d 1; touch $BACKUP/.threaded-3d-set; fi
     mkdir -p /storage/.config/autostart
     cp "$SRC/dsflip/device/autostart-rocknixds-es-features" /storage/.config/autostart/rocknixds-es-features
     chmod +x /storage/.config/autostart/rocknixds-es-features
+    # the volume indicator in the menus: ROCKNIX's input_sense calls mako-notify with its key pipe as standard input,
+    # which the nightly's mako-notify waits on (nothing shows, the next key press is eaten). A stand-in that closes
+    # it is bind-mounted over /usr/bin/mako-notify at every boot and now.
+    cp "$SRC/dsflip/device/mako-notify.sh" $DRASTIC/dsflip/mako-notify.sh; chmod +x $DRASTIC/dsflip/mako-notify.sh
+    cp "$SRC/dsflip/device/autostart-rocknixds-mako-notify" /storage/.config/autostart/rocknixds-mako-notify
+    chmod +x /storage/.config/autostart/rocknixds-mako-notify
+    grep -q " /usr/bin/mako-notify " /proc/mounts && umount /usr/bin/mako-notify 2>/dev/null
+    sh /storage/.config/autostart/rocknixds-mako-notify
     # the menus on schedutil instead of ROCKNIX's performance (menu-power.sh): whenever ES starts (after ROCKNIX's
     # autostart, which applies its own governor last) and after every game. (1.4-dev had an autostart hook: overridden.)
     rm -f /storage/.config/autostart/rocknixds-menu-power
@@ -353,6 +375,13 @@ if [ $DSFLIP_ON = 1 ]; then
         mkdir -p /storage/.config/system.d/powerstate.service.d
         cp "$SRC/dsflip/device/powerstate-rocknixds.conf" /storage/.config/system.d/powerstate.service.d/rocknixds.conf
         systemctl daemon-reload; systemctl restart powerstate.service 2>/dev/null
+    fi
+    # ROCKNIX's volume-key service (input_sense) has no session bus address, so the "Volume: N%" notification it
+    # sends after a key press never reached mako in the menus (RG DS Plus nightly 20260930). Give it the desktop's.
+    if [ -f /usr/lib/systemd/system/input.service ]; then
+        mkdir -p /storage/.config/system.d/input.service.d
+        cp "$SRC/dsflip/device/input-rocknixds.conf" /storage/.config/system.d/input.service.d/rocknixds.conf
+        systemctl daemon-reload; systemctl restart input.service 2>/dev/null
     fi
 fi
 

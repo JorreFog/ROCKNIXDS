@@ -1,0 +1,10 @@
+#!/bin/sh
+# ROCKNIXDS: put the mako-notify stand-in (mako-notify.sh: no standard input, so the volume indicator shows in the
+# menus) over ROCKNIX's binary. The original is copied first, every boot, so a ROCKNIX update's version is the one
+# that runs. Runs before ES starts.
+W=/storage/.config/drastic/dsflip
+[ -x /usr/bin/mako-notify ] && [ -x $W/mako-notify.sh ] || exit 0
+grep -q " /usr/bin/mako-notify " /proc/mounts && exit 0
+cp /usr/bin/mako-notify $W/mako-notify.real && chmod +x $W/mako-notify.real || exit 0
+mount --bind $W/mako-notify.sh /usr/bin/mako-notify
+exit 0
