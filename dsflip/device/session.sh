@@ -114,13 +114,17 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # fixed 1416 MHz with a 2-frame queue + wait 0.07 hitches/s, 1104 MHz 0.13/s; without the wait 0.11-3.2 and 0.73).
   #   performance: 1104-1992 MHz, 1-frame queue (the lowest latency)
   #   balanced:    1104-1416 MHz, 2-frame queue + 20 ms wait
-  #   battery:     1104 MHz, 3-frame queue + 20 ms wait (more cover for the late frames a low clock makes)
+  #   battery:     1104 MHz, 3-frame queue + 20 ms wait (more cover for the late frames a low clock makes);
+  #                on the Plus 1104-1416 MHz (see below)
   # DSFLIP_* already in the environment (tests, systemctl set-environment) win over the profile.
   PROF=$(grep -F "nds[\"$GAME\"].power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$PROF" ] || PROF=$(grep "^nds.power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   case "$PROF" in
     performance) Q=1 QW=0 CMAX= ;;
-    battery) Q=3 QW=20 CMAX=1104000 ;;
+    # the Plus's frames cost more (the main thread ~62% of a core at ~1475 MHz in Black 2 = ~83% at 1104, single
+    # frames seen at 44-80% of a refresh at 1416): a fixed 1104 MHz overruns the heavy ones, so there battery keeps
+    # the deep queue but lets the governor step to 1416 on CPU-bound drops (it steps back down when frames are light)
+    battery) Q=3 QW=20; if [ -n "$BIG" ]; then CMAX=1416000; else CMAX=1104000; fi ;;
     *) PROF=balanced Q=2 QW=20 CMAX=1416000 ;;
   esac
   export DSFLIP_QUEUE=${DSFLIP_QUEUE:-$Q} DSFLIP_QUEUE_WAIT=${DSFLIP_QUEUE_WAIT:-$QW}
