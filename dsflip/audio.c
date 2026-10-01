@@ -21,9 +21,10 @@
 // samples/s (the device itself is exact: 20.00 s of audio took 19.99 s through ALSA), so locking the pump to it
 // ran DraStic 1.1% slow. With the ALSA writer the rate trim locks the pump to the true device clock.
 //
-// Env: DSFLIP_AUDIO_PUMP=0 (off: SDL calls DraStic's callback as before), DSFLIP_PUMP_CHUNK (samples, 256),
-//      DSFLIP_PUMP_TARGET (ring level in samples, 1536), DSFLIP_AUDIO_OUT=sdl (drain via SDL instead of ALSA),
-//      DSFLIP_ALSA_LATENCY (us, 30000).
+// Env: DSFLIP_AUDIO_PUMP=0 (off: SDL calls DraStic's callback as before), DSFLIP_PUMP_CHUNK (samples, 256;
+//      this is the tick DraStic's frame pacing sees — 64 is ~1.5 ms instead of ~5.8), DSFLIP_ALSA_CHUNK
+//      (samples per ALSA write, 256, kept there when the pump tick is finer), DSFLIP_PUMP_TARGET (ring level
+//      in samples, 1536), DSFLIP_AUDIO_OUT=sdl (drain via SDL instead of ALSA), DSFLIP_ALSA_LATENCY (us, 30000).
 #define _GNU_SOURCE
 #include <stdint.h>
 #include <stdlib.h>
@@ -43,7 +44,7 @@ struct SDL_AudioSpec_ { int freq; unsigned short format; unsigned char channels,
 #define RING 16384                       /* frames, power of two */
 static void (*dcb)(void *, unsigned char *, int);   /* DraStic's callback */
 static void *dud;
-static int fb, freq, chunk = 256, target = 1536;   /* bytes per frame, rate, pump chunk, ring target (frames) */
+static int fb, freq, chunk = 256, alsa_chunk = 256, target = 1536;   /* bytes per frame, rate, pump tick, ALSA write, ring target */
 static unsigned char *ring;
 static volatile uint32_t head, tail;     /* frames written by the pump / read by SDL (free-running) */
 static volatile int paused = 1, primed;
@@ -51,8 +52,11 @@ static volatile int st_under, st_over, st_lmin = RING, st_lmax, st_pump, st_sdl;
 static volatile double st_ppm;
 static volatile long long st_drained, st_pumped, st_t0;   /* frames per log window, for measured rates */
 static unsigned char silence_byte;
-/* speaker output level per pump chunk (last 32 chunks = ~186 ms), for the mic's echo gate */
-static volatile float out_hist[32]; static volatile uint32_t out_pos;
+/* speaker output level per pump chunk, covering ~186 ms (32 chunks of 256 samples; more entries when the
+ * pump tick is shorter), for the mic's echo gate */
+#define OUT_HIST_MAX 128
+static volatile float out_hist[OUT_HIST_MAX]; static volatile uint32_t out_pos;
+static int out_hist_n = 32;
 
 static long long mono_ns(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000000000LL + t.tv_nsec; }
 
@@ -155,7 +159,7 @@ static void *pump(void *a) {             /* steady calls into DraStic's callback
         st_pump++; st_pumped += chunk;
         { const int16_t *sm = (const int16_t *)tmp; int ns = chunk * fb / 2; double acc = 0;
           for (int i = 0; i < ns; i++) { float v = sm[i] * (1.0f / 32768); acc += v * v; }
-          out_hist[out_pos++ & 31] = (float)sqrt(acc / ns); }
+          out_hist[out_pos++ % (uint32_t)out_hist_n] = (float)sqrt(acc / ns); }
         int level = (int)(head - __atomic_load_n(&tail, __ATOMIC_ACQUIRE));
         if (level + chunk <= RING) {
             for (int i = 0; i < chunk; ) {
@@ -218,10 +222,10 @@ static void *writer(void *a) {           /* blocking writes pace this thread at 
     (void)a;
     struct sched_param sp = { .sched_priority = 20 };
     pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);
-    unsigned char *buf = malloc((size_t)chunk * fb);
+    unsigned char *buf = malloc((size_t)alsa_chunk * fb);
     for (;;) {
-        sdl_cb(0, buf, chunk * fb);      /* the same ring drain (silence while priming or on underrun) */
-        long r = a_writei(pcm, buf, chunk);
+        sdl_cb(0, buf, alsa_chunk * fb); /* the same ring drain (silence while priming or on underrun) */
+        long r = a_writei(pcm, buf, alsa_chunk);
         if (r < 0) { st_xrun++; a_recover(pcm, (int)r, 1); }
     }
     return 0;
@@ -233,9 +237,11 @@ int audio_pump_enabled(void) { const char *e = getenv("DSFLIP_AUDIO_PUMP"); retu
 int audio_pump_open(struct SDL_AudioSpec_ *want, struct SDL_AudioSpec_ *have, int (*real)(struct SDL_AudioSpec_ *, struct SDL_AudioSpec_ *)) {
     if (!(want->format == 0x8010 || want->format == 0x0010) || want->channels < 1 || want->channels > 2 || !want->callback)
         return real(want, have);         /* only 16-bit PCM (what DraStic uses) */
-    const char *c = getenv("DSFLIP_PUMP_CHUNK"), *t = getenv("DSFLIP_PUMP_TARGET");
+    const char *c = getenv("DSFLIP_PUMP_CHUNK"), *t = getenv("DSFLIP_PUMP_TARGET"), *ac = getenv("DSFLIP_ALSA_CHUNK");
     if (c && atoi(c) >= 32) chunk = atoi(c);
     if (t && atoi(t) >= chunk) target = atoi(t);
+    if (ac && atoi(ac) >= 32) alsa_chunk = atoi(ac);
+    { int n = chunk > 0 ? (32 * 256) / chunk : 32; if (n < 4) n = 4; if (n > OUT_HIST_MAX) n = OUT_HIST_MAX; out_hist_n = n; }
     dcb = want->callback; dud = want->userdata;
     fb = 2 * want->channels; freq = want->freq; silence_byte = 0;
     ring = calloc(RING, fb);
@@ -250,8 +256,12 @@ int audio_pump_open(struct SDL_AudioSpec_ *want, struct SDL_AudioSpec_ *have, in
     if (have) { *have = *want; have->size = (uint32_t)want->samples * fb; have->silence = 0; }
     pthread_t th; if (!pthread_create(&th, 0, pump, 0)) pthread_setname_np(th, "dsf-pump");
     if (use_alsa && !pthread_create(&th, 0, writer, 0)) pthread_setname_np(th, "dsf-alsa");
-    dsflip_log("[audio] pump: %d Hz, DraStic's callback every %d samples (%.2f ms), ring target %d (%.1f ms), output %s\n",
-               freq, chunk, chunk * 1000.0 / freq, target, target * 1000.0 / freq, use_alsa ? "ALSA default" : "SDL");
+    if (use_alsa)
+        dsflip_log("[audio] pump: %d Hz, DraStic's callback every %d samples (%.2f ms), ALSA write %d samples (%.2f ms), ring target %d (%.1f ms)\n",
+                   freq, chunk, chunk * 1000.0 / freq, alsa_chunk, alsa_chunk * 1000.0 / freq, target, target * 1000.0 / freq);
+    else
+        dsflip_log("[audio] pump: %d Hz, DraStic's callback every %d samples (%.2f ms), ring target %d (%.1f ms), output SDL\n",
+                   freq, chunk, chunk * 1000.0 / freq, target, target * 1000.0 / freq);
     return 0;
 }
 
@@ -301,7 +311,7 @@ static void *mic_thread(void *a) {
          * above the "high" threshold 0.03, so the key fired constantly with nobody talking). The pump knows what
          * is played: learn the leak (mic/output ratio while not triggered) and require the mic to be clearly above
          * the expected bleed. out: the loudest output chunk of the last ~186 ms (covers the output latency). */
-        float out = 0; for (int i = 0; i < 32; i++) if (out_hist[i] > out) out = out_hist[i];
+        float out = 0; for (int i = 0; i < out_hist_n; i++) if (out_hist[i] > out) out = out_hist[i];
         float bleed = coup * out;
         int loud = level > floor_ + thresh && (!dcb || level > 3 * bleed + thresh);
         if (!loud && out > 0.01f) {      /* learn the coupling only from blocks that aren't a real blow */

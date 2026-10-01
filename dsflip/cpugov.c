@@ -16,8 +16,8 @@
 // windows in a row that would all fit lower. The clock is set through scaling_max_freq under the "performance" governor (this kernel has no
 // "userspace" governor); session.sh saves the limit before the game and restore.sh puts it back.
 //
-// DSFLIP_CPUGOV=0: off (the clock stays as ROCKNIX set it). DSFLIP_CPU_MIN / DSFLIP_CPU_MAX (kHz): bounds.
-// DSFLIP_CPUGOV_LOG=1: one log line per decision window instead of per change.
+// DSFLIP_CPUGOV=0: off (the clock stays as ROCKNIX set it). DSFLIP_CPU_MIN / DSFLIP_CPU_MAX (kHz): bounds,
+// default min 816 MHz. DSFLIP_CPUGOV_LOG=1: one log line per decision window instead of per change.
 #define _GNU_SOURCE
 #include <dirent.h>
 #include <pthread.h>
@@ -137,8 +137,9 @@ static void *gov_thread(void *a) {
         if (umax > HIGH) why = "busy";
         else if (peak > PEAK_HIGH) why = "heavy frame";
         else if (dropped) {
-            /* any drop, however light the frames look: at low clocks frames were dropped with the main thread's
-             * heaviest frame at only ~40% of a refresh (measured at 816 MHz in a still HeartGold dialog) */
+            /* a frame that changed and still had to be dropped. An unchanged frame is not counted: at 816 MHz a
+             * still scene overflowed the queue (2.93/s) with its heaviest frame at only ~40% of a refresh, and
+             * treating that repeat as a drop made the governor climb straight back out (dsflip.c). */
             why = "dropped"; if (want <= cur) want = fit(cur + 1);
             int c = idx(cur);
             if (c >= 0) {
@@ -170,8 +171,11 @@ void cpugov_start(void) {
     cur = rd_int(POL "scaling_max_freq");
     /* the hardware's top, not the current limit: a session that crashed before restore.sh must not cap this one */
     fmax_ = getenv("DSFLIP_CPU_MAX") ? atoi(getenv("DSFLIP_CPU_MAX")) : rd_int(POL "cpuinfo_max_freq");
-    /* 816 MHz dropped frames at 2x even in a still scene; the step to 1104 saves little */
-    fmin_ = getenv("DSFLIP_CPU_MIN") ? atoi(getenv("DSFLIP_CPU_MIN")) : 1104000;
+    /* 816 MHz is the bottom OPP the governor will try. A still scene there used to be banned because repeated
+     * frames counted as drops; they no longer do. 816 and 1104 often share the chip's minimum voltage (the 1.4
+     * note: the step to 1104 saves little) — dynamic power still falls with the clock, but if a game drops real
+     * frames here the ban below sends it back up. DSFLIP_CPU_MIN=1104000 is the old floor. */
+    fmin_ = getenv("DSFLIP_CPU_MIN") ? atoi(getenv("DSFLIP_CPU_MIN")) : 816000;
     if (nf < 2 || cur <= 0 || access(POL "scaling_max_freq", W_OK)) { dsflip_log("[cpugov] off: no writable cpufreq\n"); return; }
     dsflip_log("[cpugov] on: %d..%d MHz, target %.0f%% load of the busiest DraStic thread\n", fmin_ / 1000, fmax_ / 1000, TARGET * 100);
     pthread_t th;

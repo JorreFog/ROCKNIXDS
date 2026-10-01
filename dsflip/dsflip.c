@@ -10,10 +10,11 @@
 // copied into an RGB565 dumb buffer and shown on the bottom panel (the top keeps the game frame).
 //
 // A presenter thread (SCHED_FIFO) owns the atomic commits: both panels' new framebuffers go in ONE
-// commit (same emulated frame on both screens). RenderPresent never blocks. Frames wait in a
-// one-frame queue and are committed at an adaptive "latch" point in the refresh cycle, opposite
-// where DraStic's presents arrive (see arm_latch). With a shader, a worker thread draws each frame
-// on the GPU first (shader.c). Audio goes through a pump that paces DraStic exactly (audio.c).
+// commit (same emulated frame on both screens). RenderPresent never blocks. Frames wait in a short
+// queue (one extra frame by default; DSFLIP_QUEUE=2 keeps two) and are committed at an adaptive
+// "latch" point in the refresh cycle, opposite where DraStic's presents arrive (see arm_latch).
+// With a shader, a worker thread draws each frame on the GPU first (shader.c). Audio goes through a
+// pump that paces DraStic exactly (audio.c).
 //
 // Experiments that measured worse were removed in 1.3 (clock lock + PLL on DraStic's gettimeofday,
 // CPU pinning, SCHED_FIFO for DraStic's threads, A/B legacy pacing, fixed latch, audio chunk size);
@@ -63,14 +64,17 @@
 #endif
 
 typedef struct { int x, y, w, h; } SDL_Rect;
-#define NBUF 6                          /* writing, written, 2 queued (see enqueue), committed, scanout */
+#define QMAX 3                          /* frames waiting in a panel's queue, at most (DSFLIP_QUEUE=2) */
+#define NBUF (4 + QMAX)                 /* writing, written, QMAX waiting (see enqueue), committed, scanout */
+#define NOUT (4 + QMAX)                 /* shader mode: panel-sized output buffers per panel, the same roles */
 #define FMT_ARGB8888 0x16362004u         /* SDL_PIXELFORMAT_* */
 #define FMT_RGB565   0x15151002u
 enum { FREE, WRITING, WRITTEN, READY, QUEUED, SCANOUT };
 enum { K_SCREEN, K_MENU, K_BLACK };
 
 typedef struct { uint32_t fb, handle, pitch, w, h; uint64_t size; void *map; int state; uint64_t gen;
-                 int fence; } dbuf;         /* fence: GPU "done" sync_file for a shaded frame, -1 if none */
+                 int fence, hold; } dbuf;   /* fence: GPU "done" sync_file, -1 if none; hold: pinned while a
+                                             * thread reads the pixels with mu released (see enqueue) */
 typedef struct {                        /* one DraStic texture we scan out */
     void *tex; int kind, w, h;
     dbuf b[NBUF]; int nb;
@@ -80,12 +84,12 @@ typedef struct {                        /* one panel */
     uint32_t conn, crtc, crtc_idx, plane, mode_blob;
     drmModeModeInfo mode;
     uint32_t p_fb, p_crtc, p_sx, p_sy, p_sw, p_sh, p_cx, p_cy, p_cw, p_ch, p_fence;
-    dbuf *ready, *queued, *scan;
+    dbuf *q[QMAX]; int qn;              /* frame queue, oldest first: finished frames waiting for a commit (see enqueue) */
+    dbuf *queued, *scan;                /* committed (flip pending) / on screen */
     long long last_flip;
     dbuf *src;                          /* shader mode: DraStic's newest finished buffer, not yet shaded */
     long long src_t;                    /* ...and when DraStic presented it */
-    dbuf out[6];                        /* shader mode: panel-sized buffers the shader draws into */
-    dbuf *ready2;                       /* frame queue: the frame after `ready` (see enqueue) */
+    dbuf out[NOUT];                     /* shader mode: panel-sized buffers the shader draws into */
 } panel;
 
 static int fd = -1, efd = -1, ok;
@@ -137,7 +141,7 @@ volatile long long dsflip_frame_work_max; /* the heaviest frame's CPU time on Dr
                                            cpugov.c last took it: a frame over 16.7 ms is a late frame */
 volatile int dsflip_queue_drops;        /* frames dropped from the queue since start (cpugov.c) */
 void cpugov_start(void);
-static int st_drop_src, st_drop_q, st_drop_buf;
+static int st_drop_src, st_drop_q, st_drop_buf, st_dup;
 static long long st_evt_max, st_c2f_max; static int st_c2f_long; /* vblank->event delivery; commit->flip (>1 refresh) */   /* drops by cause: replaced before shading, queue overflow, no buffer */
 /* shader pass (shader.c) */
 const char *shader_name(void);
@@ -211,7 +215,7 @@ static int mkbuf(dbuf *b, uint32_t w, uint32_t h, uint32_t fourcc, uint32_t bpp)
     return 0;
 }
 static void freebuf(dbuf *b) {
-    if (!b->map) return;
+    if (!b->map || b->hold) return;     /* a holder outside mu still reads this mapping */
     if (!b->handle) { free(b->map); memset(b, 0, sizeof *b); b->fence = -1; return; }   /* mkmem buffer */
     munmap(b->map, b->size); drmModeRmFB(fd, b->fb);
     struct drm_mode_destroy_dumb d = { .handle = b->handle }; drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &d);
@@ -273,7 +277,7 @@ static int bot_n, latch_skipped;        /* bottom phase samples; a latch was ski
 
 static void drop_fence(dbuf *b) { if (b && b->fence >= 0) { close(b->fence); b->fence = -1; } }
 static void freebuf(dbuf *b);
-/* graveyard: buffers whose texture slot was recycled while a panel still held them (ready/queued/on screen).
+/* graveyard: buffers whose texture slot was recycled while a panel still held them (queued, waiting or on screen).
  * They move here, the panel pointers follow, and the flip that retires them frees them. Without this the slot's
  * struct was zeroed and re-allocated under the panel's pointer: a commit with fb 0, or a buffer marked FREE while
  * DraStic was already writing into its replacement. */
@@ -283,7 +287,7 @@ static int is_grave(dbuf *b) { return b >= grave && b < grave + NGRAVE; }
 static void release(dbuf *b) {
     if (!b || b == &blk.b[0]) return;
     b->state = FREE; drop_fence(b);
-    if (is_grave(b)) freebuf(b);        /* retired: nothing points at it any more */
+    if (is_grave(b)) freebuf(b);        /* retired: nothing points at it any more (kept if a compare still holds it) */
 }
 
 /* toast: a small overlay plane on the top panel (RetroAchievements pop-ups), committed together with the
@@ -332,15 +336,22 @@ static void add_toast(drmModeAtomicReq *r) {
     }
 }
 
+static int waiting(void) { return P[0].qn || P[1].qn; }   /* with mu held: any frame waiting on either panel */
+static void q_pop(panel *p) {          /* with mu held: the oldest waiting frame leaves the queue */
+    for (int k = 1; k < p->qn; k++) p->q[k - 1] = p->q[k];
+    p->q[--p->qn] = 0;
+}
+static void q_clear(panel *p) { for (int k = 0; k < p->qn; k++) release(p->q[k]); memset(p->q, 0, sizeof p->q); p->qn = 0; }
+
 static void try_commit(void) {         /* called with mu held */
     if (pending_mask) return;
     int mask = 0;
-    for (int i = 0; i < 2; i++) if (P[i].ready) mask |= 1 << i;
+    for (int i = 0; i < 2; i++) if (P[i].qn) mask |= 1 << i;
     int with_toast = tp_plane && toast_dirty;
     if (with_toast) mask |= 1;          /* the toast plane lives on the top panel's CRTC */
     if (!mask) return;
     drmModeAtomicReq *r = drmModeAtomicAlloc();
-    for (int i = 0; i < 2; i++) if (P[i].ready) add_fb(r, &P[i], P[i].ready);
+    for (int i = 0; i < 2; i++) if (P[i].qn) add_fb(r, &P[i], P[i].q[0]);
     if (with_toast) add_toast(r);
     int ret = drmModeAtomicCommit(fd, r, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, P);
     drmModeAtomicFree(r);
@@ -349,15 +360,15 @@ static void try_commit(void) {         /* called with mu held */
         if (ret != -EBUSY) {           /* rejected config: drop the frame rather than retry forever */
             LOG("[dsflip] commit rejected: %s%s\n", strerror(-ret), with_toast ? " (toasts disabled)" : "");
             if (with_toast) { tp_plane = 0; toast_dirty = 0; }
-            for (int i = 0; i < 2; i++) { release(P[i].ready); release(P[i].ready2); P[i].ready = P[i].ready2 = 0; }
+            for (int i = 0; i < 2; i++) q_clear(&P[i]);
         }
         return;
     }
-    for (int i = 0; i < 2; i++) if (P[i].ready) {
-        drop_fence(P[i].ready); P[i].queued = P[i].ready; P[i].queued->state = QUEUED;
-        P[i].ready = P[i].ready2; P[i].ready2 = 0;   /* the queued frame is next */
+    for (int i = 0; i < 2; i++) if (P[i].qn) {
+        drop_fence(P[i].q[0]); P[i].queued = P[i].q[0]; P[i].queued->state = QUEUED;
+        q_pop(&P[i]);                   /* the next waiting frame moves up */
     }
-    if (P[0].ready || P[1].ready) ready_since = now_us();
+    if (waiting()) ready_since = now_us();
     if (with_toast) { toast_dirty = 0; toast_shown = toast_want; }
     commit_t = now_us(); commit_vref = vbl_ref;
     pending_mask = mask;                /* one flip event per CRTC in the commit */
@@ -507,17 +518,105 @@ static void note_phase(long long tp) {  /* with mu held: where in the refresh cy
     ph_hist[(int)(ph / period * 16) & 15]++;
 }
 
-/* frame queue (DSFLIP_QUEUE=0: mailbox). DraStic's frame times are uneven at 2x (measured: intervals alternate
- * ~13 / ~21 ms), so two frames can arrive between two commits. A mailbox shows only the newest and drops the
- * other (a visible hitch); the queue keeps one more frame and shows them in order, one per refresh, which turns
- * uneven arrival into even display at the cost of up to one refresh of latency while a frame waits. A third
- * frame drops the oldest, so latency never grows beyond that. With mu held. */
-static int queue_on = 1;
+/* frame queue. DraStic's frame times are uneven at 2x (measured: intervals alternate ~13 / ~21 ms), and at a
+ * low clock a late frame is followed by a catch-up burst: the third frame used to overflow this queue and the
+ * governor treated every overflow as the game falling behind (2.93/s at 816 MHz in a still scene, heaviest
+ * frame only ~40% of a refresh). slots = DSFLIP_QUEUE + 1 waiting frames (0 mailbox, 1 the default, 2 one more
+ * for that burst). A frame that matches one already waiting is dropped without counting: repeating a still
+ * picture is invisible, and when two frames are already waiting an unchanged new one is skipped so the queue
+ * doesn't sit at full latency. The compare samples every 8th row outside mu — a dumb buffer is uncached, and
+ * a full 512x384 read is a large fraction of a refresh. With mu held on entry and return. */
+static int slots = 2, dupcheck = 1;
+typedef struct { void *map; uint32_t w, h, pitch; } pix;
+static int row_bytes(uint32_t w, uint32_t pitch) {
+    uint32_t bpp = w ? pitch / w : 0;
+    if (bpp < 2) bpp = 2;
+    if (bpp > 4) bpp = 4;
+    uint32_t n = w * bpp;
+    return (int)(n > pitch ? pitch : n);
+}
+static int rows_alike(const pix *a, const pix *b) {   /* no lock: the buffers are pinned (hold) */
+    int nb = row_bytes(a->w, a->pitch);
+    if (nb <= 0 || !a->map || !b->map) return 0;
+    const uint8_t *pa = a->map, *pb = b->map;
+    for (uint32_t y = 0; y < a->h; y += 8)
+        if (memcmp(pa + (size_t)y * a->pitch, pb + (size_t)y * b->pitch, (size_t)nb)) return 0;
+    return 1;
+}
+static dbuf *find_gen(uint64_t gen) {
+    if (!gen) return 0;
+    for (int s = 0; s < nt; s++)
+        for (int k = 0; k < T[s].nb; k++) if (T[s].b[k].map && T[s].b[k].gen == gen) return &T[s].b[k];
+    for (int i = 0; i < 2; i++)
+        for (int k = 0; k < NOUT; k++) if (P[i].out[k].map && P[i].out[k].gen == gen) return &P[i].out[k];
+    for (int j = 0; j < NGRAVE; j++) if (grave[j].map && grave[j].gen == gen) return &grave[j];
+    return 0;
+}
+static void pin(dbuf *b) { if (b && b != &blk.b[0]) b->hold++; }
+static void unpin_gen(uint64_t gen, dbuf *hint) {
+    dbuf *b = (hint && hint->map && hint->gen == gen) ? hint : find_gen(gen);
+    if (!b || b->hold <= 0) return;
+    if (--b->hold) return;
+    if (b->state == FREE && is_grave(b)) freebuf(b);
+}
+static int readable(dbuf *b) {
+    return b && b->map && !is_grave(b) && b->w && b->h && b->pitch;
+}
+static void q_add(int i, dbuf *b, long long t) {   /* mu held; qn < QMAX */
+    if (!waiting()) ready_since = t;
+    P[i].q[P[i].qn++] = b;
+}
+static void q_drop_visible(int i, dbuf *b, long long t) {   /* mu held: a frame that changed, and no free slot */
+    panel *p = &P[i];
+    if (p->qn < slots && p->qn < QMAX) { q_add(i, b, t); return; }
+    if (p->qn > 0) { release(p->q[0]); q_pop(p); }
+    st_drop++; st_drop_q++; dsflip_queue_drops++;
+    if (p->qn < QMAX) q_add(i, b, t); else release(b);
+}
 static void enqueue(int i, dbuf *b, long long t) {
-    if (!P[i].ready) { if (!P[0].ready && !P[1].ready) ready_since = t; P[i].ready = b; return; }
-    if (queue_on && !P[i].ready2) { P[i].ready2 = b; return; }
-    release(P[i].ready); st_drop++; st_drop_q++; dsflip_queue_drops++;
-    if (queue_on) { P[i].ready = P[i].ready2; P[i].ready2 = b; } else P[i].ready = b;
+    if (!b) return;
+    panel *p = &P[i];
+    for (int k = 0; k < p->qn; k++) if (p->q[k] == b) return;   /* already waiting: a second pointer would be freed twice */
+    int deep = p->qn >= 2;             /* two frames already waiting: more latency than the default queue */
+    if (p->qn < slots && !(deep && dupcheck)) { q_add(i, b, t); return; }
+    if (!dupcheck || p->qn < 1) { q_drop_visible(i, b, t); return; }
+    dbuf *newest = p->q[p->qn - 1], *oldest = p->q[0], *second = p->qn >= 2 ? p->q[1] : 0;
+    int overflow = p->qn >= slots;
+    int cmp_new = readable(b) && readable(newest)
+                  && b->w == newest->w && b->h == newest->h && b->pitch == newest->pitch;
+    int cmp_old = overflow && second && oldest != second && readable(oldest) && readable(second)
+                  && oldest->w == second->w && oldest->h == second->h && oldest->pitch == second->pitch;
+    if (!cmp_new && !cmp_old) { q_drop_visible(i, b, t); return; }
+    pix nb = { 0 }, nn = { 0 }, no = { 0 }, ns = { 0 };
+    uint64_t gb = b->gen, gn = 0, go = 0, gs = 0;
+    pin(b);                            /* the slot can be recycled while mu is released */
+    if (cmp_new) {
+        nb = (pix){ b->map, b->w, b->h, b->pitch }; nn = (pix){ newest->map, newest->w, newest->h, newest->pitch };
+        gn = newest->gen; pin(newest);
+    }
+    if (cmp_old) {
+        no = (pix){ oldest->map, oldest->w, oldest->h, oldest->pitch }; ns = (pix){ second->map, second->w, second->h, second->pitch };
+        go = oldest->gen; gs = second->gen; pin(oldest); pin(second);
+    }
+    unlock(&mu);
+    int new_dup = cmp_new && rows_alike(&nb, &nn);
+    int old_dup = cmp_old && !new_dup && rows_alike(&no, &ns);
+    lock(&mu);
+    unpin_gen(gb, b);
+    if (cmp_new) unpin_gen(gn, newest);
+    if (cmp_old) { unpin_gen(go, oldest); unpin_gen(gs, second); }
+    b = (b->map && b->gen == gb) ? b : find_gen(gb);
+    if (!b || !b->map || b->state == FREE) { st_drop++; st_drop_buf++; return; }   /* recycled while we looked */
+    int intact = 1;
+    if (cmp_new) intact = p->qn >= 1 && p->q[p->qn - 1] && p->q[p->qn - 1]->gen == gn && p->q[p->qn - 1]->state == READY;
+    if (cmp_old) intact = intact && p->qn >= 2 && p->q[0] && p->q[0]->gen == go && p->q[1] && p->q[1]->gen == gs;
+    if (!intact) { q_drop_visible(i, b, t); return; } /* a commit moved the queue: don't trust the compare */
+    if (new_dup) { release(b); st_dup++; return; }    /* same picture as the newest waiting frame */
+    if (!overflow && p->qn < QMAX) { q_add(i, b, t); return; }
+    if (old_dup) {                     /* the frame we would skip matches the one behind it */
+        release(p->q[0]); st_dup++; q_pop(p); q_add(i, b, t); return;
+    }
+    q_drop_visible(i, b, t);
 }
 
 static void shade_pending(void) {
@@ -527,7 +626,7 @@ static void shade_pending(void) {
         if (!(src[i] = P[i].src)) continue;
         st[i] = P[i].src_t;
         P[i].src = 0;
-        for (int k = 0; k < 6 && !dst[i]; k++) if (P[i].out[k].state == FREE) dst[i] = &P[i].out[k];
+        for (int k = 0; k < NOUT && !dst[i]; k++) if (P[i].out[k].state == FREE) dst[i] = &P[i].out[k];
         if (!dst[i] || !src[i]->map) { release(src[i]); src[i] = 0; st_drop++; st_drop_buf++; continue; }
         dst[i]->state = WRITING;
     }
@@ -615,16 +714,16 @@ static void *presenter(void *a) {
                 /* not during warm-up: a shader's first frames are slow and would pin the margin at max */
                 if (latch_off > period / 2 && latch_margin < 5000 && ph_n >= 600) latch_margin += 400;
             } else try_commit();
-            if (P[0].ready || P[1].ready) arm_latch();
+            if (waiting()) arm_latch();
             unlock(&mu);
         }
         if (pacing_latch && ph_n >= 120) {                                /* safety net: never sit on a frame */
             lock(&mu);
-            if ((P[0].ready || P[1].ready) && !pending_mask && now_us() - ready_since > 2 * (long long)period) { st_late++; try_commit(); }
+            if (waiting() && !pending_mask && now_us() - ready_since > 2 * (long long)period) { st_late++; try_commit(); }
             unlock(&mu);
         }
         if (anim_dir) { lock(&mu); toast_dirty = 1; unlock(&mu); }       /* the overlay is moving: every commit carries it */
-        if (toast_dirty && !pending_mask && !P[0].ready && !P[1].ready) {   /* an overlay change with no frame coming */
+        if (toast_dirty && !pending_mask && !waiting()) {                /* an overlay change with no frame coming */
             lock(&mu); try_commit(); unlock(&mu);
         }
         if (want_dump) { want_dump = 0; lock(&mu); dump_scan(); unlock(&mu); }
@@ -660,10 +759,10 @@ static void *presenter(void *a) {
         }
         if (t - st_t0 >= 1000000) {
             lock(&mu);
-            LOG("[dsflip] present/s=%.1f commits=%d dropped=%d busy=%d flips top=%d bot=%d max-iv top=%lld bot=%lld us touch=%d drop-src=%d drop-q=%d drop-buf=%d\n",
+            LOG("[dsflip] present/s=%.1f commits=%d dropped=%d busy=%d flips top=%d bot=%d max-iv top=%lld bot=%lld us touch=%d drop-src=%d drop-q=%d drop-buf=%d dup=%d\n",
                 st_present * 1e6 / (t - st_t0), st_commit, st_drop, st_busy, st_flips[0], st_flips[1], st_iv_max[0], st_iv_max[1], st_touch,
-                st_drop_src, st_drop_q, st_drop_buf);
-            st_drop_src = st_drop_q = st_drop_buf = 0;
+                st_drop_src, st_drop_q, st_drop_buf, st_dup);
+            st_drop_src = st_drop_q = st_drop_buf = st_dup = 0;
             st_present = st_commit = st_drop = st_busy = st_flips[0] = st_flips[1] = st_touch = 0; st_iv_max[0] = st_iv_max[1] = 0; st_t0 = t;
             unlock(&mu);
         }
@@ -999,17 +1098,21 @@ __attribute__((constructor)) static void init(void) {
     }
     LOG("[dsflip] toast plane: %u\n", tp_plane);
     signal(SIGUSR2, on_usr2);
-    { const char *q = getenv("DSFLIP_QUEUE"); if (q && *q == '0') queue_on = 0; }
+    { const char *q = getenv("DSFLIP_QUEUE");
+      if (q && *q) { int d = atoi(q); if (d < 0) d = 0; if (d > QMAX - 1) d = QMAX - 1; slots = d + 1; } }
+    { const char *dc = getenv("DSFLIP_DUPCHECK"); if (dc && *dc == '0') dupcheck = 0; }
     const char *pm = getenv("DSFLIP_PACING");
     if (pm && !strcmp(pm, "immediate")) pacing_latch = 0;
     if (pacing_latch) tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
     if (tfd < 0) pacing_latch = 0;                                   /* no timer: never wait for a latch */
-    LOG("[dsflip] pacing: %s, %s\n", pacing_latch ? "latch (adaptive)" : "immediate", queue_on ? "1-frame queue" : "mailbox");
+    LOG("[dsflip] pacing: %s, %s%s\n", pacing_latch ? "latch (adaptive)" : "immediate",
+        slots <= 1 ? "mailbox" : slots == 2 ? "1-frame queue" : "2-frame queue",
+        dupcheck ? ", unchanged frames not counted as drops" : "");
     tdump_x = -1; if (getenv("DSFLIP_TOUCH_DUMP")) touch_dumps = atoi(getenv("DSFLIP_TOUCH_DUMP"));
     efd = eventfd(0, EFD_CLOEXEC); wfd = eventfd(0, EFD_CLOEXEC);
     st_t0 = now_us();
     if ((shader_nm = shader_name()))
-        for (int i = 0; i < 2 && shader_nm; i++) for (int k = 0; k < 6; k++)
+        for (int i = 0; i < 2 && shader_nm; i++) for (int k = 0; k < NOUT; k++)
             if (mkbuf(&P[i].out[k], P[i].mode.hdisplay, P[i].mode.vdisplay, DRM_FORMAT_XRGB8888, 32)) {
                 LOG("[dsflip] shader output buffers: alloc failed\n"); shader_nm = 0; break;
             }
@@ -1084,14 +1187,13 @@ void *SDL_CreateTexture(void *rn, uint32_t fmt, int access, int w, int h) {
     if (s) {
         for (int k = 0; k < s->nb; k++) {  /* recycled slot: free buffers no panel holds, park the others */
             dbuf *b = &s->b[k];
-            if (b->state == FREE || b->state == WRITTEN || b->state == WRITING) { freebuf(b); continue; }
+            if ((b->state == FREE || b->state == WRITTEN || b->state == WRITING) && !b->hold) { freebuf(b); continue; }
             dbuf *g = 0;
             for (int j = 0; j < NGRAVE && !g; j++) if (!grave[j].map) g = &grave[j];
             if (g) {
                 *g = *b;                /* the panel pointers follow the buffer to its new home */
                 for (int i = 0; i < 2; i++) {
-                    if (P[i].ready == b) P[i].ready = g;
-                    if (P[i].ready2 == b) P[i].ready2 = g;
+                    for (int q = 0; q < P[i].qn; q++) if (P[i].q[q] == b) P[i].q[q] = g;
                     if (P[i].queued == b) P[i].queued = g;
                     if (P[i].scan == b) P[i].scan = g;
                     if (P[i].src == b) P[i].src = g;
@@ -1230,7 +1332,9 @@ void SDL_RenderPresent(void *rn) {
         dbuf *b;
         if (s->kind == K_BLACK) {
             b = &blk.b[0];
-            if (P[i].scan == b || P[i].queued == b || P[i].ready == b || P[i].ready2 == b) continue;
+            int seen = P[i].scan == b || P[i].queued == b;
+            for (int q = 0; q < P[i].qn && !seen; q++) if (P[i].q[q] == b) seen = 1;
+            if (seen) continue;
         } else {
             if (s->written < 0 || s->b[s->written].state != WRITTEN) continue;
             b = &s->b[s->written]; s->written = -1; b->state = READY;
