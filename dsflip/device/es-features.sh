@@ -1,5 +1,6 @@
 #!/bin/sh
-# es-features.sh: puts ROCKNIXDS's ds-* shaders into EmulationStation's DraStic "shader" option.
+# es-features.sh: puts ROCKNIXDS's ds-* shaders into EmulationStation's DraStic "shader" option,
+# and a "wfc dns" option (nds.wfc_dns) on the same core.
 # Run by the installer and at every boot (autostart hook rocknixds-es-features), before ES starts.
 #
 # ES reads /storage/.config/emulationstation/es_features.cfg instead of ROCKNIX's read-only
@@ -15,12 +16,15 @@ ESF=${ESF_USER:-/storage/.config/emulationstation/es_features.cfg}
 STATE=${ESF_STATE:-/storage/rgds-rocknix-backup}     # the installer's backup dir: .esf-created, .esf-system-md5
 [ -f "$SYS" ] || exit 0
 
-# our choices go at the end of the drastic-sa core's <feature name="shader">, indented like its other choices;
-# any earlier copy of them is dropped first, so this is idempotent
+# shader choices go at the end of the drastic-sa core's <feature name="shader">, and "wfc dns" is a
+# sibling feature. Any earlier copy of either is dropped first, so this is idempotent.
 add_ours() {
     grep -vE 'value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"' "$1" | awk '
         /<core name="drastic-sa"/ { core = 1 }
         core && /<\/core>/ { core = 0 }
+        core && skip && /<\/feature>/ { skip = 0; next }
+        core && skip { next }
+        core && /<feature name="wfc dns"/ { skip = 1; next }
         core && /<feature name="shader"/ { shader = 1 }
         shader && /<choice / { ind = $0; sub(/<choice.*/, "", ind) }
         shader && /<\/feature>/ {
@@ -33,8 +37,19 @@ add_ours() {
             print ind "<choice name=\"ds-integer (pixel-perfect 2x + bezel)\" value=\"ds-integer\" />"
             shader = 0; added = 1
         }
+        core && /<\/features>/ && !wfc {
+            ind = $0; sub(/<\/features>.*/, "", ind)
+            fi = ind "  "; ci = ind "    "
+            print fi "<feature name=\"wfc dns\">"
+            print ci "<choice name=\"off\" value=\"off\" />"
+            print ci "<choice name=\"Kaeru WFC (178.62.43.212)\" value=\"kaeru\" />"
+            print ci "<choice name=\"AltWFC (172.104.88.237)\" value=\"altwfc\" />"
+            print ci "<choice name=\"WiiLink (167.235.229.36)\" value=\"wiilink\" />"
+            print fi "</feature>"
+            wfc = 1
+        }
         { print }
-        END { if (!added) exit 3 }'
+        END { if (!added || !wfc) exit 3 }'
 }
 
 SRC=$ESF
