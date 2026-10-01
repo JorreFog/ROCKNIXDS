@@ -7,19 +7,19 @@
 
 <p align="center"><b>Full-speed 2× DraStic and a DSi-style dual-screen frontend for the Anbernic RG DS on ROCKNIX.</b></p>
 
-<p>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/img/transparency-disclaimer-dark.svg">
-    <img src="docs/img/transparency-disclaimer.svg" width="100%" alt="Transparency disclaimer: 99% of all the code work has been made by AI under human supervision. A large majority of project planning, testing and design ideas have been made by me with my own ideas and with inspiration from other people's works. All of those people have been credited under the credits section. Due to the obvious AI involvement it is important for me to acknowledge the obvious technical debt as a result of this and this is why every ai made file or library or whatever is free for anyone to use under all circumstances and for whatever project or purpose they might feel fit. /JorreFog">
-  </picture>
-</p>
-
 <p align="center">
   <img src="docs/img/es-home-ds.png" width="265" alt="Main menu: the selected system with its icon, counts and play stats on the top screen, system carousel on the bottom">
   <img src="docs/img/es-games-ds.png" width="265" alt="Game list: 3D box, screenshot and RetroAchievements progress on top, real DS cartridges on the bottom">
   <img src="docs/img/gameplay-hires-ds.png" width="265" alt="Pokémon HeartGold at 2x internal resolution on both panels">
 </p>
 <p align="center"><sub>The main menu, the game list, and Pokémon HeartGold at 2× internal resolution (captured from the panels' scanout buffers).</sub></p>
+
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/img/transparency-disclaimer-dark.svg">
+    <img src="docs/img/transparency-disclaimer.svg" width="100%" alt="Transparency disclaimer: 99% of all the code work has been made by AI under human supervision. A large majority of project planning, testing and design ideas have been made by me with my own ideas and with inspiration from other people's works. All of those people have been credited under the credits section. Due to the obvious AI involvement it is important for me to acknowledge the obvious technical debt as a result of this and this is why every ai made file or library or whatever is free for anyone to use under all circumstances and for whatever project or purpose they might feel fit. /JorreFog">
+  </picture>
+</p>
 
 The Anbernic RG DS is a clamshell handheld with two 640×480 touch panels and an RK3566 (4× Cortex-A55,
 Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [ROCKNIX](https://rocknix.org) install:
