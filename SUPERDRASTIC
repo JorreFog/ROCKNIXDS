@@ -1,3 +1,3 @@
 # The SuperDrastic release install.sh installs (https://github.com/JorreFog/SuperDrastic): version and the sha256 of
 # superdrastic-<version>-aarch64.tar.gz. Bump both together.
-0.3.0-beta.1 4b13ebf7cdeaff2795b01b1ae30eea7d08c6470fe743a9474ab9d42c0c5331f2
+0.3.0-beta.2 c586d55bea6f1b48301743d2805242082437a738130cfe205ae12547148f4734
