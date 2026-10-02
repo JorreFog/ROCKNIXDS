@@ -248,6 +248,7 @@ if [ $UNINSTALL = 1 ]; then
           /storage/.config/system.d/timers.target.wants/rocknixds-update-check.timer
     rmdir /storage/.config/system.d/timers.target.wants 2>/dev/null; systemctl daemon-reload
     rm -rf /storage/.config/rocknixds
+    [ -f $SYSCFG ] && sed -i '/^rocknixds\./d' $SYSCFG      # the update channel and the media and update switches
     [ -e $ES_THEMES/canvas-ds/.rocknixds-commit ] && rm -rf $ES_THEMES/canvas-ds      # the one this installer downloaded
     if [ -e $BACKUP/.theme-installed-by-us ]; then
         rm -rf $THEME $ES_THEMES/rocknixds-dark $ES_THEMES/rocknixds-light $ES_THEMES/rocknixds-pixel
