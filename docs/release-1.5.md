@@ -34,7 +34,7 @@ the Plus's releases on a Plus.
 
 1. RG DS: merge `claude/wizardly-cori-486rvt` (based on `beta`, with `main` merged in) into `beta` and `main`.
    `VERSION` is `1.5`.
-2. RG DS Plus: merge the Plus branch (based on `plus-beta`) into `plus-beta`. Set `VERSION` to `1.5-plus` there.
+2. RG DS Plus: merge the Plus release branch (based on `plus-beta`; `VERSION` is `1.5-plus`) into `plus-beta`.
 3. Check CI on both (`check` and `unit tests`).
 4. Publish the release **`v1.5-plus`** from `plus-beta` (not a pre-release), with the notes below.
 5. Publish the release **`v1.5`** from `main` (not a pre-release), with the notes below. It becomes "latest".
