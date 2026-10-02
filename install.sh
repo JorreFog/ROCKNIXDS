@@ -279,9 +279,13 @@ if [ $THEME_ON = 1 ]; then
         cp -a "$SRC/dii-ess-aye/overlay/." "$dest/"
         cp -a "$SRC/dii-ess-aye/themes/$variant/." "$dest/"
         rm -rf "$dest/assets/fonts" "$dest/assets/sounds" "$dest/assets/images/systems"
-        ln -s ../dii-ess-aye/assets/fonts "$dest/assets/fonts"
-        ln -s ../dii-ess-aye/assets/sounds "$dest/assets/sounds"
-        ln -s ../dii-ess-aye/assets/images/systems "$dest/assets/images/systems"
+        # The target is resolved from the link's own directory. fonts/ and sounds/
+        # live in <theme>/assets (two levels below the themes folder); system icons
+        # live in <theme>/assets/images (three). "../dii-ess-aye" pointed inside the
+        # variant folder, so the DSi font, sounds and system art never opened.
+        ln -s ../../dii-ess-aye/assets/fonts "$dest/assets/fonts"
+        ln -s ../../dii-ess-aye/assets/sounds "$dest/assets/sounds"
+        ln -s ../../../dii-ess-aye/assets/images/systems "$dest/assets/images/systems"
         chmod +x "$dest"/scripts/*.sh 2>/dev/null || true
     done
     touch $BACKUP/.theme-installed-by-us

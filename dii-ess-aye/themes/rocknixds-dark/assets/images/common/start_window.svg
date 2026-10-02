@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="160" height="200" viewBox="0 0 160 200">
-<defs><linearGradient id="sw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ec8ee"/><stop offset="0.45" stop-color="#1a6ea3"/><stop offset="1" stop-color="#0c3d5c"/></linearGradient></defs>
+<defs><linearGradient id="sw" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0" stop-color="#7ec8ee"/><stop offset="0.45" stop-color="#1a6ea3"/><stop offset="1" stop-color="#0c3d5c"/></linearGradient></defs>
 <path d="M16,2 H144 A14,14 0 0 1 158,16 V184 A14,14 0 0 1 144,198 H16 A14,14 0 0 1 2,184 V16 A14,14 0 0 1 16,2 Z M29,22 A9,9 0 0 0 20,31 V133 A9,9 0 0 0 29,142 H131 A9,9 0 0 0 140,133 V31 A9,9 0 0 0 131,22 Z" fill="url(#sw)"/>
 <path d="M16,2 H144 A14,14 0 0 1 158,16 V184 A14,14 0 0 1 144,198 H16 A14,14 0 0 1 2,184 V16 A14,14 0 0 1 16,2 Z" fill="none" stroke="#0c3d5c" stroke-width="2.5"/>
 <path d="M16,5 H144 A11,11 0 0 1 155,16 V184 A11,11 0 0 1 144,195 H16 A11,11 0 0 1 5,184 V16 A11,11 0 0 1 16,5 Z" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1.5"/>
