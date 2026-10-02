@@ -4,11 +4,15 @@
 #   check    one line: "UPDATE <what>" when the channel has something newer than what's installed, else a message
 #   install  runs the channel's installer in its own unit (it stops the menu and brings it back when it's done)
 #   notify   check, and pop up a notification in the menu once per new update (the timer; off with the menu switch)
-# Channel: rocknixds.channel in system.cfg, "stable" (the latest release) or "beta". The menu only stores those
+# Channel: rocknixds.channel in system.cfg, "stable" (the latest release for this handheld) or "beta". Releases
+# come in pairs from 1.5 on: vX.Y for the RG DS and vX.Y-plus for the RG DS Plus (pre-releases are betas), so
+# stable is the newest release whose tag is this handheld's. The menu only stores those
 # two. On an RG DS Plus, beta is the plus-beta branch: Plus beta 3 followed the original RG DS beta branch,
 # because the menu's Beta choice is stored as "beta" and the updater used plus-beta only when the value was
 # "plus", which the menu never writes. An earlier Plus install's "plus" is the same choice.
 # What's installed: /storage/.config/rocknixds/installed-id, written by install.sh (a release tag or a commit).
+# install hands install.sh the exact tag or commit the check found (RGDS_REF), and that ref's own install.sh runs,
+# so installed-id is what was installed: never a branch head that moved in between, never another handheld's.
 # Host tests point ROCKNIXDS_CFG, ROCKNIXDS_STATE, ROCKNIXDS_MODEL_FILE and ROCKNIXDS_MODES_GLOB
 # at a temp tree. Unset, these are the paths on the device.
 REPO=JorreFog/ROCKNIXDS
@@ -50,11 +54,29 @@ branch() {   # git branch this channel installs: Plus beta never comes from the 
     echo beta
 }
 
+latest_release() {   # the newest stable release's tag for this handheld (tags ending in -plus are the Plus's)
+    curl -fsSL --max-time 20 "https://api.github.com/repos/$REPO/releases?per_page=50" 2>/dev/null | python3 -c '
+import json, sys
+plus = sys.argv[1] == "1"
+try:
+    rel = json.load(sys.stdin)
+except ValueError:
+    sys.exit()
+for r in rel if isinstance(rel, list) else []:
+    t = r.get("tag_name") or ""
+    if r.get("draft") or r.get("prerelease"):
+        continue
+    if (t.endswith("-plus") if plus else "plus" not in t):
+        print(t)
+        break' "$PLUS" 2>/dev/null
+}
+
 latest() {  # "<id> <label>": the latest release's tag (stable) or the channel's newest commit
     if [ $CH = stable ]; then
-        t=$(curl -fsSL --max-time 15 https://api.github.com/repos/$REPO/releases/latest 2>/dev/null |
-            sed -n 's/^ *"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)
-        [ -n "$t" ] && echo "$t ROCKNIXDS ${t#v}"
+        t=$(latest_release)
+        [ -n "$t" ] || return 0
+        v=${t#v}
+        if [ $PLUS = 1 ]; then echo "$t ROCKNIXDS ${v%-plus} for the RG DS Plus"; else echo "$t ROCKNIXDS $v"; fi
     else
         BR=$(branch)
         c=$(curl -fsSL --max-time 15 https://api.github.com/repos/$REPO/commits/$BR 2>/dev/null |
@@ -66,9 +88,19 @@ latest() {  # "<id> <label>": the latest release's tag (stable) or the channel's
 case "$1" in
 check|notify)
     l=$(latest)
-    [ -n "$l" ] || { echo "COULDN'T REACH GITHUB: CHECK THE NETWORK"; exit 1; }
+    [ -n "$l" ] || {
+        if [ $CH = stable ] && [ $PLUS = 1 ] && curl -fsS --max-time 15 -o /dev/null https://api.github.com/ 2>/dev/null; then
+            echo "NO STABLE ROCKNIXDS RELEASE FOR THE RG DS PLUS YET: USE THE BETA CHANNEL"; exit 0
+        fi
+        echo "COULDN'T REACH GITHUB: CHECK THE NETWORK"; exit 1; }
     id=${l%% *} label=${l#* }
-    if [ "$id" = "$(cat $STATE/installed-id 2>/dev/null)" ]; then echo "ROCKNIXDS IS UP TO DATE ($label)"; exit 0; fi
+    have=$(cat $STATE/installed-id 2>/dev/null)
+    if [ "$id" = "$have" ]; then echo "ROCKNIXDS IS UP TO DATE ($label)"; exit 0; fi
+    # a beta (a commit) and a release (a tag) aren't ordered: say what switching the channel does
+    case "$CH:$have" in
+        stable:[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) label="$label (the stable release, in place of the beta installed now)" ;;
+        beta:v*) label="$label (the beta, in place of the stable release installed now)" ;;
+    esac
     if [ "$1" = notify ]; then
         [ "$(setting rocknixds.autocheck)" = 0 ] && exit 0
         [ "$(cat $STATE/notified-id 2>/dev/null)" = "$id" ] && exit 0          # once per update
@@ -81,8 +113,20 @@ check|notify)
 install)
     B=$(branch)
     systemctl is-active -q rocknixds-update && { echo "AN UPDATE IS ALREADY RUNNING"; exit 1; }
-    systemd-run --quiet --unit=rocknixds-update --collect sh -c \
-        "curl -fsSL https://raw.githubusercontent.com/$REPO/$B/install.sh | RGDS_BRANCH=$B sh > /storage/rocknixds-update.log 2>&1"
+    l=$(latest)
+    [ -n "$l" ] || { echo "COULDN'T REACH GITHUB: CHECK THE NETWORK"; exit 1; }
+    id=${l%% *}
+    # that ref's installer, downloaded whole before it runs (a cut-off download must not run half a script); if it
+    # fails, the menu says so once it is back (the installer restarts it either way)
+    LOG=/storage/rocknixds-update.log
+    systemd-run --quiet --unit=rocknixds-update --collect sh -c "
+        if curl -fsSL --max-time 120 -o /tmp/rocknixds-install.sh https://raw.githubusercontent.com/$REPO/$id/install.sh &&
+           RGDS_BRANCH=$B RGDS_REF=$id sh /tmp/rocknixds-install.sh > $LOG 2>&1; then rm -f /tmp/rocknixds-install.sh; exit 0; fi
+        echo \"rocknixds-update: the install of $id failed\" >> $LOG
+        for i in \$(seq 1 90); do curl -fs -m 2 localhost:1234/isIdle >/dev/null 2>&1 && break; sleep 2; done
+        curl -fs --max-time 5 -X POST --data-binary 'The ROCKNIXDS update did not finish: see /storage/rocknixds-update.log' \
+            http://localhost:1234/notify >/dev/null 2>&1
+        exit 1" || { echo "COULDN'T START THE UPDATE"; exit 1; }
     echo "STARTED"
     ;;
 *)
