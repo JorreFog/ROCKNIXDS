@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ROCKNIXDS — menu mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #e7eef6;
+    --muted: #93a0b0;
+    --line: #7d8b9c;
+    --paper: #12181f;
+    --edge: #d5dee8;
+    --blue: #3d8ec4;
+    --navy: #e7f4ff;
+    --red: #ff3b4a;
+    --dither: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'><rect width='1' height='1' fill='white' fill-opacity='.14'/><rect x='2' y='2' width='1' height='1' fill='white' fill-opacity='.07'/></svg>");
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background:
+      radial-gradient(900px 420px at 50% 0%, #1c2836, transparent 60%),
+      #0c1016;
+    color: var(--ink);
+    font-family: "Pixelify Sans", "Courier New", monospace;
+    font-weight: 400;
+    -webkit-font-smoothing: none;
+  }
+  button { font-family: inherit; color: inherit; cursor: pointer; }
+  .caption, .hint {
+    margin: 0;
+    text-align: center;
+    color: #9aa6b4;
+  }
+  .caption { font-size: 15px; letter-spacing: .12em; text-transform: uppercase; }
+  .hint { font-size: 18px; max-width: 760px; line-height: 1.4; }
+  .fit-wrap { display: flex; justify-content: center; }
+  .fit { transform-origin: top center; }
+  .device { width: 684px; }
+  .shell {
+    background-color: #2a313c;
+    background-image: linear-gradient(#3d4756 0 14px, transparent 14px);
+    padding: 16px;
+    box-shadow: inset 0 -8px 0 #141920, 6px 8px 0 rgba(0, 0, 0, .45);
+  }
+  .top-shell { border-radius: 28px 28px 8px 8px; padding-top: 12px; }
+  .bot-shell { border-radius: 8px 8px 28px 28px; padding-bottom: 16px; }
+  .hinge {
+    height: 16px;
+    background: linear-gradient(#1c222c, #3a4452 46%, #121820 52%, #2a313c);
+    position: relative;
+  }
+  .hinge i {
+    position: absolute;
+    left: 24%; right: 24%;
+    top: 5px;
+    height: 6px;
+    border-radius: 6px;
+    background: linear-gradient(#4a5564, #1c222c);
+  }
+  .led {
+    position: absolute;
+    right: 26px; top: 5px;
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    background: var(--red);
+    box-shadow: 0 0 0 2px #2c3a4a;
+    animation: blink 1.6s steps(2, end) infinite;
+  }
+  .screen {
+    width: 640px;
+    height: 480px;
+    overflow: hidden;
+    position: relative;
+    background-color: #121820;
+    background-image: var(--dither);
+    border-radius: 2px;
+    box-shadow: inset 0 0 0 4px #070a0e, inset 0 8px 0 #243040;
+  }
+  .view {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 12px 18px 14px;
+  }
+  .status {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--ink);
+    font-size: 20px;
+  }
+  .status-l, .status-r { display: flex; align-items: center; gap: 8px; }
+  .status b { font-weight: 500; }
+  .brand {
+    display: inline-flex;
+    background: #1b2330;
+    border-radius: 4px;
+    padding: 3px 7px;
+    box-shadow: 2px 2px 0 #070a0e;
+  }
+  .brand img { height: 20px; width: auto; display: block; }
+  .sheet {
+    flex: 1;
+    min-height: 0;
+    margin-top: 8px;
+    border-radius: 18px;
+    position: relative;
+    overflow: hidden;
+    border: 3px solid var(--edge);
+    box-shadow: inset 0 6px 0 rgba(255, 255, 255, .1), inset 0 -8px 0 rgba(0, 0, 0, .35), 4px 4px 0 rgba(0, 0, 0, .4);
+    background-color: color-mix(in srgb, var(--sys) 34%, #10161e);
+    background-image: var(--dither);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 18px 22px 16px;
+    gap: 10px;
+  }
+  .sheet.shot {
+    justify-content: flex-end;
+    padding: 20px 22px 26px;
+    gap: 12px;
+  }
+  .hero-ico {
+    width: 96px;
+    height: 96px;
+    border-radius: 18px;
+    overflow: hidden;
+    border: 3px solid var(--edge);
+    background-color: #1a222c;
+    background-image: linear-gradient(#2e3a48 0 8px, #121820 8px 100%);
+    box-shadow: inset 0 -6px 0 #070a0e, 4px 4px 0 rgba(0, 0, 0, .45);
+    animation: bob 2.4s steps(2, end) infinite;
+    padding: 5px;
+    flex: none;
+  }
+  .hero-ico .ico, .slot .ico {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: contain;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  .hero-ico svg.ico, .slot svg.ico { shape-rendering: crispEdges; border-radius: 8px; }
+  .stats {
+    display: flex;
+    gap: 18px;
+    justify-content: center;
+  }
+  .stats div { min-width: 84px; }
+  .stats b { display: block; font-size: 28px; font-weight: 500; line-height: 1; }
+  .stats span, .eyebrow {
+    display: block;
+    margin-top: 3px;
+    font-size: 17px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    background-color: #121820;
+    background-image: linear-gradient(#243040 0 8px, #0e141c 8px 100%);
+    border: 3px solid var(--edge);
+    box-shadow: 3px 3px 0 rgba(0, 0, 0, .4);
+    border-radius: 12px;
+    padding: 6px 12px 6px 8px;
+    max-width: 100%;
+  }
+  .chip b {
+    display: block;
+    font-size: 20px;
+    font-weight: 500;
+    max-width: 300px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chip .eyebrow { margin: 0 0 2px; }
+  .cartbox { flex: none; }
+  .cartbox .cart { width: 100%; height: 100%; display: block; }
+  canvas.cart { image-rendering: auto; }
+  .photo {
+    width: min(100%, 520px);
+    height: 220px;
+    margin-top: 4px;
+    flex: none;
+    background: #12181f;
+    border-radius: 8px;
+    border: 4px solid #2a3442;
+    box-shadow: inset 0 0 0 3px #070a0e, 4px 4px 0 rgba(0, 0, 0, .4);
+    overflow: hidden;
+  }
+  .photo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .cap { margin: 0; font-size: 22px; line-height: 1.3; max-width: 32em; }
+  .live {
+    display: inline-block;
+    width: 8px; height: 8px;
+    margin-right: 8px;
+    background: var(--red);
+    box-shadow: 0 0 0 2px var(--edge);
+    vertical-align: 1px;
+  }
+  .meter {
+    width: min(100%, 360px);
+    height: 14px;
+    border: 3px solid var(--edge);
+    border-radius: 2px;
+    background: #10161e;
+    box-shadow: inset 2px 2px 0 rgba(0, 0, 0, .45);
+    overflow: hidden;
+  }
+  .meter i {
+    display: block;
+    height: 100%;
+    background-color: var(--sys);
+    background-image: repeating-linear-gradient(90deg, transparent 0 6px, rgba(255,255,255,.45) 6px 8px);
+    background-size: 16px 100%;
+    animation: march .8s steps(4, end) infinite;
+  }
+  .meter-label { font-size: 18px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  .shoulders {
+    height: 42px;
+    display: grid;
+    grid-template-columns: 1fr 72px 1fr;
+    align-items: center;
+    gap: 8px;
+  }
+  .shoulders button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: none;
+    border: 0;
+    padding: 0;
+    font-size: 20px;
+    color: var(--ink);
+    min-width: 0;
+  }
+  .shoulders button.right { justify-content: flex-end; }
+  .shoulders span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+  }
+  .shoulders kbd, .face kbd {
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 500;
+    background: #e7eef6;
+    color: #121820;
+    border-radius: 4px;
+    padding: 2px 6px;
+    flex: none;
+  }
+  .rule { height: 3px; background: #3a4654; border-radius: 2px; }
+  .bubble {
+    position: relative;
+    margin: 6px 48px 0;
+    min-height: 92px;
+    background-color: #1a222c;
+    background-image: linear-gradient(#2c3848 0 10px, #141b24 10px 100%);
+    border: 3px solid var(--line);
+    border-radius: 12px;
+    box-shadow: inset 0 -6px 0 #0c1218, 4px 4px 0 #070a0e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 8px 16px 10px;
+  }
+  .bubble b {
+    font-size: 26px;
+    font-weight: 500;
+    line-height: 1.25;
+    letter-spacing: .02em;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .bubble em {
+    margin-top: 3px;
+    font-style: normal;
+    font-size: 20px;
+    color: var(--muted);
+  }
+  .ptr {
+    position: absolute;
+    left: 50%;
+    bottom: -16px;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 14px solid transparent;
+    border-right: 14px solid transparent;
+    border-top: 16px solid var(--line);
+  }
+  .ptr::after {
+    content: "";
+    position: absolute;
+    left: -11px;
+    top: -16px;
+    border-left: 11px solid transparent;
+    border-right: 11px solid transparent;
+    border-top: 13px solid #141b24;
+  }
+  .reel {
+    position: relative;
+    flex: 1;
+    min-height: 176px;
+    margin: 8px -8px 0;
+    overflow: hidden;
+  }
+  .reel:not(:has(.slot))::before { display: none; }
+  .reel::before {
+    content: "";
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    top: 34px;
+    height: 80px;
+    border-radius: 18px;
+    background-color: #0c1016;
+    background-image: var(--dither);
+    box-shadow: inset 0 4px 0 rgba(0, 0, 0, .45), inset 0 -4px 0 #2a3544;
+    z-index: 0;
+  }
+  .plate {
+    position: absolute;
+    left: 50%;
+    top: 4px;
+    width: 124px;
+    height: 162px;
+    transform: translateX(-50%);
+    background-color: #1a6ea3;
+    background-image: linear-gradient(#7ec8ee 0 14px, transparent 14px 132px, #0c3d5c 132px 100%);
+    border: 3px solid var(--edge);
+    border-radius: 18px;
+    box-shadow: inset 0 -8px 0 rgba(0, 0, 0, .35), 4px 4px 0 rgba(0, 0, 0, .4);
+    z-index: 1;
+  }
+  .slot {
+    position: absolute;
+    left: 50%;
+    top: 16px;
+    width: 96px;
+    height: 96px;
+    border-radius: 14px;
+    border: 3px solid var(--edge);
+    background-color: #1a222c;
+    background-image: linear-gradient(#2e3a48 0 8px, #121820 8px 100%);
+    box-shadow: inset 0 -6px 0 #070a0e, 3px 3px 0 rgba(0, 0, 0, .45);
+    padding: 5px;
+    overflow: hidden;
+    transform-origin: center top;
+    z-index: 3;
+  }
+  .slot.is-on { border-color: #fff; z-index: 4; }
+  .slot .badge {
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 10px; height: 10px;
+    background: var(--red);
+    border: 2px solid #fff;
+    border-radius: 2px;
+  }
+  .slot.cart-slot {
+    border: 0;
+    background: transparent;
+    overflow: visible;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+  .cart-slot .fit {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .cart-slot .cart { height: 100%; width: auto; display: block; }
+  .start {
+    position: absolute;
+    left: 50%;
+    top: 120px;
+    transform: translateX(-50%);
+    z-index: 5;
+    background: none;
+    border: 0;
+    padding: 4px 8px;
+    font-size: 20px;
+    font-weight: 500;
+    letter-spacing: .12em;
+    color: var(--navy);
+  }
+  .ready-word {
+    position: absolute;
+    left: 50%;
+    top: 122px;
+    transform: translateX(-50%);
+    z-index: 5;
+    font-size: 20px;
+    font-weight: 500;
+    letter-spacing: .12em;
+    color: var(--navy);
+  }
+  .rail {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: center;
+    margin-top: 4px;
+  }
+  .track {
+    height: 10px;
+    background-color: #0c1016;
+    background-image: var(--dither);
+    border-radius: 2px;
+    position: relative;
+    border: 2px solid var(--edge);
+    box-shadow: inset 2px 2px 0 rgba(0, 0, 0, .45);
+  }
+  .thumb {
+    position: absolute;
+    top: -4px;
+    height: 14px;
+    width: 42px;
+    border-radius: 2px;
+    background-color: #3d8ec8;
+    background-image: linear-gradient(#b7e6ff 0 4px, transparent 4px);
+    border: 2px solid var(--edge);
+    transition: left .35s steps(5, end);
+  }
+  .count { font-size: 18px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .count b { color: var(--ink); font-weight: 500; }
+  .face {
+    height: 48px;
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .face button, .note {
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 3px solid var(--edge);
+    background-color: #1a222c;
+    background-image: linear-gradient(#2c3848 0 8px, #121820 8px 100%);
+    border-radius: 10px;
+    box-shadow: inset 0 -4px 0 #070a0e, 3px 3px 0 #070a0e;
+    font-size: 19px;
+    font-weight: 500;
+  }
+  .face button.is-on { background-color: #3a1820; background-image: linear-gradient(#5a2430 0 8px, #2a1016 8px 100%); border-color: var(--red); color: #ff8a96; }
+  .face button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #070a0e; }
+  .bubble.pop b, .bubble.pop em { animation: pop .32s steps(3, end); }
+  @keyframes bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+  @keyframes blink {
+    0%, 55% { opacity: 1; }
+    56%, 100% { opacity: .35; }
+  }
+  @keyframes march { to { background-position: 16px 0; } }
+  @keyframes pop {
+    from { transform: translateY(6px); }
+    to { transform: none; }
+  }
+  @keyframes rise {
+    from { transform: translateY(10px); }
+    to { transform: none; }
+  }
+  .view { animation: rise .28s steps(4, end); }
+  .note { box-shadow: none; color: var(--muted); border-color: #3a4654; }
+  .launch-cart {
+    position: absolute;
+    left: 50%;
+    top: 12px;
+    transform: translateX(-50%);
+    z-index: 4;
+    width: 100px;
+    height: 104px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .launch-cart .cart { height: 104px; width: auto; display: block; }
+  @media (prefers-reduced-motion: reduce) {
+    .slot, .thumb, .view, .bubble.pop b, .bubble.pop em { transition: none !important; animation: none !important; }
+    .led, .live, .hero-ico, .meter i { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+  <p class="caption">ROCKNIXDS · main menu · two 640×480 screens</p>
+  <div class="fit-wrap">
+    <div class="fit" id="fit">
+      <div class="device">
+        <div class="shell top-shell">
+          <div class="screen" id="top"></div>
+        </div>
+        <div class="hinge"><i></i><b class="led"></b></div>
+        <div class="shell bot-shell">
+          <div class="screen" id="bot"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="hint" id="hint"></p>
+<script>
+const g = (title, genre, year, plays, last, time, a, b, slug, cart) =>
+  ({title, genre, year, plays, last, time, a, b, slug, cart, box: `art/${slug}-box.jpg`, snap: `art/${slug}-snap.jpg`});
+
+const systems = [
+  { id:'nds', name:'Nintendo DS', maker:'Nintendo', accent:'#3d9e9a', games:128, played:46, last:'Yesterday', time:'86h 12m', resume:0,
+    list:[
+      g('Pokémon HeartGold','Role-playing','2009',14,'Yesterday','22h 10m',28,50,'hg','nds'),
+      g('The Legend of Zelda: Spirit Tracks','Adventure','2009',6,'Sunday','11h 02m',12,40,'st','nds'),
+      g('Mario Kart DS','Racing','2005',9,'Monday','8h 40m',20,30,'mkds','nds'),
+      g('Chrono Trigger','Role-playing','2008',3,'Last week','16h 12m',8,48,'ctds','nds'),
+      g('Phoenix Wright: Ace Attorney','Adventure','2005',4,'Mar 18','9h 05m',15,30,'pw','nds'),
+      g('Castlevania: Dawn of Sorrow','Action','2005',2,'Feb 2','4h 18m',6,36,'cvds','nds'),
+      g('New Super Mario Bros.','Platform','2006',8,'Saturday','6h 55m',18,40,'nsmb','nds')
+    ]},
+  { id:'gba', name:'Game Boy Advance', maker:'Nintendo', accent:'#8b6ad8', games:64, played:22, last:'Tuesday', time:'31h 04m', resume:0,
+    list:[
+      g('Metroid Fusion','Action','2002',7,'Tuesday','9h 20m',22,40,'mf','gba'),
+      g('The Minish Cap','Adventure','2004',4,'Mar 2','7h 11m',11,36,'mc','gba'),
+      g('Advance Wars','Strategy','2001',5,'Jan 20','6h 40m',9,28,'aw','gba'),
+      g('Golden Sun','Role-playing','2001',3,'Dec 12','8h 02m',6,44,'gs','gba'),
+      g('WarioWare, Inc.','Party','2003',3,'Feb 14','1h 12m',14,20,'ww','gba')
+    ]},
+  { id:'gbc', name:'Game Boy Color', maker:'Nintendo', accent:'#2eae62', games:40, played:11, last:'Last week', time:'14h 20m', resume:0,
+    list:[
+      g('Pokémon Crystal','Role-playing','2000',6,'Last week','8h 04m',10,24,'crystal','gbc'),
+      g('The Legend of Zelda: Oracle of Ages','Adventure','2001',2,'Jan 4','3h 40m',4,18,'ooa','gbc'),
+      g('Wario Land 3','Platform','2000',3,'Nov 2','2h 36m',8,16,'wl3','gbc')
+    ]},
+  { id:'gb', name:'Game Boy', maker:'Nintendo', accent:'#8a9144', games:28, played:9, last:'Mar 2', time:'8h 11m', resume:0,
+    list:[
+      g("Link's Awakening",'Adventure','1993',4,'Mar 2','4h 10m',6,12,'la','gb'),
+      g('Super Mario Land 2','Platform','1992',3,'Jan 8','2h 02m',5,10,'sml2','gb'),
+      g('Tetris','Puzzle','1989',2,'Dec 1','1h 59m',3,8,'tetris','gb')
+    ]},
+  { id:'snes', name:'Super Nintendo', maker:'Nintendo', accent:'#a07ad4', games:52, played:17, last:'Monday', time:'40h 02m', resume:0,
+    list:[
+      g('Super Metroid','Action','1994',5,'Monday','12h 16m',18,32,'sm','snes'),
+      g('Chrono Trigger','Role-playing','1995',4,'Feb 11','14h 40m',9,30,'ct','snes'),
+      g('A Link to the Past','Adventure','1991',4,'Jan 19','8h 22m',12,28,'alttp','snes'),
+      g('Super Mario World','Platform','1990',4,'Dec 28','4h 44m',16,24,'smw','snes')
+    ]},
+  { id:'nes', name:'NES', maker:'Nintendo', accent:'#e25a5a', games:36, played:8, last:'Jan 12', time:'6h 44m', resume:0,
+    list:[
+      g('Mega Man 2','Action','1988',3,'Jan 12','2h 20m',8,14,'mm2','nes'),
+      g('The Legend of Zelda','Adventure','1986',2,'Nov 3','3h 01m',5,12,'zelda1','nes'),
+      g('Super Mario Bros. 3','Platform','1988',3,'Oct 18','1h 23m',6,10,'smb3','nes')
+    ]},
+  { id:'n64', name:'Nintendo 64', maker:'Nintendo', accent:'#6d8a58', games:18, played:6, last:'Sunday', time:'22h 15m', resume:0,
+    list:[
+      g('The Legend of Zelda: Ocarina of Time','Adventure','1998',4,'Sunday','14h 08m',12,20,'oot','n64'),
+      g('Mario Kart 64','Racing','1996',2,'Feb 2','4h 12m',8,16,'mk64','n64'),
+      g('Super Mario 64','Platform','1996',0,'Never','0m',0,12,'sm64','n64')
+    ]},
+  { id:'psx', name:'PlayStation', maker:'Sony', accent:'#5c86e0', games:24, played:7, last:'Friday', time:'19h 30m', resume:0,
+    list:[
+      g('Castlevania: Symphony of the Night','Action','1997',3,'Friday','8h 16m',14,32,'sotn','psx'),
+      g('Final Fantasy VII','Role-playing','1997',2,'Jan 30','9h 40m',6,28,'ff7','psx'),
+      g('Metal Gear Solid','Action','1998',2,'Dec 2','1h 34m',4,18,'mgs','psx')
+    ]},
+  { id:'md', name:'Mega Drive', maker:'Sega', accent:'#2eabc8', games:21, played:5, last:'Feb 8', time:'5h 12m', resume:0,
+    list:[
+      g('Sonic the Hedgehog 2','Platform','1992',3,'Feb 8','2h 14m',10,16,'sonic2','md'),
+      g('Streets of Rage 2','Action','1992',1,'Nov 11','1h 02m',4,12,'sor2','md'),
+      g('Gunstar Heroes','Action','1993',1,'Aug 4','1h 56m',3,10,'gunstar','md')
+    ]},
+  { id:'arcade', name:'Arcade', maker:'Various', accent:'#e8a020', games:80, played:14, last:'Today', time:'11h 48m', resume:0,
+    list:[
+      g('Metal Slug','Action','1996',6,'Today','3h 20m',4,8,'mslug','arcade'),
+      g('Street Fighter II','Fighting','1991',4,'Yesterday','2h 11m',6,12,'sf2','arcade'),
+      g('Pac-Man','Maze','1980',4,'Monday','1h 04m',2,6,'pac','arcade')
+    ]},
+  { id:'ports', name:'Ports', maker:'PC', accent:'#e08a4e', games:9, played:4, last:'Yesterday', time:'27h 05m', resume:0,
+    list:[
+      g('Cave Story','Adventure','2004',5,'Yesterday','18h 12m',16,24,'cave','ports'),
+      g('Celeste','Platform','2018',3,'Sunday','6h 40m',12,20,'celeste','ports'),
+      g('Stardew Valley','Simulation','2016',2,'Mar 1','2h 13m',8,18,'stardew','ports')
+    ]},
+  { id:'fav', name:'Favorites', maker:'Collection', accent:'#e23d52', games:8, played:8, last:'Today', time:'64h', resume:0,
+    list:[
+      g('Pokémon HeartGold','Role-playing','2009',14,'Yesterday','22h 10m',28,50,'hg','nds'),
+      g('Super Metroid','Action','1994',5,'Monday','12h 16m',18,32,'sm','snes'),
+      g('Chrono Trigger','Role-playing','2008',3,'Last week','16h 12m',8,48,'ctds','nds'),
+      g('Metroid Fusion','Action','2002',7,'Tuesday','9h 20m',22,40,'mf','gba')
+    ]}
+];
+
+// Ten console icons are BenJelter's Console Icon Pack (32x32 PNGs).
+// https://benjelter.itch.io/console-icon-pack
+// Favorites and Ports are original pixel drawings: a glossy heart and a laptop.
+const PACK_ICONS = {
+  nds: 'icons/nds.png',
+  gba: 'icons/gba.png',
+  gbc: 'icons/gbc.png',
+  gb: 'icons/gb.png',
+  snes: 'icons/snes.png',
+  nes: 'icons/nes.png',
+  n64: 'icons/n64.png',
+  psx: 'icons/psx.png',
+  md: 'icons/md.png',
+  arcade: 'icons/arcade.png',
+  ports: 'icons/ports.png',
+  fav: 'icons/fav.png'
+};
+const wifi = '<svg viewBox="0 0 16 14" width="18" height="16" aria-hidden="true"><path d="M1 5.2a8 8 0 0 1 14 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/><path d="M3.6 8a4.6 4.6 0 0 1 8.8 0" fill="none" stroke="currentColor" stroke-width="2"/><rect x="6.4" y="10.2" width="3.2" height="3.2" fill="currentColor"/></svg>';
+const batt = '<svg viewBox="0 0 26 14" width="26" height="14" aria-hidden="true"><rect x="1" y="1" width="20" height="12" fill="none" stroke="currentColor" stroke-width="2"/><rect x="22" y="4" width="3" height="6" fill="currentColor"/><rect x="3" y="3" width="12" height="8" fill="currentColor"/></svg>';
+
+const CARD_W = 100, CARD_H = 104;
+// Pixel redraw of the ROCKNIXDS DS card (game_slot). The label hole is the
+// transparent window in game_slot.png, aligned to that drawing's 2px grid.
+const CARD_WIN = { x: 12, y: 20, w: 76, h: 66 };
+let shellP = null;
+const artP = new Map();
+const baked = new Map();
+
+const topEl = document.getElementById('top');
+const botEl = document.getElementById('bot');
+const params = new URLSearchParams(location.search);
+let favSet;
+try { favSet = new Set(JSON.parse(sessionStorage.getItem('rnds-fav') || '[]')); }
+catch { favSet = new Set(); }
+const state = {
+  view: ['home','library','launch'].includes(params.get('view')) ? params.get('view') : 'home',
+  system: Math.min(systems.length - 1, Math.max(0, +(params.get('system') || 0))),
+  game: +(params.get('game') || 0),
+  fav: favSet
+};
+let shellKey = '';
+let swiped = false;
+
+function cur() { return systems[state.system]; }
+function list() { return cur().list; }
+function game() {
+  const items = list();
+  state.game = Math.min(items.length - 1, Math.max(0, state.game || 0));
+  return items[state.game];
+}
+function pad(n) { return String(n).padStart(2, '0'); }
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+}
+function glyph(id) {
+  return `<img class="ico" src="${PACK_ICONS[id]}" alt="" draggable="false">`;
+}
+function loadImage(src) {
+  return new Promise((resolve) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = () => resolve(null);
+    im.src = src;
+  });
+}
+function shellImage() {
+  if (!shellP) shellP = loadImage('game_slot.png');
+  return shellP;
+}
+function artImage(src) {
+  if (!artP.has(src)) artP.set(src, loadImage(src));
+  return artP.get(src);
+}
+function cover(ctx, img, x, y, w, h) {
+  const ia = img.width / img.height;
+  const ra = w / h;
+  let dw, dh;
+  if (ia > ra) { dh = h; dw = h * ia; }
+  else { dw = w; dh = w / ia; }
+  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+}
+function bake(src) {
+  if (baked.has(src)) return baked.get(src);
+  const job = (async () => {
+    const [shell, art] = await Promise.all([shellImage(), artImage(src)]);
+    const full = document.createElement('canvas');
+    full.width = CARD_W;
+    full.height = CARD_H;
+    const g = full.getContext('2d');
+    if (art) {
+      g.save();
+      g.beginPath();
+      g.rect(CARD_WIN.x, CARD_WIN.y, CARD_WIN.w, CARD_WIN.h);
+      g.clip();
+      cover(g, art, CARD_WIN.x, CARD_WIN.y, CARD_WIN.w, CARD_WIN.h);
+      g.restore();
+    }
+    if (shell) g.drawImage(shell, 0, 0, CARD_W, CARD_H);
+    return full;
+  })();
+  baked.set(src, job);
+  return job;
+}
+let cartGen = 0;
+function paintCarts() {
+  const gen = ++cartGen;
+  document.querySelectorAll('canvas.cart').forEach(async (node) => {
+    const bmp = await bake(node.dataset.box);
+    if (gen !== cartGen || !node.isConnected) return;
+    const g = node.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.clearRect(0, 0, CARD_W, CARD_H);
+    g.drawImage(bmp, 0, 0);
+  });
+}
+function cart(src) {
+  return `<canvas class="cart" width="${CARD_W}" height="${CARD_H}" data-box="${esc(src)}" aria-hidden="true"></canvas>`;
+}
+function cartBox(src, maxW, maxH) {
+  const s = Math.min(maxW / CARD_W, maxH / CARD_H);
+  return `<div class="cartbox" style="width:${Math.round(CARD_W * s)}px;height:${Math.round(CARD_H * s)}px">${cart(src)}</div>`;
+}
+function delta(i, center, n) {
+  let d = (i - center) % n;
+  if (d < 0) d += n;
+  if (d > n / 2) d -= n;
+  return d;
+}
+function neighbor(dir) {
+  if (state.view === 'home') {
+    const n = systems.length;
+    return systems[(state.system + dir + n) % n].name;
+  }
+  const items = list();
+  return items[(state.game + dir + items.length) % items.length].title;
+}
+function statusHTML() {
+  return `<div class="status"><div class="status-l">${wifi}${batt}<span class="brand"><img src="logo.svg" alt="ROCKNIXDS"></span></div><div class="status-r"><span data-date>——/——</span><b data-clock>—:—</b></div></div>`;
+}
+function tick() {
+  const d = new Date();
+  const date = `${pad(d.getMonth() + 1)}/${pad(d.getDate())}`;
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  document.querySelectorAll('[data-date]').forEach(el => { el.textContent = date; });
+  document.querySelectorAll('[data-clock]').forEach(el => { el.textContent = time; });
+}
+function topHTML() {
+  const s = cur();
+  if (state.view === 'home') {
+    const resume = s.list[s.resume] || s.list[0];
+    return `<div class="view">${statusHTML()}
+      <div class="sheet" style="--sys:${s.accent}">
+        <div class="hero-ico">${glyph(s.id)}</div>
+        <div class="stats">
+          <div><b>${s.games}</b><span>Games</span></div>
+          <div><b>${s.played}</b><span>Played</span></div>
+          <div><b>${esc(s.time)}</b><span>Time</span></div>
+        </div>
+        <div class="chip">${cartBox(resume.box, 54, 56)}<div><span class="eyebrow">Last played</span><b>${esc(resume.title)}</b></div></div>
+      </div>
+    </div>`;
+  }
+  const gm = game();
+  const pct = gm.b ? Math.round(gm.a / gm.b * 100) : 0;
+  const line = state.view === 'launch'
+    ? 'Ready to start. This preview does not boot the game.'
+    : `${esc(gm.genre)} · ${gm.year}. ${gm.plays ? gm.plays + ' plays' : 'Never played'} · ${esc(gm.last)} · ${esc(gm.time)}.`;
+  return `<div class="view">${statusHTML()}
+    <div class="sheet shot" style="--sys:${s.accent}">
+      <p class="cap"><i class="live"></i>${line}</p>
+      <div class="meter" aria-hidden="true"><i style="width:${pct}%"></i></div>
+      <div class="meter-label">${gm.a} / ${gm.b} achievements</div>
+      <div class="photo"><img src="${gm.snap}" alt=""></div>
+    </div>
+  </div>`;
+}
+function faceHTML() {
+  const on = state.fav.has(cur().id) ? ' is-on' : '';
+  const fav = `<button class="favbtn${on}" data-act="fav"><kbd>Y</kbd> Fav</button>`;
+  if (state.view === 'launch') {
+    return `<div class="face"><button data-act="back"><kbd>B</kbd> Back</button><span class="note">Preview only</span></div>`;
+  }
+  if (state.view === 'library') {
+    return `<div class="face"><button data-act="back"><kbd>B</kbd> Back</button>${fav}</div>`;
+  }
+  return `<div class="face">${fav}<button data-act="continue"><kbd>X</kbd> Resume</button></div>`;
+}
+function botHTML() {
+  if (state.view === 'launch') {
+    const gm = game();
+    return `<div class="view">
+      <div class="bubble" style="margin-top:14px"><b data-bind="title"></b><em data-bind="sub"></em><i class="ptr"></i></div>
+      <div class="reel">
+        <div class="plate"></div>
+        <div class="launch-cart">${cart(gm.box)}</div>
+        <div class="ready-word">READY</div>
+      </div>
+      <div class="rail"><div class="track"><i class="thumb"></i></div><div class="count"><b>01</b> / 01</div></div>
+      ${faceHTML()}
+    </div>`;
+  }
+  const home = state.view === 'home';
+  const items = home ? systems : list();
+  const slots = items.map((item, i) => {
+    const inner = home
+      ? glyph(item.id) + `<i class="badge"${state.fav.has(item.id) ? '' : ' hidden'}></i>`
+      : `<div class="fit">${cart(item.box)}</div>`;
+    const cls = home ? 'slot' : 'slot cart-slot';
+    return `<button class="${cls}" data-act="slot" data-i="${i}" aria-label="${esc(home ? item.name : item.title)}">${inner}</button>`;
+  }).join('');
+  return `<div class="view">
+    <div class="shoulders">
+      <button data-act="prev"><kbd>L</kbd><span data-bind="prev"></span></button>
+      <i class="rule"></i>
+      <button class="right" data-act="next"><span data-bind="next"></span><kbd>R</kbd></button>
+    </div>
+    <div class="bubble"><b data-bind="title"></b><em data-bind="sub"></em><i class="ptr"></i></div>
+    <div class="reel"><div class="plate"></div><button class="start" data-act="open">START</button>${slots}</div>
+    <div class="rail"><div class="track"><i class="thumb"></i></div><div class="count"><b data-bind="idx"></b> / <span data-bind="total"></span></div></div>
+    ${faceHTML()}
+  </div>`;
+}
+function paint() {
+  const s = cur();
+  const home = state.view === 'home';
+  const gm = game();
+  const title = botEl.querySelector('[data-bind="title"]');
+  const sub = botEl.querySelector('[data-bind="sub"]');
+  if (title) title.textContent = home ? s.name : gm.title;
+  if (sub) sub.textContent = home ? s.maker : (state.view === 'launch' ? 'Ready' : `${gm.genre} · ${gm.year}`);
+  const prev = botEl.querySelector('[data-bind="prev"]');
+  const next = botEl.querySelector('[data-bind="next"]');
+  if (prev) prev.textContent = neighbor(-1);
+  if (next) next.textContent = neighbor(1);
+  const idx = botEl.querySelector('[data-bind="idx"]');
+  const total = botEl.querySelector('[data-bind="total"]');
+  const n = home ? systems.length : list().length;
+  const at = home ? state.system : state.game;
+  if (idx) idx.textContent = pad(at + 1);
+  if (total) total.textContent = pad(n);
+  const thumb = botEl.querySelector('.thumb');
+  if (thumb) thumb.style.left = n < 2 ? '0px' : `calc(${at} * (100% - 42px) / ${n - 1})`;
+  const fav = botEl.querySelector('.favbtn');
+  if (fav) {
+    fav.classList.toggle('is-on', state.fav.has(s.id));
+  }
+  botEl.querySelectorAll('.slot .badge').forEach((badge, i) => {
+    badge.hidden = !state.fav.has(systems[i].id);
+  });
+  const bubble = botEl.querySelector('.bubble');
+  if (bubble) {
+    bubble.classList.remove('pop');
+    void bubble.offsetWidth;
+    bubble.classList.add('pop');
+  }
+}
+function layout(animate) {
+  const home = state.view === 'home';
+  const n = home ? systems.length : list().length;
+  const center = home ? state.system : state.game;
+  const step = 122;
+  botEl.querySelectorAll('.slot').forEach(el => {
+    const d = delta(+el.dataset.i, center, n);
+    const prev = el._d;
+    const jump = prev != null && Math.abs(d - prev) > 2;
+    el._d = d;
+    el.style.transition = (!animate || jump) ? 'none' : 'transform .42s cubic-bezier(.2,1.4,.32,1), opacity .24s steps(4, end)';
+    const hide = Math.abs(d) > 3;
+    el.style.opacity = hide ? '0' : '1';
+    el.style.pointerEvents = hide ? 'none' : 'auto';
+    el.style.zIndex = d === 0 ? '4' : String(3 - Math.min(Math.abs(d), 2));
+    const scale = d === 0 ? 1 : 0.84;
+    el.style.transform = `translate(calc(-50% + ${d * step}px), 0) scale(${scale})`;
+    el.classList.toggle('is-on', d === 0);
+    el.setAttribute('aria-current', d === 0 ? 'true' : 'false');
+  });
+}
+function render(animate) {
+  topEl.innerHTML = topHTML();
+  const key = state.view === 'home' ? 'home' : state.view === 'library' ? 'lib-' + cur().id : 'launch-' + cur().id + '-' + state.game;
+  if (shellKey !== key) {
+    shellKey = key;
+    botEl.innerHTML = botHTML();
+    layout(false);
+  } else {
+    layout(animate);
+  }
+  paint();
+  paintCarts();
+  tick();
+  const hint = document.getElementById('hint');
+  hint.textContent = state.view === 'home'
+    ? 'L and R move between systems. START opens the shelf. X resumes the last game. Y favorites. The top screen is display only.'
+    : state.view === 'library'
+    ? 'L and R move between games. START opens the ready screen. B goes back. The top screen shows the screenshot.'
+    : 'Ready screen only. B returns to the shelf. The game does not start.';
+}
+function setSystem(i) {
+  const n = systems.length;
+  state.system = (i + n) % n;
+  state.game = cur().resume || 0;
+  render(true);
+}
+function setGame(i) {
+  const n = list().length;
+  state.game = (i + n) % n;
+  render(true);
+}
+function nudge(dir) {
+  if (state.view === 'home') setSystem(state.system + dir);
+  else if (state.view === 'library') setGame(state.game + dir);
+}
+function open() {
+  if (state.view === 'home') {
+    state.game = cur().resume || 0;
+    state.view = 'library';
+    render(false);
+  } else if (state.view === 'library') {
+    state.view = 'launch';
+    render(false);
+  }
+}
+function back() {
+  if (state.view === 'launch') { state.view = 'library'; render(false); }
+  else if (state.view === 'library') { state.view = 'home'; render(false); }
+}
+function toggleFav() {
+  const id = cur().id;
+  if (state.fav.has(id)) state.fav.delete(id); else state.fav.add(id);
+  sessionStorage.setItem('rnds-fav', JSON.stringify([...state.fav]));
+  if (state.view !== 'launch') render(false);
+}
+function resume() {
+  if (state.view !== 'home') return;
+  state.game = cur().resume || 0;
+  state.view = 'launch';
+  render(false);
+}
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#top')) return;
+  const t = e.target.closest('[data-act]');
+  if (!t || swiped) { swiped = false; return; }
+  const act = t.dataset.act;
+  if (act === 'slot') {
+    const i = +t.dataset.i;
+    if (state.view === 'home') { if (i === state.system) open(); else setSystem(i); }
+    else if (state.view === 'library') { if (i === state.game) open(); else setGame(i); }
+  } else if (act === 'prev') nudge(-1);
+  else if (act === 'next') nudge(1);
+  else if (act === 'open') open();
+  else if (act === 'back') back();
+  else if (act === 'fav') toggleFav();
+  else if (act === 'continue') resume();
+});
+addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key;
+  if (['ArrowLeft','ArrowRight','Enter','Escape','Backspace'].includes(k) || 'abxyrlABXYRL'.includes(k)) e.preventDefault();
+  if (k === 'ArrowLeft' || k === 'l' || k === 'L') nudge(-1);
+  else if (k === 'ArrowRight' || k === 'r' || k === 'R') nudge(1);
+  else if (k === 'Enter' || k === 'a' || k === 'A') open();
+  else if (k === 'Escape' || k === 'Backspace' || k === 'b' || k === 'B') back();
+  else if (k === 'x' || k === 'X') resume();
+  else if (k === 'y' || k === 'Y') toggleFav();
+});
+botEl.addEventListener('pointerdown', (e) => { botEl._x = e.clientX; botEl._y = e.clientY; swiped = false; });
+botEl.addEventListener('pointerup', (e) => {
+  const dx = e.clientX - botEl._x, dy = e.clientY - botEl._y;
+  if (Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy) * 1.2) { swiped = true; nudge(dx < 0 ? 1 : -1); }
+});
+function fit() {
+  const fitEl = document.getElementById('fit');
+  const wrap = document.querySelector('.fit-wrap');
+  fitEl.style.transform = 'none';
+  const w = fitEl.offsetWidth, h = fitEl.offsetHeight;
+  const scale = Math.min((innerWidth - 24) / w, (innerHeight - 86) / h, 1.15);
+  fitEl.style.transform = `scale(${scale})`;
+  wrap.style.height = Math.ceil(h * scale) + 'px';
+  wrap.style.width = Math.ceil(w * scale) + 'px';
+}
+addEventListener('resize', fit);
+render(false);
+fit();
+setInterval(tick, 10000);
+</script>
+</body>
+</html>
