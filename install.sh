@@ -172,7 +172,7 @@ if [ $UNINSTALL = 1 ]; then
     B=$BACKUP/storage
     if [ $RESTORE_FILES = 1 ]; then
         # whole files from the install-time copies (what 1.2 always did): also undoes settings made since
-        [ -d $B ] && ( cd $BACKUP && find ./storage -type f ) | while read -r f; do
+        [ -d $B ] && ( cd $BACKUP && find ./storage -type f ! -name "*.rocknixds-absent" ) | while read -r f; do
             p=${f#.}
             mkdir -p "$(dirname "$p")"; cp -a "$BACKUP$p" "$p"
         done
