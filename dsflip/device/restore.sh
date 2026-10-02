@@ -29,9 +29,10 @@ if [ -f /tmp/dsflip-pw-rates ]; then             # session.sh forced 44.1 kHz: P
     else XDG_RUNTIME_DIR=$RT pw-metadata -n settings -d 0 clock.allowed-rates >/dev/null 2>&1; fi
     rm -f /tmp/dsflip-pw-rates
 fi
-# Resume-on-quit wrote "-USR1 drastic" for the exit hotkey; put ROCKNIX's default back so a later non-DS
-# launcher (or a session that skipped resume) is not left signalling USR1.
-[ -f /tmp/.process-kill-data ] && grep -q -- '-USR1 drastic' /tmp/.process-kill-data 2>/dev/null && echo "-9" > /tmp/.process-kill-data
+# Resume-on-quit wrote "-USR1 drastic" for the exit hotkey; put stock's target back so a later non-DS
+# launcher (or a session that skipped resume) is not left signalling USR1. "-9" alone is not that
+# target: killall needs the process name (start_drastic.sh writes "-9 drastic").
+[ -f /tmp/.process-kill-data ] && grep -qx -- '-USR1 drastic' /tmp/.process-kill-data 2>/dev/null && echo "-9 drastic" > /tmp/.process-kill-data
 sway_has_outputs() {
     SOCK=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
     [ -n "$SOCK" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$SOCK" -t get_outputs 2>/dev/null | grep -q '"active": true'
