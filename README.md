@@ -22,6 +22,13 @@
 </p>
 <p align="center"><sub>The main menu, the game list, and Pokémon HeartGold at 2× internal resolution (captured from the panels' scanout buffers).</sub></p>
 
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/img/transparency-disclaimer-dark.svg">
+    <img src="docs/img/transparency-disclaimer.svg" width="100%" alt="Transparency disclaimer: 99% of all the code work has been made by AI under human supervision. A large majority of project planning, testing and design ideas have been made by me with my own ideas and with inspiration from other people's works. All of those people have been credited under the credits section. Due to the obvious AI involvement it is important for me to acknowledge the obvious technical debt as a result of this and this is why every ai made file or library or whatever is free for anyone to use under all circumstances and for whatever project or purpose they might feel fit. /JorreFog">
+  </picture>
+</p>
+
 The Anbernic RG DS is a clamshell handheld with two 640×480 touch panels and an RK3566 (4× Cortex-A55,
 Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [ROCKNIX](https://rocknix.org) install:
 

@@ -1,0 +1,46 @@
+# Scheduled workflows run from the default branch only, so this file lives on main.
+# ROCKNIXDS on the device posts a performance session to ntfy.sh when a game quits;
+# this commits that file onto device-logs. It never pushes main or beta.
+# GitHub delays or drops schedules that land on minute 0, 15, 30, or 45, and a
+# "*/15" schedule on this workflow produced no runs at all. These minutes stay
+# off that rush and repeat every 5 minutes, which is as often as GitHub allows.
+name: device performance logs
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "1,6,11,16,21,26,31,36,41,46,51,56 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/perf-logs.yml
+      - .github/ingest-perf.py
+permissions:
+  contents: write
+concurrency:
+  group: device-performance-logs
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: importer
+      - uses: actions/checkout@v4
+        with:
+          ref: device-logs
+          path: device-logs
+      - run: python3 importer/.github/ingest-perf.py device-logs
+      - name: commit imported logs
+        working-directory: device-logs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data/device
+          if git diff --cached --quiet; then
+            echo "nothing new"
+            exit 0
+          fi
+          git commit -m "perf: import device logs"
+          git push origin HEAD:device-logs
