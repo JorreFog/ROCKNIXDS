@@ -59,10 +59,10 @@ index 90df9a9b..75714e3d 100644
  			else if (complete || SDL_GetTicks() - firstFrame > 3000)
 diff --git a/es-app/src/rnds/RndsEs.cpp b/es-app/src/rnds/RndsEs.cpp
 new file mode 100644
-index 00000000..236bbfc1
+index 00000000..72249db8
 --- /dev/null
 +++ b/es-app/src/rnds/RndsEs.cpp
-@@ -0,0 +1,1051 @@
+@@ -0,0 +1,1054 @@
 +#include "rnds/RndsEs.h"
 +#include "rnds/RndsUI.h"
 +
@@ -574,8 +574,11 @@ index 00000000..236bbfc1
 +
 +		static std::string year(FileData* f)
 +		{
++			// ES writes a missing date as "not-a-date-time": a year is four digits, and not 0000
 +			std::string r = f->getMetadata(MetaDataId::ReleaseDate);
-+			return r.size() >= 4 && r.substr(0, 4) != "0000" ? r.substr(0, 4) : "";
++			if (r.size() < 4 || r.substr(0, 4) == "0000") return "";
++			for (int i = 0; i < 4; i++) if (r[i] < '0' || r[i] > '9') return "";
++			return r.substr(0, 4);
 +		}
 +
 +		// a name as the engine shows it: no file-name leftovers ("(USA, Europe)", "[!]", underscores)
@@ -1185,10 +1188,10 @@ index 00000000..85770a09
 +}
 diff --git a/es-app/src/rnds/RndsRaster.cpp b/es-app/src/rnds/RndsRaster.cpp
 new file mode 100644
-index 00000000..cfa9c6c4
+index 00000000..e5b38010
 --- /dev/null
 +++ b/es-app/src/rnds/RndsRaster.cpp
-@@ -0,0 +1,820 @@
+@@ -0,0 +1,851 @@
 +#include "RndsRaster.h"
 +
 +#include <ft2build.h>
@@ -1913,6 +1916,37 @@ index 00000000..cfa9c6c4
 +		return mn > 190 && mx - mn < 40 && p[3] > 128;
 +	}
 +
++	// a row or column that is plain: mostly near-white, or one flat colour (a label's white margin, the card's plastic)
++	static bool plainLine(const Bitmap& b, int x0, int y0, int dx, int dy, int n)
++	{
++		int white = 0, cnt = 0;
++		double sum = 0, sum2 = 0;
++		for (int i = 0; i < n; i += 2, cnt++)
++		{
++			const uint8_t* p = &b.px[((size_t)(y0 + dy * i) * b.w + (x0 + dx * i)) * 4];
++			if (nearWhite(p) || p[3] < 128) white++;
++			double l = 0.3 * p[0] + 0.59 * p[1] + 0.11 * p[2];
++			sum += l; sum2 += l * l;
++		}
++		if (cnt == 0) return true;
++		double m = sum / cnt, sd = std::sqrt(std::max(0.0, sum2 / cnt - m * m));
++		return white > cnt * 6 / 10 || sd < 10;
++	}
++
++	// trims plain edges (up to a quarter of each side), so the picture inside fills what it is fitted to
++	static Bitmap trimPlain(const Bitmap& b)
++	{
++		if (b.empty() || b.alpha) return b;
++		int x0 = 0, y0 = 0, x1 = b.w - 1, y1 = b.h - 1;
++		while (x0 < b.w / 4 && plainLine(b, x0, y0, 0, 1, y1 - y0 + 1)) x0++;
++		while (x1 > b.w * 3 / 4 && plainLine(b, x1, y0, 0, 1, y1 - y0 + 1)) x1--;
++		while (y0 < b.h / 4 && plainLine(b, x0, y0, 1, 0, x1 - x0 + 1)) y0++;
++		while (y1 > b.h * 3 / 4 && plainLine(b, x0, y1, 1, 0, x1 - x0 + 1)) y1--;
++		// and one more pixel: the edge of the art itself is often a thin line
++		x0 = std::min(x0 + 1, x1); y0 = std::min(y0 + 1, y1); x1 = std::max(x1 - 1, x0); y1 = std::max(y1 - 1, y0);
++		return crop(b, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
++	}
++
 +	Bitmap cardLabelArt(const Bitmap& scan)
 +	{
 +		if (scan.empty() || scan.alpha) return Bitmap();
@@ -1957,7 +1991,7 @@ index 00000000..cfa9c6c4
 +			// where the art sits on a DS card's label when the scan doesn't say
 +			ay0 = y0 + ch * 20 / 100; ay1 = y0 + ch * 76 / 100;
 +		}
-+		return crop(scan, lx0, ay0, lx1 - lx0 + 1, ay1 - ay0 + 1);
++		return trimPlain(crop(scan, lx0, ay0, lx1 - lx0 + 1, ay1 - ay0 + 1));
 +	}
 +
 +	Bitmap coverWithoutStrip(const Bitmap& box)
@@ -1974,7 +2008,7 @@ index 00000000..cfa9c6c4
 +		}
 +		if (x <= box.w * 4 / 100) return box;
 +		x = std::max(x, box.w * 135 / 1000) + 2;
-+		return crop(box, x, 0, box.w - x, box.h);
++		return trimPlain(crop(box, x, 0, box.w - x, box.h));
 +	}
 +
 +	void containSize(int iw, int ih, int bw, int bh, float& outW, float& outH)
@@ -2190,10 +2224,10 @@ index 00000000..fd1e242b
 +}
 diff --git a/es-app/src/rnds/RndsUI.cpp b/es-app/src/rnds/RndsUI.cpp
 new file mode 100644
-index 00000000..54b022c1
+index 00000000..647879ad
 --- /dev/null
 +++ b/es-app/src/rnds/RndsUI.cpp
-@@ -0,0 +1,1693 @@
+@@ -0,0 +1,1703 @@
 +#include "RndsUI.h"
 +
 +#include <algorithm>
@@ -3280,6 +3314,16 @@ index 00000000..54b022c1
 +			const float L = 300, W = 296;
 +			TStyle tt = ts(true, 26, 0.52f), tsb = ts(false, 20);
 +			std::vector<TextLine> tl = layoutWrap(utf8to32(gm.title), tstyle(tt), (int)W, 2);
++			// no word left alone on the second line ("Pokemon Black Version / 2"): narrow the first line until they balance
++			for (int w = (int)W - 16; tl.size() == 2 && tl[1].width < tl[0].width * 0.35f && w > W * 0.55f; w -= 16)
++			{
++				std::vector<TextLine> t2 = layoutWrap(utf8to32(gm.title), tstyle(tt), w, 2);
++				if (t2.size() != 2 || t2[1].text.size() < tl[1].text.size()) break;
++				bool cut = false;
++				for (auto& l : t2) if (!l.text.empty() && l.text.back() == U'\u2026') cut = true;
++				if (cut) break;
++				tl = t2;
++			}
 +			bool launch = ui->mView == LAUNCH;
 +			std::string subText = launch ? "Starting..." : gm.sub;
 +			TextLine sl = layoutEllipsis(utf8to32(subText), tstyle(tsb), (int)(W - (launch ? 16 : 0)));
@@ -4210,7 +4254,7 @@ index 407aaf48..4a80816d 100644
  	float			mExtraTransitionSpeed;
  	bool			mExtraTransitionHorizontal;
 diff --git a/es-app/src/views/ViewController.cpp b/es-app/src/views/ViewController.cpp
-index 59153c8c..500826d2 100644
+index 59153c8c..9bd152a5 100644
 --- a/es-app/src/views/ViewController.cpp
 +++ b/es-app/src/views/ViewController.cpp
 @@ -10,6 +10,8 @@
@@ -4282,6 +4326,17 @@ index 59153c8c..500826d2 100644
 +	if (selectedViewType != GRID || rndsView)
  	{
  		// GridGameListView theme needs to be loaded before populating.
+ 
+@@ -1292,6 +1323,10 @@ std::vector<HelpPrompt> ViewController::getHelpPrompts()
+ 
+ 	prompts = mCurrentView->getHelpPrompts();
+ 
++	// ROCKNIXDS: the rnds engine draws its own buttons; ES's help bar would only show START (MENU) over its top screen
++	if (getState().system != nullptr && rnds::isRndsTheme(getState().system->getTheme()))
++		return prompts;
++
+ 	if (!UIModeController::getInstance()->isUIModeKid())
+ 		prompts.push_back(HelpPrompt("start", _("MENU"), [&] { mWindow->pushGui(new GuiMenu(mWindow)); }));
  
 diff --git a/es-app/src/views/gamelist/RndsGameListView.cpp b/es-app/src/views/gamelist/RndsGameListView.cpp
 new file mode 100644
