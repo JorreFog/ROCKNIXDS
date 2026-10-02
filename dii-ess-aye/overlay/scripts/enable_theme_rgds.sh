@@ -62,7 +62,7 @@ fi
 # theme, starts on dii-ess-aye; dark and light are in the theme menu.
 CURRENT_THEME=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' "$ES_SETTINGS" 2>/dev/null)
 case "$CURRENT_THEME" in
-    dii-ess-aye|canvas-ds|rocknixds-dark|rocknixds-light) ;;
+    dii-ess-aye|canvas-ds|rocknixds-dark|rocknixds-light|rocknixds-pixel) ;;
     *)
         if grep -q '<string name="ThemeSet"' "$ES_SETTINGS" 2>/dev/null; then
             sed -i 's|<string name="ThemeSet" value="[^"]*" />|<string name="ThemeSet" value="dii-ess-aye" />|' "$ES_SETTINGS"

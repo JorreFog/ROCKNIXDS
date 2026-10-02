@@ -36,7 +36,7 @@ if [ -f /tmp/dsflip-vt ]; then
         S=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
         THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
         case "$THEME_SET" in
-            ""|dii-ess-aye|canvas-ds|rocknixds-dark|rocknixds-light)
+            ""|dii-ess-aye|canvas-ds|rocknixds-dark|rocknixds-light|rocknixds-pixel)
                 [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" '[app_id="emulationstation"] floating enable, fullscreen disable, resize set 1920 480, move absolute position 0 0' >/dev/null 2>&1
                 ;;
         esac

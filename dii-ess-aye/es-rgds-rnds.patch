@@ -1,0 +1,4175 @@
+diff --git a/es-app/CMakeLists.txt b/es-app/CMakeLists.txt
+index 218e787a..0bbc370f 100644
+--- a/es-app/CMakeLists.txt
++++ b/es-app/CMakeLists.txt
+@@ -119,6 +119,10 @@ set(ES_HEADERS
+     # Views
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/views/gamelist/BasicGameListView.h
+ 	${CMAKE_CURRENT_SOURCE_DIR}/src/views/gamelist/CarouselGameListView.h
++	${CMAKE_CURRENT_SOURCE_DIR}/src/views/gamelist/RndsGameListView.h
++	${CMAKE_CURRENT_SOURCE_DIR}/src/rnds/RndsRaster.h
++	${CMAKE_CURRENT_SOURCE_DIR}/src/rnds/RndsUI.h
++	${CMAKE_CURRENT_SOURCE_DIR}/src/rnds/RndsEs.h
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/views/gamelist/DetailedGameListView.h
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/views/gamelist/IGameListView.h
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/views/gamelist/ISimpleGameListView.h
+@@ -226,6 +230,10 @@ set(ES_SOURCES
+     # Views
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/views/gamelist/BasicGameListView.cpp
+ 	${CMAKE_CURRENT_SOURCE_DIR}/src/views/gamelist/CarouselGameListView.cpp
++	${CMAKE_CURRENT_SOURCE_DIR}/src/views/gamelist/RndsGameListView.cpp
++	${CMAKE_CURRENT_SOURCE_DIR}/src/rnds/RndsRaster.cpp
++	${CMAKE_CURRENT_SOURCE_DIR}/src/rnds/RndsUI.cpp
++	${CMAKE_CURRENT_SOURCE_DIR}/src/rnds/RndsEs.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/views/gamelist/DetailedGameListView.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/views/gamelist/IGameListView.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/views/gamelist/ISimpleGameListView.cpp
+diff --git a/es-app/src/main.cpp b/es-app/src/main.cpp
+index 90df9a9b..75714e3d 100644
+--- a/es-app/src/main.cpp
++++ b/es-app/src/main.cpp
+@@ -3,6 +3,7 @@
+ 
+ #include <chrono>
+ #include "services/HttpServerThread.h"
++#include "rnds/RndsEs.h"
+ #include "guis/GuiDetectDevice.h"
+ #include "guis/GuiMsgBox.h"
+ #include "utils/FileSystemUtil.h"
+@@ -773,6 +774,11 @@ int main(int argc, char* argv[])
+ 			int toMinute = msToNextMinute();
+ 			if (timeout <= 0 || timeout > toMinute)
+ 				timeout = toMinute;
++			// ROCKNIXDS: and when the rnds engine's looping animations take their next step (they move in steps, so
++			// the menu draws a frame per step instead of 60 a second)
++			int rndsWake = rnds::nextWake();
++			if (rndsWake >= 0 && timeout > std::max(rndsWake, 1))
++				timeout = std::max(rndsWake, 1);
+ 			// and the audio after a minute without input, not sooner: reopening delays the next press, and quick browsing
+ 			// shouldn't wait for it
+ 			if ((int)(SDL_GetTicks() - ps_time) > 60000)
+@@ -929,7 +935,7 @@ int main(int argc, char* argv[])
+ 			if (drawnFrames++ == 0)
+ 				firstFrame = SDL_GetTicks();
+ 			const char* drawnPath = getenv("RGDS_ES_DRAWN");
+-			bool complete = drawnFrames >= 3 && TextureResource::getQueueSize() == 0;
++			bool complete = drawnFrames >= 3 && TextureResource::getQueueSize() == 0 && rnds::settled();	// rnds: its pictures too
+ 			if (!drawnPath || !*drawnPath)
+ 				drawnFrames = -1;
+ 			else if (complete || SDL_GetTicks() - firstFrame > 3000)
+diff --git a/es-app/src/rnds/RndsEs.cpp b/es-app/src/rnds/RndsEs.cpp
+new file mode 100644
+index 00000000..55d8a2ec
+--- /dev/null
++++ b/es-app/src/rnds/RndsEs.cpp
+@@ -0,0 +1,1000 @@
++#include "rnds/RndsEs.h"
++#include "rnds/RndsUI.h"
++
++#include "views/SystemView.h"
++#include "views/ViewController.h"
++#include "views/gamelist/RndsGameListView.h"
++#include "guis/GuiMenu.h"
++#include "CollectionSystemManager.h"
++#include "FileData.h"
++#include "ImageIO.h"
++#include "InputConfig.h"
++#include "Log.h"
++#include "Paths.h"
++#include "PowerSaver.h"
++#include "RetroAchievements.h"
++#include "Settings.h"
++#include "Sound.h"
++#include "SystemConf.h"
++#include "SystemData.h"
++#include "ThemeData.h"
++#include "Window.h"
++#include "math/Transform4x4f.h"
++#include "renderers/Renderer.h"
++#include "resources/ResourceManager.h"
++#include "utils/FileSystemUtil.h"
++#include "utils/StringUtil.h"
++#include "utils/TimeUtil.h"
++#include "watchers/BatteryLevelWatcher.h"
++#include "watchers/NetworkStateWatcher.h"
++#include "watchers/WatchersManager.h"
++
++#include <SDL.h>
++#include <atomic>
++#include <condition_variable>
++#include <cstdio>
++#include <ctime>
++#include <fstream>
++#include <map>
++#include <mutex>
++#include <set>
++#include <sstream>
++#include <thread>
++
++namespace rnds
++{
++	bool isRndsTheme(const std::shared_ptr<ThemeData>& theme) { return theme != nullptr && theme->hasView("rnds"); }
++
++	// ---- images: ES's decoder (FreeImage), rows flipped to top-down ----------------------------------------------------
++	static Bitmap esDecode(const std::string& path)
++	{
++		Bitmap b;
++		std::ifstream f(path, std::ios::binary);
++		if (!f)
++			return b;
++		std::vector<unsigned char> data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
++		if (data.empty())
++			return b;
++		size_t w = 0, h = 0;
++		MaxSizeInfo cap(1280, 1280);	// box art and screenshots are shown far smaller
++		unsigned char* px = ImageIO::loadFromMemoryRGBA32(data.data(), data.size(), w, h, &cap);
++		if (!px)
++			return b;
++		b.w = (int)w; b.h = (int)h;
++		b.px.resize(w * h * 4);
++		for (size_t y = 0; y < h; y++)
++			memcpy(&b.px[y * w * 4], px + (h - 1 - y) * w * 4, w * 4);
++		delete[] px;
++		return b;
++	}
++
++	// ---- GL backend ---------------------------------------------------------------------------------------------------
++	struct GlTex : Tex
++	{
++		unsigned int id = 0;
++		~GlTex() { if (id) Renderer::destroyTexture(id); }
++	};
++
++	class GlBackend : public Backend
++	{
++	public:
++		Transform4x4f base = Transform4x4f::Identity();
++		float originX[2] = { 0, 0 };
++		bool dual = true;
++		int screen = 0;
++		bool skip = false;
++		std::vector<Renderer::Rect> clips;
++
++		TexPtr upload(const Bitmap& b, bool smooth) override
++		{
++			auto t = std::make_shared<GlTex>();
++			if (b.empty())
++				return t;
++			t->w = b.w; t->h = b.h; t->alpha = b.alpha;
++			t->id = Renderer::createTexture(b.alpha ? Renderer::Texture::ALPHA : Renderer::Texture::RGBA, smooth, false, b.w, b.h, (void*)b.px.data());
++			return t;
++		}
++
++		Transform4x4f screenTrans()
++		{
++			Transform4x4f t = base;
++			t.translate(Vector3f(originX[screen], 0, 0));
++			return t;
++		}
++
++		void beginScreen(int s) override
++		{
++			screen = s;
++			skip = !dual && s == 0;	// one panel only: the interactive (bottom) screen
++			if (skip)
++				return;
++			Transform4x4f t = screenTrans();
++			int w = (int)Math::round(Renderer::getScreenWidth() / (dual ? 3.0f : 1.0f)), h = Renderer::getScreenHeight();
++			Renderer::pushClipRect(Vector2i((int)Math::round(t.translation().x()), (int)Math::round(t.translation().y())), Vector2i(w, h));
++		}
++
++		void endScreen() override
++		{
++			if (!skip)
++				Renderer::popClipRect();
++		}
++
++		void draw(const TexPtr& tp, float x, float y, float w, float h, const Color& tint) override
++		{
++			auto t = (GlTex*)tp.get();
++			if (skip || !t || !t->id || w <= 0 || h <= 0)
++				return;
++			Renderer::setMatrix(screenTrans());
++			Renderer::bindTexture(t->id);
++			const unsigned int col = Renderer::convertColor(tint.rgba8());
++			Renderer::Vertex v[4];
++			v[0] = { { x, y }, { 0.0f, 0.0f }, col };
++			v[1] = { { x, y + h }, { 0.0f, 1.0f }, col };
++			v[2] = { { x + w, y }, { 1.0f, 0.0f }, col };
++			v[3] = { { x + w, y + h }, { 1.0f, 1.0f }, col };
++			Renderer::drawTriangleStrips(v, 4);
++		}
++
++		void fill(float x, float y, float w, float h, const Color& c) override
++		{
++			if (skip || w <= 0 || h <= 0)
++				return;
++			Renderer::setMatrix(screenTrans());
++			Renderer::drawRect(x, y, w, h, c.rgba8(), c.rgba8());
++		}
++
++		void pushClip(float x, float y, float w, float h) override
++		{
++			if (skip)
++				return;
++			Transform4x4f t = screenTrans();
++			Renderer::pushClipRect(Vector2i((int)Math::round(t.translation().x() + x), (int)Math::round(t.translation().y() + y)), Vector2i((int)Math::round(w), (int)Math::round(h)));
++		}
++
++		void popClip() override
++		{
++			if (!skip)
++				Renderer::popClipRect();
++		}
++	};
++
++	// ---- per-system look: the theme's rnds/systems.cfg ------------------------------------------------------------------
++	struct SysLook { std::string icon; Color accent; bool hasAccent = false; std::string maker; };
++
++	// ---- RetroAchievements progress, fetched in the background for the selected game -----------------------------------
++	class RaProgress
++	{
++	public:
++		struct Entry { int a = 0, b = 0; int state = 0; };	// state: 0 none, 1 known, 2 pending, 3 failed
++
++		RaProgress()
++		{
++			mPath = Paths::getUserEmulationStationPath() + "/rnds-achievements.cfg";
++			std::ifstream f(mPath);
++			int id, a, b;
++			while (f >> id >> a >> b)
++				mMap[id] = Entry{ a, b, 1 };
++			mThread = std::thread([this] { run(); });
++		}
++
++		~RaProgress()
++		{
++			{
++				std::lock_guard<std::mutex> l(mLock);
++				mStop = true;
++			}
++			mCv.notify_all();
++			if (mThread.joinable())
++				mThread.join();
++		}
++
++		Entry get(int id, bool refresh)
++		{
++			std::lock_guard<std::mutex> l(mLock);
++			Entry e = mMap.count(id) ? mMap[id] : Entry();
++			bool fresh = mFetched.count(id) > 0;
++			if ((!fresh || refresh) && mWant != id)
++			{
++				mWant = id;
++				mCv.notify_all();
++			}
++			return e;
++		}
++
++		void forget(int id)	// after the game was played: fetch again next time
++		{
++			std::lock_guard<std::mutex> l(mLock);
++			mFetched.erase(id);
++		}
++
++		std::function<void()> changed;
++
++	private:
++		void run()
++		{
++			while (true)
++			{
++				int id;
++				{
++					std::unique_lock<std::mutex> l(mLock);
++					mCv.wait(l, [this] { return mStop || mWant > 0; });
++					if (mStop)
++						return;
++					id = mWant;
++					mWant = 0;
++				}
++				// ES's own client; with a delay, so browsing quickly doesn't send a request per game
++				SDL_Delay(350);
++				{
++					std::lock_guard<std::mutex> l(mLock);
++					if (mStop) return;
++					if (mWant > 0 && mWant != id) continue;	// moved on
++				}
++				GameInfoAndUserProgress info = RetroAchievements::getGameInfoAndUserProgress(id);
++				bool ok = info.ID == id;
++				{
++					std::lock_guard<std::mutex> l(mLock);
++					mFetched.insert(id);
++					if (ok)
++					{
++						mMap[id] = Entry{ info.NumAwardedToUser, info.NumAchievements, 1 };
++						std::ofstream f(mPath);
++						for (auto& kv : mMap)
++							if (kv.second.state == 1)
++								f << kv.first << " " << kv.second.a << " " << kv.second.b << "\n";
++					}
++				}
++				if (changed)
++					changed();
++			}
++		}
++
++		std::mutex mLock;
++		std::condition_variable mCv;
++		std::map<int, Entry> mMap;
++		std::set<int> mFetched;
++		int mWant = 0;
++		bool mStop = false;
++		std::string mPath;
++		std::thread mThread;
++	};
++
++	// ---- the host -----------------------------------------------------------------------------------------------------
++	static EsHost* sHost = nullptr;
++
++	// ES unloads its resources before it destroys the GL context for a game (Window::deinit); the engine's textures go
++	// with them and are made again when next drawn
++	struct TextureReleaser : IReloadable
++	{
++		std::function<void()> drop;
++		bool unload() override { if (drop) drop(); return true; }
++		void reload() override {}
++	};
++
++	struct EsHost::Impl : public Source
++	{
++		Window* window;
++		GlBackend backend;
++		std::unique_ptr<UI> ui;
++		std::string assetDir;
++		float scale = 1;
++
++		SystemView* systemView = nullptr;
++		std::set<RndsGameListView*> lists;
++		RndsGameListView* list = nullptr;	// the library's list
++		GuiComponent* shown = nullptr;		// the ES view the engine is drawing for
++		std::vector<SystemData*> systems;
++		std::map<std::string, SysLook> looks;
++		std::map<SystemData*, FileData*> resumeCache;
++		bool busy = false;					// inside an engine action: ES's view callbacks are ours
++		bool psPaused = false;
++		std::atomic<bool> pendingRefresh{ false };
++		int launchedCheevos = 0;
++
++		// worker
++		std::thread worker;
++		std::mutex uiLock;	// held while a job runs and while the UI is replaced
++		std::mutex wlock;
++		std::condition_variable wcv;
++		bool wstop = false, wwork = false;
++
++		std::unique_ptr<RaProgress> ra;
++		std::shared_ptr<TextureReleaser> releaser;
++
++		Impl(Window* w) : window(w)
++		{
++			setDecoder(esDecode);
++			releaser = std::make_shared<TextureReleaser>();
++			releaser->drop = [this] { if (ui) ui->dropTextures(); };
++			ResourceManager::getInstance()->addReloadable(releaser);
++			worker = std::thread([this] { work(); });
++		}
++
++		~Impl()
++		{
++			{
++				std::lock_guard<std::mutex> l(wlock);
++				wstop = true;
++			}
++			wcv.notify_all();
++			if (worker.joinable())
++				worker.join();
++			ui.reset();
++		}
++
++		void work()
++		{
++			while (true)
++			{
++				{
++					std::unique_lock<std::mutex> l(wlock);
++					wcv.wait(l, [this] { return wstop || wwork; });
++					if (wstop) return;
++					wwork = false;
++				}
++				while (true)
++				{
++					{
++						std::lock_guard<std::mutex> l(wlock);
++						if (wstop) return;
++					}
++					std::lock_guard<std::mutex> l(uiLock);	// the UI is not replaced while a job runs
++					if (!ui || !ui->workOnce())
++						break;
++				}
++			}
++		}
++
++		void kickWorker()
++		{
++			{
++				std::lock_guard<std::mutex> l(wlock);
++				wwork = true;
++			}
++			wcv.notify_all();
++		}
++
++		// ---- setup ----
++		std::string themeAssetDir(SystemData* sys)
++		{
++			if (sys == nullptr || sys->getTheme() == nullptr)
++				return "";
++			auto elem = sys->getTheme()->getElement("rnds", "assets", "image");
++			if (elem == nullptr || !elem->has("path"))
++				return "";
++			return Utils::FileSystem::getParent(elem->get<std::string>("path"));
++		}
++
++		bool ensureUI()
++		{
++			SystemData* first = systems.size() ? systems[0] : (SystemData::sSystemVector.size() ? SystemData::sSystemVector[0] : nullptr);
++			std::string dir = themeAssetDir(first);
++			int W = Renderer::getScreenWidth(), H = Renderer::getScreenHeight();
++			backend.dual = W * 3 >= H * 4 * 3 - 3;		// 1920x480 / 3072x768: three panels side by side
++			float panelW = backend.dual ? W / 3.0f : (float)W;
++			float s = H / 480.0f;
++			backend.originX[0] = 0;
++			backend.originX[1] = backend.dual ? panelW : 0;
++			if (dir.empty())
++				return false;
++			if (ui && dir == assetDir && std::fabs(s - scale) < 0.001f)
++				return true;
++			std::lock_guard<std::mutex> l(uiLock);
++			ui.reset();
++			assetDir = dir;
++			scale = s;
++			ui.reset(new UI(this, &backend, dir, s));
++			// a finished picture only needs a frame (it is uploaded in update)
++			ui->setNotifiers([this] { kickWorker(); }, [] { PowerSaver::pushRefreshEvent(); });
++			loadLooks();
++			LOG(LogInfo) << "rnds: engine on " << W << "x" << H << " (" << (backend.dual ? "two panels" : "one panel") << ", scale " << s << "), assets " << dir;
++			if (!ra)
++			{
++				ra.reset(new RaProgress());
++				ra->changed = [this] { pendingRefresh = true; PowerSaver::pushRefreshEvent(); };
++			}
++			return true;
++		}
++
++		void loadLooks()
++		{
++			looks.clear();
++			std::ifstream f(assetDir + "/systems.cfg");
++			std::string ln;
++			while (std::getline(f, ln))
++			{
++				// <system>[,<system>...]  <icon file>  <#accent>  [maker...]
++				if (ln.empty() || ln[0] == '#')
++					continue;
++				std::istringstream is(ln);
++				std::string names, icon, accent, maker;
++				if (ln[0] == '@')
++				{
++					// @<maker name>  <#accent>
++					size_t hash = ln.rfind('#');
++					if (hash == std::string::npos) continue;
++					SysLook mk;
++					mk.accent = Color::hex((uint32_t)strtoul(ln.c_str() + hash + 1, nullptr, 16));
++					mk.hasAccent = true;
++					looks["@" + Utils::String::toLower(Utils::String::trim(ln.substr(1, hash - 1)))] = mk;
++					continue;
++				}
++				is >> names >> icon >> accent;
++				std::getline(is, maker);
++				maker = Utils::String::trim(maker);
++				SysLook look;
++				look.icon = icon == "-" ? "" : assetDir + "/icons/" + icon;
++				if (accent.size() == 7 && accent[0] == '#')
++				{
++					look.accent = Color::hex((uint32_t)strtoul(accent.c_str() + 1, nullptr, 16));
++					look.hasAccent = true;
++				}
++				look.maker = maker;
++				for (auto& n : Utils::String::split(names, ','))
++					looks[Utils::String::toLower(n)] = look;
++			}
++		}
++
++		void refreshSystems()
++		{
++			systems.clear();
++			if (systemView)
++				systems = systemView->getObjects();
++			if (systems.empty())
++				for (auto s : SystemData::sSystemVector)
++					if (s->isVisible())
++						systems.push_back(s);
++		}
++
++		int sysIndex(SystemData* s)
++		{
++			for (int i = 0; i < (int)systems.size(); i++)
++				if (systems[i] == s)
++					return i;
++			if (s)
++				for (int i = 0; i < (int)systems.size(); i++)
++					if (systems[i]->getName() == s->getName())
++						return i;
++			return 0;
++		}
++
++		// ---- text helpers ----
++		static std::string fmtTime(long secs)
++		{
++			long h = secs / 3600, m = (secs % 3600) / 60;
++			char b[32];
++			if (h > 0) snprintf(b, sizeof b, "%ldh %02ldm", h, m);
++			else snprintf(b, sizeof b, "%ldm", m);
++			return b;
++		}
++
++		static std::string relDay(const std::string& stamp)
++		{
++			if (stamp.empty())
++				return "Never";
++			time_t t = Utils::Time::stringToTime(stamp);
++			if (t <= 0)
++				return "Never";
++			time_t now = time(nullptr);
++			struct tm a, b;
++			localtime_r(&t, &a);
++			localtime_r(&now, &b);
++			struct tm da = a, db = b;
++			da.tm_hour = db.tm_hour = 12; da.tm_min = db.tm_min = 0; da.tm_sec = db.tm_sec = 0;
++			long days = (long)std::lround(difftime(mktime(&db), mktime(&da)) / 86400.0);
++			static const char* wd[] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
++			static const char* mo[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
++			if (days <= 0) return "Today";
++			if (days == 1) return "Yesterday";
++			if (days < 7) return wd[a.tm_wday];
++			if (days < 14) return "Last week";
++			char buf[32];
++			if (days < 330) snprintf(buf, sizeof buf, "%s %d", mo[a.tm_mon], a.tm_mday);
++			else snprintf(buf, sizeof buf, "%s %d", mo[a.tm_mon], a.tm_year + 1900);
++			return buf;
++		}
++
++		static std::string year(FileData* f)
++		{
++			std::string r = f->getMetadata(MetaDataId::ReleaseDate);
++			return r.size() >= 4 && r.substr(0, 4) != "0000" ? r.substr(0, 4) : "";
++		}
++
++		static std::string join(const std::string& a, const std::string& b)
++		{
++			if (a.empty()) return b;
++			if (b.empty()) return a;
++			return a + " · " + b;
++		}
++
++		FileData* resumeOf(SystemData* s)
++		{
++			auto it = resumeCache.find(s);
++			if (it != resumeCache.end())
++				return it->second;
++			FileData* best = nullptr;
++			std::string bestDate;
++			FileData* first = nullptr;
++			if (s && s->getRootFolder())
++				for (auto f : s->getRootFolder()->getFilesRecursive(GAME, true))
++				{
++					if (!first) first = f;
++					std::string last = f->getMetadata(MetaDataId::LastPlayed);
++					if (!last.empty() && last > bestDate) { bestDate = last; best = f; }
++				}
++			FileData* r = best ? best : first;
++			resumeCache[s] = r;
++			return r;
++		}
++
++		// ---- Source ----
++		int systemCount() override { return (int)systems.size(); }
++
++		SysInfo system(int i) override
++		{
++			SysInfo r;
++			if (i < 0 || i >= (int)systems.size())
++				return r;
++			SystemData* s = systems[i];
++			r.id = s->getName();
++			r.name = s->getFullName();
++			r.maker = s->getSystemMetadata().manufacturer;
++			// systems.cfg: the system's name, its theme folder, then by kind ("*portable", "*collection"...), then "*";
++			// a system matched only by kind takes the accent of its maker ("@Sega") when there is one
++			SysLook look;
++			bool named = true;
++			auto it = looks.find(Utils::String::toLower(s->getName()));
++			if (it == looks.end()) it = looks.find(Utils::String::toLower(s->getThemeFolder()));
++			if (it == looks.end())
++			{
++				named = false;
++				std::string kind = s->isCollection() ? "collection" : Utils::String::toLower(s->getSystemMetadata().hardwareType);
++				it = looks.find("*" + kind);
++				if (it == looks.end()) it = looks.find("*");
++			}
++			if (it != looks.end()) look = it->second;
++			if (!named)
++			{
++				auto mk = looks.find("@" + Utils::String::toLower(r.maker));
++				if (mk != looks.end() && mk->second.hasAccent) { look.accent = mk->second.accent; look.hasAccent = true; }
++			}
++			r.icon = look.icon;
++			r.accent = look.hasAccent ? look.accent : Color::hex(0x3d8ec4);
++			if (r.maker.empty()) r.maker = !look.maker.empty() ? look.maker : (s->isCollection() ? "Collection" : "");
++			GameCountInfo* gc = s->getGameCountInfo();
++			if (gc)
++			{
++				r.games = gc->visibleGames;
++				r.played = gc->gamesPlayed;
++				r.time = fmtTime(gc->playTime);
++			}
++			else
++				r.time = "0m";
++			r.fav = favSystems().count(s->getName()) > 0;
++			FileData* res = resumeOf(s);
++			if (res)
++			{
++				r.hasResume = true;
++				r.resumeEyebrow = res->getMetadata(MetaDataId::LastPlayed).empty() ? "Not played yet" : "Last played";
++				r.resumeTitle = res->getName();
++				r.resumeBox = res->getThumbnailPath(true);
++			}
++			return r;
++		}
++
++		int gameCount() override { return list ? (int)list->entries().size() : 0; }
++
++		GameInfo game(int i) override
++		{
++			GameInfo r;
++			if (!list || i < 0 || i >= (int)list->entries().size())
++				return r;
++			FileData* f = list->entries()[i];
++			r.title = f->getPath() == ".." ? ". ." : f->getName();
++			if (f->getType() == FOLDER)
++			{
++				r.sub = "Folder";
++				r.line = "Folder.";
++				r.box = f->getThumbnailPath(true);
++				r.snap = f->getImagePath();
++				r.achLabel = "No achievements";
++				return r;
++			}
++			if (f->getType() != GAME)
++			{
++				r.sub = "";
++				r.line = f->getName() + ".";
++				r.achLabel = "No achievements";
++				return r;
++			}
++			std::string g = f->getGenre(), y = year(f);
++			r.sub = join(g, y);
++			int plays = atoi(f->getMetadata(MetaDataId::PlayCount).c_str());
++			std::string playStr = plays ? std::to_string(plays) + (plays == 1 ? " play" : " plays") : "Never played";
++			std::string first = join(g, y);
++			r.line = (first.empty() ? "" : first + ". ") + playStr + " · " + relDay(f->getMetadata(MetaDataId::LastPlayed)) + " · " + fmtTime(atol(f->getMetadata(MetaDataId::GameTime).c_str())) + ".";
++			r.box = f->getThumbnailPath(true);
++			r.snap = f->getImagePath();
++			if (r.snap.empty() || !Utils::FileSystem::exists(r.snap))
++				r.snap = f->getMetadata(MetaDataId::TitleShot);
++			r.fav = f->getFavorite();
++
++			int id = atoi(f->getMetadata(MetaDataId::CheevosId).c_str());
++			if (SystemConf::getInstance()->get("global.retroachievements.username").empty())
++				r.achLabel = "RetroAchievements off";
++			else if (id <= 0)
++				r.achLabel = "No achievements";
++			else
++			{
++				RaProgress::Entry e = ra ? ra->get(id, false) : RaProgress::Entry();
++				if (e.state == 1)
++				{
++					r.achA = e.a; r.achB = e.b;
++					r.achLabel = e.b > 0 ? std::to_string(e.a) + " / " + std::to_string(e.b) + " achievements" : "No achievements";
++				}
++				else
++					r.achLabel = "- / - achievements";
++			}
++			return r;
++		}
++
++		std::string clockText() override
++		{
++			time_t now = time(nullptr);
++			struct tm t;
++			localtime_r(&now, &t);
++			char b[32];
++			strftime(b, sizeof b, Settings::getInstance()->getBool("ClockMode12") ? "%I:%M %p" : "%H:%M", &t);
++			return b;
++		}
++
++		std::string dateText() override
++		{
++			time_t now = time(nullptr);
++			struct tm t;
++			localtime_r(&now, &t);
++			char b[16];
++			strftime(b, sizeof b, "%m/%d", &t);
++			return b;
++		}
++
++		float battery() override
++		{
++			auto w = WatchersManager::GetComponent<BatteryLevelWatcher>();
++			if (w == nullptr || !w->getBatteryInfo().hasBattery)
++				return -1;
++			return w->getBatteryInfo().level / 100.0f;
++		}
++
++		bool online() override
++		{
++			auto w = WatchersManager::GetComponent<NetworkStateWatcher>();
++			return w == nullptr || w->isConnected();
++		}
++
++		std::set<std::string> favSystems()
++		{
++			std::set<std::string> r;
++			for (auto& n : Utils::String::split(Settings::getInstance()->getString("RndsFavoriteSystems"), ','))
++				if (!n.empty()) r.insert(n);
++			return r;
++		}
++
++		void playSound(const std::string& name)
++		{
++			SystemData* s = systems.size() ? systems[0] : nullptr;
++			if (s && s->getTheme())
++				Sound::getFromTheme(s->getTheme(), "rnds", name)->play();
++		}
++
++		void selectSystem(int i) override
++		{
++			playSound("scroll");
++			if (!systemView || i < 0 || i >= (int)systems.size())
++				return;
++			busy = true;
++			systemView->goToSystem(systems[i], false);
++			busy = false;
++		}
++
++		void selectGame(int i) override
++		{
++			playSound("scroll");
++			if (!list)
++				return;
++			busy = true;
++			list->setCursorIndex(i);
++			busy = false;
++		}
++
++		int openLibrary(int sys) override
++		{
++			if (sys < 0 || sys >= (int)systems.size())
++				return 0;
++			playSound("select");
++			busy = true;
++			ViewController::get()->goToGameList(systems[sys], true);
++			auto cur = dynamic_cast<RndsGameListView*>(ViewController::get()->getGameListView(systems[sys], false).get());
++			if (cur)
++				list = cur;
++			int idx = list ? list->resumeIndex() : 0;
++			if (list)
++				list->setCursorIndex(idx);
++			busy = false;
++			return idx;
++		}
++
++		void backToHome() override
++		{
++			playSound("back");
++			busy = true;
++			if (list)
++				list->goUp();
++			else if (systemView)
++				ViewController::get()->goToSystemView(systems.size() ? systems[0] : nullptr, true);
++			busy = false;
++		}
++
++		void launch(int game) override
++		{
++			if (!list || game < 0 || game >= (int)list->entries().size())
++				return;
++			busy = true;
++			list->setCursorIndex(game);
++			FileData* f = list->entries()[game];
++			int id = atoi(f->getMetadata(MetaDataId::CheevosId).c_str());
++			if (id > 0 && ra)
++				ra->forget(id);
++			list->launchSelected();
++			busy = false;
++		}
++
++		void toggleSystemFav(int sys) override
++		{
++			if (sys < 0 || sys >= (int)systems.size())
++				return;
++			auto favs = favSystems();
++			std::string n = systems[sys]->getName();
++			if (favs.count(n)) favs.erase(n); else favs.insert(n);
++			std::string v;
++			for (auto& f : favs) v += (v.empty() ? "" : ",") + f;
++			Settings::getInstance()->setString("RndsFavoriteSystems", v);
++			Settings::getInstance()->saveFile();
++		}
++
++		void toggleGameFav(int game) override
++		{
++			if (!list || game < 0 || game >= (int)list->entries().size())
++				return;
++			FileData* f = list->entries()[game];
++			if (f->getType() != GAME)
++				return;
++			busy = true;
++			CollectionSystemManager::get()->toggleGameInCollection(f, "Favorites");
++			busy = false;
++			if (ui)
++				ui->dataChanged();
++		}
++
++		int resumeGame(int sys) override
++		{
++			if (sys < 0 || sys >= (int)systems.size())
++				return -1;
++			auto view = dynamic_cast<RndsGameListView*>(ViewController::get()->getGameListView(systems[sys]).get());
++			if (!view)
++				return -1;
++			list = view;
++			int idx = view->resumeIndex();
++			if (idx < 0 || idx >= (int)view->entries().size() || view->entries()[idx]->getType() != GAME)
++				return -1;
++			busy = true;
++			view->setCursorIndex(idx);
++			busy = false;
++			playSound("select");
++			return idx;
++		}
++
++		// ---- ES side ----
++		bool isShown(GuiComponent* from) { return from != nullptr && from == shown; }
++	};
++
++	EsHost* EsHost::get(Window* window)
++	{
++		if (!sHost)
++			sHost = new EsHost(window);
++		return sHost;
++	}
++
++	EsHost* EsHost::instance() { return sHost; }
++
++	void EsHost::shutdown()
++	{
++		delete sHost;
++		sHost = nullptr;
++	}
++
++	EsHost::EsHost(Window* window) : d(new Impl(window)) {}
++	EsHost::~EsHost() {}
++
++	void EsHost::attach(SystemView* view) { d->systemView = view; d->systems.clear(); }
++	void EsHost::detach(SystemView* view)
++	{
++		if (d->systemView == view) d->systemView = nullptr;
++		if (d->shown == (GuiComponent*)view) d->shown = nullptr;
++	}
++	void EsHost::attach(RndsGameListView* view) { d->lists.insert(view); }
++	void EsHost::detach(RndsGameListView* view)
++	{
++		d->lists.erase(view);
++		if (d->list == view) d->list = nullptr;
++		if (d->shown == (GuiComponent*)view) d->shown = nullptr;
++	}
++
++	void EsHost::showHome(SystemView* view)
++	{
++		d->systemView = view;
++		d->shown = view;
++		d->refreshSystems();
++		if (!d->ensureUI())
++			return;
++		if (d->busy)
++			return;
++		int idx = view->getCursorIndex();
++		// a ready screen opened from home (Resume) stays until its game starts (or B); back from the game it's home
++		if (d->ui->launchPending() && d->ui->systemIndex() == idx)
++			return;
++		d->ui->dataChanged();
++		d->ui->setHome(idx < 0 ? 0 : idx);
++	}
++
++	void EsHost::showLibrary(RndsGameListView* view)
++	{
++		if (view == nullptr)
++		{
++			// the list's cursor moved: follow it when ES moved it
++			if (d->busy || !d->ui || !d->list || d->shown != (GuiComponent*)d->list || d->ui->view() != UI::LIBRARY)
++				return;
++			if (d->ui->gameIndex() != d->list->getCursorIndex())
++				d->ui->setLibrary(d->ui->systemIndex(), d->list->getCursorIndex());
++			return;
++		}
++		d->list = view;
++		d->shown = view;
++		if (d->systems.empty())
++			d->refreshSystems();
++		if (!d->ensureUI() || d->busy)
++			return;
++		d->ui->dataChanged();
++		d->ui->setLibrary(d->sysIndex(view->system()), view->getCursorIndex());
++	}
++
++	bool EsHost::input(GuiComponent* from, InputConfig* config, Input input)
++	{
++		if (!d->ui || !d->isShown(from))
++			return false;
++		if (input.value == 0)
++			return false;
++		UI::View v = d->ui->view();
++		auto is = [&](const char* n) { return config->isMappedTo(n, input); };
++		bool left = config->isMappedLike("left", input), right = config->isMappedLike("right", input);
++		bool L = is("leftshoulder") || is("pageup"), R = is("rightshoulder") || is("pagedown");
++		bool A = config->isMappedTo(BUTTON_OK, input), B = config->isMappedTo(BUTTON_BACK, input);
++		bool X = is("x"), Y = is("y");
++		bool up = config->isMappedLike("up", input), down = config->isMappedLike("down", input);
++
++		if (left) return d->ui->press(UI::LEFT);
++		if (right) return d->ui->press(UI::RIGHT);
++		if (L) return d->ui->press(UI::L);
++		if (R) return d->ui->press(UI::R);
++		if (up || down) return true;
++
++		RndsGameListView* lv = dynamic_cast<RndsGameListView*>(from);
++		if (A)
++		{
++			if (v == UI::LIBRARY && lv)
++			{
++				d->busy = true;
++				bool folder = lv->openSelected();
++				d->busy = false;
++				if (folder)
++				{
++					d->ui->dataChanged();
++					d->ui->setLibrary(d->ui->systemIndex(), lv->getCursorIndex());
++					return true;
++				}
++			}
++			return d->ui->press(UI::A);
++		}
++		if (B)
++		{
++			if (v == UI::LIBRARY && lv && lv->inFolder())
++			{
++				d->busy = true;
++				lv->goUp();
++				d->busy = false;
++				d->ui->dataChanged();
++				d->ui->setLibrary(d->ui->systemIndex(), lv->getCursorIndex());
++				return true;
++			}
++			if (v == UI::HOME)
++				return true;	// nothing to go back to (the mockup's B does nothing on home)
++			return d->ui->press(UI::B);
++		}
++		if (X)
++		{
++			if (v == UI::LIBRARY && lv)
++			{
++				// ES's X on a game: its options (or save states)
++				if (Settings::getInstance()->getBool("GameOptionsAtNorth")) lv->showOptions();
++				else lv->showSaves();
++				return true;
++			}
++			return d->ui->press(UI::X) || true;
++		}
++		if (Y)
++			return d->ui->press(UI::Y) || true;
++		if (is("select"))
++		{
++			if (v == UI::LIBRARY && lv) { lv->showListOptions(); return true; }
++			if (v == UI::HOME) { GuiMenu::openQuitMenu_static(d->window, true); return true; }
++			return true;
++		}
++		return false;
++	}
++
++	bool EsHost::mouse(int button, bool down, int x, int y)
++	{
++		if (!d->ui || button != 1)
++			return false;
++		float panelW = d->backend.dual ? Renderer::getScreenWidth() / 3.0f : (float)Renderer::getScreenWidth();
++		float bx = x - d->backend.originX[1];
++		if (bx < 0 || bx >= panelW)
++		{
++			if (!down) d->ui->touch(1, -1, -1, false);
++			return true;
++		}
++		d->ui->touch(1, bx, (float)y, down);
++		return true;
++	}
++
++	void EsHost::update(GuiComponent* from, int deltaTime)
++	{
++		if (!d->ui || !d->isShown(from))
++			return;
++		if (d->pendingRefresh.exchange(false))
++			d->ui->dataChanged();
++		d->ui->update((double)SDL_GetTicks());
++		bool anim = d->ui->animating();
++		if (anim && !d->psPaused) { PowerSaver::pause(); d->psPaused = true; }
++		else if (!anim && d->psPaused) { PowerSaver::resume(); d->psPaused = false; }
++	}
++
++	void EsHost::render(GuiComponent* from, const Transform4x4f& trans)
++	{
++		if (!d->ui || !d->isShown(from))
++			return;
++		d->backend.base = trans;
++		d->ui->render();
++	}
++
++	void EsHost::dataChanged()
++	{
++		d->resumeCache.clear();
++		if (d->ui)
++			d->ui->dataChanged();
++	}
++
++	int EsHost::nextWake()
++	{
++		if (!d->ui || d->shown == nullptr)
++			return -1;
++		if (d->window->peekGui() != ViewController::get())
++			return -1;	// a menu is open: the shelf stays still
++		return d->ui->nextWake();
++	}
++
++	bool EsHost::settled() { return !d->ui || d->shown == nullptr || d->ui->settled(); }
++
++	int nextWake() { return sHost ? sHost->nextWake() : -1; }
++	bool settled() { return sHost ? sHost->settled() : true; }
++}
+diff --git a/es-app/src/rnds/RndsEs.h b/es-app/src/rnds/RndsEs.h
+new file mode 100644
+index 00000000..85770a09
+--- /dev/null
++++ b/es-app/src/rnds/RndsEs.h
+@@ -0,0 +1,63 @@
++#pragma once
++// ROCKNIXDS rnds engine inside EmulationStation. A theme that declares <view name="rnds"> is drawn by the engine
++// (RndsUI) instead of ES's own views: SystemView hands it the system shelf, RndsGameListView each system's games.
++// ES keeps everything else: its lists, cursors, menus, launching, favourites, scraping and the power saver.
++#include <memory>
++#include <string>
++#include <vector>
++
++class GuiComponent;
++class InputConfig;
++struct Input;
++class SystemData;
++class SystemView;
++class ThemeData;
++class Transform4x4f;
++class Window;
++class RndsGameListView;
++class FileData;
++
++namespace rnds
++{
++	class UI;
++
++	// does this theme use the engine
++	bool isRndsTheme(const std::shared_ptr<ThemeData>& theme);
++
++	// ms until the engine needs a frame while ES sleeps (-1: no need); main.cpp caps its standby wait with it
++	int nextWake();
++	// the engine has drawn everything it shows (for the launcher's "first view complete")
++	bool settled();
++
++	class EsHost
++	{
++	public:
++		static EsHost* get(Window* window);		// created on first use
++		static EsHost* instance();				// or nullptr
++		static void shutdown();
++
++		void attach(SystemView* view);
++		void detach(SystemView* view);
++		void attach(RndsGameListView* view);
++		void detach(RndsGameListView* view);
++
++		void showHome(SystemView* view);
++		void showLibrary(RndsGameListView* view);
++
++		// from the view that ES shows
++		bool input(GuiComponent* from, InputConfig* config, Input input);
++		bool mouse(int button, bool down, int x, int y);
++		void update(GuiComponent* from, int deltaTime);
++		void render(GuiComponent* from, const Transform4x4f& trans);
++		void dataChanged();
++
++		int nextWake();
++		bool settled();
++
++		struct Impl;
++	private:
++		EsHost(Window* window);
++		~EsHost();
++		std::unique_ptr<Impl> d;
++	};
++}
+diff --git a/es-app/src/rnds/RndsRaster.cpp b/es-app/src/rnds/RndsRaster.cpp
+new file mode 100644
+index 00000000..f22685fe
+--- /dev/null
++++ b/es-app/src/rnds/RndsRaster.cpp
+@@ -0,0 +1,737 @@
++#include "RndsRaster.h"
++
++#include <ft2build.h>
++#include FT_FREETYPE_H
++#include FT_OUTLINE_H
++#include FT_ADVANCES_H
++#include <algorithm>
++#include <cmath>
++#include <cstdio>
++#include <cstring>
++#include <mutex>
++
++namespace rnds
++{
++	static inline float clamp01(float v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
++	static inline int roundi(float v) { return (int)std::floor(v + 0.5f); } // SkScalarRoundToInt
++
++	uint32_t Color::rgba8() const
++	{
++		auto c = [](float v) { return (uint32_t)roundi(clamp01(v) * 255.0f); };
++		return (c(r) << 24) | (c(g) << 16) | (c(b) << 8) | c(a);
++	}
++
++	Color mix(const Color& a, float p, const Color& b)
++	{
++		// color-mix() mixes premultiplied, then divides by the mixed alpha
++		float q = 1 - p;
++		float al = a.a * p + b.a * q;
++		if (al <= 0)
++			return Color(0, 0, 0, 0);
++		return Color((a.r * a.a * p + b.r * b.a * q) / al, (a.g * a.a * p + b.g * b.a * q) / al, (a.b * a.a * p + b.b * b.a * q) / al, al);
++	}
++
++	// ---- Surface ------------------------------------------------------------------------------------------------------
++
++	Surface::Surface(int w_, int h_) : w(w_ > 0 ? w_ : 0), h(h_ > 0 ? h_ : 0), d((size_t)(w_ > 0 ? w_ : 0) * (h_ > 0 ? h_ : 0) * 4, 0.0f) {}
++
++	template<typename F> void Surface::paint(int x0, int y0, int x1, int y1, const Color& c, F coverage)
++	{
++		paintFrame(x0, y0, x1, y1, 0, 0, 0, 0, c, coverage);
++	}
++
++	// like paint(), but skips [sx0,sx1) x [sy0,sy1), where the caller knows the coverage is 0
++	template<typename F> void Surface::paintFrame(int x0, int y0, int x1, int y1, int sx0, int sy0, int sx1, int sy1, const Color& c, F coverage)
++	{
++		if (c.a <= 0)
++			return;
++		x0 = std::max(x0, 0); y0 = std::max(y0, 0);
++		x1 = std::min(x1, w); y1 = std::min(y1, h);
++		for (int y = y0; y < y1; y++)
++		{
++			float* row = &d[((size_t)y * w) * 4];
++			bool skipRow = y >= sy0 && y < sy1 && sx1 > sx0;
++			for (int x = x0; x < x1; x++)
++			{
++				if (skipRow && x >= sx0 && x < sx1) { x = sx1 - 1; continue; }
++				float cov = coverage(x + 0.5f, y + 0.5f);
++				if (cov <= 0)
++					continue;
++				float a = c.a * (cov > 1 ? 1 : cov);
++				float* p = row + x * 4;
++				float k = 1 - a;
++				p[0] = c.r * a + p[0] * k;
++				p[1] = c.g * a + p[1] * k;
++				p[2] = c.b * a + p[2] * k;
++				p[3] = a + p[3] * k;
++			}
++		}
++	}
++
++	void Surface::drawBitmap(const Bitmap& b, float dx, float dy, const Color& tint)
++	{
++		int ox = roundi(dx), oy = roundi(dy);
++		for (int y = 0; y < b.h; y++)
++		{
++			int ty = y + oy;
++			if (ty < 0 || ty >= h)
++				continue;
++			for (int x = 0; x < b.w; x++)
++			{
++				int tx = x + ox;
++				if (tx < 0 || tx >= w)
++					continue;
++				float sr, sg, sb, sa;
++				if (b.alpha)
++				{
++					sa = b.px[(size_t)y * b.w + x] / 255.0f * tint.a;
++					sr = tint.r; sg = tint.g; sb = tint.b;
++				}
++				else
++				{
++					const uint8_t* s = &b.px[((size_t)y * b.w + x) * 4];
++					sa = s[3] / 255.0f * tint.a;
++					sr = s[0] / 255.0f * tint.r; sg = s[1] / 255.0f * tint.g; sb = s[2] / 255.0f * tint.b;
++				}
++				if (sa <= 0)
++					continue;
++				float* p = &d[((size_t)ty * w + tx) * 4];
++				float k = 1 - sa;
++				p[0] = sr * sa + p[0] * k;
++				p[1] = sg * sa + p[1] * k;
++				p[2] = sb * sa + p[2] * k;
++				p[3] = sa + p[3] * k;
++			}
++		}
++	}
++
++	Bitmap Surface::toBitmap(bool bleed) const
++	{
++		Bitmap b;
++		b.w = w; b.h = h;
++		b.px.assign((size_t)w * h * 4, 0);
++		for (size_t i = 0; i < (size_t)w * h; i++)
++		{
++			const float* p = &d[i * 4];
++			float a = p[3];
++			uint8_t* o = &b.px[i * 4];
++			if (a <= 0.0005f)
++				continue;
++			o[0] = (uint8_t)roundi(clamp01(p[0] / a) * 255);
++			o[1] = (uint8_t)roundi(clamp01(p[1] / a) * 255);
++			o[2] = (uint8_t)roundi(clamp01(p[2] / a) * 255);
++			o[3] = (uint8_t)roundi(clamp01(a) * 255);
++		}
++		if (bleed)
++		{
++			// transparent pixels take a neighbour's colour, so linear filtering doesn't pull black into edges
++			std::vector<uint8_t> src = b.px;
++			for (int y = 0; y < h; y++)
++				for (int x = 0; x < w; x++)
++				{
++					uint8_t* o = &b.px[((size_t)y * w + x) * 4];
++					if (o[3] != 0)
++						continue;
++					for (int k = 0; k < 8; k++)
++					{
++						static const int dx[8] = { -1, 1, 0, 0, -1, 1, -1, 1 }, dy[8] = { 0, 0, -1, 1, -1, -1, 1, 1 };
++						int nx = x + dx[k], ny = y + dy[k];
++						if (nx < 0 || ny < 0 || nx >= w || ny >= h)
++							continue;
++						const uint8_t* s = &src[((size_t)ny * w + nx) * 4];
++						if (s[3] != 0) { o[0] = s[0]; o[1] = s[1]; o[2] = s[2]; break; }
++					}
++				}
++		}
++		return b;
++	}
++
++	// ---- shapes -------------------------------------------------------------------------------------------------------
++
++	float RRect::coverage(float px, float py) const
++	{
++		if (w <= 0 || h <= 0)
++			return 0;
++		if (px < x - 0.5f || py < y - 0.5f || px > x + w + 0.5f || py > y + h + 0.5f)
++			return 0;
++		float hw = w * 0.5f, hh = h * 0.5f;
++		float rr = std::min(r, std::min(hw, hh));
++		float qx = std::fabs(px - (x + hw)) - hw + rr;
++		float qy = std::fabs(py - (y + hh)) - hh + rr;
++		if (rr > 0 && qx <= 0 && qy <= 0 && std::max(qx, qy) - rr <= -0.5f)
++			return 1;	// well inside
++		float ox = std::max(qx, 0.0f), oy = std::max(qy, 0.0f);
++		float dist = (ox > 0 && oy > 0 ? std::sqrt(ox * ox + oy * oy) : ox + oy) + std::min(std::max(qx, qy), 0.0f) - rr;
++		if (rr <= 0)
++		{
++			// a plain rectangle: exact area coverage of the pixel
++			float cx = std::min(px + 0.5f, x + w) - std::max(px - 0.5f, x);
++			float cy = std::min(py + 0.5f, y + h) - std::max(py - 0.5f, y);
++			return clamp01(cx) * clamp01(cy);
++		}
++		return clamp01(0.5f - dist);
++	}
++
++	// 1-D overlap of the pixel [p-0.5, p+0.5) with [a, b)
++	static inline float overlap(float p, float a, float b) { return clamp01(std::min(p + 0.5f, b) - std::max(p - 0.5f, a)); }
++
++	PaintedBox paintBox(const BoxStyle& st, int w, int h, bool bleed)
++	{
++		PaintedBox out;
++		float minX = 0, minY = 0, maxX = (float)w, maxY = (float)h;
++		for (auto& s : st.shadows)
++		{
++			if (s.inset)
++				continue;
++			minX = std::min(minX, s.dx - s.spread); minY = std::min(minY, s.dy - s.spread);
++			maxX = std::max(maxX, w + s.dx + s.spread); maxY = std::max(maxY, h + s.dy + s.spread);
++		}
++		int ox = (int)std::ceil(-minX), oy = (int)std::ceil(-minY);
++		int W = (int)std::ceil(maxX) + ox, H = (int)std::ceil(maxY) + oy;
++		Surface s(W, H);
++
++		RRect B(ox, oy, w, h, st.radius);
++		RRect P = B.inset(st.border);
++		// the part of the box that no corner reaches: coverage 1 there for B and P
++		float core = std::max(st.radius, 0.0f) + st.border + 2;
++		int cx0 = (int)std::floor(ox + core), cy0 = (int)std::floor(oy + core), cx1 = (int)std::ceil(ox + w - core), cy1 = (int)std::ceil(oy + h - core);
++
++		// outer shadows, bottom-most first, clipped out of the border box
++		for (int i = (int)st.shadows.size() - 1; i >= 0; i--)
++		{
++			const Shadow& sh = st.shadows[i];
++			if (sh.inset)
++				continue;
++			RRect S(B.x + sh.dx - sh.spread, B.y + sh.dy - sh.spread, B.w + 2 * sh.spread, B.h + 2 * sh.spread, B.r > 0 ? B.r + sh.spread : 0);
++			s.paintFrame((int)std::floor(S.x), (int)std::floor(S.y), (int)std::ceil(S.x + S.w), (int)std::ceil(S.y + S.h), cx0, cy0, cx1, cy1, sh.c,
++				[&](float x, float y) { return S.coverage(x, y) * (1 - B.coverage(x, y)); });
++		}
++
++		// background colour (clip: border box)
++		s.paint(ox, oy, ox + w, oy + h, st.bg, [&](float x, float y) { return B.coverage(x, y); });
++
++		// gradient bands (origin: padding box)
++		for (auto& band : st.bands)
++		{
++			float y0 = P.y + band.y0, y1 = band.y1 < 0 ? P.y + P.h : P.y + band.y1;
++			s.paint(ox, (int)std::floor(y0), ox + w, (int)std::ceil(y1), band.c,
++				[&](float x, float y) { return B.coverage(x, y) * overlap(y, y0, y1); });
++		}
++
++		// the dither tile: 4x4 CSS px, white 14% at (0,0) and 7% at (2,2), 1x1 each. The tile is an SVG with
++		// shape-rendering: crispEdges, so a device pixel is lit when its centre is inside a dot (no anti-aliasing),
++		// with the tile scaled exactly (6.4 device px at 1.6x).
++		if (st.dither)
++		{
++			float sc = st.ditherScale;
++			auto inDot = [&](float p, float origin, float off) -> bool
++			{
++				float u = std::fmod((p - origin) / sc - off, 4.0f);
++				if (u < 0) u += 4;
++				return u < 1;
++			};
++			std::vector<uint8_t> colA(W), colB(W), rowA(H), rowB(H);
++			for (int x = 0; x < W; x++) { colA[x] = inDot(x + 0.5f, P.x, 0); colB[x] = inDot(x + 0.5f, P.x, 2); }
++			for (int y = 0; y < H; y++) { rowA[y] = inDot(y + 0.5f, P.y, 0); rowB[y] = inDot(y + 0.5f, P.y, 2); }
++			Color w14(1, 1, 1, 0.14f), w07(1, 1, 1, 0.07f);
++			for (int y = oy; y < oy + h && y < H; y++)
++			{
++				if (!rowA[y] && !rowB[y]) continue;
++				for (int x = ox; x < ox + w && x < W; x++)
++				{
++					const Color* c = rowA[y] && colA[x] ? &w14 : (rowB[y] && colB[x] ? &w07 : nullptr);
++					if (!c) continue;
++					float cov = (x >= cx0 && x < cx1 && y >= cy0 && y < cy1) ? 1.0f : B.coverage(x + 0.5f, y + 0.5f);
++					if (cov <= 0) continue;
++					float a = c->a * cov;
++					float* p = &s.d[((size_t)y * W + x) * 4];
++					float k = 1 - a;
++					p[0] = a + p[0] * k; p[1] = a + p[1] * k; p[2] = a + p[2] * k; p[3] = a + p[3] * k;
++				}
++			}
++		}
++
++		// inset shadows, bottom-most first: the padding box minus the shifted, shrunk hole (only near the edges)
++		for (int i = (int)st.shadows.size() - 1; i >= 0; i--)
++		{
++			const Shadow& sh = st.shadows[i];
++			if (!sh.inset)
++				continue;
++			RRect hole(P.x + sh.dx + sh.spread, P.y + sh.dy + sh.spread, P.w - 2 * sh.spread, P.h - 2 * sh.spread, std::max(0.0f, P.r - sh.spread));
++			float reach = core + std::fabs(sh.dx) + std::fabs(sh.dy) + sh.spread;
++			int hx0 = (int)std::floor(ox + reach), hy0 = (int)std::floor(oy + reach), hx1 = (int)std::ceil(ox + w - reach), hy1 = (int)std::ceil(oy + h - reach);
++			s.paintFrame(ox, oy, ox + w, oy + h, hx0, hy0, hx1, hy1, sh.c, [&](float x, float y) { return P.coverage(x, y) * (1 - hole.coverage(x, y)); });
++		}
++
++		// border
++		if (st.border > 0)
++			s.paintFrame(ox, oy, ox + w, oy + h, cx0, cy0, cx1, cy1, st.borderColor, [&](float x, float y) { return B.coverage(x, y) * (1 - P.coverage(x, y)); });
++
++		out.bmp = s.toBitmap(bleed);
++		out.originX = ox;
++		out.originY = oy;
++		return out;
++	}
++
++	Bitmap paintMask(int w, int h, float radius)
++	{
++		Bitmap b;
++		b.w = w; b.h = h; b.alpha = true;
++		b.px.assign((size_t)w * h, 0);
++		RRect r(0, 0, (float)w, (float)h, radius);
++		for (int y = 0; y < h; y++)
++			for (int x = 0; x < w; x++)
++				b.px[(size_t)y * w + x] = (uint8_t)roundi(r.coverage(x + 0.5f, y + 0.5f) * 255);
++		return b;
++	}
++
++	Bitmap paintTriangle(float x0, float y0, float x1, float y1, float x2, float y2, const Color& c, int& outX, int& outY)
++	{
++		int bx0 = (int)std::floor(std::min(x0, std::min(x1, x2))), by0 = (int)std::floor(std::min(y0, std::min(y1, y2)));
++		int bx1 = (int)std::ceil(std::max(x0, std::max(x1, x2))), by1 = (int)std::ceil(std::max(y0, std::max(y1, y2)));
++		Surface s(bx1 - bx0, by1 - by0);
++		auto edge = [](float ax, float ay, float bx, float by, float px, float py) { return (bx - ax) * (py - ay) - (by - ay) * (px - ax); };
++		float area = edge(x0, y0, x1, y1, x2, y2);
++		const int N = 4;
++		s.paint(0, 0, s.w, s.h, c, [&](float px, float py) -> float
++		{
++			int in = 0;
++			for (int j = 0; j < N; j++)
++				for (int i = 0; i < N; i++)
++				{
++					float sx = bx0 + px - 0.5f + (i + 0.5f) / N, sy = by0 + py - 0.5f + (j + 0.5f) / N;
++					float e0 = edge(x0, y0, x1, y1, sx, sy), e1 = edge(x1, y1, x2, y2, sx, sy), e2 = edge(x2, y2, x0, y0, sx, sy);
++					if (area > 0 ? (e0 >= 0 && e1 >= 0 && e2 >= 0) : (e0 <= 0 && e1 <= 0 && e2 <= 0))
++						in++;
++				}
++			return in / (float)(N * N);
++		});
++		outX = bx0; outY = by0;
++		return s.toBitmap();
++	}
++
++	// ---- text ---------------------------------------------------------------------------------------------------------
++
++	static FT_Library sFt = nullptr;
++	static std::mutex sFtLock;
++
++	std::shared_ptr<Font> Font::load(const std::string& path)
++	{
++		std::lock_guard<std::mutex> lock(sFtLock);
++		if (!sFt && FT_Init_FreeType(&sFt) != 0)
++			return nullptr;
++		FILE* f = fopen(path.c_str(), "rb");
++		if (!f)
++			return nullptr;
++		std::shared_ptr<Font> font(new Font());
++		fseek(f, 0, SEEK_END);
++		long n = ftell(f);
++		fseek(f, 0, SEEK_SET);
++		font->mData.resize(n > 0 ? n : 0);
++		size_t got = n > 0 ? fread(font->mData.data(), 1, n, f) : 0;
++		fclose(f);
++		if ((long)got != n || FT_New_Memory_Face(sFt, font->mData.data(), (FT_Long)n, 0, &font->mFace) != 0)
++			return nullptr;
++		FT_Select_Charmap(font->mFace, FT_ENCODING_UNICODE);
++		font->mUpm = font->mFace->units_per_EM ? font->mFace->units_per_EM : 1000;
++		font->mAsc = font->mFace->ascender;
++		font->mDesc = -font->mFace->descender;
++		return font;
++	}
++
++	Font::~Font()
++	{
++		std::lock_guard<std::mutex> lock(sFtLock);
++		if (mFace)
++			FT_Done_Face(mFace);
++	}
++
++	int Font::upm() const { return mUpm; }
++	float Font::ascent(float size) const { return (float)roundi(mAsc * size / mUpm); }
++	float Font::descent(float size) const { return (float)roundi(mDesc * size / mUpm); }
++
++	unsigned Font::glyphIndex(uint32_t cp)
++	{
++		auto it = mGlyphIndex.find(cp);
++		if (it != mGlyphIndex.end())
++			return it->second;
++		unsigned gi = FT_Get_Char_Index(mFace, cp);
++		mGlyphIndex[cp] = gi;
++		return gi;
++	}
++
++	bool Font::hasGlyph(uint32_t cp)
++	{
++		std::lock_guard<std::mutex> lock(sFtLock);
++		return glyphIndex(cp) != 0;
++	}
++
++	int Font::advance(uint32_t cp, uint32_t next, float size)
++	{
++		std::lock_guard<std::mutex> lock(sFtLock);
++		unsigned gi = glyphIndex(cp);
++		FT_Fixed adv = 0;
++		FT_Get_Advance(mFace, gi, FT_LOAD_NO_SCALE, &adv);
++		int a = roundi(adv * size / mUpm);
++		if (next && FT_HAS_KERNING(mFace))
++		{
++			FT_Vector k = { 0, 0 };
++			if (FT_Get_Kerning(mFace, gi, glyphIndex(next), FT_KERNING_UNSCALED, &k) == 0 && k.x != 0)
++				a += roundi(k.x * size / mUpm);
++		}
++		return a;
++	}
++
++	std::u32string utf8to32(const std::string& s)
++	{
++		std::u32string out;
++		out.reserve(s.size());
++		for (size_t i = 0; i < s.size();)
++		{
++			unsigned char c = s[i];
++			uint32_t cp;
++			int n;
++			if (c < 0x80) { cp = c; n = 1; }
++			else if ((c >> 5) == 6) { cp = c & 0x1f; n = 2; }
++			else if ((c >> 4) == 14) { cp = c & 0x0f; n = 3; }
++			else if ((c >> 3) == 30) { cp = c & 0x07; n = 4; }
++			else { i++; continue; }
++			if (i + n > s.size())
++				break;
++			for (int k = 1; k < n; k++)
++				cp = (cp << 6) | (s[i + k] & 0x3f);
++			out.push_back(cp);
++			i += n;
++		}
++		return out;
++	}
++
++	std::u32string upper(const std::u32string& s)
++	{
++		std::u32string o = s;
++		for (auto& c : o)
++		{
++			if (c >= 'a' && c <= 'z') c -= 32;
++			else if ((c >= 0xe0 && c <= 0xfe && c != 0xf7)) c -= 32;
++			else if (c == 0xff) c = 0x178;
++			else if (c >= 0x100 && c <= 0x17f && (c & 1) && c != 0x131 && c != 0x138 && c != 0x149 && !(c >= 0x139 && c <= 0x148) && !(c >= 0x179 && c <= 0x17e)) c -= 1;
++			else if (((c >= 0x139 && c <= 0x148) || (c >= 0x179 && c <= 0x17e)) && !(c & 1)) c -= 1;
++		}
++		return o;
++	}
++
++	static std::u32string prepared(const std::u32string& t, const TextStyle& st) { return st.upper ? upper(t) : t; }
++
++	TextLine layoutLine(const std::u32string& text, const TextStyle& st)
++	{
++		TextLine line;
++		line.text = prepared(text, st);
++		float pen = 0;
++		for (size_t i = 0; i < line.text.size(); i++)
++		{
++			line.x.push_back(pen);
++			uint32_t next = i + 1 < line.text.size() ? line.text[i + 1] : 0;
++			pen += st.font->advance(line.text[i], next, st.size) + st.letterSpacing;
++		}
++		line.width = pen;
++		return line;
++	}
++
++	TextLine layoutEllipsis(const std::u32string& text, const TextStyle& st, int maxWidth)
++	{
++		TextLine full = layoutLine(text, st);
++		if (full.width <= maxWidth + 0.01f)
++			return full;
++		const std::u32string ell = U"…";
++		float ellW = st.font->advance(ell[0], 0, st.size) + st.letterSpacing;
++		// keep the characters that end before maxWidth - ellipsis (the last kept one without its kerning to the next)
++		size_t keep = 0;
++		for (size_t i = 0; i < full.text.size(); i++)
++		{
++			float end = full.x[i] + st.font->advance(full.text[i], 0, st.size) + st.letterSpacing;
++			if (end + ellW > maxWidth + 0.01f)
++				break;
++			keep = i + 1;
++		}
++		return layoutLine(full.text.substr(0, keep) + ell, TextStyle{ st.font, st.size, st.letterSpacing, false });
++	}
++
++	std::vector<TextLine> layoutWrap(const std::u32string& text0, const TextStyle& st, int maxWidth, int maxLines, int firstLineIndent)
++	{
++		std::u32string text = prepared(text0, st);
++		TextStyle plain = st;
++		plain.upper = false;
++
++		std::vector<std::u32string> words;
++		std::u32string cur;
++		for (auto c : text)
++		{
++			if (c == U' ') { words.push_back(cur); cur.clear(); }
++			else cur.push_back(c);
++		}
++		words.push_back(cur);
++
++		std::vector<std::u32string> lines;
++		std::u32string line;
++		size_t w = 0;
++		std::vector<size_t> lineStartWord;
++		for (; w < words.size(); w++)
++		{
++			std::u32string trial = line.empty() ? words[w] : line + U" " + words[w];
++			int indent = lines.empty() ? firstLineIndent : 0;
++			if (!line.empty() && layoutLine(trial, plain).width + indent > maxWidth + 0.01f)
++			{
++				lines.push_back(line);
++				line = words[w];
++			}
++			else
++				line = trial;
++		}
++		lines.push_back(line);
++
++		std::vector<TextLine> out;
++		for (size_t i = 0; i < lines.size(); i++)
++		{
++			if (maxLines > 0 && (int)i == maxLines - 1 && lines.size() > (size_t)maxLines)
++			{
++				// -webkit-line-clamp: the last shown line ends in an ellipsis
++				TextLine l = layoutLine(lines[i], plain);
++				const std::u32string ell = U"…";
++				float ellW = st.font->advance(ell[0], 0, st.size) + st.letterSpacing;
++				int indent = i == 0 ? firstLineIndent : 0;
++				if (l.width + ellW + indent <= maxWidth + 0.01f)
++					out.push_back(layoutLine(lines[i] + ell, plain));
++				else
++					out.push_back(layoutEllipsis(lines[i] + U"……", plain, maxWidth - indent));
++				break;
++			}
++			out.push_back(layoutLine(lines[i], plain));
++		}
++		return out;
++	}
++
++	int gTextMode = 2;	// no hinting, whole-pixel glyph origins: what matched Chromium best (1x and 1.6x)
++
++	TextBitmap renderLine(const TextLine& line, const TextStyle& st, float scale, float baselineCss, float leftFrac, float topFrac)
++	{
++		// leftFrac/topFrac: the fractional part (device px) of the line box's position, which the caller dropped when it
++		// rounded the bitmap's placement; glyph origins are computed from the exact position and then rounded, like Skia
++		// does without subpixel positioning.
++		TextBitmap tb;
++		std::lock_guard<std::mutex> lock(sFtLock);
++		FT_Face face = st.font->mFace;
++		float size = st.size * scale;
++		FT_Set_Char_Size(face, 0, (FT_F26Dot6)roundi(size * 64), 72, 72);
++
++		float asc = st.font->mAsc * size / st.font->mUpm, desc = st.font->mDesc * size / st.font->mUpm;
++		int pad = (int)std::ceil(size * 0.3f) + 2;
++		tb.padX = pad;
++		tb.padY = pad;
++		Bitmap& b = tb.bmp;
++		b.alpha = true;
++		b.w = (int)std::ceil(line.width * scale) + 2 * pad;
++		b.h = (int)std::ceil(std::max(baselineCss * scale + desc, asc + desc)) + 2 * pad;
++		b.px.assign((size_t)b.w * b.h, 0);
++
++		float baseline = pad + topFrac + baselineCss * scale;
++		bool subpixel = (gTextMode & 1) != 0;
++		FT_Int32 flags = (gTextMode & 2) ? (FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP) : FT_LOAD_TARGET_LIGHT;
++		for (size_t i = 0; i < line.text.size(); i++)
++		{
++			unsigned gi = st.font->glyphIndex(line.text[i]);
++			if (FT_Load_Glyph(face, gi, flags) != 0)
++				continue;
++			float penX = pad + leftFrac + line.x[i] * scale;
++			int ix = subpixel ? (int)std::floor(penX) : roundi(penX);
++			int iy = roundi(baseline);
++			if (subpixel && face->glyph->format == FT_GLYPH_FORMAT_OUTLINE)
++				FT_Outline_Translate(&face->glyph->outline, (FT_Pos)roundi((penX - ix) * 64), 0);
++			if (FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL) != 0)
++				continue;
++			FT_GlyphSlot g = face->glyph;
++			int gx = ix + g->bitmap_left;
++			int gy = iy - g->bitmap_top;
++			for (unsigned r = 0; r < g->bitmap.rows; r++)
++			{
++				int ty = gy + (int)r;
++				if (ty < 0 || ty >= b.h)
++					continue;
++				const unsigned char* src = g->bitmap.buffer + r * g->bitmap.pitch;
++				for (unsigned c = 0; c < g->bitmap.width; c++)
++				{
++					int tx = gx + (int)c;
++					if (tx < 0 || tx >= b.w || !src[c])
++						continue;
++					uint8_t& d = b.px[(size_t)ty * b.w + tx];
++					int v = d + src[c] - d * src[c] / 255;
++					d = (uint8_t)(v > 255 ? 255 : v);
++				}
++			}
++		}
++		return tb;
++	}
++
++	// ---- images -------------------------------------------------------------------------------------------------------
++
++	static Bitmap(*sDecoder)(const std::string&) = nullptr;
++	void setDecoder(Bitmap(*decoder)(const std::string& path)) { sDecoder = decoder; }
++	Bitmap decodeFile(const std::string& path) { return sDecoder && !path.empty() ? sDecoder(path) : Bitmap(); }
++
++	Bitmap resize(const Bitmap& src, int w, int h)
++	{
++		Bitmap out;
++		if (src.empty() || w <= 0 || h <= 0)
++			return out;
++		out.w = w; out.h = h; out.alpha = src.alpha;
++		int ch = src.alpha ? 1 : 4;
++		out.px.assign((size_t)w * h * ch, 0);
++		float sx = src.w / (float)w, sy = src.h / (float)h;
++		if (sx <= 1 && sy <= 1)
++		{
++			// bilinear (premultiplied)
++			for (int y = 0; y < h; y++)
++				for (int x = 0; x < w; x++)
++				{
++					float fx = (x + 0.5f) * sx - 0.5f, fy = (y + 0.5f) * sy - 0.5f;
++					int x0 = (int)std::floor(fx), y0 = (int)std::floor(fy);
++					float tx = fx - x0, ty = fy - y0;
++					float acc[4] = { 0, 0, 0, 0 };
++					for (int j = 0; j < 2; j++)
++						for (int i = 0; i < 2; i++)
++						{
++							int xx = std::min(std::max(x0 + i, 0), src.w - 1), yy = std::min(std::max(y0 + j, 0), src.h - 1);
++							float wgt = (i ? tx : 1 - tx) * (j ? ty : 1 - ty);
++							const uint8_t* p = &src.px[((size_t)yy * src.w + xx) * ch];
++							if (ch == 1) acc[3] += p[0] * wgt;
++							else
++							{
++								float a = p[3] / 255.0f;
++								acc[0] += p[0] * a * wgt; acc[1] += p[1] * a * wgt; acc[2] += p[2] * a * wgt; acc[3] += p[3] * wgt;
++							}
++						}
++					uint8_t* o = &out.px[((size_t)y * w + x) * ch];
++					if (ch == 1) o[0] = (uint8_t)roundi(acc[3]);
++					else
++					{
++						float a = acc[3] / 255.0f;
++						o[3] = (uint8_t)roundi(acc[3]);
++						if (a > 0) { o[0] = (uint8_t)roundi(std::min(255.0f, acc[0] / a)); o[1] = (uint8_t)roundi(std::min(255.0f, acc[1] / a)); o[2] = (uint8_t)roundi(std::min(255.0f, acc[2] / a)); }
++					}
++				}
++			return out;
++		}
++		// area average (premultiplied) when shrinking
++		for (int y = 0; y < h; y++)
++		{
++			float y0 = y * sy, y1 = (y + 1) * sy;
++			for (int x = 0; x < w; x++)
++			{
++				float x0 = x * sx, x1 = (x + 1) * sx;
++				float acc[4] = { 0, 0, 0, 0 }, tot = 0;
++				for (int yy = (int)std::floor(y0); yy < (int)std::ceil(y1) && yy < src.h; yy++)
++				{
++					float wy = std::min(y1, yy + 1.0f) - std::max(y0, (float)yy);
++					if (wy <= 0) continue;
++					for (int xx = (int)std::floor(x0); xx < (int)std::ceil(x1) && xx < src.w; xx++)
++					{
++						float wx = std::min(x1, xx + 1.0f) - std::max(x0, (float)xx);
++						if (wx <= 0) continue;
++						float wgt = wx * wy;
++						const uint8_t* p = &src.px[((size_t)yy * src.w + xx) * ch];
++						if (ch == 1) acc[3] += p[0] * wgt;
++						else
++						{
++							float a = p[3] / 255.0f;
++							acc[0] += p[0] * a * wgt; acc[1] += p[1] * a * wgt; acc[2] += p[2] * a * wgt; acc[3] += p[3] * wgt;
++						}
++						tot += wgt;
++					}
++				}
++				if (tot <= 0) continue;
++				uint8_t* o = &out.px[((size_t)y * w + x) * ch];
++				if (ch == 1) o[0] = (uint8_t)roundi(acc[3] / tot);
++				else
++				{
++					float a = acc[3] / tot / 255.0f;
++					o[3] = (uint8_t)roundi(acc[3] / tot);
++					if (a > 0) { o[0] = (uint8_t)roundi(std::min(255.0f, acc[0] / tot / a)); o[1] = (uint8_t)roundi(std::min(255.0f, acc[1] / tot / a)); o[2] = (uint8_t)roundi(std::min(255.0f, acc[2] / tot / a)); }
++				}
++			}
++		}
++		return out;
++	}
++
++	Bitmap resizeNearest(const Bitmap& src, int w, int h)
++	{
++		Bitmap out;
++		if (src.empty() || w <= 0 || h <= 0)
++			return out;
++		out.w = w; out.h = h; out.alpha = src.alpha;
++		int ch = src.alpha ? 1 : 4;
++		out.px.resize((size_t)w * h * ch);
++		for (int y = 0; y < h; y++)
++		{
++			int sy = std::min(src.h - 1, (int)((y + 0.5f) * src.h / h));
++			for (int x = 0; x < w; x++)
++			{
++				int sx = std::min(src.w - 1, (int)((x + 0.5f) * src.w / w));
++				memcpy(&out.px[((size_t)y * w + x) * ch], &src.px[((size_t)sy * src.w + sx) * ch], ch);
++			}
++		}
++		return out;
++	}
++
++	Bitmap cover(const Bitmap& src, int w, int h)
++	{
++		if (src.empty() || w <= 0 || h <= 0)
++			return Bitmap();
++		float ia = src.w / (float)src.h, ra = w / (float)h;
++		float dw, dh;
++		if (ia > ra) { dh = (float)h; dw = h * ia; }
++		else { dw = (float)w; dh = w / ia; }
++		// crop the source to the visible part, then resample to w x h
++		float cw = src.w * (w / dw), chh = src.h * (h / dh);
++		int cx = (int)std::floor((src.w - cw) / 2), cy = (int)std::floor((src.h - chh) / 2);
++		int icw = std::max(1, (int)std::ceil(cw)), ich = std::max(1, (int)std::ceil(chh));
++		icw = std::min(icw, src.w - cx); ich = std::min(ich, src.h - cy);
++		Bitmap crop;
++		crop.w = icw; crop.h = ich; crop.alpha = src.alpha;
++		int ch = src.alpha ? 1 : 4;
++		crop.px.resize((size_t)icw * ich * ch);
++		for (int y = 0; y < ich; y++)
++			memcpy(&crop.px[(size_t)y * icw * ch], &src.px[((size_t)(y + cy) * src.w + cx) * ch], (size_t)icw * ch);
++		return resize(crop, w, h);
++	}
++
++	void containSize(int iw, int ih, int bw, int bh, float& outW, float& outH)
++	{
++		if (iw <= 0 || ih <= 0) { outW = (float)bw; outH = (float)bh; return; }
++		float s = std::min(bw / (float)iw, bh / (float)ih);
++		outW = iw * s;
++		outH = ih * s;
++	}
++
++	void blit(Bitmap& dst, const Bitmap& src, int ox, int oy)
++	{
++		if (dst.alpha || src.alpha)
++			return;
++		for (int y = 0; y < src.h; y++)
++		{
++			int ty = y + oy;
++			if (ty < 0 || ty >= dst.h) continue;
++			for (int x = 0; x < src.w; x++)
++			{
++				int tx = x + ox;
++				if (tx < 0 || tx >= dst.w) continue;
++				const uint8_t* s = &src.px[((size_t)y * src.w + x) * 4];
++				uint8_t* d = &dst.px[((size_t)ty * dst.w + tx) * 4];
++				float sa = s[3] / 255.0f, da = d[3] / 255.0f;
++				float oa = sa + da * (1 - sa);
++				if (oa <= 0) { d[0] = d[1] = d[2] = d[3] = 0; continue; }
++				for (int k = 0; k < 3; k++)
++					d[k] = (uint8_t)roundi((s[k] * sa + d[k] * da * (1 - sa)) / oa);
++				d[3] = (uint8_t)roundi(oa * 255);
++			}
++		}
++	}
++}
+diff --git a/es-app/src/rnds/RndsRaster.h b/es-app/src/rnds/RndsRaster.h
+new file mode 100644
+index 00000000..79fce01d
+--- /dev/null
++++ b/es-app/src/rnds/RndsRaster.h
+@@ -0,0 +1,165 @@
++#pragma once
++// ROCKNIXDS rnds engine: CPU rasterizer for the pieces the mockup is drawn from. Boxes are painted the way CSS paints a
++// box (outer box-shadows, background colour, hard-stop gradient bands and the dither tile, inset box-shadows, border),
++// text the way Chrome lays out Pixelify Sans on Linux (whole-pixel glyph advances and kerning, light hinting), images
++// are decoded and fitted (cover / contain). Everything here is plain C++ and FreeType, so the same code runs in ES and
++// in the host test harness that compares the engine's frames with the mockup rendered by Chromium.
++#include <cstdint>
++#include <memory>
++#include <string>
++#include <unordered_map>
++#include <vector>
++
++typedef struct FT_LibraryRec_* FT_Library;
++typedef struct FT_FaceRec_* FT_Face;
++
++namespace rnds
++{
++	struct Color
++	{
++		float r = 0, g = 0, b = 0, a = 0; // straight alpha, 0..1
++		Color() {}
++		Color(float r_, float g_, float b_, float a_ = 1) : r(r_), g(g_), b(b_), a(a_) {}
++		static Color hex(uint32_t rgb, float a = 1) { return Color(((rgb >> 16) & 255) / 255.0f, ((rgb >> 8) & 255) / 255.0f, (rgb & 255) / 255.0f, a); }
++		bool transparent() const { return a <= 0; }
++		uint32_t rgba8() const; // 0xRRGGBBAA
++	};
++
++	// color-mix(in srgb, a p%, b)
++	Color mix(const Color& a, float p, const Color& b);
++
++	// RGBA8 (straight alpha) or A8 pixels, rows top to bottom
++	struct Bitmap
++	{
++		int w = 0, h = 0;
++		bool alpha = false;		// A8 coverage (drawn tinted) instead of RGBA8
++		std::vector<uint8_t> px;
++		bool empty() const { return w <= 0 || h <= 0; }
++	};
++
++	// premultiplied float surface everything is composited on before it becomes a Bitmap
++	class Surface
++	{
++	public:
++		Surface(int w, int h);
++		int w, h;
++		std::vector<float> d;	// premultiplied RGBA
++
++		// source-over a colour through a per-pixel coverage function over [x0,x1) x [y0,y1)
++		template<typename F> void paint(int x0, int y0, int x1, int y1, const Color& c, F coverage);
++		template<typename F> void paintFrame(int x0, int y0, int x1, int y1, int sx0, int sy0, int sx1, int sy1, const Color& c, F coverage);
++		void drawBitmap(const Bitmap& b, float dx, float dy, const Color& tint = Color(1, 1, 1, 1));
++		Bitmap toBitmap(bool bleed = true) const;
++	};
++
++	// ---- shapes ---------------------------------------------------------------------------------------------------
++	struct RRect
++	{
++		float x = 0, y = 0, w = 0, h = 0, r = 0;
++		RRect() {}
++		RRect(float x_, float y_, float w_, float h_, float r_) : x(x_), y(y_), w(w_), h(h_), r(r_) {}
++		RRect inset(float d) const { return RRect(x + d, y + d, w - 2 * d, h - 2 * d, r - d > 0 ? r - d : 0); }
++		RRect moved(float dx, float dy) const { return RRect(x + dx, y + dy, w, h, r); }
++		float coverage(float px, float py) const; // anti-aliased coverage of the pixel whose centre is (px, py)
++	};
++
++	// ---- CSS box ----------------------------------------------------------------------------------------------------
++	struct Band { float y0, y1; Color c; };			// background: linear-gradient(...) hard stops, padding-box y
++	struct Shadow { float dx, dy, spread; Color c; bool inset; };
++
++	struct BoxStyle
++	{
++		float radius = 0;
++		float border = 0;			// device pixels (already snapped)
++		Color borderColor;
++		Color bg;
++		std::vector<Band> bands;	// device pixels from the padding box's top; y1 < 0 means to the bottom
++		bool dither = false;		// the mockup's --dither tile, origin at the padding box
++		float ditherScale = 1;		// CSS px -> device px
++		std::vector<Shadow> shadows;	// CSS order: the first one is on top
++	};
++
++	// The box at (0,0) w x h in device pixels. The bitmap also holds the outer shadows: the box's top-left corner is at
++	// (originX, originY) in it.
++	struct PaintedBox { Bitmap bmp; int originX = 0, originY = 0; };
++	PaintedBox paintBox(const BoxStyle& st, int w, int h, bool bleed = true);
++	// A8 coverage of a rounded rectangle w x h
++	Bitmap paintMask(int w, int h, float radius);
++
++	// a triangle (the bubble's pointer), anti-aliased, into its bounding box
++	Bitmap paintTriangle(float x0, float y0, float x1, float y1, float x2, float y2, const Color& c, int& outX, int& outY);
++
++	// ---- text -------------------------------------------------------------------------------------------------------
++	struct TextLine; struct TextStyle; struct TextBitmap;
++	class Font
++	{
++	public:
++		static std::shared_ptr<Font> load(const std::string& path);
++		~Font();
++
++		bool hasGlyph(uint32_t cp);
++		int upm() const;
++		float ascent(float size) const;	// whole pixels, as Chrome rounds them
++		float descent(float size) const;
++		float normalLineHeight(float size) const { return ascent(size) + descent(size); }
++
++		// whole-pixel advance of cp followed by next (kerning included, each rounded on its own)
++		int advance(uint32_t cp, uint32_t next, float size);
++
++	private:
++		Font() {}
++		friend TextBitmap renderLine(const TextLine& line, const TextStyle& st, float scale, float baselineCss, float leftFrac, float topFrac);
++		std::vector<uint8_t> mData;
++		FT_Face mFace = nullptr;
++		int mUpm = 1000, mAsc = 0, mDesc = 0;
++		std::unordered_map<uint32_t, unsigned> mGlyphIndex;
++		unsigned glyphIndex(uint32_t cp);
++	};
++
++	struct TextStyle
++	{
++		std::shared_ptr<Font> font;
++		float size = 16;			// device pixels
++		float letterSpacing = 0;	// device pixels, after every character (CSS letter-spacing)
++		bool upper = false;			// text-transform: uppercase
++	};
++
++	std::u32string utf8to32(const std::string& s);
++	std::u32string upper(const std::u32string& s);
++
++	// laid-out single line: whole-pixel pen positions
++	struct TextLine
++	{
++		std::u32string text;
++		std::vector<float> x;	// pen x of each character (whole-pixel advances plus letter-spacing)
++		float width = 0;		// advances + letter-spacing (CSS inline size)
++	};
++
++	TextLine layoutLine(const std::u32string& text, const TextStyle& st);
++	// text-overflow: ellipsis within maxWidth (device px)
++	TextLine layoutEllipsis(const std::u32string& text, const TextStyle& st, int maxWidth);
++	// greedy wrap at spaces (CSS white-space: normal), at most maxLines (the last one ends in an ellipsis when cut)
++	std::vector<TextLine> layoutWrap(const std::u32string& text, const TextStyle& st, int maxWidth, int maxLines = 0, int firstLineIndent = 0);
++
++	// A8 bitmap of a line laid out in CSS px, drawn at scale (device px per CSS px). The bitmap's (0,0) goes at device
++	// (round(left * scale) - padX, round(top * scale) - padY) for a line box whose top-left is (left, top) in CSS px;
++	// baselineCss is the baseline's offset from the line box top in CSS px.
++	struct TextBitmap { Bitmap bmp; int padX = 0, padY = 0; };
++	extern int gTextMode;	// calibration switch for the harness (hinting / positioning variants)
++	TextBitmap renderLine(const TextLine& line, const TextStyle& st, float scale, float baselineCss, float leftFrac = 0, float topFrac = 0);
++
++	// ---- images -----------------------------------------------------------------------------------------------------
++	Bitmap decodeFile(const std::string& path);		// RGBA8; empty on failure (decoder is set by the host)
++	void setDecoder(Bitmap(*decoder)(const std::string& path));
++
++	// resample (bilinear, area-averaged when shrinking) to w x h
++	Bitmap resize(const Bitmap& src, int w, int h);
++	// nearest-neighbour scale (pixel art)
++	Bitmap resizeNearest(const Bitmap& src, int w, int h);
++	// object-fit: cover, centred, into w x h
++	Bitmap cover(const Bitmap& src, int w, int h);
++	// object-fit: contain: the fitted size (w x h stays the box)
++	void containSize(int iw, int ih, int bw, int bh, float& outW, float& outH);
++	// draws src over dst at (x, y) (straight alpha both)
++	void blit(Bitmap& dst, const Bitmap& src, int x, int y);
++}
+diff --git a/es-app/src/rnds/RndsUI.cpp b/es-app/src/rnds/RndsUI.cpp
+new file mode 100644
+index 00000000..d7122e31
+--- /dev/null
++++ b/es-app/src/rnds/RndsUI.cpp
+@@ -0,0 +1,1396 @@
++#include "RndsUI.h"
++
++#include <algorithm>
++#include <cmath>
++#include <cstdio>
++#include <mutex>
++#include <set>
++
++namespace rnds
++{
++	// ---- timing ---------------------------------------------------------------------------------------------------------
++
++	float cubicBezier(float x1, float y1, float x2, float y2, float p)
++	{
++		if (p <= 0) return 0;
++		if (p >= 1) return 1;
++		const double cx = 3.0 * x1, bx = 3.0 * (x2 - x1) - cx, ax = 1.0 - cx - bx;
++		const double cy = 3.0 * y1, by = 3.0 * (y2 - y1) - cy, ay = 1.0 - cy - by;
++		auto sx = [&](double t) { return ((ax * t + bx) * t + cx) * t; };
++		auto dx = [&](double t) { return (3.0 * ax * t + 2.0 * bx) * t + cx; };
++		double t = p;
++		for (int i = 0; i < 8; i++)
++		{
++			double x = sx(t) - p;
++			if (std::fabs(x) < 1e-7) break;
++			double d = dx(t);
++			if (std::fabs(d) < 1e-6) break;
++			t -= x / d;
++		}
++		if (t < 0 || t > 1 || std::fabs(sx(t) - p) > 1e-5)
++		{
++			double lo = 0, hi = 1;
++			t = p;
++			for (int i = 0; i < 40; i++)
++			{
++				double x = sx(t);
++				if (std::fabs(x - p) < 1e-7) break;
++				if (x < p) lo = t; else hi = t;
++				t = (lo + hi) / 2;
++			}
++		}
++		return (float)(((ay * t + by) * t + cy) * t);
++	}
++
++	// ---- mockup palette -------------------------------------------------------------------------------------------------
++
++	static const Color INK = Color::hex(0xe7eef6), MUTED = Color::hex(0x93a0b0), LINE = Color::hex(0x7d8b9c);
++	static const Color EDGE = Color::hex(0xd5dee8), NAVY = Color::hex(0xe7f4ff), RED = Color::hex(0xff3b4a);
++	static const Color SHADE40(0, 0, 0, 0.4f), SHADE45(0, 0, 0, 0.45f), SHADE35(0, 0, 0, 0.35f);
++	static const Color BLACKISH = Color::hex(0x070a0e);
++
++	// a box in CSS px, the way the mockup's stylesheet declares it
++	struct BoxCss
++	{
++		float radius = 0, border = 0;
++		Color borderColor, bg;
++		std::vector<Band> bands;
++		bool dither = false;
++		std::vector<Shadow> shadows;
++		std::string key;	// identifies the style in the cache
++		bool async = false;	// big: painted on the worker (drawn once it's there)
++	};
++
++	static Shadow outer(float dx, float dy, const Color& c) { return Shadow{ dx, dy, 0, c, false }; }
++	static Shadow inset(float dx, float dy, float spread, const Color& c) { return Shadow{ dx, dy, spread, c, true }; }
++
++	static std::string colorKey(const Color& c) { char b[16]; snprintf(b, sizeof b, "%08x", c.rgba8()); return b; }
++
++	// ---- implementation -------------------------------------------------------------------------------------------------
++
++	struct SlotState
++	{
++		bool known = false;
++		int d = 0;				// target offset from the centre (items)
++		float fromX = 0, toX = 0, fromS = 1, toS = 1;
++		double t0 = -1e9;		// transform transition start
++		bool trans = false;
++		float fromO = 1, toO = 1;
++		double o0 = -1e9;
++		bool otrans = false;
++	};
++
++	struct CacheEntry
++	{
++		Sprite sp;
++		uint64_t used = 0;
++		size_t bytes = 0;
++		int group = 0;
++		// images: CSS size they were fitted to (photo frames)
++		float cssW = 0, cssH = 0;
++	};
++
++	struct Job
++	{
++		std::string key;
++		int group = 0;
++		bool smooth = true;
++		std::function<Bitmap(float&, float&)> fn;
++	};
++
++	struct Done
++	{
++		std::string key;
++		int group = 0;
++		bool smooth = true;
++		Bitmap bmp;
++		float cssW = 0, cssH = 0;	// photos: the fitted CSS size; boxes: the box's origin in the bitmap
++	};
++
++	enum Group { G_TEXT = 0, G_BOX, G_ICON, G_CART, G_PHOTO, G_COUNT };
++	static const size_t GROUP_LIMIT[G_COUNT] = { 400, 200, 120, 90, 8 };
++
++	struct Face
++	{
++		std::string kbd, label;
++		int kind = 0;		// 0 button, 1 is-on, 2 note
++		int action = 0;		// what a tap does
++	};
++
++	enum Action { ACT_NONE = 0, ACT_PREV, ACT_NEXT, ACT_OPEN, ACT_BACK, ACT_FAV, ACT_RESUME, ACT_SLOT };
++
++	struct UI::Impl
++	{
++		UI* ui;
++		Source* src;
++		Backend* be;
++		std::string dir;
++		float s;
++
++		std::shared_ptr<Font> R, M;
++		Bitmap shell;			// game_slot.png
++		Bitmap logo, wifi, batt;	// pre-rendered at this scale
++
++		std::map<std::string, CacheEntry> cache;
++		uint64_t frame = 1;
++
++		std::mutex qlock;
++		std::deque<Job> jobs;
++		std::set<std::string> queued;
++		std::vector<Done> done;
++		std::function<void()> onQueued, onFinished;
++		bool requestedThisFrame = false;
++
++		double now = 0;
++		double topAt = -1e9, shellAt = -1e9, popAt = -1e9;
++		std::string shellKey;
++		std::vector<SlotState> slots;
++		float thumbFrom = 0, thumbTo = 0;
++		double thumbAt = -1e9;
++		bool thumbKnown = false;
++		bool launchFromHome = false;
++		double launchAt = -1;		// auto-launch time on the ready screen
++		bool launched = false;
++
++		// touch
++		bool pointerDown = false;
++		float downX = 0, downY = 0;
++		int pressedAction = 0;		// face button held (drawn pressed)
++		int pressedSide = -1;
++
++		// per-render model
++		std::vector<SysInfo> sysCache;
++		std::map<int, GameInfo> gameCache;
++
++		Impl(UI* u) : ui(u) {}
++
++		float X(float css) const { return css * s; }
++
++		// ---- cache ----
++		CacheEntry* find(const std::string& key)
++		{
++			auto it = cache.find(key);
++			if (it == cache.end()) return nullptr;
++			it->second.used = frame;
++			return &it->second;
++		}
++
++		CacheEntry& put(const std::string& key, int group, const Bitmap& b, bool smooth, int ox, int oy)
++		{
++			CacheEntry& e = cache[key];
++			e.sp.tex = be->upload(b, smooth);
++			e.sp.ox = ox; e.sp.oy = oy;
++			e.used = frame;
++			e.group = group;
++			e.bytes = (size_t)b.w * b.h * (b.alpha ? 1 : 4);
++			return e;
++		}
++
++		void evict()
++		{
++			size_t count[G_COUNT] = { 0 };
++			for (auto& kv : cache) count[kv.second.group]++;
++			for (int g = 0; g < G_COUNT; g++)
++			{
++				while (count[g] > GROUP_LIMIT[g])
++				{
++					auto oldest = cache.end();
++					for (auto it = cache.begin(); it != cache.end(); ++it)
++						if (it->second.group == g && it->second.used < frame && (oldest == cache.end() || it->second.used < oldest->second.used))
++							oldest = it;
++					if (oldest == cache.end()) break;
++					cache.erase(oldest);
++					count[g]--;
++				}
++			}
++		}
++
++		void request(const std::string& key, int group, bool smooth, std::function<Bitmap(float&, float&)> fn)
++		{
++			requestedThisFrame = true;
++			{
++				std::lock_guard<std::mutex> l(qlock);
++				if (queued.count(key)) return;
++				queued.insert(key);
++				jobs.push_front(Job{ key, group, smooth, fn });	// newest first: what's on screen now
++			}
++			if (onQueued) onQueued();
++		}
++
++		// ---- assets ----
++		Bitmap loadPng(const std::string& name) { return decodeFile(dir + "/" + name); }
++
++		void loadAssets()
++		{
++			R = Font::load(dir + "/fonts/PixelifySans-Regular.ttf");
++			M = Font::load(dir + "/fonts/PixelifySans-Medium.ttf");
++			shell = loadPng("game_slot.png");
++			std::string sfx = s > 1.3f ? "@1.6x.png" : "@1x.png";
++			logo = loadPng("logo" + sfx);
++			wifi = loadPng("wifi" + sfx);
++			batt = loadPng("battery" + sfx);
++		}
++
++		// ---- boxes ----
++		Sprite box(const BoxCss& css, float w, float h)
++		{
++			int dw = (int)std::lround(X(w)), dh = (int)std::lround(X(h));
++			char k[64];
++			snprintf(k, sizeof k, "box:%dx%d:", dw, dh);
++			std::string key = std::string(k) + css.key;
++			if (auto e = find(key)) return e->sp;
++			BoxStyle st;
++			st.radius = X(css.radius);
++			st.border = css.border <= 0 ? 0 : (s == 1 ? css.border : std::max(1.0f, std::floor(css.border * s)));
++			st.borderColor = css.borderColor;
++			st.bg = css.bg;
++			for (auto b : css.bands) st.bands.push_back(Band{ X(b.y0), b.y1 < 0 ? -1 : X(b.y1), b.c });
++			st.dither = css.dither;
++			st.ditherScale = s;
++			for (auto sh : css.shadows) st.shadows.push_back(Shadow{ X(sh.dx), X(sh.dy), X(sh.spread), sh.c, sh.inset });
++			if (css.async)
++			{
++				request(key, G_BOX, true, [st, dw, dh](float& ox, float& oy) -> Bitmap
++				{
++					PaintedBox pb = paintBox(st, dw, dh, false);	// drawn 1:1, no need to bleed edges
++					ox = (float)pb.originX; oy = (float)pb.originY;
++					return pb.bmp;
++				});
++				return Sprite();
++			}
++			PaintedBox pb = paintBox(st, dw, dh);
++			return put(key, G_BOX, pb.bmp, true, pb.originX, pb.originY).sp;
++		}
++
++		// the sheet's shape, drawn tinted with each system's colour (painted once, on the worker)
++		Sprite mask(float radius, float w, float h)
++		{
++			int dw = (int)std::lround(X(w)), dh = (int)std::lround(X(h));
++			char k[64];
++			snprintf(k, sizeof k, "mask:%dx%d:%.2f", dw, dh, X(radius));
++			if (auto e = find(k)) return e->sp;
++			float r = X(radius);
++			request(k, G_BOX, true, [dw, dh, r](float&, float&) -> Bitmap { return paintMask(dw, dh, r); });
++			return Sprite();
++		}
++
++		// draws a sprite whose CSS box is at (x, y); xf scales about (oxCss, oyCss) and then translates by (tx, 0) CSS px
++		struct Xf { float ox = 0, oy = 0, sc = 1, tx = 0, ty = 0, alpha = 1; };
++		void drawSprite(const Sprite& sp, float x, float y, const Xf* xf = nullptr, const Color& tint = Color(1, 1, 1, 1))
++		{
++			if (!sp.valid()) return;
++			float dx = X(x), dy = X(y);
++			float a = tint.a * (xf ? xf->alpha : 1);
++			if (a <= 0) return;
++			Color t(tint.r, tint.g, tint.b, a);
++			if (!xf || (xf->sc == 1 && xf->tx == 0 && xf->ty == 0))
++			{
++				be->draw(sp.tex, std::round(dx) - sp.ox, std::round(dy) - sp.oy, (float)sp.tex->w, (float)sp.tex->h, t);
++				return;
++			}
++			float ox = X(xf->ox), oy = X(xf->oy);
++			float bx = std::round(dx) - sp.ox, by = std::round(dy) - sp.oy;
++			float nx = ox + (bx - ox) * xf->sc + X(xf->tx), ny = oy + (by - oy) * xf->sc + X(xf->ty);
++			if (xf->sc == 1) { nx = std::round(nx); ny = std::round(ny); }
++			be->draw(sp.tex, nx, ny, sp.tex->w * xf->sc, sp.tex->h * xf->sc, t);
++		}
++
++		void drawBox(const BoxCss& css, float x, float y, float w, float h, const Xf* xf = nullptr)
++		{
++			drawSprite(box(css, w, h), x, y, xf);
++		}
++
++		// ---- text ----
++		struct TStyle { Font* f; float size; float ls; bool upper; };
++		TStyle ts(bool medium, float size, float ls = 0, bool up = false) { return TStyle{ medium ? M.get() : R.get(), size, ls, up }; }
++		TextStyle tstyle(const TStyle& t) { TextStyle st; st.font = t.f == M.get() ? M : R; st.size = t.size; st.letterSpacing = t.ls; st.upper = t.upper; return st; }
++
++		float lineHeight(const TStyle& t) { return t.f->normalLineHeight(t.size); }
++		float baseline(const TStyle& t, float lh)
++		{
++			float asc = t.f->ascent(t.size), desc = t.f->descent(t.size);
++			return asc + std::floor((lh - (asc + desc)) / 2);
++		}
++
++		TextLine line(const std::string& text, const TStyle& t) { return layoutLine(utf8to32(text), tstyle(t)); }
++
++		// draws a laid-out line whose line box is at (x, top) CSS px
++		void drawLine(const TextLine& l, const TStyle& t, float x, float top, float lh, const Color& c, const Xf* xf = nullptr)
++		{
++			if (l.text.empty()) return;
++			float bx = X(x), by = X(top);
++			if (xf && xf->sc == 1) { bx += X(xf->tx); by += X(xf->ty); }
++			int ix = (int)std::floor(bx), iy = (int)std::floor(by);
++			float fx = bx - ix, fy = by - iy;
++			int qx = (int)std::lround(fx * 8), qy = (int)std::lround(fy * 8);
++			std::string key = "txt:";
++			for (auto ch : l.text) { key += std::to_string((unsigned)ch); key += ','; }
++			char k[96];
++			snprintf(k, sizeof k, "|%p|%.2f|%.3f|%.3f|%d|%d|%.2f", (void*)t.f, t.size, t.ls, lh, qx, qy, s);
++			key += k;
++			CacheEntry* e = find(key);
++			if (!e)
++			{
++				TextBitmap tb = renderLine(l, tstyle(t), s, baseline(t, lh), qx / 8.0f, qy / 8.0f);
++				e = &put(key, G_TEXT, tb.bmp, true, tb.padX, tb.padY);
++			}
++			Color tint(c.r, c.g, c.b, c.a * (xf ? xf->alpha : 1));
++			if (xf && xf->sc != 1)
++			{
++				float ox = X(xf->ox), oy = X(xf->oy);
++				float nx = ox + (ix - e->sp.ox - ox) * xf->sc + X(xf->tx), ny = oy + (iy - e->sp.oy - oy) * xf->sc + X(xf->ty);
++				be->draw(e->sp.tex, nx, ny, e->sp.tex->w * xf->sc, e->sp.tex->h * xf->sc, tint);
++			}
++			else
++				be->draw(e->sp.tex, (float)(ix - e->sp.ox), (float)(iy - e->sp.oy), (float)e->sp.tex->w, (float)e->sp.tex->h, tint);
++		}
++
++		void drawText(const std::string& text, const TStyle& t, float x, float top, const Color& c, float lh = -1)
++		{
++			drawLine(line(text, t), t, x, top, lh < 0 ? lineHeight(t) : lh, c);
++		}
++
++		// ---- images ----
++		Sprite icon(const std::string& path)
++		{
++			if (path.empty()) return Sprite();
++			std::string key = "icon:" + path;
++			if (auto e = find(key)) return e->sp;
++			Bitmap b = decodeFile(path);
++			if (b.empty()) return Sprite();
++			return put(key, G_ICON, b, false, 0, 0).sp;
++		}
++
++		Sprite still(const std::string& name, const Bitmap& b, bool smooth)
++		{
++			if (b.empty()) return Sprite();
++			std::string key = "still:" + name;
++			if (auto e = find(key)) return e->sp;
++			return put(key, G_ICON, b, smooth, 0, 0).sp;
++		}
++
++		// the mockup's cartridge: box art covering the label window under the pixel shell, at this CSS size
++		Sprite cart(const std::string& boxPath, float cw, float ch)
++		{
++			int dw = (int)std::lround(X(cw)), dh = (int)std::lround(X(ch));
++			char k[48];
++			snprintf(k, sizeof k, "cart:%dx%d:", dw, dh);
++			std::string key = std::string(k) + boxPath;
++			if (auto e = find(key)) return e->sp;
++			Bitmap shellCopy = shell;
++			float sc = s;
++			request(key, G_CART, true, [boxPath, shellCopy, sc, dw, dh](float&, float&) -> Bitmap
++			{
++				// the canvas is 100x104 CSS px; bake it at device resolution, then resample to the drawn size
++				int mw = (int)std::lround(100 * sc), mh = (int)std::lround(104 * sc);
++				Bitmap master;
++				master.w = mw; master.h = mh;
++				master.px.assign((size_t)mw * mh * 4, 0);
++				Bitmap art = decodeFile(boxPath);
++				if (!art.empty())
++				{
++					int wx = (int)std::lround(12 * sc), wy = (int)std::lround(20 * sc);
++					int ww = (int)std::lround(88 * sc) - wx, wh = (int)std::lround(86 * sc) - wy;
++					blit(master, cover(art, ww, wh), wx, wy);
++				}
++				if (!shellCopy.empty())
++					blit(master, mw == shellCopy.w && mh == shellCopy.h ? shellCopy : resizeNearest(shellCopy, mw, mh), 0, 0);
++				if (dw == mw && dh == mh)
++					return master;
++				return resize(master, dw, dh);
++			});
++			return Sprite();
++		}
++
++		// the screenshot fitted into 512x212 CSS px, corners rounded by the frame's inner radius
++		CacheEntry* photo(const std::string& path)
++		{
++			if (path.empty()) return nullptr;
++			std::string key = "photo:" + path;
++			if (auto e = find(key)) return e;
++			float sc = s;
++			request(key, G_PHOTO, true, [path, sc](float& cssW, float& cssH) -> Bitmap
++			{
++				Bitmap img = decodeFile(path);
++				if (img.empty()) return Bitmap();
++				float fw, fh;
++				containSize(img.w, img.h, 512, 212, fw, fh);
++				cssW = std::max(1.0f, std::round(fw));
++				cssH = std::max(1.0f, std::round(fh));
++				int dw = (int)std::lround(cssW * sc), dh = (int)std::lround(cssH * sc);
++				Bitmap b = resize(img, dw, dh);
++				// overflow: hidden on the frame clips the picture to its padding box (radius 8 - border 4)
++				RRect clip(0, 0, (float)dw, (float)dh, 4 * sc);
++				for (int y = 0; y < dh; y++)
++					for (int x = 0; x < dw; x++)
++					{
++						float cov = clip.coverage(x + 0.5f, y + 0.5f);
++						if (cov < 1)
++						{
++							uint8_t* p = &b.px[((size_t)y * dw + x) * 4];
++							p[3] = (uint8_t)std::lround(p[3] * cov);
++						}
++					}
++				return b;
++			});
++			return nullptr;
++		}
++
++		// ---- model ----
++		const SysInfo& sys(int i)
++		{
++			if (sysCache.empty())
++			{
++				int n = src->systemCount();
++				for (int k = 0; k < n; k++) sysCache.push_back(src->system(k));
++			}
++			static SysInfo empty;
++			return i >= 0 && i < (int)sysCache.size() ? sysCache[i] : empty;
++		}
++		int sysCount() { sys(0); return (int)sysCache.size(); }
++		const GameInfo& game(int i)
++		{
++			auto it = gameCache.find(i);
++			if (it == gameCache.end())
++				it = gameCache.emplace(i, src->game(i)).first;
++			return it->second;
++		}
++
++		int count() { return ui->mView == HOME ? sysCount() : src->gameCount(); }
++		int center() { return ui->mView == HOME ? ui->mSys : ui->mGame; }
++
++		static int delta(int i, int c, int n)
++		{
++			int d = (i - c) % n;
++			if (d < 0) d += n;
++			if (d > n / 2) d -= n;	// JS: d > n / 2 with a float n / 2
++			return d;
++		}
++
++		// ---- animation state ----
++		std::string makeShellKey()
++		{
++			if (ui->mView == HOME) return "home";
++			if (ui->mView == LIBRARY) return "lib-" + std::to_string(ui->mSys);
++			return "launch-" + std::to_string(ui->mSys) + "-" + std::to_string(ui->mGame);
++		}
++
++		void slotValue(SlotState& st, float& x, float& sc, float& o)
++		{
++			if (st.trans)
++			{
++				float p = (float)((now - st.t0) / 420.0);
++				if (p >= 1) { st.trans = false; x = st.toX; sc = st.toS; }
++				else
++				{
++					float e = cubicBezier(0.2f, 1.4f, 0.32f, 1, p);
++					x = st.fromX + (st.toX - st.fromX) * e;
++					sc = st.fromS + (st.toS - st.fromS) * e;
++				}
++			}
++			else { x = st.toX; sc = st.toS; }
++			if (st.otrans)
++			{
++				float p = (float)((now - st.o0) / 240.0);
++				if (p >= 1) { st.otrans = false; o = st.toO; }
++				else o = st.fromO + (st.toO - st.fromO) * stepsEnd(4, p);
++			}
++			else o = st.toO;
++		}
++
++		void layout(bool animate)
++		{
++			int n = count();
++			if ((int)slots.size() != n) { slots.assign(n, SlotState()); }
++			int c = center();
++			for (int i = 0; i < n; i++)
++			{
++				SlotState& st = slots[i];
++				int d = delta(i, c, n);
++				bool jump = st.known && std::abs(d - st.d) > 2;
++				float cx, cs, co;
++				slotValue(st, cx, cs, co);
++				float tx = d * 122.0f, tsc = d == 0 ? 1.0f : 0.84f, to = std::abs(d) > 3 ? 0.0f : 1.0f;
++				if (!animate || jump || !st.known)
++				{
++					st.trans = false; st.otrans = false;
++					st.toX = tx; st.toS = tsc; st.toO = to;
++				}
++				else
++				{
++					if (tx != st.toX || tsc != st.toS)
++					{
++						st.fromX = cx; st.fromS = cs; st.toX = tx; st.toS = tsc;
++						st.t0 = now; st.trans = true;
++					}
++					if (to != st.toO)
++					{
++						st.fromO = co; st.toO = to; st.o0 = now; st.otrans = true;
++					}
++				}
++				st.d = d;
++				st.known = true;
++			}
++		}
++
++		float thumbLeft(int at, int n, float inner) { return n < 2 ? 0 : at * (inner - 42) / (n - 1); }
++
++		// what render(animate) does in the mockup
++		void render(bool animate)
++		{
++			topAt = now;
++			std::string key = makeShellKey();
++			if (shellKey != key)
++			{
++				shellKey = key;
++				shellAt = now;
++				slots.clear();
++				thumbKnown = false;
++				layout(false);
++			}
++			else
++				layout(animate);
++			popAt = now;
++		}
++
++		void dataChanged()
++		{
++			sysCache.clear();
++			gameCache.clear();
++		}
++
++		// ---- input ----
++		void setSystem(int i)
++		{
++			int n = sysCount();
++			if (n == 0) return;
++			ui->mSys = ((i % n) + n) % n;
++			src->selectSystem(ui->mSys);
++			render(true);
++		}
++
++		void setGame(int i)
++		{
++			int n = src->gameCount();
++			if (n == 0) return;
++			ui->mGame = ((i % n) + n) % n;
++			src->selectGame(ui->mGame);
++			gameCache.clear();
++			render(true);
++		}
++
++		void nudge(int dir)
++		{
++			if (ui->mView == HOME) setSystem(ui->mSys + dir);
++			else if (ui->mView == LIBRARY) setGame(ui->mGame + dir);
++		}
++
++		void open()
++		{
++			if (ui->mView == HOME)
++			{
++				int g = src->openLibrary(ui->mSys);
++				gameCache.clear();
++				ui->mGame = g < 0 ? 0 : g;
++				ui->mView = LIBRARY;
++				render(false);
++			}
++			else if (ui->mView == LIBRARY)
++			{
++				if (src->gameCount() == 0) return;
++				ui->mView = LAUNCH;
++				launchFromHome = false;
++				launchAt = now + LAUNCH_DELAY;
++				launched = false;
++				render(false);
++			}
++			else if (ui->mView == LAUNCH && !launched)
++				launchAt = now;	// A again: don't wait
++		}
++
++		void back()
++		{
++			if (ui->mView == LAUNCH)
++			{
++				launchAt = -1;
++				if (launchFromHome)
++				{
++					int g = src->openLibrary(ui->mSys);
++					if (g >= 0) ui->mGame = g;
++				}
++				ui->mView = LIBRARY;
++				gameCache.clear();
++				render(false);
++			}
++			else if (ui->mView == LIBRARY)
++			{
++				src->backToHome();
++				ui->mView = HOME;
++				render(false);
++			}
++		}
++
++		void toggleFav()
++		{
++			if (ui->mView == HOME) { src->toggleSystemFav(ui->mSys); sysCache.clear(); }
++			else if (ui->mView == LIBRARY) { src->toggleGameFav(ui->mGame); gameCache.clear(); }
++			if (ui->mView != LAUNCH) render(false);
++		}
++
++		void resume()
++		{
++			if (ui->mView != HOME) return;
++			int g = src->resumeGame(ui->mSys);
++			if (g < 0) return;
++			gameCache.clear();
++			ui->mGame = g;
++			ui->mView = LAUNCH;
++			launchFromHome = true;
++			launchAt = now + LAUNCH_DELAY;
++			launched = false;
++			render(false);
++		}
++
++		static constexpr double LAUNCH_DELAY = 650;	// the ready screen shows this long before the game starts
++
++		// ---- geometry shared by drawing and hit tests ----
++		struct Geo
++		{
++			float bubbleY = 60, bubbleH = 92;
++			float reelY = 160, reelH = 226;
++			std::vector<TextLine> titleLines, subLines;
++			float countW = 0;
++			Face left, right;
++			float leftW = 0, rightW = 0;
++			float startW = 0;
++		};
++
++		TStyle tTitle() { return ts(true, 26, 0.52f); }
++		TStyle tSub() { return ts(false, 20); }
++		TStyle tKbd() { return ts(true, 16); }
++		TStyle tFace() { return ts(true, 19); }
++
++		float kbdW(const std::string& k) { return 12 + line(k, tKbd()).width; }
++		float faceW(const Face& f) { return f.kind == 2 ? 3 + 12 + line(f.label, tFace()).width + 12 + 3 : 3 + 12 + kbdW(f.kbd) + 8 + line(f.label, tFace()).width + 12 + 3; }
++
++		Geo geometry()
++		{
++			Geo g;
++			View v = ui->mView;
++			std::string title, sub;
++			if (v == HOME) { auto& sy = sys(ui->mSys); title = sy.name; sub = sy.maker; }
++			else
++			{
++				auto& gm = game(ui->mGame);
++				title = gm.title;
++				sub = v == LAUNCH ? "Ready" : gm.sub;
++			}
++			g.titleLines = layoutWrap(utf8to32(title), tstyle(tTitle()), 470, 2);
++			g.subLines = layoutWrap(utf8to32(sub), tstyle(tSub()), 470);
++			float content = g.titleLines.size() * 32.5f + 3 + g.subLines.size() * lineHeight(tSub());
++			g.bubbleH = std::max(92.0f, content + 18 + 6);
++			g.bubbleY = v == LAUNCH ? 26 : 60;
++			g.reelY = g.bubbleY + g.bubbleH + 8;
++			g.reelH = 386 - g.reelY;
++
++			int n = v == LAUNCH ? 1 : count();
++			int at = v == LAUNCH ? 0 : center();
++			char a[16], b[16];
++			snprintf(a, sizeof a, "%02d", at + 1);
++			snprintf(b, sizeof b, "%02d", n);
++			g.countW = line(a, ts(true, 18)).width + line(" / ", ts(false, 18)).width + line(b, ts(false, 18)).width;
++
++			if (v == HOME)
++			{
++				g.left = Face{ "Y", "Fav", sys(ui->mSys).fav ? 1 : 0, ACT_FAV };
++				g.right = Face{ "X", "Resume", 0, ACT_RESUME };
++			}
++			else if (v == LIBRARY)
++			{
++				g.left = Face{ "B", "Back", 0, ACT_BACK };
++				g.right = Face{ "Y", "Fav", (src->gameCount() > 0 && game(ui->mGame).fav) ? 1 : 0, ACT_FAV };
++			}
++			else
++			{
++				g.left = Face{ "B", "Back", 0, ACT_BACK };
++				g.right = Face{ "", "Starting", 2, ACT_NONE };
++			}
++			g.leftW = faceW(g.left);
++			g.rightW = faceW(g.right);
++			g.startW = line("START", ts(true, 20, 2.4f)).width + 16;
++			return g;
++		}
++
++		// ---- styles ----
++		BoxCss screenBox()
++		{
++			BoxCss b; b.key = "screen"; b.radius = 2; b.bg = Color::hex(0x121820); b.dither = true; b.async = true;
++			b.shadows = { inset(0, 0, 4, BLACKISH), inset(0, 8, 0, Color::hex(0x243040)) };
++			return b;
++		}
++		// the sheet without its background colour: dither, inset shadows, border and shadow over transparency; the
++		// colour (color-mix of the system's accent) is the tinted mask() under it, so one paint serves every system
++		BoxCss sheetOverlay()
++		{
++			BoxCss b; b.key = "sheet"; b.radius = 18; b.border = 3; b.borderColor = EDGE; b.dither = true; b.async = true;
++			b.shadows = { inset(0, 6, 0, Color(1, 1, 1, 0.1f)), inset(0, -8, 0, SHADE35), outer(4, 4, SHADE40) };
++			return b;
++		}
++		void drawSheet(const Color& accent, float x, float y)
++		{
++			Sprite m = mask(18, 604, 406), o = box(sheetOverlay(), 604, 406);
++			if (!m.valid() || !o.valid()) return;
++			drawSprite(m, x, y, nullptr, mix(accent, 0.34f, Color::hex(0x10161e)));
++			drawSprite(o, x, y);
++		}
++		BoxCss heroBox()
++		{
++			BoxCss b; b.key = "hero"; b.radius = 18; b.border = 3; b.borderColor = EDGE; b.bg = Color::hex(0x1a222c);
++			b.bands = { Band{ 0, 8, Color::hex(0x2e3a48) }, Band{ 8, -1, Color::hex(0x121820) } };
++			b.shadows = { inset(0, -6, 0, BLACKISH), outer(4, 4, SHADE45) };
++			return b;
++		}
++		BoxCss chipBox()
++		{
++			BoxCss b; b.key = "chip"; b.radius = 12; b.border = 3; b.borderColor = EDGE; b.bg = Color::hex(0x121820);
++			b.bands = { Band{ 0, 8, Color::hex(0x243040) }, Band{ 8, -1, Color::hex(0x0e141c) } };
++			b.shadows = { outer(3, 3, SHADE40) };
++			return b;
++		}
++		BoxCss photoBox()
++		{
++			BoxCss b; b.key = "photo"; b.radius = 8; b.border = 4; b.borderColor = Color::hex(0x2a3442); b.bg = Color::hex(0x12181f);
++			b.shadows = { inset(0, 0, 3, BLACKISH), outer(4, 4, SHADE40) };
++			return b;
++		}
++		BoxCss meterBox()
++		{
++			BoxCss b; b.key = "meter"; b.radius = 2; b.border = 3; b.borderColor = EDGE; b.bg = Color::hex(0x10161e);
++			b.shadows = { inset(2, 2, 0, SHADE45) };
++			return b;
++		}
++		BoxCss brandBox()
++		{
++			BoxCss b; b.key = "brand"; b.radius = 4; b.bg = Color::hex(0x1b2330);
++			b.shadows = { outer(2, 2, BLACKISH) };
++			return b;
++		}
++		BoxCss kbdBox() { BoxCss b; b.key = "kbd"; b.radius = 4; b.bg = Color::hex(0xe7eef6); return b; }
++		BoxCss ruleBox() { BoxCss b; b.key = "rule"; b.radius = 2; b.bg = Color::hex(0x3a4654); return b; }
++		BoxCss bubbleBox()
++		{
++			BoxCss b; b.key = "bubble"; b.radius = 12; b.border = 3; b.borderColor = LINE; b.bg = Color::hex(0x1a222c);
++			b.bands = { Band{ 0, 10, Color::hex(0x2c3848) }, Band{ 10, -1, Color::hex(0x141b24) } };
++			b.shadows = { inset(0, -6, 0, Color::hex(0x0c1218)), outer(4, 4, BLACKISH) };
++			return b;
++		}
++		BoxCss trackBox()
++		{
++			BoxCss b; b.key = "reeltrack"; b.radius = 18; b.bg = Color::hex(0x0c1016); b.dither = true;
++			b.shadows = { inset(0, 4, 0, SHADE45), inset(0, -4, 0, Color::hex(0x2a3544)) };
++			return b;
++		}
++		BoxCss plateBox()
++		{
++			BoxCss b; b.key = "plate"; b.radius = 18; b.border = 3; b.borderColor = EDGE; b.bg = Color::hex(0x1a6ea3);
++			b.bands = { Band{ 0, 14, Color::hex(0x7ec8ee) }, Band{ 132, -1, Color::hex(0x0c3d5c) } };
++			b.shadows = { inset(0, -8, 0, SHADE35), outer(4, 4, SHADE40) };
++			return b;
++		}
++		BoxCss slotBox(bool on)
++		{
++			BoxCss b; b.key = on ? "slot1" : "slot0"; b.radius = 14; b.border = 3; b.borderColor = on ? Color::hex(0xffffff) : EDGE;
++			b.bg = Color::hex(0x1a222c);
++			b.bands = { Band{ 0, 8, Color::hex(0x2e3a48) }, Band{ 8, -1, Color::hex(0x121820) } };
++			b.shadows = { inset(0, -6, 0, BLACKISH), outer(3, 3, SHADE45) };
++			return b;
++		}
++		BoxCss badgeBox() { BoxCss b; b.key = "badge"; b.radius = 2; b.border = 2; b.borderColor = Color::hex(0xffffff); b.bg = RED; return b; }
++		BoxCss railBox()
++		{
++			BoxCss b; b.key = "rail"; b.radius = 2; b.border = 2; b.borderColor = EDGE; b.bg = Color::hex(0x0c1016); b.dither = true;
++			b.shadows = { inset(2, 2, 0, SHADE45) };
++			return b;
++		}
++		BoxCss thumbBox()
++		{
++			BoxCss b; b.key = "thumb"; b.radius = 2; b.border = 2; b.borderColor = EDGE; b.bg = Color::hex(0x3d8ec8);
++			b.bands = { Band{ 0, 4, Color::hex(0xb7e6ff) } };
++			return b;
++		}
++		BoxCss faceBox(int kind, bool pressed)
++		{
++			BoxCss b; b.radius = 10; b.border = 3;
++			if (kind == 1)
++			{
++				b.key = "face1"; b.borderColor = RED; b.bg = Color::hex(0x3a1820);
++				b.bands = { Band{ 0, 8, Color::hex(0x5a2430) }, Band{ 8, -1, Color::hex(0x2a1016) } };
++			}
++			else
++			{
++				b.key = kind == 2 ? "face2" : "face0"; b.borderColor = kind == 2 ? Color::hex(0x3a4654) : EDGE; b.bg = Color::hex(0x1a222c);
++				b.bands = { Band{ 0, 8, Color::hex(0x2c3848) }, Band{ 8, -1, Color::hex(0x121820) } };
++			}
++			if (kind == 2) {}
++			else if (pressed) { b.key += "p"; b.shadows = { outer(1, 1, BLACKISH) }; }
++			else b.shadows = { inset(0, -4, 0, BLACKISH), outer(3, 3, BLACKISH) };
++			return b;
++		}
++
++		// ---- animation values ----
++		float rise(double at) { double t = now - at; if (t < 0 || t >= 280) return 0; return 10 * (1 - stepsEnd(4, (float)(t / 280))); }
++		float pop() { double t = now - popAt; if (t < 0 || t >= 320) return 0; return 6 * (1 - stepsEnd(3, (float)(t / 320))); }
++		float bob()
++		{
++			double t = std::fmod(std::max(0.0, now - topAt), 2400.0) / 2400.0;
++			if (t < 0.5) return -4 * stepsEnd(2, (float)(t / 0.5));
++			return -4 + 4 * stepsEnd(2, (float)((t - 0.5) / 0.5));
++		}
++		float march() { double t = std::fmod(std::max(0.0, now - topAt), 800.0) / 800.0; return 16 * stepsEnd(4, (float)t); }
++		float thumbValue()
++		{
++			double t = now - thumbAt;
++			if (t >= 350 || t < 0) return thumbTo;
++			return thumbFrom + (thumbTo - thumbFrom) * stepsEnd(5, (float)(t / 350));
++		}
++
++		// ---- drawing: top screen ----
++		void drawStatus(float ry)
++		{
++			// wifi, battery, brand
++			if (!wifi.empty())
++				drawSprite(still("wifi", wifi, false), 18, 24 + ry, nullptr, Color(INK.r, INK.g, INK.b, src->online() ? 1.0f : 0.35f));
++			if (!batt.empty())
++			{
++				drawSprite(still("batt", batt, false), 44, 25 + ry, nullptr, INK);
++				float lvl = src->battery();
++				if (lvl < 0) lvl = 0.75f;
++				float fw = std::round(16 * std::min(1.0f, std::max(0.0f, lvl)) * s) / s;
++				if (fw > 0)
++					be->fill(std::round(X(47)), std::round(X(28 + ry)), std::round(X(fw)), std::round(X(8)), INK);
++			}
++			drawBox(brandBox(), 78, 19 + ry, 148.23f, 26);
++			if (!logo.empty())
++				drawSprite(still("logo", logo, true), 85, 22 + ry);
++
++			std::string clock = src->clockText(), date = src->dateText();
++			float cw = line(clock, ts(true, 20)).width, dw = line(date, ts(false, 20)).width;
++			drawText(clock, ts(true, 20), 622 - cw, 20 + ry, INK);
++			drawText(date, ts(false, 20), 622 - cw - 8 - dw, 20 + ry, INK);
++		}
++
++		void drawTop()
++		{
++			be->beginScreen(0);
++			drawBox(screenBox(), 0, 0, 640, 480);
++			float ry = rise(topAt);
++			drawStatus(ry);
++			const SysInfo& sy = sys(ui->mSys);
++			drawSheet(sy.accent, 18, 60 + ry);
++
++			if (ui->mView == HOME)
++			{
++				bool chip = sy.hasResume;
++				float total = 96 + 10 + 52 + (chip ? 10 + 74 : 0);
++				float y0 = 81 + (366 - total) / 2 + ry;
++				float b = bob();
++				drawBox(heroBox(), 272, y0 + b, 96, 96);
++				Sprite ic = icon(sy.icon);
++				if (ic.valid()) be->draw(ic.tex, std::round(X(280)), std::round(X(y0 + 8 + b)), std::round(X(80)), std::round(X(80)), Color(1, 1, 1, 1));
++
++				// stats
++				std::string vals[3] = { std::to_string(sy.games), std::to_string(sy.played), sy.time };
++				std::string labs[3] = { "Games", "Played", "Time" };
++				TStyle tb = ts(true, 28), tl = ts(false, 17, 1.36f, true);
++				float colW[3], total3 = 36;
++				TextLine lb[3], ll[3];
++				for (int i = 0; i < 3; i++)
++				{
++					lb[i] = line(vals[i], tb);
++					ll[i] = layoutLine(utf8to32(labs[i]), tstyle(tl));
++					colW[i] = std::max(84.0f, std::max(lb[i].width, ll[i].width));
++					total3 += colW[i];
++				}
++				float x = 320 - total3 / 2, sy0 = y0 + 106;
++				for (int i = 0; i < 3; i++)
++				{
++					drawLine(lb[i], tb, x + (colW[i] - lb[i].width) / 2, sy0, 28, INK);
++					drawLine(ll[i], tl, x + (colW[i] - ll[i].width) / 2, sy0 + 31, lineHeight(tl), MUTED);
++					x += colW[i] + 18;
++				}
++
++				if (chip)
++				{
++					TStyle te = ts(false, 17, 1.36f, true), tt = ts(true, 20);
++					TextLine le = layoutLine(utf8to32(sy.resumeEyebrow), tstyle(te));
++					TextLine full = layoutLine(utf8to32(sy.resumeTitle), tstyle(tt));
++					TextLine lt = layoutEllipsis(utf8to32(sy.resumeTitle), tstyle(tt), 300);
++					float tw = std::max(le.width, std::min(300.0f, full.width));	// the box is max-width: 300px of the whole title
++					float cw = 3 + 8 + 54 + 10 + tw + 12 + 3;
++					float cx = 320 - cw / 2, cy = y0 + 168;
++					drawBox(chipBox(), cx, cy, cw, 74);
++					Sprite c = cart(sy.resumeBox, 54, 56);
++					drawSprite(c, cx + 11, cy + 9);
++					float tx = cx + 11 + 54 + 10, ty = cy + 13.5f;
++					drawLine(le, te, tx, ty, lineHeight(te), MUTED);
++					drawLine(lt, tt, tx, ty + 23, lineHeight(tt), INK);
++				}
++			}
++			else
++			{
++				const GameInfo& gm = game(ui->mGame);
++				// screenshot (adapts to the picture; centred in the mockup's 520x220 place)
++				CacheEntry* ph = photo(gm.snap);
++				bool snapMissing = gm.snap.empty() || (ph && !ph->sp.valid());
++				if (ph && !ph->sp.valid()) ph = nullptr;
++				float fw = 520, fh = 220;
++				if (ph) { fw = ph->cssW + 8; fh = ph->cssH + 8; }
++				float fx = 60 + std::round((520 - fw) / 2), fy = 217 + std::round((220 - fh) / 2) + ry;
++				if (ph || snapMissing)
++				{
++					drawBox(photoBox(), fx, fy, fw, fh);
++					if (ph) drawSprite(ph->sp, fx + 4, fy + 4);
++				}
++
++				// achievements
++				TStyle tl = ts(false, 18, 1.08f, true);
++				TextLine ll = layoutLine(utf8to32(gm.achLabel), tstyle(tl));
++				drawLine(ll, tl, 320 - ll.width / 2, 179 + ry, lineHeight(tl), MUTED);
++				drawBox(meterBox(), 140, 153 + ry, 360, 14);
++				float pct = gm.achB > 0 ? std::round(gm.achA * 100.0f / gm.achB) : 0;
++				float fillW = 354 * pct / 100;
++				if (fillW > 0)
++				{
++					float l = std::round(X(143)), t = std::round(X(156 + ry)), r = std::round(X(143 + fillW)), bt = std::round(X(164 + ry));
++					be->fill(l, t, r - l, bt - t, sy.accent);
++					be->pushClip(l, t, r - l, bt - t);
++					float bp = march();
++					Color w45(1, 1, 1, 0.45f);
++					for (float sx = 143 + bp + 6 - 16; sx < 143 + fillW; sx += 8)
++					{
++						float a = std::round(X(sx)), b2 = std::round(X(sx + 2));
++						if (b2 > l && a < r) be->fill(a, t, b2 - a, bt - t, w45);
++					}
++					be->popClip();
++				}
++
++				// caption with the live dot
++				TStyle tc = ts(false, 22);
++				std::string capText = ui->mView == LAUNCH ? "Ready to start." : gm.line;
++				std::vector<TextLine> lines = layoutWrap(utf8to32(capText), tstyle(tc), 554, 0, 16);
++				float top = 141 - 28.6f * lines.size() + ry;
++				for (size_t i = 0; i < lines.size(); i++)
++				{
++					float lw = lines[i].width + (i == 0 ? 16 : 0);
++					float lx = 43 + (554 - lw) / 2, lt = top + 28.6f * i;
++					if (i == 0)
++					{
++						float base = lt + baseline(tc, 28.6f);
++						float dy = base - 1 - 8;
++						be->fill(std::round(X(lx - 2)), std::round(X(dy - 2)), std::round(X(12)), std::round(X(12)), EDGE);
++						be->fill(std::round(X(lx)), std::round(X(dy)), std::round(X(8)), std::round(X(8)), RED);
++						lx += 16;
++					}
++					drawLine(lines[i], tc, lx, lt, 28.6f, INK);
++				}
++			}
++			be->endScreen();
++		}
++
++		// ---- drawing: bottom screen ----
++		void drawFace(const Face& f, float x, float w, bool pressed)
++		{
++			float dx = pressed ? 2 : 0;
++			drawBox(faceBox(f.kind, pressed), x + dx, 422 + dx, w, 40);
++			Color lc = f.kind == 1 ? Color::hex(0xff8a96) : (f.kind == 2 ? MUTED : INK);
++			float lx = x + 15 + dx;
++			if (f.kind != 2)
++			{
++				float kw = kbdW(f.kbd);
++				drawBox(kbdBox(), lx, 430.5f + dx, kw, 23);
++				drawText(f.kbd, tKbd(), lx + 6, 432.5f + dx, Color::hex(0x121820));
++				lx += kw + 8;
++			}
++			drawText(f.label, tFace(), lx, 431 + dx, lc);
++		}
++
++		void drawBottom()
++		{
++			be->beginScreen(1);
++			drawBox(screenBox(), 0, 0, 640, 480);
++			float rb = rise(shellAt);
++			Geo g = geometry();
++			View v = ui->mView;
++			int n = count();
++
++			if (v != LAUNCH)
++			{
++				// shoulders
++				float kl = kbdW("L"), kr = kbdW("R");
++				drawBox(kbdBox(), 18, 21.5f + rb, kl, 23);
++				drawText("L", tKbd(), 24, 23.5f + rb, Color::hex(0x121820));
++				std::string prev, next;
++				if (n > 0 && v == HOME) { prev = sys((ui->mSys - 1 + n) % n).name; next = sys((ui->mSys + 1) % n).name; }
++				else if (n > 0) { prev = game((ui->mGame - 1 + n) % n).title; next = game((ui->mGame + 1) % n).title; }
++				TStyle tsh = ts(false, 20);
++				TextLine lp = layoutEllipsis(utf8to32(prev), tstyle(tsh), 180), ln = layoutEllipsis(utf8to32(next), tstyle(tsh), 180);
++				drawLine(lp, tsh, 18 + kl + 8, 21 + rb, 24, INK);
++				drawBox(ruleBox(), 284, 31.5f + rb, 72, 3);
++				drawBox(kbdBox(), 622 - kr, 21.5f + rb, kr, 23);
++				drawText("R", tKbd(), 622 - kr + 6, 23.5f + rb, Color::hex(0x121820));
++				drawLine(ln, tsh, 622 - kr - 8 - ln.width, 21 + rb, 24, INK);
++			}
++
++			// bubble
++			float by = g.bubbleY + rb;
++			drawBox(bubbleBox(), 66, by, 508, g.bubbleH);
++			float contentH = g.titleLines.size() * 32.5f + 3 + g.subLines.size() * lineHeight(tSub());
++			float cy = by + 3 + 8 + ((g.bubbleH - 24) - contentH) / 2;
++			float p = pop();
++			for (size_t i = 0; i < g.titleLines.size(); i++)
++				drawLine(g.titleLines[i], tTitle(), 320 - g.titleLines[i].width / 2, cy + p + 32.5f * i, 32.5f, INK);
++			float ey = cy + g.titleLines.size() * 32.5f + 3;
++			for (size_t i = 0; i < g.subLines.size(); i++)
++				drawLine(g.subLines[i], tSub(), 320 - g.subLines[i].width / 2, ey + p + lineHeight(tSub()) * i, lineHeight(tSub()), MUTED);
++			// pointer: the border-coloured triangle and the inner one that opens the border into it
++			float pb = by + g.bubbleH - 3;
++			drawTriangle("ptrO", 306, pb, 334, pb, 320, pb + 16, LINE);
++			drawTriangle("ptrI", 309, pb, 331, pb, 320, pb + 13, Color::hex(0x141b24));
++
++			// reel
++			float ry = g.reelY + rb;
++			be->pushClip(std::round(X(10)), std::round(X(ry)), std::round(X(620)), std::round(X(g.reelH)));
++			if (v != LAUNCH && n > 0)
++				drawBox(trackBox(), 26, ry + 34, 588, 80);
++			drawBox(plateBox(), 258, ry + 4, 124, 162);
++
++			if (v == LAUNCH)
++			{
++				Sprite c = cart(game(ui->mGame).box, 100, 104);
++				drawSprite(c, 270, ry + 12);
++				TStyle tr = ts(true, 20, 2.4f);
++				TextLine lr = line("READY", tr);
++				drawLine(lr, tr, 320 - lr.width / 2, ry + 122, 24, NAVY);
++			}
++			else
++			{
++				// slots by z-index: |d| >= 2, |d| == 1, the centre; DOM order within a level
++				std::vector<std::pair<int, int>> order;
++				for (int i = 0; i < n && i < (int)slots.size(); i++)
++				{
++					int d = slots[i].d;
++					int z = d == 0 ? 4 : 3 - std::min(std::abs(d), 2);
++					order.push_back({ z, i });
++				}
++				std::stable_sort(order.begin(), order.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b) { return a.first < b.first; });
++				for (auto& o : order)
++				{
++					int i = o.second;
++					float tx, sc, op;
++					slotValue(slots[i], tx, sc, op);
++					if (op <= 0) continue;
++					Xf xf; xf.ox = 320; xf.oy = ry + 16; xf.sc = sc; xf.tx = tx; xf.alpha = op;
++					if (v == HOME)
++					{
++						const SysInfo& si = sys(i);
++						drawBox(slotBox(slots[i].d == 0), 272, ry + 16, 96, 96, &xf);
++						Sprite ic = icon(si.icon);
++						if (ic.valid())
++						{
++							float ix = 320 + (280 - 320) * sc + tx, iy = ry + 16 + 8 * sc;
++							be->draw(ic.tex, X(ix), X(iy), X(80 * sc), X(80 * sc), Color(1, 1, 1, op));
++						}
++						if (si.fav) drawBox(badgeBox(), 272 + 77, ry + 16 + 9, 10, 10, &xf);
++					}
++					else
++					{
++						Sprite c = cart(game(i).box, 92.3077f, 96);
++						drawSprite(c, 273.846f, ry + 16, &xf);
++					}
++				}
++				TStyle tsr = ts(true, 20, 2.4f);
++				TextLine lsr = line("START", tsr);
++				drawLine(lsr, tsr, 320 - lsr.width / 2, ry + 124, 24, NAVY);
++			}
++			be->popClip();
++
++			// rail
++			int at = v == LAUNCH ? 0 : center(), total = v == LAUNCH ? 1 : n;
++			float trackW = 604 - 12 - g.countW;
++			drawBox(railBox(), 18, 396, trackW, 10);
++			float target = thumbLeft(at, total, trackW - 4);
++			if (!thumbKnown) { thumbKnown = true; thumbFrom = thumbTo = target; thumbAt = -1e9; }
++			else if (target != thumbTo) { thumbFrom = thumbValue(); thumbTo = target; thumbAt = now; }
++			drawBox(thumbBox(), 20 + thumbValue(), 394, 42, 14);
++			char a[16], b[16];
++			snprintf(a, sizeof a, "%02d", at + 1);
++			snprintf(b, sizeof b, "%02d", total);
++			float cx = 622 - g.countW;
++			TextLine la = line(a, ts(true, 18)), lsl = line(" / ", ts(false, 18)), lb = line(b, ts(false, 18));
++			drawLine(la, ts(true, 18), cx, 390, 22, INK);
++			drawLine(lsl, ts(false, 18), cx + la.width, 390, 22, MUTED);
++			drawLine(lb, ts(false, 18), cx + la.width + lsl.width, 390, 22, MUTED);
++
++			// face buttons
++			drawFace(g.left, 18, g.leftW, pressedAction && pressedSide == 0);
++			drawFace(g.right, 622 - g.rightW, g.rightW, pressedAction && pressedSide == 1 && g.right.kind != 2);
++			be->endScreen();
++		}
++
++		void drawTriangle(const char* name, float x0, float y0, float x1, float y1, float x2, float y2, const Color& c)
++		{
++			// cached by shape at the origin; y offsets reuse it
++			char k[64];
++			snprintf(k, sizeof k, "tri:%s", name);
++			float oy = std::floor(X(y0));
++			CacheEntry* e = find(k);
++			if (!e)
++			{
++				int bx, byy;
++				Bitmap b = paintTriangle(X(x0), X(y0) - oy, X(x1), X(y1) - oy, X(x2), X(y2) - oy, c, bx, byy);
++				e = &put(k, G_BOX, b, true, -bx, -byy);
++			}
++			be->draw(e->sp.tex, (float)(-e->sp.ox), oy - e->sp.oy, (float)e->sp.tex->w, (float)e->sp.tex->h, Color(1, 1, 1, 1));
++		}
++
++		// ---- touch hit tests (CSS px of the bottom screen) ----
++		int hit(float x, float y, int& slotIndex, int& side)
++		{
++			Geo g = geometry();
++			View v = ui->mView;
++			slotIndex = -1; side = -1;
++			auto in = [&](float rx, float ry, float rw, float rh) { return x >= rx && x < rx + rw && y >= ry && y < ry + rh; };
++			if (in(18, 422, g.leftW, 40)) { side = 0; return g.left.action; }
++			if (in(622 - g.rightW, 422, g.rightW, 40)) { side = 1; return g.right.action; }
++			if (v == LAUNCH) return ACT_NONE;
++			if (in(18, 21, 258, 24)) return ACT_PREV;
++			if (in(364, 21, 258, 24)) return ACT_NEXT;
++			if (in(320 - g.startW / 2, g.reelY + 120, g.startW, 32)) return ACT_OPEN;
++			if (!in(10, g.reelY, 620, g.reelH)) return ACT_NONE;
++			// topmost slot first
++			int best = -1, bestZ = -1;
++			for (int i = 0; i < (int)slots.size(); i++)
++			{
++				float tx, sc, op;
++				slotValue(slots[i], tx, sc, op);
++				if (op <= 0) continue;
++				float sx = 320 - 48 * sc + tx, sy = g.reelY + 16, sw = 96 * sc;
++				if (!in(sx, sy, sw, sw)) continue;
++				int d = slots[i].d, z = d == 0 ? 4 : 3 - std::min(std::abs(d), 2);
++				if (z >= bestZ) { bestZ = z; best = i; }
++			}
++			if (best >= 0) { slotIndex = best; return ACT_SLOT; }
++			return ACT_NONE;
++		}
++
++		void act(int a, int slot)
++		{
++			switch (a)
++			{
++			case ACT_PREV: nudge(-1); break;
++			case ACT_NEXT: nudge(1); break;
++			case ACT_OPEN: open(); break;
++			case ACT_BACK: back(); break;
++			case ACT_FAV: toggleFav(); break;
++			case ACT_RESUME: resume(); break;
++			case ACT_SLOT:
++				if (ui->mView == HOME) { if (slot == ui->mSys) open(); else setSystem(slot); }
++				else if (ui->mView == LIBRARY) { if (slot == ui->mGame) open(); else setGame(slot); }
++				break;
++			}
++		}
++	};
++
++	// ---- UI -----------------------------------------------------------------------------------------------------------
++
++	UI::UI(Source* src, Backend* be, const std::string& assetDir, float scale) : d(new Impl(this))
++	{
++		d->src = src;
++		d->be = be;
++		d->dir = assetDir;
++		d->s = scale;
++		d->loadAssets();
++	}
++
++	UI::~UI() {}
++
++	void UI::setHome(int sys)
++	{
++		bool same = mView == HOME && mSys == sys && !d->shellKey.empty();
++		mView = HOME;
++		mSys = sys;
++		d->launchAt = -1;
++		if (!same) d->render(false);
++	}
++
++	void UI::setLibrary(int sys, int game)
++	{
++		bool same = mView == LIBRARY && mSys == sys && mGame == game && !d->shellKey.empty();
++		mView = LIBRARY;
++		mSys = sys;
++		mGame = game;
++		d->launchAt = -1;
++		d->gameCache.clear();
++		if (!same) d->render(false);
++	}
++
++	void UI::setLaunch(int sys, int game, bool fromHome)
++	{
++		mView = LAUNCH;
++		mSys = sys;
++		mGame = game;
++		d->launchFromHome = fromHome;
++		d->launchAt = d->now + Impl::LAUNCH_DELAY;
++		d->launched = false;
++		d->gameCache.clear();
++		d->render(false);
++	}
++
++	bool UI::settled() const
++	{
++		std::lock_guard<std::mutex> l(d->qlock);
++		return !d->requestedThisFrame && d->jobs.empty() && d->done.empty();
++	}
++
++	bool UI::launchPending() const { return mView == LAUNCH && !d->launched; }
++
++	void UI::dropTextures()
++	{
++		d->cache.clear();
++	}
++
++	void UI::dataChanged()
++	{
++		d->dataChanged();
++		int n = d->count();
++		if ((int)d->slots.size() != n)
++			d->layout(false);
++	}
++
++	bool UI::press(Button b)
++	{
++		switch (b)
++		{
++		case LEFT: case L: d->nudge(-1); return true;
++		case RIGHT: case R: d->nudge(1); return true;
++		case A: d->open(); return true;
++		case B: if (mView == HOME) return false; d->back(); return true;
++		case X: if (mView != HOME) return false; d->resume(); return true;
++		case Y: if (mView == LAUNCH) return false; d->toggleFav(); return true;
++		default: return false;
++		}
++	}
++
++	bool UI::touch(int screen, float x, float y, bool down)
++	{
++		if (screen != 1) return false;
++		float cx = x / d->s, cy = y / d->s;
++		if (down)
++		{
++			d->pointerDown = true;
++			d->downX = cx; d->downY = cy;
++			int slot, side;
++			int a = d->hit(cx, cy, slot, side);
++			if ((a == ACT_FAV || a == ACT_RESUME || a == ACT_BACK) && side >= 0) { d->pressedAction = a; d->pressedSide = side; }
++			return true;
++		}
++		if (!d->pointerDown) return false;
++		d->pointerDown = false;
++		d->pressedAction = 0; d->pressedSide = -1;
++		float dx = cx - d->downX, dy = cy - d->downY;
++		if (std::fabs(dx) > 56 && std::fabs(dx) > std::fabs(dy) * 1.2f)
++		{
++			d->nudge(dx < 0 ? 1 : -1);
++			return true;
++		}
++		int slot, side;
++		int a = d->hit(d->downX, d->downY, slot, side);
++		if (a != ACT_NONE) d->act(a, slot);
++		return true;
++	}
++
++	void UI::update(double nowMs)
++	{
++		d->now = nowMs;
++		{
++			std::vector<Done> ready;
++			{
++				std::lock_guard<std::mutex> l(d->qlock);
++				ready.swap(d->done);
++			}
++			for (auto& r : ready)
++			{
++				if (r.bmp.empty()) { CacheEntry& e = d->cache[r.key]; e.group = r.group; e.used = d->frame; continue; }
++				bool box = r.group == G_BOX;
++				CacheEntry& e = d->put(r.key, r.group, r.bmp, r.smooth, box ? (int)r.cssW : 0, box ? (int)r.cssH : 0);
++				if (!box) { e.cssW = r.cssW; e.cssH = r.cssH; }
++			}
++		}
++		if (mView == LAUNCH && d->launchAt >= 0 && nowMs >= d->launchAt && !d->launched)
++		{
++			d->launched = true;
++			d->launchAt = -1;
++			d->src->launch(mGame);
++		}
++	}
++
++	void UI::render()
++	{
++		d->frame++;
++		d->requestedThisFrame = false;
++		d->drawTop();
++		d->drawBottom();
++		d->evict();
++	}
++
++	bool UI::animating() const
++	{
++		double now = d->now;
++		if (now - d->topAt < 280 || now - d->shellAt < 280 || now - d->popAt < 320 || now - d->thumbAt < 350) return true;
++		for (auto& st : d->slots)
++			if ((st.trans && now - st.t0 < 420) || (st.otrans && now - st.o0 < 240)) return true;
++		if (d->launchAt >= 0) return true;
++		std::lock_guard<std::mutex> l(d->qlock);
++		return !d->jobs.empty() || !d->done.empty();
++	}
++
++	int UI::nextWake() const
++	{
++		if (animating()) return 0;
++		double now = d->now;
++		// the looping animations step: the icon bob every 600 ms (home), the meter stripes every 200 ms (library)
++		double period = mView == HOME ? 600 : 200;
++		double t = now - d->topAt;
++		double next = (std::floor(t / period) + 1) * period - t;
++		return (int)std::ceil(next);
++	}
++
++	bool UI::workOnce()
++	{
++		Job job;
++		{
++			std::lock_guard<std::mutex> l(d->qlock);
++			if (d->jobs.empty()) return false;
++			job = d->jobs.front();
++			d->jobs.pop_front();
++		}
++		Done r;
++		r.key = job.key; r.group = job.group; r.smooth = job.smooth;
++		r.bmp = job.fn(r.cssW, r.cssH);
++		{
++			std::lock_guard<std::mutex> l(d->qlock);
++			d->queued.erase(job.key);
++			d->done.push_back(std::move(r));
++		}
++		if (d->onFinished) d->onFinished();
++		return true;
++	}
++
++	void UI::setNotifiers(std::function<void()> queued, std::function<void()> finished)
++	{
++		d->onQueued = queued;
++		d->onFinished = finished;
++	}
++
++	void UI::finishWork() { while (workOnce()) {} }
++}
+diff --git a/es-app/src/rnds/RndsUI.h b/es-app/src/rnds/RndsUI.h
+new file mode 100644
+index 00000000..3542b415
+--- /dev/null
++++ b/es-app/src/rnds/RndsUI.h
+@@ -0,0 +1,152 @@
++#pragma once
++// ROCKNIXDS rnds engine: the ROCKNIXDS menu mockup (mockup/index.html) as a native two-screen UI. Three views: home
++// (the system shelf), library (a system's games as cartridges) and the ready screen. Layout, colours, fonts and
++// animations follow the mockup's CSS; positions are CSS px of a 640x480 screen and are scaled to the panel (x1.6 on
++// the RG DS Plus). The UI knows nothing about EmulationStation: a Source supplies systems, games and status, a Backend
++// draws textures. In ES those are SystemData/FileData and the GL renderer; in the test harness the mockup's own data
++// and a software compositor.
++#include "RndsRaster.h"
++#include <deque>
++#include <functional>
++#include <list>
++#include <map>
++#include <memory>
++#include <string>
++#include <vector>
++
++namespace rnds
++{
++	// ---- data ---------------------------------------------------------------------------------------------------------
++	struct SysInfo
++	{
++		std::string id;			// icon/accent key
++		std::string name;		// "Nintendo DS"
++		std::string maker;		// "Nintendo"
++		Color accent;
++		std::string icon;		// 32x32 pixel icon (PNG path)
++		int games = 0, played = 0;
++		std::string time;		// "86h 12m"
++		bool fav = false;
++		bool hasResume = false;		// a game to show on the "last played" chip
++		std::string resumeEyebrow;	// "Last played"
++		std::string resumeTitle;
++		std::string resumeBox;
++	};
++
++	struct GameInfo
++	{
++		std::string title;
++		std::string sub;		// bubble subtitle: "Role-playing · 2009"
++		std::string line;		// top caption: "Role-playing · 2009. 14 plays · Yesterday · 22h 10m."
++		std::string box;		// box art inside the cartridge
++		std::string snap;		// screenshot on the top screen
++		int achA = 0, achB = 0;	// unlocked / total
++		std::string achLabel;	// "28 / 50 achievements" (lower case; drawn upper)
++		bool fav = false;
++	};
++
++	class Source
++	{
++	public:
++		virtual ~Source() {}
++		virtual int systemCount() = 0;
++		virtual SysInfo system(int i) = 0;
++		virtual int gameCount() = 0;			// the library's list (the current system)
++		virtual GameInfo game(int i) = 0;
++		virtual std::string clockText() = 0;	// "01:01 PM" / "13:01"
++		virtual std::string dateText() = 0;		// "10/02"
++		virtual float battery() = 0;			// 0..1, < 0 unknown
++		virtual bool online() = 0;
++
++		// actions
++		virtual void selectSystem(int i) = 0;	// the home cursor moved
++		virtual void selectGame(int i) = 0;		// the library cursor moved
++		virtual int openLibrary(int sys) = 0;	// home -> library: the game index to start on
++		virtual void backToHome() = 0;			// library -> home
++		virtual void launch(int game) = 0;		// the ready screen's game (library index)
++		virtual void toggleSystemFav(int sys) = 0;
++		virtual void toggleGameFav(int game) = 0;
++		virtual int resumeGame(int sys) = 0;	// library index of the system's resume game, opening that list; -1 none
++	};
++
++	// ---- drawing ------------------------------------------------------------------------------------------------------
++	struct Tex
++	{
++		virtual ~Tex() {}
++		int w = 0, h = 0;
++		bool alpha = false;
++	};
++	typedef std::shared_ptr<Tex> TexPtr;
++
++	class Backend
++	{
++	public:
++		virtual ~Backend() {}
++		virtual TexPtr upload(const Bitmap& b, bool smooth) = 0;
++		// device pixels of the current screen; tint multiplies (alpha textures take its colour)
++		virtual void draw(const TexPtr& t, float x, float y, float w, float h, const Color& tint) = 0;
++		virtual void fill(float x, float y, float w, float h, const Color& c) = 0;
++		virtual void pushClip(float x, float y, float w, float h) = 0;
++		virtual void popClip() = 0;
++		virtual void beginScreen(int screen) = 0;	// 0 top, 1 bottom
++		virtual void endScreen() = 0;
++	};
++
++	// a texture plus where its CSS box sits in it (device px)
++	struct Sprite
++	{
++		TexPtr tex;
++		int ox = 0, oy = 0;		// the box's top-left inside the bitmap
++		bool valid() const { return (bool)tex; }
++	};
++
++	// ---- timing functions -------------------------------------------------------------------------------------------
++	float cubicBezier(float x1, float y1, float x2, float y2, float p);
++	inline float stepsEnd(int n, float p) { return p >= 1 ? 1 : (p <= 0 ? 0 : (float)(int)(p * n) / n); }
++
++	// ---- the UI -------------------------------------------------------------------------------------------------------
++	class UI
++	{
++	public:
++		enum View { HOME, LIBRARY, LAUNCH };
++
++		UI(Source* src, Backend* be, const std::string& assetDir, float scale);
++		~UI();
++
++		// state changes driven by the host
++		void setHome(int sys);					// showing home, cursor on sys
++		void setLibrary(int sys, int game);		// showing sys's library, cursor on game
++		void setLaunch(int sys, int game, bool fromHome);
++		void dataChanged();						// metadata / favourites / lists changed: rebuild texts
++		void dropTextures();					// the GL context is going away (a game starts): forget every texture
++		View view() const { return mView; }
++		bool launchPending() const;				// the ready screen is waiting to start its game
++		int systemIndex() const { return mSys; }
++		int gameIndex() const { return mGame; }
++
++		// input: true when used
++		enum Button { LEFT, RIGHT, UP, DOWN, A, B, X, Y, L, R };
++		bool press(Button b);
++		bool touch(int screen, float x, float y, bool down);	// device px of that screen
++
++		void update(double nowMs);
++		void render();
++
++		// ms until something must be drawn again: 0 = every frame, -1 = nothing pending
++		int nextWake() const;
++
++		// asynchronous image work: the host's thread (or the harness) calls this until it returns false
++		bool workOnce();
++		void finishWork();	// harness: run every queued job now
++		// called (from any thread) when a job is queued, and when one is finished
++		void setNotifiers(std::function<void()> queued, std::function<void()> finished);
++		bool animating() const;
++		bool settled() const;	// nothing queued, nothing waiting to be uploaded, the last frame was complete
++
++	private:
++		struct Impl;
++		std::unique_ptr<Impl> d;
++		View mView = HOME;
++		int mSys = 0, mGame = 0;
++	};
++}
+diff --git a/es-app/src/views/SystemView.cpp b/es-app/src/views/SystemView.cpp
+index a7eafe49..a3061c2b 100644
+--- a/es-app/src/views/SystemView.cpp
++++ b/es-app/src/views/SystemView.cpp
+@@ -28,6 +28,7 @@
+ #include "BindingManager.h"
+ #include "guis/GuiRetroAchievements.h"
+ #include "components/CarouselComponent.h"
++#include "rnds/RndsEs.h"
+ 
+ SystemView::SystemView(Window* window) : GuiComponent(window),
+ 	mViewNeedsReload(true),
+@@ -55,10 +56,24 @@ SystemView::SystemView(Window* window) : GuiComponent(window),
+ 
+ 	setSize((float)Renderer::getScreenWidth(), (float)Renderer::getScreenHeight());
+ 	populate();
++	updateRnds();
++}
++
++// ROCKNIXDS: themes with a <view name="rnds"> are drawn and driven by the rnds engine; this view keeps the system list
++// and the cursor
++void SystemView::updateRnds()
++{
++	SystemData* first = SystemData::getFirstVisibleSystem();
++	mRnds = first != nullptr && rnds::isRndsTheme(first->getTheme());
++	if (mRnds)
++		rnds::EsHost::get(mWindow)->attach(this);
+ }
+ 
+ SystemView::~SystemView()
+ {
++	if (auto host = rnds::EsHost::instance())
++		host->detach(this);
++
+ 	mCarousel.attach(nullptr);
+ 
+ 	for (auto sb : mStaticBackgrounds)
+@@ -375,6 +390,13 @@ SystemData* SystemView::getSelected()
+ 
+ bool SystemView::input(InputConfig* config, Input input)
+ {
++	if (mRnds)
++	{
++		if (rnds::EsHost::get(mWindow)->input(this, config, input))
++			return true;
++		return GuiComponent::input(config, input);
++	}
++
+ 	if (mYButton.isShortPressed(config, input))
+ 	{
+ 		showQuickSearch();
+@@ -603,6 +625,13 @@ void SystemView::showNavigationBar(const std::string& title, const std::function
+ 
+ void SystemView::update(int deltaTime)
+ {
++	if (mRnds)
++	{
++		GuiComponent::update(deltaTime);
++		rnds::EsHost::get(mWindow)->update(this, deltaTime);
++		return;
++	}
++
+ 	mCarousel.update(deltaTime);
+ 	mSystemInfo.update(deltaTime);
+ 
+@@ -859,6 +888,12 @@ void SystemView::render(const Transform4x4f& parentTrans)
+ 
+ 	Transform4x4f trans = getTransform() * parentTrans;
+ 
++	if (mRnds)
++	{
++		rnds::EsHost::get(mWindow)->render(this, trans);
++		return;
++	}
++
+ 	auto rect = Renderer::getScreenRect(trans, mSize);
+ 	if (!Renderer::isVisibleOnScreen(rect))
+ 		return;
+@@ -889,6 +924,9 @@ void SystemView::render(const Transform4x4f& parentTrans)
+ 
+ std::vector<HelpPrompt> SystemView::getHelpPrompts()
+ {
++	if (mRnds)
++		return std::vector<HelpPrompt>();	// the engine draws its own buttons
++
+ 	std::vector<HelpPrompt> prompts = mCarousel.getHelpPrompts();
+ 
+ 	prompts.push_back(HelpPrompt(BUTTON_OK, _("SELECT"), [&] {ViewController::get()->goToGameList(getSelected()); }));
+@@ -933,6 +971,7 @@ HelpStyle SystemView::getHelpStyle()
+ 
+ void  SystemView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
+ {
++	updateRnds();
+ 	LOG(LogDebug) << "SystemView::onThemeChanged()";
+ 
+ 	mViewNeedsReload = true;
+@@ -1439,6 +1478,8 @@ void SystemView::onShow()
+ 
+ 	if (getSelected() != nullptr)
+ 		TextToSpeech::getInstance()->say(getSelected()->getFullName());
++	if (mRnds)
++		rnds::EsHost::get(mWindow)->showHome(this);
+ }
+ 
+ void SystemView::onHide()
+@@ -1529,6 +1570,9 @@ bool SystemView::hitTest(int x, int y, Transform4x4f& parentTransform, std::vect
+ {
+ 	bool ret = GuiComponent::hitTest(x, y, parentTransform, pResult);
+ 
++	if (mRnds)
++		return ret;	// the engine takes every touch (the hidden carousel must not)
++
+ 	int mCursor = mCarousel.getCursorIndex();
+ 	if (mCursor < 0 || mCursor >= mEntries.size())
+ 		return ret;
+@@ -1545,6 +1589,9 @@ bool SystemView::hitTest(int x, int y, Transform4x4f& parentTransform, std::vect
+ 
+ bool SystemView::onMouseClick(int button, bool pressed, int x, int y)
+ {
++	if (mRnds)
++		return rnds::EsHost::get(mWindow)->mouse(button, pressed, x, y);
++
+ 	if (mCarousel.onMouseClick(button, pressed, x, y))
+ 		return true;
+ 
+@@ -1558,6 +1605,8 @@ bool SystemView::onMouseClick(int button, bool pressed, int x, int y)
+ 
+ void SystemView::onMouseMove(int x, int y)
+ {
++	if (mRnds)
++		return;
+ 	mCarousel.onMouseMove(x, y);
+ }
+ 
+diff --git a/es-app/src/views/SystemView.h b/es-app/src/views/SystemView.h
+index 407aaf48..4a80816d 100644
+--- a/es-app/src/views/SystemView.h
++++ b/es-app/src/views/SystemView.h
+@@ -69,6 +69,9 @@ public:
+ 	int getCursorIndex();
+ 	std::vector<SystemData*> getObjects();
+ 
++	// ROCKNIXDS: the theme is drawn by the rnds engine (rnds/RndsEs.h)
++	bool isRnds() const { return mRnds; }
++
+ protected:
+ 	//virtual void onCursorChanged(const CursorState& state) override;
+ 	void onCursorChanged(const CursorState& state);
+@@ -134,6 +137,9 @@ private:
+ 	float			mSystemInfoDelay;
+ 	bool			mSystemInfoCountOnly;
+ 
++	bool			mRnds = false;
++	void			updateRnds();
++
+ 	std::string		mExtraTransitionType;
+ 	float			mExtraTransitionSpeed;
+ 	bool			mExtraTransitionHorizontal;
+diff --git a/es-app/src/views/ViewController.cpp b/es-app/src/views/ViewController.cpp
+index 59153c8c..500826d2 100644
+--- a/es-app/src/views/ViewController.cpp
++++ b/es-app/src/views/ViewController.cpp
+@@ -10,6 +10,8 @@
+ #include "views/gamelist/GridGameListView.h"
+ #include "views/gamelist/VideoGameListView.h"
+ #include "views/gamelist/CarouselGameListView.h"
++#include "views/gamelist/RndsGameListView.h"
++#include "rnds/RndsEs.h"
+ #include "views/SystemView.h"
+ #include "views/UIModeController.h"
+ #include "FileFilterIndex.h"
+@@ -371,6 +373,10 @@ void ViewController::playViewTransition(bool forceImmediate)
+ 	if (Settings::PowerSaverMode() == "instant")
+ 		transition_style = "instant";
+ 
++	// ROCKNIXDS: the rnds engine animates its own views
++	if (getState().system != nullptr && rnds::isRndsTheme(getState().system->getTheme()))
++		transition_style = "instant";
++
+ 	if (transition_style == "fade & slide")
+ 		transition_style = "slide";
+ 
+@@ -567,6 +573,28 @@ void ViewController::launch(FileData* game, LaunchGameOptions options, Vector3f
+ 
+ 	GuiComponent::isLaunchTransitionRunning = true;
+ 		
++	// ROCKNIXDS: the rnds engine's ready screen stays up until the game takes over (no splash, no fade)
++	bool rndsLaunch = game->getSourceFileData()->getSystem() != nullptr && rnds::isRndsTheme(game->getSourceFileData()->getSystem()->getTheme());
++	if (rndsLaunch)
++	{
++		setAnimation(new LambdaAnimation([](float) {}, 1), 0, [this, game, options]
++		{
++			if (doLaunchGame(game, options))
++			{
++				GuiComponent::isLaunchTransitionRunning = false;
++				Window* w = mWindow;
++				mWindow->postToUiThread([w]() { reloadAllGames(w, false); });
++			}
++			else
++			{
++				GuiComponent::isLaunchTransitionRunning = false;
++				mLockInput = false;
++				this->onFileChanged(game, FILE_METADATA_CHANGED);
++			}
++		});
++		return;
++	}
++
+ 	if (!Settings::getInstance()->getBool("HideWindow"))
+ 		mWindow->setCustomSplashScreen(game->getImagePath(), game->getName(), game);
+ 
+@@ -772,7 +800,10 @@ std::shared_ptr<IGameListView> ViewController::getGameListView(SystemData* syste
+ 	}
+ 
+ 	// Create the view
+-	switch (selectedViewType)
++	bool rndsView = rnds::isRndsTheme(system->getTheme());	// ROCKNIXDS: drawn by the rnds engine
++	if (rndsView)
++		view = std::shared_ptr<IGameListView>(new RndsGameListView(mWindow, system->getRootFolder()));
++	else switch (selectedViewType)
+ 	{
+ 		case VIDEO:
+ 			view = std::shared_ptr<IGameListView>(new VideoGameListView(mWindow, system->getRootFolder()));
+@@ -791,7 +822,7 @@ std::shared_ptr<IGameListView> ViewController::getGameListView(SystemData* syste
+ 			break;
+ 	}
+ 
+-	if (selectedViewType != GRID)
++	if (selectedViewType != GRID || rndsView)
+ 	{
+ 		// GridGameListView theme needs to be loaded before populating.
+ 
+diff --git a/es-app/src/views/gamelist/RndsGameListView.cpp b/es-app/src/views/gamelist/RndsGameListView.cpp
+new file mode 100644
+index 00000000..82f94309
+--- /dev/null
++++ b/es-app/src/views/gamelist/RndsGameListView.cpp
+@@ -0,0 +1,239 @@
++#include "views/gamelist/RndsGameListView.h"
++
++#include "rnds/RndsEs.h"
++#include "views/ViewController.h"
++#include "CollectionSystemManager.h"
++#include "SaveStateRepository.h"
++#include "guis/GuiSaveState.h"
++#include "FileData.h"
++#include "Settings.h"
++#include "Sound.h"
++#include "SystemData.h"
++#include "Window.h"
++#include "renderers/Renderer.h"
++
++RndsGameListView::RndsGameListView(Window* window, FolderData* root) : ISimpleGameListView(window, root)
++{
++	rnds::EsHost::get(window)->attach(this);
++	populateList(root->getChildrenListToDisplay());
++}
++
++RndsGameListView::~RndsGameListView()
++{
++	if (auto host = rnds::EsHost::instance())
++		host->detach(this);
++}
++
++SystemData* RndsGameListView::system() { return mRoot->getSystem(); }
++
++void RndsGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
++{
++	ISimpleGameListView::onThemeChanged(theme);
++	if (auto host = rnds::EsHost::instance())
++		host->dataChanged();
++}
++
++void RndsGameListView::onFileChanged(FileData* file, FileChangeType change)
++{
++	if (change == FILE_METADATA_CHANGED)
++	{
++		// the engine re-reads names, art, play stats and favourites; the list itself didn't change
++		if (auto host = rnds::EsHost::instance())
++			host->dataChanged();
++		return;
++	}
++	ISimpleGameListView::onFileChanged(file, change);
++}
++
++void RndsGameListView::populateList(const std::vector<FileData*>& files)
++{
++	FileData* keep = mEntries.size() && mCursor >= 0 && mCursor < (int)mEntries.size() ? mEntries[mCursor] : nullptr;
++	mEntries.clear();
++	if (files.size() > 0)
++	{
++		bool showParentFolder = mRoot->getSystem()->getShowParentFolder();
++		if (showParentFolder && mCursorStack.size())
++			mEntries.push_back(createParentFolderData());
++		for (auto file : files)
++			mEntries.push_back(file);
++	}
++	else
++		mEntries.push_back(createNoEntriesPlaceholder());
++
++	mCursor = 0;
++	if (keep)
++		for (int i = 0; i < (int)mEntries.size(); i++)
++			if (mEntries[i] == keep) { mCursor = i; break; }
++	if (mCursor == 0 && mEntries.size() > 1 && mEntries[0]->getPath() == ".." && mCursorStack.size())
++		mCursor = 1;
++
++	updateFolderPath();
++	if (auto host = rnds::EsHost::instance())
++		host->dataChanged();
++}
++
++FileData* RndsGameListView::getCursor()
++{
++	if (mEntries.empty())
++		return nullptr;
++	if (mCursor < 0 || mCursor >= (int)mEntries.size())
++		mCursor = 0;
++	return mEntries[mCursor];
++}
++
++void RndsGameListView::setCursor(FileData* cursor)
++{
++	if (cursor == nullptr)
++		return;
++	for (int i = 0; i < (int)mEntries.size(); i++)
++		if (mEntries[i] == cursor) { setCursorIndex(i); return; }
++
++	if (!cursor->isPlaceHolder())
++	{
++		// in another folder: show that folder
++		std::stack<FileData*> stack;
++		auto children = mRoot->findChildrenListToDisplayAtCursor(cursor, stack);
++		if (children != nullptr)
++		{
++			mCursorStack = stack;
++			populateList(*children.get());
++			for (int i = 0; i < (int)mEntries.size(); i++)
++				if (mEntries[i] == cursor) { setCursorIndex(i); return; }
++		}
++	}
++}
++
++int RndsGameListView::getCursorIndex() { return mCursor; }
++
++void RndsGameListView::setCursorIndex(int index)
++{
++	if (mEntries.empty())
++		return;
++	mCursor = ((index % (int)mEntries.size()) + (int)mEntries.size()) % (int)mEntries.size();
++	if (auto host = rnds::EsHost::instance())
++		host->showLibrary(nullptr);	// keeps the engine's cursor in step when ES moved it (jump to letter, random game...)
++}
++
++int RndsGameListView::resumeIndex()
++{
++	int best = -1;
++	std::string bestDate;
++	for (int i = 0; i < (int)mEntries.size(); i++)
++	{
++		FileData* f = mEntries[i];
++		if (f->getType() != GAME)
++			continue;
++		std::string last = f->getMetadata(MetaDataId::LastPlayed);
++		if (!last.empty() && last > bestDate) { bestDate = last; best = i; }
++	}
++	if (best >= 0)
++		return best;
++	for (int i = 0; i < (int)mEntries.size(); i++)
++		if (mEntries[i]->getType() == GAME)
++			return i;
++	return 0;
++}
++
++bool RndsGameListView::openSelected()
++{
++	FileData* cursor = getCursor();
++	if (cursor == nullptr)
++		return true;
++	if (mCursorStack.size() && (cursor->getType() == PLACEHOLDER || cursor->getType() == FOLDER) && cursor->getPath() == "..")
++	{
++		goBack();
++		return true;
++	}
++	if (cursor->getType() == FOLDER)
++	{
++		moveToFolder((FolderData*)cursor);
++		return true;
++	}
++	return cursor->getType() != GAME;	// a placeholder opens nothing
++}
++
++void RndsGameListView::launchSelected()
++{
++	FileData* cursor = getCursor();
++	if (cursor == nullptr || cursor->getType() != GAME)
++		return;
++	if (SaveStateRepository::isEnabled(cursor) &&
++		(cursor->getCurrentGameSetting("savestates") == "1" || (cursor->getCurrentGameSetting("savestates") == "2" && cursor->getSourceFileData()->getSystem()->getSaveStateRepository()->hasSaveStates(cursor))))
++	{
++		mWindow->pushGui(new GuiSaveState(mWindow, cursor, [this, cursor](SaveState* state)
++		{
++			Sound::getFromTheme(getTheme(), getName(), "launch")->play();
++			LaunchGameOptions options;
++			options.saveStateInfo = state;
++			ViewController::get()->launch(cursor, options);
++		}));
++		return;
++	}
++	Sound::getFromTheme(getTheme(), getName(), "launch")->play();
++	launch(cursor);
++}
++
++void RndsGameListView::goUp() { goBack(); }
++
++void RndsGameListView::launch(FileData* game)
++{
++	ViewController::get()->launch(game);
++}
++
++void RndsGameListView::remove(FileData* game)
++{
++	for (auto it = mEntries.begin(); it != mEntries.end(); ++it)
++		if (*it == game) { mEntries.erase(it); break; }
++	mRoot->removeFromVirtualFolders(game);
++	delete game;
++	if (mEntries.empty())
++		mEntries.push_back(createNoEntriesPlaceholder());
++	if (mCursor >= (int)mEntries.size())
++		mCursor = (int)mEntries.size() - 1;
++	if (auto host = rnds::EsHost::instance())
++		host->dataChanged();
++}
++
++bool RndsGameListView::input(InputConfig* config, Input input)
++{
++	if (rnds::EsHost::get(mWindow)->input(this, config, input))
++		return true;
++	return ISimpleGameListView::input(config, input);
++}
++
++void RndsGameListView::update(int deltaTime)
++{
++	GuiComponent::update(deltaTime);
++	rnds::EsHost::get(mWindow)->update(this, deltaTime);
++}
++
++void RndsGameListView::render(const Transform4x4f& parentTrans)
++{
++	Transform4x4f trans = parentTrans * getTransform();
++	rnds::EsHost::get(mWindow)->render(this, trans);
++}
++
++void RndsGameListView::onShow()
++{
++	ISimpleGameListView::onShow();
++	rnds::EsHost::get(mWindow)->showLibrary(this);
++}
++
++bool RndsGameListView::hitTest(int x, int y, Transform4x4f& parentTransform, std::vector<GuiComponent*>* pResult)
++{
++	// only the view: the engine takes every touch, the header components it doesn't draw must not
++	if (!isVisible())
++		return false;
++	Transform4x4f trans = getTransform() * parentTransform;
++	auto rect = Renderer::getScreenRect(trans, getSize(), true);
++	if (x == -1 || y == -1 || !rect.contains(x, y))
++		return false;
++	if (pResult)
++		pResult->push_back(this);
++	return true;
++}
++
++bool RndsGameListView::onMouseClick(int button, bool pressed, int x, int y)
++{
++	return rnds::EsHost::get(mWindow)->mouse(button, pressed, x, y);
++}
+diff --git a/es-app/src/views/gamelist/RndsGameListView.h b/es-app/src/views/gamelist/RndsGameListView.h
+new file mode 100644
+index 00000000..99a669c3
+--- /dev/null
++++ b/es-app/src/views/gamelist/RndsGameListView.h
+@@ -0,0 +1,60 @@
++#pragma once
++#ifndef ES_APP_VIEWS_GAME_LIST_RNDS_GAME_LIST_VIEW_H
++#define ES_APP_VIEWS_GAME_LIST_RNDS_GAME_LIST_VIEW_H
++
++#include "views/gamelist/ISimpleGameListView.h"
++
++// ROCKNIXDS: a system's games for themes drawn by the rnds engine (rnds/RndsEs.h). It keeps the list and the cursor
++// the way ES's other game lists do (folders, filters, sorting, favourites, menus); the engine draws it and takes its
++// input.
++class RndsGameListView : public ISimpleGameListView
++{
++public:
++	RndsGameListView(Window* window, FolderData* root);
++	~RndsGameListView();
++
++	virtual void onFileChanged(FileData* file, FileChangeType change) override;
++	virtual void onThemeChanged(const std::shared_ptr<ThemeData>& theme) override;
++
++	virtual FileData* getCursor() override;
++	virtual void setCursor(FileData* file) override;
++	virtual int getCursorIndex() override;
++	virtual void setCursorIndex(int index) override;
++	virtual void resetLastCursor() override {}
++
++	virtual const char* getName() const override { return "rnds"; }
++	virtual void launch(FileData* game) override;
++	virtual std::vector<FileData*> getFileDataEntries() override { return mEntries; }
++
++	virtual bool input(InputConfig* config, Input input) override;
++	virtual void update(int deltaTime) override;
++	virtual void render(const Transform4x4f& parentTrans) override;
++	virtual void onShow() override;
++	virtual bool onMouseClick(int button, bool pressed, int x, int y) override;
++	virtual bool hitTest(int x, int y, Transform4x4f& parentTransform, std::vector<GuiComponent*>* pResult = nullptr) override;
++	virtual std::vector<HelpPrompt> getHelpPrompts() override { return std::vector<HelpPrompt>(); }
++
++	// for the engine
++	const std::vector<FileData*>& entries() const { return mEntries; }
++	SystemData* system();
++	bool openSelected();	// what ES's A does on the cursor: open a folder / go up, or false for a game
++	void launchSelected();	// ES's launch path for the cursor game (save-state chooser when that's on)
++	void goUp();			// B: up a folder, or back to the systems
++	bool inFolder() const { return mCursorStack.size() > 0; }
++	int resumeIndex();		// the most recently played game, else the first game
++	void showOptions() { showSelectedGameOptions(); }
++	void showSaves() { showSelectedGameSaveSnapshots(); }
++	void showListOptions() { showGamelistOptions(); }
++
++protected:
++	virtual std::string getQuickSystemSelectRightButton() override { return "righttrigger"; }
++	virtual std::string getQuickSystemSelectLeftButton() override { return "lefttrigger"; }
++	virtual void populateList(const std::vector<FileData*>& files) override;
++	virtual void remove(FileData* game) override;
++
++private:
++	std::vector<FileData*> mEntries;
++	int mCursor = 0;
++};
++
++#endif
+diff --git a/es-core/src/ThemeData.cpp b/es-core/src/ThemeData.cpp
+index 6f62cd01..5a5ee339 100644
+--- a/es-core/src/ThemeData.cpp
++++ b/es-core/src/ThemeData.cpp
+@@ -29,7 +29,7 @@
+ #include <unordered_set>
+ 
+ std::set<std::string> ThemeData::sSupportedItemTemplate { "imagegrid", "carousel", "gamecarousel", "textlist" };
+-std::set<std::string> ThemeData::sSupportedViews        { "system", "basic", "detailed", "grid", "video", "gamecarousel", "menu", "screen", "splash" };
++std::set<std::string> ThemeData::sSupportedViews        { "system", "basic", "detailed", "grid", "video", "gamecarousel", "menu", "screen", "splash", "rnds" };	// rnds: ROCKNIXDS engine
+ std::set<std::string> ThemeData::sSupportedFeatures     { "video", "carousel", "gamecarousel", "z-index", "visible", "manufacturer" };
+ 
+ static std::set<std::string> _autoExtraTypes            { "stackpanel", "container", "screenshader", "clock", "networkIcon", "webimage", "batteryText", "batteryIcon", "rectangle" };
+@@ -1094,6 +1094,10 @@ bool ThemeData::parseSubset(const pugi::xml_node& node)
+ 
+ void ThemeData::parseInclude(const pugi::xml_node& node)
+ {
++	// ROCKNIXDS: a layout only for EmulationStations without the rnds engine (it draws every view itself)
++	if (node.attribute("rndsFallback"))
++		return;
++
+ 	if (!parseFilterAttributes(node))
+ 		return;
+ 

@@ -36,6 +36,16 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 
 ### New in 1.5 (beta)
 
+- **Beta 9: ROCKNIXDS Pixel, a new theme drawn by its own engine.** The ROCKNIXDS menu mockup on both screens, on the
+  RG DS and the RG DS Plus: a pixel-art system shelf with each system's icon and colour, its games as cartridges with
+  their box art, a ready screen before a game starts, the stats of the selected system (games, played, time, the last
+  game played) and of the selected game (plays, last played, time, RetroAchievements progress, the screenshot), in
+  the Pixelify Sans pixel font. L/R or the d-pad move, A opens, B goes back, X resumes the system's last game, Y
+  favourites the system (home) or the game (game list); tap or swipe the bottom screen. It is drawn by a native
+  engine inside the patched ES (`es-rgds-rnds.patch`), so it moves exactly like the mockup: the shelf's springy
+  slide, the stepped pixel animations and the screenshot frame that takes each screenshot's shape. An idle menu
+  draws only when an animation steps (1.7 frames a second on the shelf, 5 on a game list). Pick *rocknixds-pixel*
+  in the theme menu.
 - **Beta 6.** The handheld fetches its own game art and RetroAchievements strips. Each time the menu opens, a
   background job at idle priority scrapes games that are missing a 3D box, screenshot or cartridge (a game with no
   match is tried again a week later; offline, the next time the menu opens) and redraws the RetroAchievements strip
@@ -490,6 +500,20 @@ the top panel, the bottom panel, and an unused third.
   the colours change. Pick either in EmulationStation's theme menu. `gen_themes.py` rebuilds them from
   `overlay/theme-rgds.xml` and `gen_skin.py`. Every texture is SVG, so it stays sharp. All text uses the DSi
   font from upstream. The cartridge art window is unchanged (x12..88, y21..87).
+- **ROCKNIXDS Pixel** (`themes/rocknixds-pixel`, 1.5): the ROCKNIXDS menu mockup, drawn by the **rnds engine**, a
+  native renderer in the patched ES (`es-rgds-rnds.patch`, `es-app/src/rnds/`). A theme that declares
+  `<view name="rnds">` hands ES's system view and game lists to it; ES keeps its lists, cursors, menus, launching,
+  favourites and scraping. The engine lays everything out as the mockup's CSS does (in CSS px of a 640x480 screen,
+  scaled 1.6x for the RG DS Plus): boxes are painted the way CSS paints them (borders, inset and outer shadows,
+  hard-stop gradients, the dither tile), text uses Pixelify Sans with Chrome's whole-pixel glyph advances and GPOS
+  kerning (flattened into a `kern` table by `rnds/gen_fonts.py`), and the animations use the mockup's timing
+  (`cubic-bezier(.2,1.4,.32,1)` for the shelf, `steps()` for the rest). Box art and screenshots are decoded and
+  baked on a worker thread. The status bar's wifi, battery and logo are rendered by Chromium (`rnds/gen_assets.mjs`).
+  `rnds/systems.cfg` gives every system its icon and colour: the mockup's twelve, and generic pixel icons
+  (`rnds/gen_icons.py`) by kind for the rest. RetroAchievements progress comes from ES's own client for the selected
+  game (cached in `rnds-achievements.cfg`). Stock ES (when the launcher has to run it) shows rocknixds-dark's layout
+  instead. `rnds/test/` has the host harness that renders the engine's frames from the mockup's own data, to compare
+  them with the mockup in Chromium (mean difference under 1% at 1x).
 - **ROCKNIXDS logo** between the L2/R2 tabs and on the boot splash ([`logo/`](logo), see below).
 - **Patched ES** (`emulationstation-rgds`, ROCKNIX/emulationstation-next bccd715):
   - `es-rgds-uiwidth.patch`: popups, keyboard, sliders and game options sized to one 640 px screen
@@ -503,6 +527,9 @@ the top panel, the bottom panel, and an unused third.
     ScreenScraper scraper work as in stock ES (1.3's menu showed "Unauthenticated", 401).
   - `es-rgds-firstview.patch` (1.5): writes `$RGDS_ES_DRAWN` once ES's first view is complete (three frames drawn, no
     texture still loading), so the launcher shows ES's window then, instead of a fixed second after ES answers.
+  - `es-rgds-rnds.patch` (1.5): the rnds engine for ROCKNIXDS Pixel (above), the `rnds` theme view, instant view
+    transitions and a launch without splash or fade for it (its ready screen stays up until the game takes over),
+    standby wake-ups when its looping animations step, and `<include rndsFallback="true">` (skipped by this ES).
   - `es-rgds-lockdown.patch` (1.5): leaves out the settings that break ROCKNIXDS, offers only the themes in
     `/storage/.config/rocknixds/themes.allow`, and replaces ROCKNIX's OS updater with ROCKNIXDS's (UPDATES &
     DOWNLOADS > ROCKNIXDS). `touch /storage/.config/rocknixds/unlocked` shows everything again.
@@ -518,8 +545,8 @@ the top panel, the bottom panel, and an unused third.
     closes under the screensaver too.
     The theme's looping animations now stop after a few cycles. Idle menu: ~101% -> ~13% CPU (of 400), average clock
     ~1390 -> ~530 MHz, GPU at its lowest clock.
-- **Other themes** (since 1.4): pick any theme that is not `dii-ess-aye`, `canvas-ds`, `rocknixds-dark` or
-  `rocknixds-light` and ES restarts in stock ROCKNIX's layout, the top panel at 640x480 with the bottom panel off.
+- **Other themes** (since 1.4): pick any theme that is not `dii-ess-aye`, `canvas-ds`, `rocknixds-dark`,
+  `rocknixds-light` or `rocknixds-pixel` and ES restarts in stock ROCKNIX's layout, the top panel at 640x480 with the bottom panel off.
   Pick one of those four again and it spans both panels. Switching between dark and light does not restart ES:
   they share a canvas. 1.3 stretched every theme across both screens. (`theme-changed.sh` does the restart when
   the canvas has to change.)
@@ -545,7 +572,8 @@ the top panel, the bottom panel, and an unused third.
 | `overlay/` | Every file that differs from upstream: `theme-rgds.xml` (the layout), `scripts/start_es_rgds.sh` (launcher, bind-mounted over `/usr/bin/start_es.sh`), SVG skin, splash and fonts. The installer lays this over upstream |
 | `gen_skin.py` | SVG skin and splash generator (run against a full theme copy: it reads upstream's DSi font) |
 | `trace_logo.py`, `rocknix_logo.paths` | the traced stock ROCKNIX wordmark, kept for reference |
-| `es-rgds-*.patch`, `emulationstation-rgds` | ES patches and the built binary (aarch64) |
+| `es-rgds-*.patch`, `emulationstation-rgds` | ES patches and the built binary (aarch64); [`tools/build-es.sh`](tools/build-es.sh) builds it without ROCKNIX's build system |
+| `themes/rocknixds-pixel`, `rnds/` | ROCKNIXDS Pixel and the tools that make its fonts, icons and status-bar pictures; `rnds/test/` the engine's host harness |
 | `device/autostart-dii-ess-aye`, `device/sway-config.theme` | Boot hook: redoes the bind mount and restores the theme's sway config, which ROCKNIX's `111-sway-init` overwrites on every boot |
 | `scrape/` | Media tools: cart scans, 3D boxes, label art, RetroAchievements strip, HTTP-API push |
 
@@ -593,6 +621,10 @@ dark-background and a light-background version, a stacked version for small squa
   patched build is based on.
 - **Unbounded** by **The Unbounded Project Authors**: the ROCKNIXDS logo's letters (SIL Open Font License).
 - **Press Start 2P** by **CodeMan38**: the RetroAchievements pop-up font in libdsflip (SIL Open Font License).
+- [**Pixelify Sans**](https://github.com/eifetx/Pixelify-Sans) by **Stefie Justprince**: ROCKNIXDS Pixel's font (SIL
+  Open Font License; static Regular and Medium instances with the kerning in a `kern` table, the licence alongside).
+- [**Console Icon Pack**](https://benjelter.itch.io/console-icon-pack) by **BenJelter**: ROCKNIXDS Pixel's ten console
+  icons (DS, GBA, GBC, Game Boy, SNES, NES, N64, PlayStation, Mega Drive, arcade).
 - [LaunchBox Games Database](https://gamesdb.launchbox-app.com): the community-contributed DS cartridge scans.
 - [libretro-thumbnails](https://github.com/libretro-thumbnails): covers, screenshots and title screens used for scraping.
 - [RetroAchievements](https://retroachievements.org): achievement sets and badges for the game list's progress strip.

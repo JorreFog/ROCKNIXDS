@@ -37,7 +37,7 @@ REVEAL_DELAY=1          # stock ES only: after it answers its API, before its wi
 # forced the 1920 canvas on every theme, stretching them over both screens.) theme-changed.sh restarts ES when the
 # choice switches between the two. Dark and light share the canvas, so that switch does not restart ES.
 # Keep the list in sync with theme-changed.sh.
-DUAL_THEMES="dii-ess-aye canvas-ds rocknixds-dark rocknixds-light"
+DUAL_THEMES="dii-ess-aye canvas-ds rocknixds-dark rocknixds-light rocknixds-pixel"
 THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
 if [ -z "$THEME_SET" ] || case " $DUAL_THEMES " in *" $THEME_SET "*) true ;; *) false ;; esac; then
     ES_ARGS="--resolution 1920 480"
