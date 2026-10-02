@@ -34,51 +34,67 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 - The **panel timing fix**, the older **vsync pacing shim**, and the measurement tools (including a DS
   stress-test ROM) behind all the numbers below.
 
-### New in 1.5 (beta)
+### New in 1.5
 
-- **ROCKNIXDS Pixel, a new theme drawn by its own engine.** The ROCKNIXDS menu mockup on both screens, on the
-  RG DS Plus and the RG DS: a pixel-art system shelf with each system's icon and colour, its games as cartridges with
-  their box art, a ready screen before a game starts, the stats of the selected system (games, played, time, the last
-  game played) and of the selected game (plays, last played, time, RetroAchievements progress, the screenshot), in
-  the Pixelify Sans pixel font. L/R or the d-pad move, A opens, B goes back, X resumes the system's last game, Y
-  favourites the system (home) or the game (game list); tap or swipe the bottom screen. It is drawn by a native
-  engine inside the patched ES (`es-rgds-rnds.patch`), so it moves exactly like the mockup: the shelf's springy
-  slide, the stepped pixel animations and the screenshot frame that takes each screenshot's shape. On the Plus it is
-  the same layout at 1.6x. An idle menu draws only when an animation steps (1.7 frames a second on the shelf, 5 on a
-  game list). Pick *rocknixds-pixel* in the theme menu.
-- **Settings that break ROCKNIXDS are gone from the menus:** the dual-screen layout options, the CPU/GPU governors,
-  the GPU driver, video mode and rotation, DTB overlays, the developer options, factory reset and the emulator-config
-  reset, and the DS system's emulator choice (DS games run on ROCKNIXDS's DraStic only). Development: `touch
-  /storage/.config/rocknixds/unlocked` and restart the menu to see everything.
-- **Updates from the menu:** *Updates & downloads > ROCKNIXDS* shows the installed version, the channel (stable
-  releases or beta), checks and installs; a timer checks every 6 hours and pops up a notification once per new
-  update (switch it off there). ROCKNIX's own OS updates are hidden: a new ROCKNIX can need a new ROCKNIXDS.
-- **A second theme, [canvas-ds](https://github.com/toniremi/canvas-ds)** by toniremi (made for the RG DS's two
-  screens), downloaded from upstream at a verified version (`--no-canvas` skips the ~180 MB). Only verified themes
-  can be picked.
-- **Pick up where you left off.** The exit hotkey now saves your place (a savestate of its own, never one of your
-  slots) and quits; the next start of that game resumes there, once. ES: the DS system's or game's *resume on quit*
-  option (on by default). Quitting from DraStic's own menu doesn't save. A resume state older than the game's own save
-  file is dropped.
-- **No more stutter storms in DS games.** A pacing bug could leave libdsflip committing every frame late, and after
-  a while a minute of dropped frames (up to 32 a second, at any CPU clock) in about one of ten two-minute runs.
-  Gone: 0.01-0.02 drops/s in 200 s HeartGold runs.
-- **The CPU clock remembers each game:** clocks that dropped frames are skipped from the start of the next session
-  instead of being found again by dropping frames. Only drops that really come from the CPU count: in real play
-  most didn't, and they used to hold the clock at its top for most of a session.
-- **Power profiles.** *Game settings > Per system advanced configuration > Nintendo DS > Power profile* (at the
-  bottom of Game settings), or per game (hold A on it > *Advanced game options*):
+1.5 comes as two releases: **v1.5-plus** for the RG DS Plus (this one) and **v1.5** for the RG DS. The installer
+and the menu's updater pick the right one for the handheld they run on. It is the first stable ROCKNIXDS for the
+RG DS Plus.
+
+- **The RG DS Plus.** Everything is sized from the panels: two 1024×768 panels, a 3072×768 canvas for the
+  dual-screen themes, the boot splash and the menus. DS games run at full speed on the Plus:
+  - DraStic's emulation thread runs on a CPU of its own, and its 3D helper threads one per remaining core,
+    busiest first. Black 2 went from 1.7-2.6 repeated frames a second to about one every 12 s, and Dragon Quest
+    Monsters from 3.6 to 0.2.
+  - The commit of both panels' frames comes early enough for the bottom panel, whose vblank is 6.8 ms before
+    the top's.
+  - PipeWire stays at 48 kHz, the only rate the Plus's speaker amp runs. Forcing DraStic's 44.1 kHz played
+    everything 7% fast and the audio stuttered.
+  - A DS session runs on the performance CPU governor whatever ROCKNIX's setting. The Plus nightly defaults to
+    ondemand, under which the clock control switches itself off.
+  - DraStic's *threaded 3d* is switched on where it was never set.
+  - The volume indicator works in the menus, and SuperDrastic draws its own while a game runs.
+- **ROCKNIXDS Pixel, a new theme drawn by its own engine.** The ROCKNIXDS menu mockup on both screens, at 1.6x on
+  the Plus: a pixel-art system shelf with each system's icon and colour, its games as cartridges with their box
+  art, a ready screen before a game starts, the stats of the selected system (games, played, time, the last game
+  played) and of the selected game (plays, last played, time, RetroAchievements progress, the screenshot), in the
+  Pixelify Sans pixel font. L/R or the d-pad move, A opens, B goes back, X resumes the system's last game, Y
+  favourites the system (home) or the game (game list); tap or swipe the bottom screen. A native engine inside the
+  patched ES draws it (`es-rgds-rnds.patch`), so it moves exactly like the mockup: the shelf's springy slide, the
+  stepped pixel animations, and a screenshot frame that takes each screenshot's shape. An idle menu draws only when
+  an animation steps (1.7 frames a second on the shelf, 5 on a game list). Pick *rocknixds-pixel* in the theme menu.
+- **Dark and light ROCKNIXDS themes**: *rocknixds-dark* and *rocknixds-light*, two skins of the dual-screen layout.
+  Switching between them doesn't restart the menu.
+- **Pick up where you left off.** The exit hotkey saves your place and quits. The save is a savestate of its own,
+  never one of your slots. The next start of that game resumes there, once. ES: the DS system's or game's *resume
+  on quit* option (on by default). With it off, the hotkey quits as before. A resume state older than the game's
+  own save file is dropped.
+- **Power profiles.** *Game settings > Per system advanced configuration > Nintendo DS > Power profile*, or per
+  game (hold A on it > *Advanced game options*):
   - *balanced* (the default): CPU up to 1416 MHz, one more frame of queue (+17 ms input latency), and a full queue
     holds DraStic for a moment instead of dropping a frame;
   - *performance*: CPU up to 1992 MHz and the shortest queue, for the lowest latency;
-  - *battery saver*: CPU at 1104 MHz, three frames of queue (+33 ms).
-
-  Measured (Black 2 at 2x, walking): 1416 MHz with balanced's queue 0.07 hitches/s and no dropped frames, about
-  what performance gets while averaging ~1570 MHz and going up to 1992.
-- **Back to the menu ~0.5 s sooner** after a DS game, and ROCKNIX's charger watcher no longer starts a process every
-  2 s (2.2% -> 0.13% of a core).
-- **The DraStic engine is its own project now: [SuperDrastic](https://github.com/JorreFog/SuperDrastic)**, for any Linux firmware. The installer
-  installs its release (the version pinned in [`SUPERDRASTIC`](SUPERDRASTIC)); `dsflip/` keeps the ROCKNIX scripts.
+  - *battery saver*: three frames of queue (+33 ms). On the Plus the CPU runs 1104–1416 MHz: its frames cost more,
+    and a fixed 1104 MHz overran the heavy ones.
+- **The CPU clock remembers each game** and counts all of DraStic's threads. Clocks that dropped frames are skipped
+  from the start of the next session, and no more stutter storms.
+- **The handheld fetches its own game art and RetroAchievements strips.** Each time the menu opens, a background job
+  at idle priority scrapes the games that are missing a 3D box, screenshot or cartridge. A game with no match is
+  tried again a week later. The same job redraws the RetroAchievements strip of every game played since its strip
+  was drawn, and the strip of the game you just quit is redrawn while the menu starts. New games get their
+  RetroAchievements ID on the device. Retail art comes before demos, kiosks and hacks, in the ROM's own region.
+- **Updates from the menu:** *Updates & downloads > ROCKNIXDS* shows the installed version and the channel (stable
+  releases or beta), and checks for and installs updates. On a Plus, stable is the newest `-plus` release and beta
+  is the `plus-beta` branch, never an RG DS build. The menu says if an update fails. ROCKNIX's own OS updates are
+  hidden: a new ROCKNIX can need a new ROCKNIXDS.
+- **Settings that break ROCKNIXDS are gone from the menus.** That covers the dual-screen layout options, the CPU/GPU
+  governors, the GPU driver, video mode and rotation, DTB overlays, the developer options, factory reset, the
+  emulator-config reset, and the DS system's emulator choice. For development: `touch
+  /storage/.config/rocknixds/unlocked` and restart the menu to see everything.
+- **A second dual-screen theme, [canvas-ds](https://github.com/toniremi/canvas-ds)** by toniremi, downloaded from
+  upstream at a verified version (`--no-canvas` skips the ~180 MB). Only verified themes can be picked.
+- "Launch this game at startup" runs once per boot. The menu is back ~0.5 s sooner after a DS game.
+- **The DraStic engine is its own project now: [SuperDrastic](https://github.com/JorreFog/SuperDrastic)**. This
+  release installs SuperDrastic 0.3.0-beta.2 (the version in [`SUPERDRASTIC`](SUPERDRASTIC)).
 
 ### New in 1.4
 
@@ -143,32 +159,17 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 
 ## Install
 
-On an Anbernic RG DS running ROCKNIX, ssh in as `root` (default password
+On an Anbernic RG DS Plus or RG DS running ROCKNIX, ssh in as `root` (default password
 `rocknix`) and run:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh | sh
 ```
 
-The RG DS Plus (two 1024×768 panels) uses the `plus-beta` branch. Same installer, sized from the panels
-(canvas 3072×768). In *Updates & downloads > ROCKNIXDS*, **Beta** on a Plus downloads this branch.
-Plus beta 3.1 fixes that choice: it was downloading the original RG DS beta branch, because the menu stores
-the channel as `beta` and the updater treated that as the RG DS `beta` branch.
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/plus-beta/install.sh | RGDS_BRANCH=plus-beta sh
-```
-
-What the Plus beta adds for the Plus nightly (20260930) specifically: a DS session runs on the `performance` CPU
-governor whatever ROCKNIX's setting (the nightly defaults to `ondemand`, under which libdsflip's clock governor
-switches itself off and the clock floats); PipeWire stays at 48 kHz for a DS session (the Plus's speaker amp runs
-48 kHz whatever rate it is given, so forcing DraStic's 44.1 kHz played everything 7% fast and the audio stuttered); DraStic's *threaded 3d* is switched on where
-it was never set; the volume indicator works again (ROCKNIX's key service had no bus address and its
-mako-notify waited on the key pipe), with libdsflip drawing its own while a game runs; and DraStic's emulation
-thread runs on a CPU of its own (its 3D helpers, libdsflip's and PipeWire's threads on the other three, interrupts
-off that core, its 3D helper threads one per core), which took Black 2 from 1.7-2.6 repeated frames a second to
-about one every 12 s and Dragon Quest Monsters from 3.6 to 0.2; and the clock governor counts all of DraStic's
-threads, not only the busiest, so games whose work is in the 3D helpers are not stepped down as light.
+The same command works on both handhelds: it installs the newest release for the one it runs on (v1.5-plus on the
+RG DS Plus, v1.5 on the RG DS). `RGDS_BRANCH=beta` in front of `sh` installs the beta instead (`plus-beta` on a
+Plus), and a tag (`RGDS_BRANCH=v1.5-plus`) installs that release. After that, *Updates & downloads > ROCKNIXDS* in
+the menu keeps it up to date.
 
 It installs the dii-ess-aye theme (downloaded from [upstream](https://github.com/beebono/dii-ess-aye) at the pinned
 commit, then this repo's overlay), the patched EmulationStation, `libdsflip` as the default DraStic launcher, and
