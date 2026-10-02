@@ -193,6 +193,8 @@ class MediaMatchTest(unittest.TestCase):
         self.assertEqual(img.size, (round(self.mod.CARD_H * self.mod.CARD_ASPECT), self.mod.CARD_H))
         self.assertIn("Europe", why)
         self.assertNotIn("North America", why)
+        img, why = self.mod.cart_image(index, "Mario Kart DS", str(cache), "Europe")   # ES's name has no region
+        self.assertIn("Europe", why)
         img, why = self.mod.cart_image({}, "No Such Game", str(cache))
         self.assertIsNone(img)
         self.assertEqual(why, "no LaunchBox entry")
@@ -388,6 +390,40 @@ class MediaMatchTest(unittest.TestCase):
         )
         self.mod.ra_rom(str(rom))
         self.assertIn("missing", messages[-1])
+
+    def test_ra_rom_keeps_the_strip_when_retroachievements_is_unreachable(self):
+        sysroot = self.root / "roms" / "nds"
+        sysroot.mkdir(parents=True)
+        rom = sysroot / "Game.nds"
+        rom.write_bytes(b"")
+        (sysroot / "strip.png").write_bytes(b"old strip")
+        (sysroot / "gamelist.xml").write_text(
+            "<gameList><game><path>./Game.nds</path><name>Game</name><cheevosId>4</cheevosId>"
+            "<wheel>./strip.png</wheel></game></gameList>")
+        cfg = self.root / "system.cfg"
+        cfg.write_text("global.retroachievements.username=u\nglobal.retroachievements.token=t\n")
+        self.mod.RECOVERY = str(self.root / "recovery")
+        messages = []
+        self.mod.log = lambda *a: messages.append(" ".join(str(x) for x in a))
+        real = self.mod.importlib.util.module_from_spec
+
+        def offline_ra_fetch(spec):
+            m = real(spec)
+            orig = spec.loader.exec_module
+
+            def exec_module(mod):
+                orig(mod)
+                mod.CFG = str(cfg)
+                mod.fetch = lambda *a: (_ for _ in ()).throw(OSError("offline"))
+            spec.loader.exec_module = exec_module
+            return m
+        self.mod.importlib.util.module_from_spec = offline_ra_fetch
+        try:
+            self.mod.ra_rom(str(rom))
+        finally:
+            self.mod.importlib.util.module_from_spec = real
+        self.assertIn("strip kept", messages[-1])
+        self.assertEqual((sysroot / "strip.png").read_bytes(), b"old strip")
 
     def test_state_round_trip_and_a_corrupt_file_starts_empty(self):
         path = self.root / "media-state.json"
