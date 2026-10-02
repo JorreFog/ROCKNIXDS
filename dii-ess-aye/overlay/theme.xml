@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<theme>
+    <formatVersion>7</formatVersion>
+    <!--
+        Upstream includes theme-rgds.xml only when the canvas is exactly 1920 wide, and
+        theme-thor.xml otherwise. RG DS Plus is the same three-panel layout at 3072x768,
+        so both widths use theme-rgds.xml. ES evaluates include if with MathExpr, which
+        accepts || and &&. Any other width keeps the upstream Thor / single-screen file.
+    -->
+    <include if="${screen.width} == 1920 || ${screen.width} == 3072">./theme-rgds.xml</include>
+    <include if="${screen.width} != 1920 &amp;&amp; ${screen.width} != 3072">./theme-thor.xml</include>
+</theme>

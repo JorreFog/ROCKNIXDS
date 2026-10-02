@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <theme defaultTransition="instant" defaultView="gamecarousel">
+    <!-- Colours for the rocknixds-dark theme. Layout, features and storyboards match overlay/theme-rgds.xml.
+         Regenerate with dii-ess-aye/gen_themes.py after editing that file. -->
     <formatVersion>7</formatVersion>
 
     <!--
@@ -75,7 +77,7 @@
             <orientation>horizontal</orientation>
             <reverse>false</reverse>
             <clock name="system-clock">
-                <color>E8E9EBFF</color>
+                <color>E7EEF6FF</color>
                 <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
                 <fontSize>0.0333333</fontSize><!-- 16px -->
                 <lineSpacing>1</lineSpacing>
@@ -85,7 +87,7 @@
             <orientation>horizontal</orientation>
             <reverse>true</reverse>
             <batteryText name="system-battery-text">
-                <color>E8E9EBFF</color>
+                <color>E7EEF6FF</color>
                 <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
                 <fontSize>0.0333333</fontSize><!-- 16px -->
                 <lineSpacing>1</lineSpacing>
@@ -101,7 +103,7 @@
             </batteryIcon>
             <networkIcon name="system-network-icon">
                 <maxSize>1 1</maxSize>
-                <color>E8E9EBFF</color>
+                <color>E7EEF6FF</color>
                 <networkIcon>${themePath}/assets/images/common/network_icon_on.svg</networkIcon>
                 <planemodeIcon>${themePath}/assets/images/common/network_icon_off.svg</planemodeIcon>
             </networkIcon>
@@ -122,7 +124,7 @@
             <verticalAlignment>center</verticalAlignment>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0333333</fontSize><!-- 16px -->
-            <color>E8E9EBFF</color>
+            <color>E7EEF6FF</color>
             <alignment>left</alignment>
             <zIndex>2</zIndex>
         </text>
@@ -141,7 +143,7 @@
             <verticalAlignment>center</verticalAlignment>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0333333</fontSize><!-- 16px -->
-            <color>E8E9EBFF</color>
+            <color>E7EEF6FF</color>
             <alignment>right</alignment>
             <zIndex>2</zIndex>
         </text>
@@ -221,7 +223,7 @@
             <size>0.15 0.0625</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0333333</fontSize><!-- 16px -->
-            <color>A9AFB8FF</color>
+            <color>93A0B0FF</color>
             <alignment>center</alignment>
             <zIndex>2</zIndex>
         </clock>
@@ -257,7 +259,7 @@
             <size>0.1895833 0.1000000</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0750000</fontSize><!-- 36px -->
-            <color>F2F3F5FF</color>
+            <color>E7EEF6FF</color>
             <alignment>left</alignment>
             <verticalAlignment>center</verticalAlignment>
             <zIndex>2</zIndex>
@@ -268,7 +270,7 @@
             <size>0.1895833 0.0500000</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0375000</fontSize><!-- 18px -->
-            <color>A9AFB8FF</color>
+            <color>93A0B0FF</color>
             <alignment>left</alignment>
             <zIndex>2</zIndex>
         </text>
@@ -278,7 +280,7 @@
             <size>0.1895833 0.0583333</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0458333</fontSize><!-- 22px -->
-            <color>8FC8FFFF</color>
+            <color>7EC8EEFF</color>
             <alignment>left</alignment>
             <zIndex>2</zIndex>
         </text>
@@ -289,7 +291,7 @@
             <size>0.1302083 0.0416667</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0270833</fontSize><!-- 13px -->
-            <color>8A9098FF</color>
+            <color>93A0B0FF</color>
             <alignment>left</alignment>
             <zIndex>2</zIndex>
         </text>
@@ -299,7 +301,7 @@
             <size>0.1302083 0.0666667</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0500000</fontSize><!-- 24px -->
-            <color>F2F3F5FF</color>
+            <color>E7EEF6FF</color>
             <alignment>left</alignment>
             <zIndex>2</zIndex>
         </text>
@@ -309,7 +311,7 @@
             <size>0.1302083 0.0416667</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0270833</fontSize><!-- 13px -->
-            <color>8A9098FF</color>
+            <color>93A0B0FF</color>
             <alignment>left</alignment>
             <zIndex>2</zIndex>
         </text>
@@ -319,7 +321,7 @@
             <size>0.1302083 0.0666667</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0500000</fontSize><!-- 24px -->
-            <color>F2F3F5FF</color>
+            <color>E7EEF6FF</color>
             <alignment>left</alignment>
             <zIndex>2</zIndex>
         </text>
@@ -360,7 +362,7 @@
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <forceUppercase>true</forceUppercase>
             <fontSize>0.03</fontSize>
-            <color>E8E9EBFF</color>
+            <color>E7EEF6FF</color>
             <storyboard>
                 <animation event="scroll" property="scale"/>
             </storyboard>
@@ -373,7 +375,7 @@
             <size>0.2333 0.1</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0583333</fontSize><!-- 28px -->
-            <color>E8E9EBFF</color>
+            <color>E7EEF6FF</color>
             <alignment>center</alignment>
             <autoScroll>horizontal</autoScroll><!-- a name wider than the box scrolls instead of ending in "..." -->
             <autoScrollDelay>1500</autoScrollDelay><!-- ES's default 6 s (+1 s) is too long to notice -->
@@ -387,7 +389,7 @@
             <size>0.2333 0.06</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0375000</fontSize><!-- 18px -->
-            <color>8FC8FFFF</color>
+            <color>7EC8EEFF</color>
             <alignment>center</alignment>
             <zIndex>57</zIndex>
         </text>
@@ -399,7 +401,7 @@
             <size>0.2333 0.3</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.025</fontSize>
-            <color>E8E9EBFF</color>
+            <color>E7EEF6FF</color>
             <alignment>center</alignment>
             <zIndex>53</zIndex>
         </text>
@@ -472,7 +474,7 @@
             <size>0.1958333 0.05</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0375</fontSize><!-- 18px -->
-            <color>A9AFB8FF</color>
+            <color>93A0B0FF</color>
             <alignment>left</alignment>
             <zIndex>1.5</zIndex>
         </text>
@@ -482,7 +484,7 @@
             <size>0.1958333 0.05</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0416667</fontSize><!-- 20px -->
-            <color>8FC8FFFF</color>
+            <color>7EC8EEFF</color>
             <alignment>left</alignment>
             <zIndex>1.5</zIndex>
         </text>
@@ -504,7 +506,7 @@
             <size>0.2958333 0.1</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0375</fontSize>
-            <color>6E747DFF</color>
+            <color>7D8B9CFF</color>
             <alignment>center</alignment>
             <zIndex>2</zIndex>
         </text>
@@ -521,7 +523,7 @@
             <alignment>center</alignment>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0583333</fontSize><!-- 28px -->
-            <color>E8E9EBFF</color>
+            <color>E7EEF6FF</color>
         </text>
 
         <!-- Bottom screen (X 0.333-0.666) -->
@@ -688,7 +690,7 @@
             <size>0.2333 0.1</size>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.0500000</fontSize><!-- 24px -->
-            <color>E8E9EBFF</color>
+            <color>E7EEF6FF</color>
             <alignment>center</alignment>
             <autoScroll>horizontal</autoScroll><!-- titles past ~26 characters scroll instead of ending in "..." -->
             <autoScrollDelay>1500</autoScrollDelay><!-- starts ~2.3 s after the title appears (ES default: ~7 s) -->
@@ -724,14 +726,14 @@
             <autoScrollDelay>3000</autoScrollDelay>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <fontSize>0.03</fontSize>
-            <color>A9AEB5FF</color>
+            <color>93A0B0FF</color>
             <alignment>center</alignment>
             <zIndex>57</zIndex>
         </text>
 
         <text name="gamecarouselLogoText">
             <fontSize>0.026</fontSize>
-            <color>C9CDD2FF</color>
+            <color>A8B4C0FF</color>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
             <storyboard>
                 <animation event="scroll" property="scale"/>
@@ -741,31 +743,31 @@
 
     <view name="menu">
         <menuBackground name="menubg">
-            <color>2B2E33FF</color>
-            <scrollbarColor>5D626AFF</scrollbarColor>
+            <color>12181FFF</color>
+            <scrollbarColor>3D4A5AFF</scrollbarColor>
         </menuBackground>
 
         <menuText name="menutext, menutitle, menufooter">
             <fontSize>0.03</fontSize>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <color>E8E9EBFF</color>
+            <color>E7EEF6FF</color>
             <selectedColor>FFFFFFFF</selectedColor>
-            <selectorColor>2B8FE6FF</selectorColor>
-            <separatorColor>3C4047FF</separatorColor>
+            <selectorColor>1A6EA3FF</selectorColor>
+            <separatorColor>243040FF</separatorColor>
         </menuText>
 
         <menuTextSmall name="menutextsmall">
             <fontSize>0.03</fontSize>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <color>A9AEB5FF</color>
+            <color>93A0B0FF</color>
         </menuTextSmall>
 
         <menuGroup name="menugroup">
             <fontSize>0.03</fontSize>
             <fontPath>${themePath}/assets/fonts/dsi_font.otf</fontPath>
-            <color>8FC8FFFF</color>
-            <backgroundColor>23252AFF</backgroundColor>
-            <separatorColor>3C4047FF</separatorColor>
+            <color>7EC8EEFF</color>
+            <backgroundColor>1A222CFF</backgroundColor>
+            <separatorColor>243040FF</separatorColor>
         </menuGroup>
 
         <menuSwitch name="menuswitch">

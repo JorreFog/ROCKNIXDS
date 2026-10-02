@@ -34,7 +34,12 @@ if [ -f /tmp/dsflip-vt ]; then
     chvt "${VT:-1}"
     if wait_outputs; then
         S=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
-        [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" '[app_id="emulationstation"] floating enable, fullscreen disable, resize set 1920 480, move absolute position 0 0' >/dev/null 2>&1
+        THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
+        case "$THEME_SET" in
+            ""|dii-ess-aye|canvas-ds|rocknixds-dark|rocknixds-light)
+                [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" '[app_id="emulationstation"] floating enable, fullscreen disable, resize set 1920 480, move absolute position 0 0' >/dev/null 2>&1
+                ;;
+        esac
     else
         echo "$(date) sway has no outputs after the VT switch: restarting it"
         systemctl restart sway.service; wait_outputs

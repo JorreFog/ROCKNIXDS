@@ -32,11 +32,12 @@ REVEAL_DELAY=1          # stock ES only: after it answers its API, before its wi
                         # top panel is still black (ES hasn't drawn its first view); at 1 s both panels are complete.
                         # The patched ES says when its first view is complete instead ($RGDS_ES_DRAWN).
 
-# Which layout: the dual-screen themes (this one and canvas-ds, made for the same layout) span one 1920x480 canvas
-# over both panels. Any other theme is drawn for one 640x480 screen, so it gets stock ROCKNIX's layout: ES fullscreen
-# on the top panel, the bottom panel off. (1.3 forced the 1920 canvas on every theme, stretching them over both
-# screens.) theme-changed.sh restarts ES when the choice switches between the two. Keep the list in sync with it.
-DUAL_THEMES="dii-ess-aye canvas-ds"
+# Which layout: the dual-screen themes span one 1920x480 canvas over both panels. Any other theme is drawn for one
+# 640x480 screen, so it gets stock ROCKNIX's layout: ES fullscreen on the top panel, the bottom panel off. (1.3
+# forced the 1920 canvas on every theme, stretching them over both screens.) theme-changed.sh restarts ES when the
+# choice switches between the two. Dark and light share the canvas, so that switch does not restart ES.
+# Keep the list in sync with theme-changed.sh.
+DUAL_THEMES="dii-ess-aye canvas-ds rocknixds-dark rocknixds-light"
 THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
 if [ -z "$THEME_SET" ] || case " $DUAL_THEMES " in *" $THEME_SET "*) true ;; *) false ;; esac; then
     ES_ARGS="--resolution 1920 480"
@@ -84,7 +85,10 @@ export RGDS_ES_DRAWN=/tmp/es-rgds-drawn
 rm -f $RGDS_ES_DRAWN
 read u _ < /proc/uptime; echo "[$u] launcher start" > /tmp/es-rgds-launch.log    # the start's timeline, for switchtime.sh
 SOCK=$(ls /var/run/0-runtime-dir/sway-ipc.*.sock 2>/dev/null | head -n1)
-SPLASH=/storage/.config/emulationstation/themes/dii-ess-aye/assets/images/splash/rgds-splash.png
+SPLASH_THEME=$THEME_SET
+case " $DUAL_THEMES " in *" $SPLASH_THEME "*) ;; *) SPLASH_THEME=dii-ess-aye ;; esac
+SPLASH=/storage/.config/emulationstation/themes/$SPLASH_THEME/assets/images/splash/rgds-splash.png
+[ -f "$SPLASH" ] || SPLASH=/storage/.config/emulationstation/themes/dii-ess-aye/assets/images/splash/rgds-splash.png
 SPLASH_PID=
 if [ -f "$SPLASH" ] && [ -n "$SOCK" ] && command -v swayimg >/dev/null; then
     swayimg -g 1280,480 -s real -c info.mode=off "$SPLASH" >/dev/null 2>&1 &

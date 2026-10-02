@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="22" viewBox="0 0 256 22">
+<defs><linearGradient id="sb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b3e44"/><stop offset="1" stop-color="#2b2d32"/></linearGradient>
+<linearGradient id="cap" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ec8ee"/><stop offset="1" stop-color="#0c3d5c"/></linearGradient></defs>
+<rect x="18" y="4" width="220" height="14" rx="3" fill="url(#sb)" stroke="#070a0e" stroke-width="1.2"/>
+<path d="M30,11 h1.5 M34,11 h1.5 M38,11 h1.5 M42,11 h1.5 M46,11 h1.5 M50,11 h1.5 M54,11 h1.5 M58,11 h1.5 M62,11 h1.5 M66,11 h1.5 M70,11 h1.5 M74,11 h1.5 M78,11 h1.5 M82,11 h1.5 M86,11 h1.5 M90,11 h1.5 M94,11 h1.5 M98,11 h1.5 M102,11 h1.5 M106,11 h1.5 M110,11 h1.5 M114,11 h1.5 M118,11 h1.5 M122,11 h1.5 M126,11 h1.5 M130,11 h1.5 M134,11 h1.5 M138,11 h1.5 M142,11 h1.5 M146,11 h1.5 M150,11 h1.5 M154,11 h1.5 M158,11 h1.5 M162,11 h1.5 M166,11 h1.5 M170,11 h1.5 M174,11 h1.5 M178,11 h1.5 M182,11 h1.5 M186,11 h1.5 M190,11 h1.5 M194,11 h1.5 M198,11 h1.5 M202,11 h1.5 M206,11 h1.5 M210,11 h1.5 M214,11 h1.5 M218,11 h1.5 M222,11 h1.5 M226,11 h1.5" stroke="#7a8089" stroke-width="1.2"/>
+<rect x="1" y="1" width="22" height="20" rx="4" fill="url(#cap)" stroke="#0c3d5c" stroke-width="1.2"/>
+<rect x="233" y="1" width="22" height="20" rx="4" fill="url(#cap)" stroke="#0c3d5c" stroke-width="1.2"/>
+<path d="M16,6 L7,11 L16,16 Z M240,6 L249,11 L240,16 Z" fill="#ffffff"/>
+</svg>
