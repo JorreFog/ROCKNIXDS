@@ -16,6 +16,7 @@ fi
 mkdir -p $D/dsflip
 cp "$HERE/libdsflip.so" "$HERE/session.sh" "$HERE/restore.sh" $D/dsflip/
 [ -f "$HERE/es-features.sh" ] && cp "$HERE/es-features.sh" $D/dsflip/
+[ -f "$HERE/preload-guard.so" ] && cp "$HERE/preload-guard.so" $D/dsflip/
 [ -f "$HERE/playstats.py" ] && cp "$HERE/playstats.py" $D/dsflip/
 [ -f "$HERE/perf-session.py" ] && cp "$HERE/perf-session.py" $D/dsflip/
 if [ -f "$HERE/es-share-logs.sh" ]; then

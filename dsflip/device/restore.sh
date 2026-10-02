@@ -19,10 +19,19 @@ if [ -s /tmp/dsflip-cpu-max ]; then                  # the CPU clock limit libds
     cat /tmp/dsflip-cpu-max > /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq 2>/dev/null
     rm -f /tmp/dsflip-cpu-max
 fi
+if [ -s /tmp/dsflip-cpu-governor ]; then             # the governor session.sh switched to performance
+    cat /tmp/dsflip-cpu-governor > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor 2>/dev/null
+    rm -f /tmp/dsflip-cpu-governor
+fi
 # Resume-on-quit aimed the exit hotkey at "killall -USR1 drastic". Put stock's target back so a later
 # launcher is not left sending USR1. "-9" alone is not that target: killall needs the process name.
 [ -f /tmp/.process-kill-data ] && grep -qx -- '-USR1 drastic' /tmp/.process-kill-data 2>/dev/null && echo "-9 drastic" > /tmp/.process-kill-data
-XDG_RUNTIME_DIR=$RT pw-metadata -n settings 0 clock.force-rate 0 >/dev/null 2>&1          # PipeWire's own rate again
+if [ -f /tmp/dsflip-pw-rates ]; then             # session.sh forced 44.1 kHz: PipeWire's own rate and rate list again
+    XDG_RUNTIME_DIR=$RT pw-metadata -n settings 0 clock.force-rate 0 >/dev/null 2>&1
+    if [ -s /tmp/dsflip-pw-rates ]; then XDG_RUNTIME_DIR=$RT pw-metadata -n settings 0 clock.allowed-rates "$(cat /tmp/dsflip-pw-rates)" >/dev/null 2>&1
+    else XDG_RUNTIME_DIR=$RT pw-metadata -n settings -d 0 clock.allowed-rates >/dev/null 2>&1; fi
+    rm -f /tmp/dsflip-pw-rates
+fi
 sway_has_outputs() {
     SOCK=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
     [ -n "$SOCK" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$SOCK" -t get_outputs 2>/dev/null | grep -q '"active": true'

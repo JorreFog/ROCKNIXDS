@@ -66,10 +66,29 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # A file left by a session that never got restored holds the real limit: keep it.
   CPU=/sys/devices/system/cpu/cpufreq/policy0
   [ -f /tmp/dsflip-cpu-max ] || cat $CPU/scaling_max_freq > /tmp/dsflip-cpu-max 2>/dev/null
-  # PipeWire at DraStic's 44.1 kHz for the session (restore.sh resets it): at its usual 48 kHz every cycle resampled
-  # DraStic's audio, and DraStic's audio threads cost ~9% of a core; at 44.1 kHz ~5% (measured 2026-09-28, HeartGold
-  # at 1608 MHz). Set before DraStic opens its stream: switching mid-stream made the drain uneven for the session.
-  XDG_RUNTIME_DIR=/var/run/0-runtime-dir pw-metadata -n settings 0 clock.force-rate 44100 >/dev/null 2>&1
+  # cpugov.c sets the clock through scaling_max_freq, which only pins it under the "performance" governor (it turns
+  # itself off under any other). One of four RG DS units in the 1.5 beta performance logs ran its games with the
+  # clock floating between 816 and 1992 MHz and no cpugov at all (a balanced or battery profile at up to 1992 MHz),
+  # as the RG DS Plus nightly's ondemand default did. Run the session on performance whatever ROCKNIX's setting;
+  # restore.sh puts the menu's back.
+  [ -f /tmp/dsflip-cpu-governor ] || cat $CPU/scaling_governor > /tmp/dsflip-cpu-governor 2>/dev/null
+  echo performance > $CPU/scaling_governor 2>/dev/null
+  # PipeWire at DraStic's 44.1 kHz for the session (restore.sh puts its settings back): at its usual 48 kHz every
+  # cycle resampled DraStic's audio, and DraStic's audio threads cost ~9% of a core; at 44.1 kHz ~5% (measured
+  # 2026-09-28, HeartGold at 1608 MHz). Set before DraStic opens its stream: switching mid-stream made the drain
+  # uneven for the session. The nightly only allows 48000 (clock.allowed-rates), so 44100 is allowed first.
+  # NOT on the RG DS Plus: its speaker amp (aw88166 on I2S3) runs at 48 kHz whatever rate it is given (the I2S
+  # clock stays 12.288 MHz): with the graph at 44.1 kHz, 60 s of audio played in 55.75 s and the sink xrun'd, so
+  # DraStic was pulled ~3% fast against the display, held by the frame queue, and its ring underran (measured
+  # 2026-10-01; at the stock 48 kHz graph, resampled, 60 s took 60.3 s with no xruns). DSFLIP_PW_RATE=44100 forces it.
+  PWM="XDG_RUNTIME_DIR=/var/run/0-runtime-dir pw-metadata -n settings"
+  if grep -q aw88166 /proc/asound/cards 2>/dev/null && [ -z "$DSFLIP_PW_RATE" ]; then
+    echo "PipeWire kept at its own rate: the aw88166 speaker amp runs 48 kHz only"
+  else
+    eval $PWM 0 clock.allowed-rates 2>/dev/null | sed -n "s/.*value:'\([^']*\)'.*/\1/p" > /tmp/dsflip-pw-rates
+    eval $PWM 0 clock.allowed-rates "'[ 44100 48000 ]'" >/dev/null 2>&1
+    eval $PWM 0 clock.force-rate ${DSFLIP_PW_RATE:-44100} >/dev/null 2>&1
+  fi
   rm -f $STATE $NOTICE
   # test launches (smoke.sh, switchtime.sh) don't teach libdsflip's CPU governor anything about the player's games
   [ -e /tmp/rocknixds-testing ] && export DSFLIP_CPUGOV_MEMORY=0
@@ -130,9 +149,13 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
     esac
   fi
   cd $D
+  # preload-guard.so keeps libdsflip out of the processes DraStic starts (SuperDrastic 0.3.0-beta.3 starts pactl and
+  # wpctl for the volume card; with libdsflip in them, they rotated the game's log and overwrote its verdict).
+  # Listed last: glibc runs it first.
+  PRE=$D/dsflip/libdsflip.so; [ -f $D/dsflip/preload-guard.so ] && PRE="$PRE $D/dsflip/preload-guard.so"
   # no wait for the display: libdsflip retries DRM master itself while seatd lets go of it (~0.4 s after sway)
   SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log \
-    LD_PRELOAD=$D/dsflip/libdsflip.so $D/dsflip/drastic "$ROM" > $D/dsflip/drastic.out 2>&1 &
+    LD_PRELOAD="$PRE" $D/dsflip/drastic "$ROM" > $D/dsflip/drastic.out 2>&1 &
   P=$!; TG=$(date +%s)
   # ROCKNIX's powerstate service re-applies a GPU profile whenever the battery status flips between charging and
   # discharging ("auto" on AC, system.gpuperf on battery): plugging or unplugging mid-game, or a weak charger that
