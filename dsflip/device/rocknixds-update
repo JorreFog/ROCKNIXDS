@@ -9,15 +9,19 @@
 # because the menu's Beta choice is stored as "beta" and the updater used plus-beta only when the value was
 # "plus", which the menu never writes. An earlier Plus install's "plus" is the same choice.
 # What's installed: /storage/.config/rocknixds/installed-id, written by install.sh (a release tag or a commit).
+# Host tests point ROCKNIXDS_CFG, ROCKNIXDS_STATE, ROCKNIXDS_MODEL_FILE and ROCKNIXDS_MODES_GLOB
+# at a temp tree. Unset, these are the paths on the device.
 REPO=JorreFog/ROCKNIXDS
-CFG=/storage/.config/system/configs/system.cfg
-STATE=/storage/.config/rocknixds
+CFG=${ROCKNIXDS_CFG:-/storage/.config/system/configs/system.cfg}
+STATE=${ROCKNIXDS_STATE:-/storage/.config/rocknixds}
+MODEL_FILE=${ROCKNIXDS_MODEL_FILE:-/proc/device-tree/model}
+MODES_GLOB=${ROCKNIXDS_MODES_GLOB:-/sys/class/drm/card*-DSI-*/modes}
 setting() { grep "^$1=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2-; }
 
 rgds_plus() {   # the RG DS Plus: the model string, or a panel wider than the RG DS's 640
-    model=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)
+    model=$(tr -d '\0' < "$MODEL_FILE" 2>/dev/null || true)
     case "$model" in *"RG DS Plus"*) return 0 ;; esac
-    for m in /sys/class/drm/card*-DSI-*/modes; do
+    for m in $MODES_GLOB; do
         [ -f "$m" ] || continue
         read -r mode < "$m" 2>/dev/null || continue
         w=${mode%%x*}

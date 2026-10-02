@@ -1,0 +1,30 @@
+# Host tests. The SuperDrastic package check stays in build.yml; this is the logic that
+# can be checked without the handheld.
+name: unit tests
+on:
+  push:
+    branches: [beta, plus-beta, main]
+    paths:
+      - 'tests/**'
+      - 'dii-ess-aye/scrape/rocknixds-media.py'
+      - 'dii-ess-aye/scrape/ra-fetch.py'
+      - 'dsflip/device/rocknixds-update'
+      - '.github/workflows/unit.yml'
+  pull_request:
+    paths:
+      - 'tests/**'
+      - 'dii-ess-aye/scrape/rocknixds-media.py'
+      - 'dii-ess-aye/scrape/ra-fetch.py'
+      - 'dsflip/device/rocknixds-update'
+      - '.github/workflows/unit.yml'
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pillow
+        run: python3 -m pip install pillow
+      - name: Run
+        run: sh tests/run.sh
