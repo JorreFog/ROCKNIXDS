@@ -1,5 +1,5 @@
 # The DraStic engine (libdsflip) is built and released by SuperDrastic (https://github.com/JorreFog/SuperDrastic);
-# install.sh installs the release pinned in SUPERDRASTIC. This checks that the pinned package downloads, matches its
+# install.sh installs the release pinned in SUPERDRASTIC (or the package shipped in dsflip/). This checks that the pinned package is there, matches its
 # checksum and holds what install.sh takes from it, and that the scripts parse. The patched EmulationStation isn't
 # built here: that needs ROCKNIX's whole build system.
 name: check
@@ -17,7 +17,9 @@ jobs:
       - name: The pinned SuperDrastic release
         run: |
           set -- $(grep -v '^#' SUPERDRASTIC); V=$1 SUM=$2
-          curl -fsSL -o sd.tar.gz "https://github.com/JorreFog/SuperDrastic/releases/download/v$V/superdrastic-$V-aarch64.tar.gz"
+          # the package shipped in the tree, as install.sh uses it first; else the release
+          if [ -f "dsflip/superdrastic-$V-aarch64.tar.gz" ]; then cp "dsflip/superdrastic-$V-aarch64.tar.gz" sd.tar.gz
+          else curl -fsSL -o sd.tar.gz "https://github.com/JorreFog/SuperDrastic/releases/download/v$V/superdrastic-$V-aarch64.tar.gz"; fi
           echo "$SUM  sd.tar.gz" | sha256sum -c -
           tar tzf sd.tar.gz | grep -q '/libsuperdrastic.so$'
           tar tzf sd.tar.gz | grep -q '/shaders/ds-crisp.frag$'
