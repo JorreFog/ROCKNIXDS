@@ -159,6 +159,11 @@ es_set() {        # es_set <key> <value> in the live es_settings.cfg
     else sed -i "s|</config>|\t<string name=\"$1\" value=\"$2\" />\n</config>|" $ES_SETTINGS; fi
 }
 themes_allow() { printf 'rocknixds-pixel-light\nrocknixds-pixel-dark\ndii-ess-aye\ncanvas-ds\n'; }   # pickable in the patched ES
+es_setb() {       # es_setb <key> true|false: a <bool name=...> setting in the live es_settings.cfg
+    if grep -q "<bool name=\"$1\"" $ES_SETTINGS 2>/dev/null; then
+        sed -i "s|<bool name=\"$1\" value=\"[^\"]*\" />|<bool name=\"$1\" value=\"$2\" />|" $ES_SETTINGS
+    else sed -i "s|</config>|\t<bool name=\"$1\" value=\"$2\" />\n</config>|" $ES_SETTINGS; fi
+}
 es_del() { sed -i "/<string name=\"$1\" /d" $ES_SETTINGS 2>/dev/null; }
 
 # ---- uninstall ---------------------------------------------------------------------------------------
@@ -369,6 +374,12 @@ if [ $THEME_ON = 1 ]; then
     if [ ! -e /storage/.config/rocknixds/.pixel-default ]; then
         es_set ThemeSet rocknixds-pixel-light
         mkdir -p /storage/.config/rocknixds && touch /storage/.config/rocknixds/.pixel-default
+    fi
+    # ROCKNIXDS Pixel's menu sounds: ES plays theme sounds only with "enable navigation sounds" on (off by default).
+    # On once; switching them off in the menu stays.
+    if [ ! -e /storage/.config/rocknixds/.sounds-default ]; then
+        es_setb EnableSounds true
+        touch /storage/.config/rocknixds/.sounds-default
     fi
 fi
 

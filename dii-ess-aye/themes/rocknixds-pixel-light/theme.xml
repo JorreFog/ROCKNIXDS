@@ -21,14 +21,22 @@
         <text name="palette" extra="false">
             <text>light</text>
         </text>
-        <!-- the DSi sounds of the upstream dii-ess-aye theme (the installer links ./assets/sounds to them) -->
+        <!-- the menu's sounds (rnds/gen_sounds.py); ES plays them while "enable navigation sounds" is on -->
         <sound name="scroll">
-            <path>./assets/sounds/scroll.wav</path>
+            <path>./../rocknixds-pixel-dark/rnds/sounds/scroll.wav</path>
         </sound>
-        <sound name="launch">
-            <path>./assets/sounds/launch.wav</path>
+        <sound name="select">
+            <path>./../rocknixds-pixel-dark/rnds/sounds/select.wav</path>
         </sound>
-        <!-- the cartridge clicking into the console on the ready screen -->
+        <sound name="back">
+            <path>./../rocknixds-pixel-dark/rnds/sounds/back.wav</path>
+        </sound>
+        <sound name="fav">
+            <path>./../rocknixds-pixel-dark/rnds/sounds/fav.wav</path>
+        </sound>
+        <sound name="ready">
+            <path>./../rocknixds-pixel-dark/rnds/sounds/ready.wav</path>
+        </sound>
         <sound name="insert">
             <path>./../rocknixds-pixel-dark/rnds/sounds/insert.wav</path>
         </sound>
