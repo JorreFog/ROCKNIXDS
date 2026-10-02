@@ -137,9 +137,13 @@ fi
 es_stop()  { systemctl stop essway.service 2>/dev/null || true; trap 'systemctl start essway.service 2>/dev/null' EXIT; }
 es_start() { systemctl start essway.service 2>/dev/null || true; }
 backup_once() {   # backup_once <file>: keep the first (pre-install) copy only
-    [ -e "$1" ] || return 0
     dst=$BACKUP$1
-    [ -e "$dst" ] && return 0
+    [ -e "$dst" ] || [ -e "$dst.rocknixds-absent" ] && return 0
+    if [ ! -e "$1" ]; then
+        # not there before the first install: a later install must not take ROCKNIXDS's own copy for the original
+        # (uninstall would put it back)
+        mkdir -p "$(dirname "$dst")"; touch "$dst.rocknixds-absent"; return 0
+    fi
     mkdir -p "$(dirname "$dst")"; cp -a "$1" "$dst"
 }
 set_cfg() {       # set_cfg <key> <value> in system.cfg
