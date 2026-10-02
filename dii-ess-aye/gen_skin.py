@@ -12,17 +12,101 @@ from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.boundsPen import BoundsPen
 
 THEME = sys.argv[1]
+PALETTE = sys.argv[2] if len(sys.argv) > 2 else "legacy"
 OUT = os.path.join(THEME, "assets/images/common")
 FONT = TTFont(os.path.join(THEME, "assets/fonts/dsi_font.otf"))
 
-# Palette
-BG_TOP, BG_BOT = "#2b2e33", "#1f2124"
-GRID = "#ffffff"
-PANEL_HI, PANEL, PANEL_LO = "#4a4e55", "#3a3d43", "#303338"
-EDGE = "#15161a"
-RIM = "#5d626a"
-TEXT = "#e8e9eb"
-ACCENT_HI, ACCENT, ACCENT_LO = "#5cc0ff", "#2b8fe6", "#1a64b3"
+# legacy is the skin already shipping in overlay/ (do not restyle it here).
+# dark and light are the two selectable themes; both keep the DS card itself.
+if PALETTE == "dark":
+    BG_TOP, BG_BOT = "#1c2836", "#10161e"
+    GRID, GRID_OP, GRID_BG_OP = "#ffffff", "0.05", "0.04"
+    PANEL_HI, PANEL, PANEL_LO = "#2c3a4a", "#1a222c", "#141b24"
+    EDGE, RIM, TEXT = "#070a0e", "#7d8b9c", "#e7eef6"
+    ACCENT_HI, ACCENT, ACCENT_LO, ACCENT_EDGE = "#7ec8ee", "#1a6ea3", "#0c3d5c", "#0c3d5c"
+    BUBBLE_HI, BUBBLE_LO = "#243040", "#1a222c"
+    WELL_HI, WELL_LO = "#10161c", "#0c1016"
+    CHROME_HI, CHROME_LO = "#2c3a4a", "#1a222c"
+    PREVIEW_HI, PREVIEW_LO = "#2c3a4a", "#141b24"
+    SLOT_HI, SLOT_LO = "#1e2832", "#141b24"
+    BADGE_FILL, BADGE_EDGE, BADGE_TEXT = "#070a0e", "#7d8b9c", "#e7eef6"
+    SWITCH_OFF, SWITCH_KNOB = "#141b24", "#93a0b0"
+    BLUE, BLUE_HI, BLUE_LO, BLUE_EDGE = "#1a6ea3", "#7ec8ee", "#0c3d5c", "#08283d"
+    GROOVE_OUT, GROOVE_FILL, GROOVE_SHADOW, GROOVE_LIP, GROOVE_DOT = "#05070a", "#0c1016", "#07090c", "#3d4a5a", "#2a3644"
+    STATUS_FILL, STATUS_OP, STATUS_LINE, STATUS_LINE_OP = "#000000", "0.35", "#ffffff", "0.08"
+    TRAY_A, TRAY_B, TRAY_LINE, TRAY_STROKE = "0.42", "0.22", "0.10", "#ffffff"
+    VIG_OP = "0.42"
+    SHADOW_OP = "0.40"
+    HL, HL_SOFT, HL_TILE = ("#ffffff", "0.12", "0.06")
+    RULE, RULE_OP = "#ffffff", "0.08"
+    DIVIDER, DIVIDER_OP = "#000000", "0.45"
+    SPLASH_MUTED, SPLASH_LOADING = "#93a0b0", "#e7eef6"
+    SPLASH_SUB = "RG DS  ·  RG DS Plus"
+    LOGO_FRAG_NAME = "rocknixds-logo"
+    HAIR, HAIR_OP = "#ffffff", "0.10"
+    EMPTY_FILL, EMPTY_EDGE, EMPTY_LIP = "0.40", "0.55", "0.08"
+    EMPTY_MARK, EMPTY_MARK_OP = "#ffffff", "0.05"
+elif PALETTE == "light":
+    BG_TOP, BG_BOT = "#f7fafc", "#d5e0ea"
+    GRID, GRID_OP, GRID_BG_OP = "#1a2330", "0.055", "0.04"
+    PANEL_HI, PANEL, PANEL_LO = "#ffffff", "#f4f7fb", "#e4edf5"
+    EDGE, RIM, TEXT = "#8aa0b4", "#5c7084", "#1a2330"
+    ACCENT_HI, ACCENT, ACCENT_LO, ACCENT_EDGE = "#7ec8ee", "#1a6ea3", "#0c3d5c", "#0c3d5c"
+    BUBBLE_HI, BUBBLE_LO = "#ffffff", "#e8f0f6"
+    WELL_HI, WELL_LO = "#e7eef5", "#d5e0ea"
+    CHROME_HI, CHROME_LO = "#ffffff", "#e8f0f6"
+    PREVIEW_HI, PREVIEW_LO = "#ffffff", "#e4edf5"
+    SLOT_HI, SLOT_LO = "#f7fafc", "#d5e0ea"
+    BADGE_FILL, BADGE_EDGE, BADGE_TEXT = "#1a2330", "#5c7084", "#f7fafc"
+    SWITCH_OFF, SWITCH_KNOB = "#d5e0ea", "#5c7084"
+    BLUE, BLUE_HI, BLUE_LO, BLUE_EDGE = "#1a6ea3", "#7ec8ee", "#0c3d5c", "#08283d"
+    GROOVE_OUT, GROOVE_FILL, GROOVE_SHADOW, GROOVE_LIP, GROOVE_DOT = "#8aa0b4", "#c5d3df", "#b7c6d4", "#ffffff", "#8aa0b4"
+    STATUS_FILL, STATUS_OP, STATUS_LINE, STATUS_LINE_OP = "#1a2330", "0.06", "#1a2330", "0.20"
+    TRAY_A, TRAY_B, TRAY_LINE, TRAY_STROKE = "0.07", "0.03", "0.22", "#1a2330"
+    VIG_OP = "0.10"
+    SHADOW_OP = "0.14"
+    # White edge-lights disappear on paper. These are the lines that have to stay visible.
+    HL, HL_SOFT, HL_TILE = ("#1a2330", "0.16", "0.10")
+    RULE, RULE_OP = "#1a2330", "0.16"
+    DIVIDER, DIVIDER_OP = "#1a2330", "0.28"
+    SPLASH_MUTED, SPLASH_LOADING = "#3e5164", "#1a2330"
+    SPLASH_SUB = "RG DS  ·  RG DS Plus"
+    LOGO_FRAG_NAME = "rocknixds-logo-light"
+    HAIR, HAIR_OP = "#ffffff", "0.70"
+    # A black wash under 0.3 disappeared into the paper on a 4" panel. The body has to
+    # read as a grey cart, and the outline has to stay darker than that body.
+    EMPTY_FILL, EMPTY_EDGE, EMPTY_LIP = "0.32", "0.78", "0.0"
+    EMPTY_MARK, EMPTY_MARK_OP = "#1a2330", "0.45"
+else:
+    if PALETTE != "legacy":
+        sys.exit("palette must be legacy, dark or light")
+    BG_TOP, BG_BOT = "#2b2e33", "#1f2124"
+    GRID, GRID_OP, GRID_BG_OP = "#ffffff", "0.04", "0.035"
+    PANEL_HI, PANEL, PANEL_LO = "#4a4e55", "#3a3d43", "#303338"
+    EDGE, RIM, TEXT = "#15161a", "#5d626a", "#e8e9eb"
+    ACCENT_HI, ACCENT, ACCENT_LO, ACCENT_EDGE = "#5cc0ff", "#2b8fe6", "#1a64b3", "#0d3a6b"
+    BUBBLE_HI, BUBBLE_LO = "#42464d", "#34373c"
+    WELL_HI, WELL_LO = "#1d1f23", "#15171a"
+    CHROME_HI, CHROME_LO = "#43474e", "#2f3136"
+    PREVIEW_HI, PREVIEW_LO = "#454950", "#2e3035"
+    SLOT_HI, SLOT_LO = "#2c3036", "#1e2125"
+    BADGE_FILL, BADGE_EDGE, BADGE_TEXT = "#1c1d21", "#5d626a", TEXT
+    SWITCH_OFF, SWITCH_KNOB = "#2a2c31", "#8a9098"
+    BLUE, BLUE_HI, BLUE_LO, BLUE_EDGE = "#2b8fe6", "#7cc8ff", "#1a5fa8", "#0a2f57"
+    GROOVE_OUT, GROOVE_FILL, GROOVE_SHADOW, GROOVE_LIP, GROOVE_DOT = "#08090b", "#16181b", "#0d0e10", "#3a3e45", "#3b4048"
+    STATUS_FILL, STATUS_OP, STATUS_LINE, STATUS_LINE_OP = "#000000", "0.22", "#ffffff", "0.07"
+    TRAY_A, TRAY_B, TRAY_LINE, TRAY_STROKE = "0.34", "0.18", "0.07", "#ffffff"
+    VIG_OP = "0.35"
+    SHADOW_OP = "0.40"
+    HL, HL_SOFT, HL_TILE = ("#ffffff", "0.12", "0.06")
+    RULE, RULE_OP = "#ffffff", "0.08"
+    DIVIDER, DIVIDER_OP = "#000000", "0.45"
+    SPLASH_MUTED, SPLASH_LOADING = "#a9afb8", "#e8e9eb"
+    SPLASH_SUB = "Anbernic RG DS"
+    LOGO_FRAG_NAME = "rocknixds-logo"
+    HAIR, HAIR_OP = "#ffffff", "0.12"
+    EMPTY_FILL, EMPTY_EDGE, EMPTY_LIP = "0.22", "0.45", "0.07"
+    EMPTY_MARK, EMPTY_MARK_OP = "#ffffff", "0.05"
 
 
 def glyph_run(text, x, y, height, fill, anchor="middle", stroke=0.0, font=None):
@@ -64,7 +148,9 @@ def rr_ccw(x, y, w, h, r):
 def write(name, w, h, body):
     svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">\n'
            f'{body}\n</svg>\n')
-    with open(os.path.join(OUT, name), "w") as f:
+    path = os.path.join(OUT, name)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
         f.write(svg)
 
 
@@ -81,7 +167,7 @@ for y in range(0, 481, 20):
     lines.append(f"M0,{y} H1920")
 write("background.svg", 1920, 480, f'''<defs>{grad("bg", [(0, BG_TOP), (1, BG_BOT)])}</defs>
 <rect width="1920" height="480" fill="url(#bg)"/>
-<path d="{' '.join(lines)}" stroke="{GRID}" stroke-opacity="0.035" stroke-width="1" fill="none"/>''')
+<path d="{' '.join(lines)}" stroke="{GRID}" stroke-opacity="{GRID_BG_OP}" stroke-width="1" fill="none"/>''')
 
 # --- game_slot: a Nintendo DS Game Card seen from the label side, 100x104 ---
 # Modelled on photos of real cards: a thin charcoal plastic rim, the bottom-left corner chamfered, a small notch
@@ -120,7 +206,7 @@ write("game_slot.svg", CARD_W, CARD_H, f'''<defs>{grad("card", [(0, "#606166"), 
 <path d="{card} {window}" fill="url(#card)" fill-rule="nonzero"/>
 <path d="M5.5,1 H{CW - 5.5}" stroke="#ffffff" stroke-opacity="0.22" stroke-width="1.2"/>
 <path d="M1.1,6 V54 M1.1,67 V92" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1"/>
-<path d="{card}" fill="none" stroke="{EDGE}" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="{card}" fill="none" stroke="#15161a" stroke-width="1.6" stroke-linejoin="round"/>
 <path d="{rr(5.2, 3.2, CW - 10.4, 88.6, 7)}" fill="none" stroke="#000000" stroke-opacity="0.35" stroke-width="1.3"/>
 <path d="{label} {window}" fill="url(#paper)" fill-rule="nonzero"/>
 <path d="{rr(11.6, 20.6, CW - 23.2, 66.8, 1.2)}" fill="none" stroke="#000000" stroke-opacity="0.18" stroke-width="0.8"/>
@@ -129,101 +215,128 @@ write("game_slot.svg", CARD_W, CARD_H, f'''<defs>{grad("card", [(0, "#606166"), 
 <path d="M{CW / 2 + 4.2},94.8 L{CW / 2 + 0.3},99.6" stroke="#ffffff" stroke-opacity="0.14" stroke-width="0.8"/>''')
 write("game_label.svg", CW - 24, 66, f'''<defs>{grad("gl", [(0, "#fbfbf8"), (1, "#ecebe6")])}</defs>
 <rect width="{CW - 24}" height="66" fill="url(#gl)"/>''')
-write("empty_slot.svg", CARD_W, CARD_H, f'''<path d="{card}" fill="#000000" fill-opacity="0.22"/>
-<path d="{card}" fill="none" stroke="#000000" stroke-opacity="0.45" stroke-width="1.6" stroke-linejoin="round"/>
-<path d="M5.5,103 H{CW - 5.5}" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1.2"/>
-<path d="{rr(6.5, 4.5, CW - 13, 86, 6)}" fill="none" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1"/>''')
+write("empty_slot.svg", CARD_W, CARD_H, f'''<path d="{card}" fill="#000000" fill-opacity="{EMPTY_FILL}"/>
+<path d="{card}" fill="none" stroke="#000000" stroke-opacity="{EMPTY_EDGE}" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="M5.5,103 H{CW - 5.5}" stroke="#ffffff" stroke-opacity="{EMPTY_LIP}" stroke-width="1.2"/>
+<path d="{rr(6.5, 4.5, CW - 13, 86, 6)}" fill="none" stroke="{EMPTY_MARK}" stroke-opacity="{EMPTY_MARK_OP}" stroke-width="1"/>''')
 
 # --- menu_slot: a dark socket the icon tile sits in. The icon (gen_icons.py tiles, 1/1.45 of the slot = 86 px)
 #     shows through the window x21.5..103.5 y21..103, 2 px inside the tile's edge so its anti-aliased rim is hidden ---
 hole = rr_ccw(21.5, 21, 82, 82, 15)
 outer = rr(2, 2, 121, 134, 16)
-write("menu_slot.svg", 125, 140, f'''<defs>{grad("ms", [(0, "#2c3036"), (1, "#1e2125")])}</defs>
-<path d="{rr(2, 6, 121, 134, 16)}" fill="#000000" fill-opacity="0.4"/>
+write("menu_slot.svg", 125, 140, f'''<defs>{grad("ms", [(0, SLOT_HI), (1, SLOT_LO)])}</defs>
+<path d="{rr(2, 6, 121, 134, 16)}" fill="#000000" fill-opacity="{SHADOW_OP}"/>
 <path d="{outer} {hole}" fill="url(#ms)"/>
 <path d="{outer}" fill="none" stroke="{EDGE}" stroke-width="1.5"/>
-<path d="{rr(3.5, 3.5, 118, 131, 14.5)}" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1"/>
+<path d="{rr(3.5, 3.5, 118, 131, 14.5)}" fill="none" stroke="{HL}" stroke-opacity="{HL_TILE}" stroke-width="1"/>
 <path d="{rr(20, 19.5, 85, 85, 16)}" fill="none" stroke="#000000" stroke-opacity="0.55" stroke-width="3"/>''')
 
 # --- carousel_tray: the band the system carousel sits on, across the whole bottom screen (640x180, y232..412).
 #     Full width because the icon row itself spans x8..632: a box with ends (it was 600 wide) left the outer
 #     sockets hanging over its edges, and the icons scroll in from the panel edges anyway ---
-write("carousel_tray.svg", 640, 180, f'''<defs><linearGradient id="cty" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000" stop-opacity="0.34"/><stop offset="1" stop-color="#000000" stop-opacity="0.18"/></linearGradient></defs>
+write("carousel_tray.svg", 640, 180, f'''<defs><linearGradient id="cty" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000" stop-opacity="{TRAY_A}"/><stop offset="1" stop-color="#000000" stop-opacity="{TRAY_B}"/></linearGradient></defs>
 <rect x="0" y="0" width="640" height="180" fill="url(#cty)"/>
-<path d="M0,0.75 H640 M0,179.25 H640" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1.5"/>
-<path d="M0,2.5 H640" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1"/>''')
+<path d="M0,0.75 H640 M0,179.25 H640" stroke="{TRAY_STROKE}" stroke-opacity="{TRAY_LINE}" stroke-width="1.5"/>
+<path d="M0,2.5 H640" stroke="{TRAY_STROKE}" stroke-opacity="0.08" stroke-width="1"/>''')
 
 # --- start_window: DSi blue selection frame, window x20..139 y22..141 ---
 hole = rr_ccw(20, 22, 120, 120, 9)
 outer = rr(2, 2, 156, 196, 14)
 write("start_window.svg", 160, 200, f'''<defs>{grad("sw", [(0, ACCENT_HI), (0.45, ACCENT), (1, ACCENT_LO)])}</defs>
 <path d="{outer} {hole}" fill="url(#sw)"/>
-<path d="{outer}" fill="none" stroke="#0d3a6b" stroke-width="2.5"/>
+<path d="{outer}" fill="none" stroke="{ACCENT_EDGE}" stroke-width="2.5"/>
 <path d="{rr(5, 5, 150, 190, 11)}" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1.5"/>
-<path d="{rr(18.5, 20.5, 123, 123, 10.5)}" fill="none" stroke="#0d3a6b" stroke-width="3"/>
-{glyph_run("START", 80, 184.5, 26, "#0d3a6b", stroke=3.2)}
+<path d="{rr(18.5, 20.5, 123, 123, 10.5)}" fill="none" stroke="{ACCENT_EDGE}" stroke-width="3"/>
+{glyph_run("START", 80, 184.5, 26, ACCENT_EDGE, stroke=3.2)}
 {glyph_run("START", 80, 182.5, 26, "#ffffff", stroke=1.6)}''')
 
 # --- text_bubble: speech bubble with centred tail ---
 bubble = ("M10,1 H240 A9,9 0 0 1 249,10 V67 A9,9 0 0 1 240,76 H134 L125,84 L116,76 "
           "H10 A9,9 0 0 1 1,67 V10 A9,9 0 0 1 10,1 Z")
-write("text_bubble.svg", 250, 85, f'''<defs>{grad("tb", [(0, "#42464d"), (1, "#34373c")])}</defs>
+write("text_bubble.svg", 250, 85, f'''<defs>{grad("tb", [(0, BUBBLE_HI), (1, BUBBLE_LO)])}</defs>
 <path d="{bubble}" fill="url(#tb)" stroke="{RIM}" stroke-width="1.6" stroke-linejoin="round"/>''')
 
 # --- bubble_fade: hides the partly visible last line of the game description (it autoscrolls) over the bottom
 #     28 px of the text box (y187..215 on screen). nanosvg ignores gradient stop-opacity, so it is 2 px rows with
 #     fill-opacity; the colours are the bubble's on-screen colours there (sampled), not its SVG gradient's ---
-_top, _bot = (0x3f, 0x42, 0x48), (0x3d, 0x40, 0x46)
-_rows = []
-for _i in range(14):
-    _t = _i / 13; _a = _t * _t * (3 - 2 * _t)
-    _c = tuple(int(_top[k] + (_bot[k] - _top[k]) * _t + 0.5) for k in range(3))
-    _rows.append(f'<rect x="0" y="{_i * 2}" width="448" height="2" fill="#%02x%02x%02x" fill-opacity="{_a:.3f}"/>' % _c)
-write("bubble_fade.svg", 448, 28, "\n".join(_rows))
-# the same upside down, under the title: hides the first line as it scrolls out at the top
-_rows_top = []
-for _i in range(14):
-    _t = _i / 13; _a = (1 - _t) * (1 - _t) * (3 - 2 * (1 - _t))
-    _c = tuple(int(0x3d + (0x34 - 0x3d) * _t + 0.5) + d for d in (0, 3, 8))   # the bubble is lighter near its top (sampled)
-    _rows_top.append(f'<rect x="0" y="{_i * 2}" width="448" height="2" fill="#%02x%02x%02x" fill-opacity="{_a:.3f}"/>' % _c)
-write("bubble_fade_top.svg", 448, 28, "\n".join(_rows_top))
+def _hex_rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+def _mix(c0, c1, t):
+    return tuple(int(c0[k] + (c1[k] - c0[k]) * t + 0.5) for k in range(3))
+
+
+def _fade(path_name, c0, c1, top=False, f0=0.0, f1=1.0):
+    """2px rows. Opacity eases across the strip; the colour is the bubble's own colour
+    at that height (f0..f1 of the bubble), so the strip does not show as a band."""
+    rows = []
+    for i in range(14):
+        t = i / 13
+        if top:
+            a = (1 - t) * (1 - t) * (3 - 2 * (1 - t))
+        else:
+            a = t * t * (3 - 2 * t)
+        c = _mix(c0, c1, f0 + (f1 - f0) * t)
+        rows.append(f'<rect x="0" y="{i * 2}" width="448" height="2" fill="#%02x%02x%02x" fill-opacity="{a:.3f}"/>' % c)
+    write(path_name, 448, 28, "\n".join(rows))
+
+if PALETTE == "legacy":
+    _top, _bot = (0x3f, 0x42, 0x48), (0x3d, 0x40, 0x46)
+    _rows = []
+    for _i in range(14):
+        _t = _i / 13; _a = _t * _t * (3 - 2 * _t)
+        _c = tuple(int(_top[k] + (_bot[k] - _top[k]) * _t + 0.5) for k in range(3))
+        _rows.append(f'<rect x="0" y="{_i * 2}" width="448" height="2" fill="#%02x%02x%02x" fill-opacity="{_a:.3f}"/>' % _c)
+    write("bubble_fade.svg", 448, 28, "\n".join(_rows))
+    _rows_top = []
+    for _i in range(14):
+        _t = _i / 13; _a = (1 - _t) * (1 - _t) * (3 - 2 * (1 - _t))
+        _c = tuple(int(0x3d + (0x34 - 0x3d) * _t + 0.5) + d for d in (0, 3, 8))   # the bubble is lighter near its top (sampled)
+        _rows_top.append(f'<rect x="0" y="{_i * 2}" width="448" height="2" fill="#%02x%02x%02x" fill-opacity="{_a:.3f}"/>' % _c)
+    write("bubble_fade_top.svg", 448, 28, "\n".join(_rows_top))
+else:
+    _hi, _lo = _hex_rgb(BUBBLE_HI), _hex_rgb(BUBBLE_LO)
+    # The tall game-list bubble is y 0.075..0.525. The fades cover y 0.390..0.448 and y 0.198..0.256.
+    _fade("bubble_fade.svg", _hi, _lo, top=False, f0=0.699, f1=0.829)
+    _fade("bubble_fade_top.svg", _hi, _lo, top=True, f0=0.273, f1=0.403)
 
 # --- preview_panel: dark bevelled screen for box art / video ---
-write("preview_panel.svg", 492, 369, f'''<defs>{grad("pp", [(0, "#454950"), (1, "#2e3035")])}
-{grad("scr", [(0, "#1d1f23"), (1, "#15171a")])}</defs>
-<path d="{rr(2, 6, 488, 361, 16)}" fill="#000000" fill-opacity="0.4"/>
+write("preview_panel.svg", 492, 369, f'''<defs>{grad("pp", [(0, PREVIEW_HI), (1, PREVIEW_LO)])}
+{grad("scr", [(0, WELL_HI), (1, WELL_LO)])}</defs>
+<path d="{rr(2, 6, 488, 361, 16)}" fill="#000000" fill-opacity="{SHADOW_OP}"/>
 <path d="{rr(2, 2, 488, 360, 16)}" fill="url(#pp)" stroke="{EDGE}" stroke-width="2"/>
-<path d="{rr(4, 4, 484, 356, 14)}" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
+<path d="{rr(4, 4, 484, 356, 14)}" fill="none" stroke="{HL}" stroke-opacity="{HL_SOFT}" stroke-width="1.2"/>
 <path d="{rr(18, 18, 456, 328, 8)}" fill="url(#scr)" stroke="{EDGE}" stroke-width="2"/>
 <path d="{rr(19.5, 19.5, 453, 325, 7)}" fill="none" stroke="{ACCENT}" stroke-opacity="0.25" stroke-width="1"/>''')
 
 # --- info_panel: the game list's top-screen card, 608x360: 3D box on the left (drawn over), screenshot window
 # x214..592 y18..160 (the 512:192 side-by-side DS screens), details below it, RetroAchievements strip under a
 # divider at y250 ---
-write("info_panel.svg", 608, 360, f'''<defs>{grad("ip", [(0, "#43474e"), (1, "#2f3136")])}
-{grad("scr", [(0, "#1d1f23"), (1, "#15171a")])}</defs>
-<path d="{rr(2, 6, 604, 352, 18)}" fill="#000000" fill-opacity="0.4"/>
+write("info_panel.svg", 608, 360, f'''<defs>{grad("ip", [(0, CHROME_HI), (1, CHROME_LO)])}
+{grad("scr", [(0, WELL_HI), (1, WELL_LO)])}</defs>
+<path d="{rr(2, 6, 604, 352, 18)}" fill="#000000" fill-opacity="{SHADOW_OP}"/>
 <path d="{rr(2, 2, 604, 352, 18)}" fill="url(#ip)" stroke="{EDGE}" stroke-width="2"/>
-<path d="{rr(4, 4, 600, 348, 16)}" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
+<path d="{rr(4, 4, 600, 348, 16)}" fill="none" stroke="{HL}" stroke-opacity="{HL_SOFT}" stroke-width="1.2"/>
 <path d="{rr(211, 15, 384, 148, 8)}" fill="url(#scr)" stroke="{EDGE}" stroke-width="2"/>
 <path d="{rr(212.5, 16.5, 381, 145, 7)}" fill="none" stroke="{ACCENT}" stroke-opacity="0.25" stroke-width="1"/>
-<path d="M22,250 H586" stroke="#000000" stroke-opacity="0.45" stroke-width="1.5"/>
-<path d="M22,251.5 H586" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1"/>''')
+<path d="M22,250 H586" stroke="{DIVIDER}" stroke-opacity="{DIVIDER_OP}" stroke-width="1.5"/>
+<path d="M22,251.5 H586" stroke="{HL}" stroke-opacity="{RULE_OP}" stroke-width="1"/>''')
 
 # --- home panels (main menu top screen) ---
 # home_hero_panel: 608x340 card for the main menu's top screen: icon well x18..208 y18..208 (the system icon
 # with a glow), name and counts to the right, and two stat tiles along the bottom (y236..322: x18..299, x309..590)
 tiles = "".join(f'<path d="{rr(x, 236, 281, 86, 12)}" fill="url(#well)" stroke="{EDGE}" stroke-width="1.5"/>'
-                f'<path d="{rr(x + 1.5, 237.5, 278, 83, 11)}" fill="none" stroke="#ffffff" stroke-opacity="0.06" stroke-width="1"/>'
+                f'<path d="{rr(x + 1.5, 237.5, 278, 83, 11)}" fill="none" stroke="{HL}" stroke-opacity="{HL_TILE}" stroke-width="1"/>'
                 for x in (18, 309))
-write("home_hero_panel.svg", 608, 340, f'''<defs>{grad("hh", [(0, "#43474e"), (1, "#2f3136")])}
-{grad("well", [(0, "#1d1f23"), (1, "#15171a")])}</defs>
-<path d="{rr(2, 6, 604, 332, 18)}" fill="#000000" fill-opacity="0.4"/>
+write("home_hero_panel.svg", 608, 340, f'''<defs>{grad("hh", [(0, CHROME_HI), (1, CHROME_LO)])}
+{grad("well", [(0, WELL_HI), (1, WELL_LO)])}</defs>
+<path d="{rr(2, 6, 604, 332, 18)}" fill="#000000" fill-opacity="{SHADOW_OP}"/>
 <path d="{rr(2, 2, 604, 332, 18)}" fill="url(#hh)" stroke="{EDGE}" stroke-width="2"/>
-<path d="{rr(4, 4, 600, 328, 16)}" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
+<path d="{rr(4, 4, 600, 328, 16)}" fill="none" stroke="{HL}" stroke-opacity="{HL_SOFT}" stroke-width="1.2"/>
 <path d="{rr(18, 18, 190, 190, 18)}" fill="url(#well)" stroke="{EDGE}" stroke-width="2"/>
 <path d="{rr(19.5, 19.5, 187, 187, 17)}" fill="none" stroke="{ACCENT}" stroke-opacity="0.25" stroke-width="1"/>
-<path d="M226,214 H590" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1"/>
+<path d="M226,214 H590" stroke="{RULE}" stroke-opacity="{RULE_OP}" stroke-width="1"/>
 {tiles}''')
 
 # --- tabs (108x56, opaque x0..100 / x8..108, y8..56) with L2/R2 badge ---
@@ -240,10 +353,10 @@ def tab(name, flip, label):
 <g{tr}>
 <path d="{shape}" fill="url(#tab)"/>
 <path d="M0,{top + 1} H118 A29,29 0 0 1 147,{top + 30} V{H}" fill="none" stroke="{EDGE}" stroke-width="2"/>
-<path d="M0,{top + 3} H117 A26,26 0 0 1 144,{top + 29}" fill="none" stroke="#ffffff" stroke-opacity="0.13" stroke-width="1.2"/>
+<path d="M0,{top + 3} H117 A26,26 0 0 1 144,{top + 29}" fill="none" stroke="{HL}" stroke-opacity="{HL_SOFT}" stroke-width="1.2"/>
 </g>
-<path d="{rr(bx, cy - bh / 2, bw, bh, 7)}" fill="#1c1d21" stroke="#5d626a" stroke-width="1.2"/>
-{glyph_run(label, bx + bw / 2, cy + 6.5, 13, TEXT, stroke=0.7)}''')
+<path d="{rr(bx, cy - bh / 2, bw, bh, 7)}" fill="{BADGE_FILL}" stroke="{BADGE_EDGE}" stroke-width="1.2"/>
+{glyph_run(label, bx + bw / 2, cy + 6.5, 13, BADGE_TEXT, stroke=0.7)}''')
 
 tab("left_tab.svg", False, "L2")
 tab("right_tab.svg", True, "R2")
@@ -254,15 +367,15 @@ write("scroll_bar.svg", 256, 22, f'''<defs>{grad("sb", [(0, "#3b3e44"), (1, "#2b
 {grad("cap", [(0, ACCENT_HI), (1, ACCENT_LO)])}</defs>
 <rect x="18" y="4" width="220" height="14" rx="3" fill="url(#sb)" stroke="{EDGE}" stroke-width="1.2"/>
 <path d="{dots}" stroke="#7a8089" stroke-width="1.2"/>
-<rect x="1" y="1" width="22" height="20" rx="4" fill="url(#cap)" stroke="#0d3a6b" stroke-width="1.2"/>
-<rect x="233" y="1" width="22" height="20" rx="4" fill="url(#cap)" stroke="#0d3a6b" stroke-width="1.2"/>
+<rect x="1" y="1" width="22" height="20" rx="4" fill="url(#cap)" stroke="{ACCENT_EDGE}" stroke-width="1.2"/>
+<rect x="233" y="1" width="22" height="20" rx="4" fill="url(#cap)" stroke="{ACCENT_EDGE}" stroke-width="1.2"/>
 <path d="M16,6 L7,11 L16,16 Z M240,6 L249,11 L240,16 Z" fill="#ffffff"/>''')
 
 # --- menu switch / slider knob for the settings menus ---
-write("switch_on.svg", 44, 28, f'''<rect x="1" y="4" width="42" height="20" rx="10" fill="{ACCENT}" stroke="#0d3a6b" stroke-width="1.5"/>
+write("switch_on.svg", 44, 28, f'''<rect x="1" y="4" width="42" height="20" rx="10" fill="{ACCENT}" stroke="{ACCENT_EDGE}" stroke-width="1.5"/>
 <circle cx="33" cy="14" r="8" fill="#ffffff"/>''')
-write("switch_off.svg", 44, 28, f'''<rect x="1" y="4" width="42" height="20" rx="10" fill="#2a2c31" stroke="{RIM}" stroke-width="1.5"/>
-<circle cx="11" cy="14" r="8" fill="#8a9098"/>''')
+write("switch_off.svg", 44, 28, f'''<rect x="1" y="4" width="42" height="20" rx="10" fill="{SWITCH_OFF}" stroke="{RIM}" stroke-width="1.5"/>
+<circle cx="11" cy="14" r="8" fill="{SWITCH_KNOB}"/>''')
 write("slider_knob.svg", 32, 32, f'''<circle cx="16" cy="16" r="13" fill="#ffffff" stroke="{ACCENT}" stroke-width="3"/>''')
 
 print("ok")
@@ -273,13 +386,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 # --- background split: static gradient + a grid layer the theme drifts slowly ---
 write("background_plain.svg", 1920, 480, f'''<defs>{grad("bg", [(0, BG_TOP), (1, BG_BOT)])}
-<radialGradient id="vig" cx="0.5" cy="0.45" r="0.75"><stop offset="0.55" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity="0.35"/></radialGradient></defs>
+<radialGradient id="vig" cx="0.5" cy="0.45" r="0.75"><stop offset="0.55" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity="{VIG_OP}"/></radialGradient></defs>
 <rect width="1920" height="480" fill="url(#bg)"/>
 <rect width="640" height="480" fill="url(#vig)"/>
 <rect x="640" width="640" height="480" fill="url(#vig)"/>''')
-# 1960x520: 40px larger so it can slide 20px (one cell) diagonally and loop seamlessly
+# 1960x520: 40px larger so it can slide 20px (one cell) diagonally and loop seamlessly.
+# The cell is 20px in this viewBox. The theme slides the layer by one cell as a fraction of the
+# canvas, so the loop stays seamless at 1920x480 and at 3072x768.
 lines = [f"M{x},0 V520" for x in range(0, 1961, 20)] + [f"M0,{y} H1960" for y in range(0, 521, 20)]
-write("grid.svg", 1960, 520, f'<path d="{" ".join(lines)}" stroke="{GRID}" stroke-opacity="0.04" stroke-width="1" fill="none"/>')
+write("grid.svg", 1960, 520, f'<path d="{" ".join(lines)}" stroke="{GRID}" stroke-opacity="{GRID_OP}" stroke-width="1" fill="none"/>')
 
 # --- ROCKNIX wordmark: traced from the stock 500x195 PNG (trace_logo.py), now vector ---
 paths = open(os.path.join(HERE, "rocknix_logo.paths")).read()
@@ -291,10 +406,20 @@ def logo_frag(name):
     f = open(os.path.join(HERE, "..", "logo", name + ".frag")).read()
     w, h = (float(v) for v in f.split("-->", 1)[0].strip("<!- \n").split(" x "))
     return f, w, h
-WIDE, WW, WH = logo_frag("rocknixds-logo")          # one line: wordmark, DS icon, DS
-STACK, SW, SH = logo_frag("rocknixds-logo-stack")   # wordmark over [icon DS], for small squares
-STACKL, _, _ = logo_frag("rocknixds-logo-stack-light")   # the same with a dark DS, for the white card label
-write("distro_logo.svg", round(WW), round(WH), WIDE)
+# The wide mark's grey "NIX" and red "ROCK" are drawn for a dark ground. On the paper
+# theme they sit on a dark chip, so the same mark stays readable. The cartridge label
+# keeps the dark-DS stack, on white paper, and is identical in every theme.
+WIDE, WW, WH = logo_frag("rocknixds-logo" if PALETTE == "light" else LOGO_FRAG_NAME)
+STACK, SW, SH = logo_frag("rocknixds-logo-stack")
+STACKL, _, _ = logo_frag("rocknixds-logo-stack-light")
+if PALETTE == "light":
+    _chip = f'<rect width="{WW:.1f}" height="{WH:.1f}" rx="18" fill="#121820"/>'
+    _inset = 0.84
+    _ox, _oy = WW * (1 - _inset) / 2, WH * (1 - _inset) / 2
+    write("distro_logo.svg", round(WW), round(WH),
+          _chip + f'<g transform="translate({_ox:.2f} {_oy:.2f}) scale({_inset})">{WIDE}</g>')
+else:
+    write("distro_logo.svg", round(WW), round(WH), WIDE)
 
 # --- soft light behind the logo (the theme makes it breathe) ---
 write("logo_glow.svg", 560, 240, f'''<defs><radialGradient id="g" cx="0.5" cy="0.5" r="0.5">
@@ -304,9 +429,9 @@ write("logo_glow.svg", 560, 240, f'''<defs><radialGradient id="g" cx="0.5" cy="0
 <ellipse cx="280" cy="120" rx="280" ry="120" fill="url(#g)"/>''')
 
 # --- top-screen status strip ---
-write("status_bar.svg", 640, 44, f'''<defs>{grad("st", [(0, "#000000"), (1, "#000000")])}</defs>
-<rect width="640" height="43" fill="#000000" fill-opacity="0.22"/>
-<path d="M0,43.5 H640" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1"/>''')
+write("status_bar.svg", 640, 44, f'''<defs>{grad("st", [(0, STATUS_FILL), (1, STATUS_FILL)])}</defs>
+<rect width="640" height="43" fill="{STATUS_FILL}" fill-opacity="{STATUS_OP}"/>
+<path d="M0,43.5 H640" stroke="{STATUS_LINE}" stroke-opacity="{STATUS_LINE_OP}" stroke-width="1"/>''')
 
 # --- scroll bar: retro pixel-art style, drawn on the exact 1:1 pixel grid (600x28 at 660,438;
 #     thumb 84x20). Only integer-aligned rects, so nanosvg's antialiasing never softens an edge.
@@ -332,16 +457,15 @@ def px_arrow(cx, cy, left, c, shadow, b=2):
             out.append(px(x, cy - n * b + b // 2 + dx, b, (2 * n - 1) * b, col))
     return "\n".join(out)
 
-BLUE, BLUE_HI, BLUE_LO, BLUE_EDGE = "#2b8fe6", "#7cc8ff", "#1a5fa8", "#0a2f57"
 W, H = 600, 28
 track = [
-    # recessed groove: dark outline, inner shadow on top, highlight on the bottom edge
-    px(40, 7, 520, 1, "#08090b"), px(40, 20, 520, 1, "#08090b"),
-    px(39, 8, 1, 12, "#08090b"), px(560, 8, 1, 12, "#08090b"),
-    px(40, 8, 520, 12, "#16181b"), px(40, 8, 520, 2, "#0d0e10"),
-    px(40, 21, 520, 1, "#3a3e45"),
+    # recessed groove: outline, inner shadow on top, highlight on the bottom edge
+    px(40, 7, 520, 1, GROOVE_OUT), px(40, 20, 520, 1, GROOVE_OUT),
+    px(39, 8, 1, 12, GROOVE_OUT), px(560, 8, 1, 12, GROOVE_OUT),
+    px(40, 8, 520, 12, GROOVE_FILL), px(40, 8, 520, 2, GROOVE_SHADOW),
+    px(40, 21, 520, 1, GROOVE_LIP),
     # dotted row, like the DSi menu bar
-    *[px(x, 13, 2, 2, "#3b4048") for x in range(46, 556, 8)],
+    *[px(x, 13, 2, 2, GROOVE_DOT) for x in range(46, 556, 8)],
 ]
 write("scroll_track.svg", W, H, "\n".join(track) + "\n"
       + px_box(0, 0, 32, 28, BLUE, BLUE_HI, BLUE_LO, BLUE_EDGE) + "\n"
@@ -360,21 +484,32 @@ SPLASH = os.path.join(THEME, "assets/images/splash")
 os.makedirs(SPLASH, exist_ok=True)
 grid640 = " ".join([f"M{x},0 V480" for x in range(0, 641, 20)] + [f"M0,{y} H640" for y in range(0, 481, 20)])
 base = f'''<defs>{grad("bg", [(0, BG_TOP), (1, BG_BOT)])}
-<radialGradient id="vig" cx="0.5" cy="0.45" r="0.75"><stop offset="0.55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.35"/></radialGradient>
+<radialGradient id="vig" cx="0.5" cy="0.45" r="0.75"><stop offset="0.55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="{VIG_OP}"/></radialGradient>
 <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="{ACCENT_HI}" stop-opacity="0.24"/><stop offset="0.45" stop-color="{ACCENT}" stop-opacity="0.09"/><stop offset="1" stop-color="{ACCENT}" stop-opacity="0"/></radialGradient></defs>
 <rect width="640" height="480" fill="url(#bg)"/>
-<path d="{grid640}" stroke="#ffffff" stroke-opacity="0.04" stroke-width="1" fill="none"/>
+<path d="{grid640}" stroke="{GRID}" stroke-opacity="{GRID_OP}" stroke-width="1" fill="none"/>
 <rect width="640" height="480" fill="url(#vig)"/>'''
 logo = open(os.path.join(HERE, "rocknix_logo.paths")).read()
 logo = logo.replace('fill="RED"', 'fill="url(#rk)"').replace('fill="GREY"', 'fill="url(#nx)"')
 logo_defs = f'<defs>{grad("rk", [(0, "#ff6b6b"), (1, "#e8403f")])}{grad("nx", [(0, "#f2f3f5"), (1, "#c9ccd1")])}</defs>'
-# top: logo 400 px wide (native 500 x ~95) centred at y 205, device name, divider
+# top: logo 540 px wide, centred at y 200, device name, divider.
+# Paper theme: the mark is the dark-ground one, on a chip, or the light "DS" disappears.
+_ls = 540 / WW
+_lx = 320 - WW * _ls / 2
+_ly = 200 - WH * _ls / 2
+if PALETTE == "light":
+    _pad = 18
+    splash_logo = (f'<rect x="{_lx - _pad:.2f}" y="{_ly - _pad:.2f}" width="{WW * _ls + 2 * _pad:.2f}" '
+                   f'height="{WH * _ls + 2 * _pad:.2f}" rx="16" fill="#121820"/>'
+                   f'<g transform="translate({_lx:.2f} {_ly:.2f}) scale({_ls:.5f})">{WIDE}</g>')
+else:
+    splash_logo = f'<g transform="translate({_lx:.2f} {_ly:.2f}) scale({_ls:.5f})">{WIDE}</g>'
 write("../splash/splash_top.svg", 640, 480, base + f'''
 {logo_defs}
 <ellipse cx="320" cy="200" rx="300" ry="120" fill="url(#glow)"/>
-<g transform="translate({320 - WW * (540 / WW) / 2:.2f} {200 - WH * (540 / WW) / 2:.2f}) scale({540 / WW:.5f})">{WIDE}</g>
-<path d="M200,288 H440" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>
-{glyph_run("Anbernic RG DS", 320, 320, 15, "#a9afb8")}''')
+{splash_logo}
+<path d="M200,288 H440" stroke="{("#8aa0b4" if PALETTE == "light" else "#ffffff")}" stroke-opacity="{("0.55" if PALETTE == "light" else "0.12")}" stroke-width="1.2"/>
+{glyph_run(SPLASH_SUB, 320, 320, 15, SPLASH_MUTED)}''')
 # bottom: the DS card (100x104, drawn 1.6x) with the logo on its label, in the selection frame; Loading + dots
 card = open(os.path.join(OUT, "game_slot.svg")).read().split(">", 1)[1].rsplit("</svg>", 1)[0]
 ls = 62 / SW   # stacked logo 62 px wide on the 76 px label
@@ -386,11 +521,11 @@ write("../splash/splash_bottom.svg", 640, 480, base + f'''
 {logo_defs}{grad("sw", [(0, ACCENT_HI), (0.45, ACCENT), (1, ACCENT_LO)])}
 <ellipse cx="{cx}" cy="{cy}" rx="220" ry="160" fill="url(#glow)"/>
 <path d="{rr(cx - fw / 2, cy - fh / 2 + 4, fw, fh, 16)}" fill="#000000" fill-opacity="0.35"/>
-<path d="{rr(cx - fw / 2, cy - fh / 2, fw, fh, 16)}" fill="url(#sw)" stroke="#0d3a6b" stroke-width="2.5"/>
+<path d="{rr(cx - fw / 2, cy - fh / 2, fw, fh, 16)}" fill="url(#sw)" stroke="{ACCENT_EDGE}" stroke-width="2.5"/>
 <path d="{rr(cx - fw / 2 + 3, cy - fh / 2 + 3, fw - 6, fh - 6, 13)}" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1.5"/>
 <path d="{rr(cx - cw / 2 - 5, cy - ch / 2 - 5, cw + 10, ch + 10, 9)}" fill="#14161a"/>
 <g transform="translate({cx - cw / 2} {cy - ch / 2}) scale({sc})">{lab}{card}</g>
-{glyph_run("Loading", 320, 345, 17, "#e8e9eb")}
+{glyph_run("Loading", 320, 345, 17, SPLASH_LOADING)}
 <circle cx="296" cy="372" r="5" fill="{ACCENT_HI}"/>
 <circle cx="320" cy="372" r="5" fill="{ACCENT_HI}" fill-opacity="0.6"/>
 <circle cx="344" cy="372" r="5" fill="{ACCENT_HI}" fill-opacity="0.3"/>''')

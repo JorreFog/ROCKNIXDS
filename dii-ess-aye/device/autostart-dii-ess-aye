@@ -5,7 +5,7 @@
 # (stock layout: ES fullscreen on one panel, DSI-1 powered off), which blacks out
 # the 1920-wide ES window -- so the theme sway config is restored here too.
 # Keep DUAL_THEMES in sync with start_es_rgds.sh and theme-changed.sh.
-DUAL_THEMES="dii-ess-aye canvas-ds"
+DUAL_THEMES="dii-ess-aye canvas-ds rocknixds-dark rocknixds-light"
 LAUNCHER=/storage/.config/emulationstation/themes/dii-ess-aye/scripts/start_es_rgds.sh
 SWAYCFG=/storage/dii-ess-aye-backup/sway-config.theme
 THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)

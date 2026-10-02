@@ -49,14 +49,19 @@ if [ -f /tmp/dsflip-vt ]; then
         # RG DS: the window is resized to the 1920 canvas (sway allows it past the 1280 desktop).
         # Plus: a resize to 3072 is clamped to the 2048 desktop and the theme scales, so only un-fullscreen
         # and pin at 0,0. The launcher's --resolution already made the window 3072x768.
-        PANEL=; for m in /sys/class/drm/card*-DSI-*/modes; do read -r PANEL < "$m" 2>/dev/null && [ -n "$PANEL" ] && break; done
-        case "$PANEL" in [0-9]*x[0-9]*) ;; *) PANEL=640x480 ;; esac
-        PW=${PANEL%%x*}
-        if [ "$PW" -gt 640 ]; then
-            [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" '[app_id="emulationstation"] floating enable, fullscreen disable, move absolute position 0 0' >/dev/null 2>&1
-        else
-            [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" '[app_id="emulationstation"] floating enable, fullscreen disable, resize set 1920 480, move absolute position 0 0' >/dev/null 2>&1
-        fi
+        THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
+        case "$THEME_SET" in
+            ""|dii-ess-aye|canvas-ds|rocknixds-dark|rocknixds-light)
+                PANEL=; for m in /sys/class/drm/card*-DSI-*/modes; do read -r PANEL < "$m" 2>/dev/null && [ -n "$PANEL" ] && break; done
+                case "$PANEL" in [0-9]*x[0-9]*) ;; *) PANEL=640x480 ;; esac
+                PW=${PANEL%%x*}
+                if [ "$PW" -gt 640 ]; then
+                    [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" '[app_id="emulationstation"] floating enable, fullscreen disable, move absolute position 0 0' >/dev/null 2>&1
+                else
+                    [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" '[app_id="emulationstation"] floating enable, fullscreen disable, resize set 1920 480, move absolute position 0 0' >/dev/null 2>&1
+                fi
+                ;;
+        esac
     else
         echo "$(date) sway has no outputs after the VT switch: restarting it"
         systemctl restart sway.service; wait_outputs

@@ -190,7 +190,9 @@ if [ $UNINSTALL = 1 ]; then
     rmdir /storage/.config/system.d/timers.target.wants 2>/dev/null; systemctl daemon-reload
     rm -rf /storage/.config/rocknixds
     [ -e $ES_THEMES/canvas-ds/.rocknixds-commit ] && rm -rf $ES_THEMES/canvas-ds      # the one this installer downloaded
-    [ -e $BACKUP/.theme-installed-by-us ] && rm -rf $THEME
+    if [ -e $BACKUP/.theme-installed-by-us ]; then
+        rm -rf $THEME $ES_THEMES/rocknixds-dark $ES_THEMES/rocknixds-light
+    fi
     [ -d $BACKUP/theme-previous ] && mv $BACKUP/theme-previous $THEME
     systemctl restart sway.service 2>/dev/null || true; sleep 2
     es_start
@@ -248,16 +250,8 @@ if [ $THEME_ON = 1 ]; then
     rm -rf $THEME; mkdir -p $ES_THEMES
     cp -a $WORK/theme $THEME
     cp -a "$SRC/dii-ess-aye/overlay/." $THEME/
-    # Upstream only loads the RG DS layout when the canvas is 1920 wide. The Plus canvas is 3072, and this
-    # theme's coordinates are fractions of a 3-panel canvas, so both widths use theme-rgds.xml.
-    cat > $THEME/theme.xml << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<theme>
-    <formatVersion>7</formatVersion>
-
-    <include>./theme-rgds.xml</include>
-</theme>
-EOF
+    # overlay/theme.xml loads theme-rgds.xml at 1920 (RG DS) and 3072 (RG DS Plus). Upstream's
+    # theme.xml loads the Thor layout at any width other than 1920.
     mkdir -p $THEME/bin
     cp "$SRC/dii-ess-aye/emulationstation-rgds" $THEME/bin/emulationstation
     # the ROCKNIX build (OS_VERSION) the patched ES was compiled against: on any other, the launcher checks it links
@@ -275,6 +269,21 @@ EOF
         fi
     fi
     chmod +x $THEME/bin/emulationstation $THEME/scripts/*.sh
+    # Two selectable skins of this same layout. Each is a full upstream theme plus the
+    # overlay, then its own colours. Fonts, sounds and system icons are the upstream
+    # copies (symlinked) so the three folders cannot drift apart.
+    for variant in rocknixds-dark rocknixds-light; do
+        dest=$ES_THEMES/$variant
+        rm -rf "$dest"
+        cp -a $WORK/theme "$dest"
+        cp -a "$SRC/dii-ess-aye/overlay/." "$dest/"
+        cp -a "$SRC/dii-ess-aye/themes/$variant/." "$dest/"
+        rm -rf "$dest/assets/fonts" "$dest/assets/sounds" "$dest/assets/images/systems"
+        ln -s ../dii-ess-aye/assets/fonts "$dest/assets/fonts"
+        ln -s ../dii-ess-aye/assets/sounds "$dest/assets/sounds"
+        ln -s ../dii-ess-aye/assets/images/systems "$dest/assets/images/systems"
+        chmod +x "$dest"/scripts/*.sh 2>/dev/null || true
+    done
     touch $BACKUP/.theme-installed-by-us
 
     say "Sway config, boot hook and ES settings"
@@ -303,7 +312,7 @@ fi
 # ---- canvas-ds: a second dual-screen theme ---------------------------------------------------------------
 # toniremi/canvas-ds (made for ROCKNIX on the RG DS, after dii-ess-aye's layout), downloaded from upstream at the
 # commit verified here: its theme files only (its scripts set up the launcher and sway, which ROCKNIXDS does itself).
-# Only the themes in /storage/.config/rocknixds/themes.allow can be picked (the patched ES), and both are listed.
+# Only the themes in /storage/.config/rocknixds/themes.allow can be picked (the patched ES).
 if [ $THEME_ON = 1 ] && [ $CANVAS_ON = 1 ]; then
     C=$ES_THEMES/canvas-ds
     if [ "$(cat $C/.rocknixds-commit 2>/dev/null)" != $CANVAS_COMMIT ]; then
@@ -435,7 +444,7 @@ say "Locking the settings that would break ROCKNIXDS; ROCKNIXDS updates"
 RD=/storage/.config/rocknixds
 mkdir -p $RD
 cp "$SRC/dsflip/device/rocknixds-update" $RD/ && chmod +x $RD/rocknixds-update
-printf 'dii-ess-aye\ncanvas-ds\n' > $RD/themes.allow
+printf 'dii-ess-aye\ncanvas-ds\nrocknixds-dark\nrocknixds-light\n' > $RD/themes.allow
 [ -f $SYSCFG ] && sed -i '/^nds\(\[.*\]\)\{0,1\}\.\(emulator\|core\)=/d' $SYSCFG       # a per-game RetroArch/melonDS choice
 if [ -f $SYSCFG ] && [ "$DEVICE" = "RG DS Plus" ]; then
     # The menu only stores stable or beta. On a Plus, beta is this branch: rocknixds-update maps it to
