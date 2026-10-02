@@ -18,7 +18,7 @@ while [ -d /proc/$P ]; do
         [ -r $t/schedstat ] || continue
         read run wait slices < $t/schedstat
         set -- $(cat $t/stat 2>/dev/null | sed "s/.*) //")   # fields from state (3) on: $1=state ... $16=prio $37=cpu $39=policy
-        printf "D %s %s %s %s %s %s %s %s\n" "$(cat $t/comm)" "$run" "$wait" "$slices" "$1" "$16" "${37}" "${39}" >> $OUT
+        printf "D %s %s %s %s %s %s %s %s\n" "$(cat $t/comm)" "$run" "$wait" "$slices" "$1" "${16}" "${37}" "${39}" >> $OUT
     done
     sleep 1
 done
