@@ -32,7 +32,8 @@ class UpdateChannelTest(unittest.TestCase):
         self._stub("curl", """#!/bin/sh
 printf '%s\\n' "$*" >> "$ROCKNIXDS_STUB_LOG"
 case " $* " in
-  *releases/latest*) printf '%s\\n' '  "tag_name": "v1.5.0"' ;;
+  *releases\?per_page*) cat "$ROCKNIXDS_RELEASES" 2>/dev/null || exit 1 ;;
+  *api.github.com/\ *) exit 0 ;;
   *commits/plus-beta*) printf '%s\\n' '  "sha": "__PLUS__"' ;;
   *commits/beta*) printf '%s\\n' '  "sha": "__BETA__"' ;;
   *localhost:1234/notify*)
@@ -65,6 +66,11 @@ exit 0
     def _model(self, text):
         self.model.write_bytes(text.encode() + b"\x00\x00")
 
+    def _releases(self, *rel):
+        import json
+        (self.root / "releases.json").write_text(json.dumps(
+            [{"tag_name": t, "prerelease": pre, "draft": False} for t, pre in rel]))
+
     def invoke(self, *args, active=False, notify_fail=False):
         env = os.environ.copy()
         env["PATH"] = str(self.bin) + os.pathsep + env.get("PATH", "")
@@ -73,6 +79,7 @@ exit 0
         env["ROCKNIXDS_MODEL_FILE"] = str(self.model)
         env["ROCKNIXDS_MODES_GLOB"] = str(self.modes)
         env["ROCKNIXDS_STUB_LOG"] = str(self.log)
+        env["ROCKNIXDS_RELEASES"] = str(self.root / "releases.json")
         env["ROCKNIXDS_UPDATE_ACTIVE"] = "1" if active else "0"
         env["ROCKNIXDS_NOTIFY_FAIL"] = "1" if notify_fail else "0"
         return subprocess.run([str(SCRIPT), *args], capture_output=True, text=True, env=env)
@@ -122,15 +129,46 @@ exit 0
         self.assertIn("plus-beta", r.stdout)
         self.assertEqual(self.cfg.read_text().strip(), "rocknixds.channel=plus")
 
-    def test_stable_is_the_latest_release_even_on_a_plus(self):
+    def test_stable_is_the_newest_release_for_this_handheld(self):
+        # newest first, as GitHub lists them: betas and the other handheld's releases are skipped
+        self._releases(("v1.6-beta.1", True), ("v1.5-plus", False), ("v1.5", False), ("v1.5-plus-beta.5", True),
+                       ("v1.4", False))
+        self._cfg("rocknixds.channel=stable\n")
+        self._model("Anbernic RG DS")
+        r = self.invoke("check")
+        self.assertEqual(r.stdout.strip(), "UPDATE ROCKNIXDS 1.5")
+        (self.state / "installed-id").write_text("v1.5")
+        r = self.invoke("check")
+        self.assertEqual(r.stdout.strip(), "ROCKNIXDS IS UP TO DATE (ROCKNIXDS 1.5)")
+        self.assertEqual(r.returncode, 0)
+
+        self._model("Anbernic RG DS Plus")
+        r = self.invoke("check")
+        self.assertEqual(r.stdout.strip(), "UPDATE ROCKNIXDS 1.5 for the RG DS Plus")
+        (self.state / "installed-id").write_text("v1.5-plus")
+        r = self.invoke("check")
+        self.assertIn("UP TO DATE", r.stdout)
+
+    def test_a_plus_before_its_first_release_is_told_to_use_beta(self):
+        self._releases(("v1.4", False), ("v1.5-plus-beta.5", True))
         self._model("Anbernic RG DS Plus")
         self._cfg("rocknixds.channel=stable\n")
         r = self.invoke("check")
-        self.assertEqual(r.stdout.strip(), "UPDATE ROCKNIXDS 1.5.0")
-        (self.state / "installed-id").write_text("v1.5.0")
-        r = self.invoke("check")
-        self.assertEqual(r.stdout.strip(), "ROCKNIXDS IS UP TO DATE (ROCKNIXDS 1.5.0)")
         self.assertEqual(r.returncode, 0)
+        self.assertIn("NO STABLE ROCKNIXDS RELEASE FOR THE RG DS PLUS YET", r.stdout)
+        self.assertNotIn("UPDATE", r.stdout)
+
+    def test_switching_channels_says_which_way_it_goes(self):
+        self._releases(("v1.5", False))
+        self._model("Anbernic RG DS")
+        self._cfg("rocknixds.channel=stable\n")
+        (self.state / "installed-id").write_text(SHA_BETA)
+        r = self.invoke("check")
+        self.assertIn("UPDATE ROCKNIXDS 1.5 (the stable release, in place of the beta installed now)", r.stdout)
+        self._cfg("rocknixds.channel=beta\n")
+        (self.state / "installed-id").write_text("v1.5")
+        r = self.invoke("check")
+        self.assertIn("(the beta, in place of the stable release installed now)", r.stdout)
 
     def test_notify_is_once_per_update_and_silent_when_autocheck_is_off(self):
         self._model("Anbernic RG DS")
@@ -166,17 +204,32 @@ exit 0
         self.assertEqual(r.returncode, 0)
         self.assertEqual(r.stdout.strip(), "STARTED")
         log = self.log.read_text()
-        self.assertIn("RGDS_BRANCH=plus-beta", log)
-        self.assertIn("/plus-beta/install.sh", log)
+        self.assertIn("RGDS_BRANCH=plus-beta RGDS_REF=%s" % SHA_PLUS, log)
+        self.assertIn("/%s/install.sh" % SHA_PLUS, log)
 
         self._model("Anbernic RG DS")
         self.modes.write_text("640x480\n")
         self.log.write_text("")
         r = self.invoke("install")
         log = self.log.read_text()
-        self.assertIn("RGDS_BRANCH=beta", log)
-        self.assertIn("/beta/install.sh", log)
+        self.assertIn("RGDS_BRANCH=beta RGDS_REF=%s" % SHA_BETA, log)
+        self.assertIn("/%s/install.sh" % SHA_BETA, log)
         self.assertNotIn("plus-beta", log)
+
+        self._releases(("v1.5-plus", False), ("v1.5", False))
+        self._cfg("rocknixds.channel=stable\n")
+        self.log.write_text("")
+        self.invoke("install")
+        log = self.log.read_text()
+        self.assertIn("RGDS_BRANCH=main RGDS_REF=v1.5 ", log)
+        self.assertIn("/v1.5/install.sh", log)
+
+        self._model("Anbernic RG DS Plus")
+        self.log.write_text("")
+        self.invoke("install")
+        log = self.log.read_text()
+        self.assertIn("RGDS_BRANCH=main RGDS_REF=v1.5-plus ", log)
+        self.assertIn("/v1.5-plus/install.sh", log)
 
     def test_github_being_unreachable_is_reported(self):
         self._model("Anbernic RG DS")

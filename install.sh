@@ -15,6 +15,10 @@
 #   --restore-files with --uninstall: put back whole config files from the install-time backups instead
 #   --version       print the ROCKNIXDS version this installer belongs to
 # Env: RGDS_SRC=/path/to/checkout installs from a local copy instead of downloading.
+#      RGDS_BRANCH: what to install. main (the default) is the newest release for this handheld: vX.Y on the
+#      RG DS, vX.Y-plus on the RG DS Plus. beta is this handheld's beta branch (beta, or plus-beta on the Plus).
+#      A tag (v1.5, v1.5-plus) is that release. The installer finds the exact tag or commit first, then runs that
+#      ref's own install.sh (RGDS_REF), which installs that ref and records it for the update check.
 # Everything it replaces is backed up under /storage/rgds-rocknix-backup/ first.
 set -e
 
@@ -75,6 +79,60 @@ case "$MODEL" in
 esac
 
 systemctl is-active -q dsflip-game.service 2>/dev/null && die "a DS game is running: quit it first"
+
+# ---- what to install: the exact release or commit for this handheld ------------------------------------
+# Releases come in pairs from 1.5 on (vX.Y for the RG DS, vX.Y-plus for the RG DS Plus; pre-releases are
+# betas), and each handheld has its beta branch. A device that runs the other handheld's installer (the README's
+# command, or a 1.5 beta's updater, both fetch main's or beta's) is sent to its own here, before anything changes.
+latest_release() {   # latest_release 0|1: the newest stable release's tag for the RG DS (0) or the Plus (1)
+    curl -fsSL --max-time 20 "https://api.github.com/repos/$REPO/releases?per_page=50" 2>/dev/null | python3 -c '
+import json, sys
+plus = sys.argv[1] == "1"
+try:
+    rel = json.load(sys.stdin)
+except ValueError:
+    sys.exit()
+for r in rel if isinstance(rel, list) else []:
+    t = r.get("tag_name") or ""
+    if r.get("draft") or r.get("prerelease"):
+        continue
+    if (t.endswith("-plus") if plus else "plus" not in t):
+        print(t)
+        break' "$1" 2>/dev/null
+}
+branch_head() { curl -fsSL --max-time 20 "https://api.github.com/repos/$REPO/commits/$1" 2>/dev/null | sed -n 's/^  "sha": *"\([0-9a-f]*\)".*/\1/p' | head -n1; }
+PLUS=0; NAME=$DEVICE; [ "$DEVICE" = "RG DS Plus" ] && PLUS=1
+if [ $UNINSTALL = 0 ] && [ -z "$RGDS_SRC" ] && [ -z "$RGDS_REF" ]; then
+    case "$BRANCH" in
+    main|stable)
+        CH=main; REF=$(latest_release $PLUS)
+        if [ -z "$REF" ]; then
+            curl -fsS --max-time 15 -o /dev/null https://api.github.com/ 2>/dev/null || die "couldn't reach GitHub: check the network"
+            die "there is no ROCKNIXDS release for the $NAME yet: install the beta (RGDS_BRANCH=beta)"
+        fi ;;
+    beta|plus-beta)
+        CH=beta; [ $PLUS = 1 ] && CH=plus-beta
+        REF=$(branch_head $CH); [ -n "$REF" ] || die "couldn't reach GitHub: check the network" ;;
+    v[0-9]*)
+        CH=$BRANCH REF=$BRANCH
+        case "$REF" in
+        *-plus|*-plus-*) [ $PLUS = 1 ] || die "$REF is the RG DS Plus's release; this is an RG DS" ;;
+        *) [ $PLUS = 0 ] || die "$REF is the RG DS's release; this is an RG DS Plus (its releases end in -plus)" ;;
+        esac ;;
+    *)
+        CH=$BRANCH; REF=$(branch_head "$BRANCH"); [ -n "$REF" ] || die "no branch $BRANCH (or GitHub unreachable)" ;;
+    esac
+    say "Anbernic $NAME: installing ROCKNIXDS $REF ($CH)"
+    tmp=$(mktemp)
+    curl -fsSL --max-time 120 "https://raw.githubusercontent.com/$REPO/$REF/install.sh" -o "$tmp" \
+        || { rm -f "$tmp"; die "couldn't download the installer of $REF"; }
+    set +e
+    RGDS_BRANCH=$CH RGDS_REF=$REF sh "$tmp" "$@"
+    rc=$?
+    set -e
+    rm -f "$tmp"
+    exit $rc
+fi
 
 es_stop()  { systemctl stop essway.service 2>/dev/null || true; trap 'systemctl start essway.service 2>/dev/null' EXIT; }
 es_start() { systemctl start essway.service 2>/dev/null || true; }
@@ -207,8 +265,8 @@ rm -rf $WORK; mkdir -p $WORK
 if [ -n "$RGDS_SRC" ]; then
     SRC=$RGDS_SRC; say "Using local source $SRC"
 else
-    say "Downloading $REPO ($BRANCH)"
-    curl -fsSL "https://codeload.github.com/$REPO/tar.gz/$BRANCH" | tar xz -C $WORK
+    say "Downloading $REPO ${RGDS_REF:-$BRANCH} ($BRANCH)"
+    curl -fsSL "https://codeload.github.com/$REPO/tar.gz/${RGDS_REF:-$BRANCH}" | tar xz -C $WORK
     SRC=$(echo $WORK/*/)
 fi
 [ -f "$SRC/dsflip/device/session.sh" ] || die "download incomplete"
@@ -466,21 +524,23 @@ cp "$SRC/dsflip/device/rocknixds-update" $RD/ && chmod +x $RD/rocknixds-update
 themes_allow > $RD/themes.allow
 [ -f $SYSCFG ] && backup_once $SYSCFG
 [ -f $SYSCFG ] && sed -i '/^nds\(\[.*\]\)\{0,1\}\.\(emulator\|core\)=/d' $SYSCFG       # a per-game RetroArch/melonDS choice
-if [ -f $SYSCFG ] && [ "$DEVICE" = "RG DS Plus" ]; then
-    # The menu only stores stable or beta. On a Plus, beta is this branch: rocknixds-update maps it to
-    # plus-beta. Plus beta 3 stored "plus", which the menu shows as Stable and overwrites with Stable,
-    # and a menu Beta choice stored "beta", which that updater downloaded from the RG DS beta branch.
-    set_cfg rocknixds.channel beta
-elif [ -f $SYSCFG ]; then
-    grep -q '^rocknixds.channel=' $SYSCFG || set_cfg rocknixds.channel "$([ "$BRANCH" = beta ] && echo beta || echo stable)"
+# The update channel follows what was installed, unless the player already chose one in the menu (which stores
+# only stable or beta; on a Plus, rocknixds-update maps beta to plus-beta). Plus beta 3 stored "plus", which the
+# menu shows as Stable: it meant the beta.
+if [ -f $SYSCFG ]; then
+    case "$(sed -n 's/^rocknixds\.channel=//p' $SYSCFG | tail -n1)" in
+    plus) set_cfg rocknixds.channel beta ;;
+    "") case "$BRANCH" in beta|plus-beta) set_cfg rocknixds.channel beta ;; *) set_cfg rocknixds.channel stable ;; esac ;;
+    esac
 fi
 [ -f $SYSCFG ] && { grep -q '^rocknixds.autocheck=' $SYSCFG || set_cfg rocknixds.autocheck 1; }
 cp "$SRC/dsflip/device/rocknixds-update-check.service" "$SRC/dsflip/device/rocknixds-update-check.timer" /storage/.config/system.d/
 mkdir -p /storage/.config/system.d/timers.target.wants
 ln -sf ../rocknixds-update-check.timer /storage/.config/system.d/timers.target.wants/rocknixds-update-check.timer
 systemctl daemon-reload; systemctl start rocknixds-update-check.timer 2>/dev/null
-# what's installed, for the update check: the release tag (main) or the branch's commit (beta)
+# what's installed, for the update check: the release tag or the commit that was downloaded
 if [ -n "$RGDS_SRC" ]; then ID=local
+elif [ -n "$RGDS_REF" ]; then ID=$RGDS_REF
 elif [ "$BRANCH" = main ]; then
     ID=$(curl -fsSL --max-time 15 https://api.github.com/repos/$REPO/releases/latest 2>/dev/null | sed -n 's/^ *"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)
 else

@@ -5,4 +5,5 @@
 set -e
 cd "$(dirname "$0")/.."
 sh -n dsflip/device/rocknixds-update
+sh -n install.sh
 python3 -m unittest discover -s tests -v
