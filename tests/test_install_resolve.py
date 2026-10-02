@@ -37,6 +37,10 @@ class InstallResolveTest(unittest.TestCase):
         src = src.replace("/etc/os-release", str(self.root / "os-release"))
         src = src.replace("/proc/device-tree/model", str(self.model))
         src = src.replace("/sys/class/drm/card*-DSI-*/modes", str(self.modes))
+        # CI doesn't run as root, and nothing up to the hand-over needs it
+        root_check = '[ "$(id -u)" = 0 ] ||'
+        self.assertIn(root_check, src)
+        src = src.replace(root_check, "true ||", 1)
         # its own (empty) backup folder: an uninstall in a test must never find a real install's
         src = src.replace("/storage/rgds-rocknix-backup", str(self.root / "backup"))
         # never past the hand-over in a test: the install itself would run on this machine
