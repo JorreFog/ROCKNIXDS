@@ -191,7 +191,7 @@ if [ $UNINSTALL = 1 ]; then
     rm -rf /storage/.config/rocknixds
     [ -e $ES_THEMES/canvas-ds/.rocknixds-commit ] && rm -rf $ES_THEMES/canvas-ds      # the one this installer downloaded
     if [ -e $BACKUP/.theme-installed-by-us ]; then
-        rm -rf $THEME $ES_THEMES/rocknixds-dark $ES_THEMES/rocknixds-light
+        rm -rf $THEME $ES_THEMES/rocknixds-dark $ES_THEMES/rocknixds-light $ES_THEMES/rocknixds-pixel
     fi
     [ -d $BACKUP/theme-previous ] && mv $BACKUP/theme-previous $THEME
     systemctl restart sway.service 2>/dev/null || true; sleep 2
@@ -288,6 +288,13 @@ if [ $THEME_ON = 1 ]; then
         ln -s ../../../dii-ess-aye/assets/images/systems "$dest/assets/images/systems"
         chmod +x "$dest"/scripts/*.sh 2>/dev/null || true
     done
+    # ROCKNIXDS Pixel: the menu mockup, drawn by the rnds engine in the patched ES (everything it draws is in rnds/).
+    # Its theme.xml also includes rocknixds-dark's layout, which only stock ES uses (when the patched ES can't run);
+    # assets/ is that theme's, for it and for the DSi sounds.
+    dest=$ES_THEMES/rocknixds-pixel
+    rm -rf "$dest"
+    cp -a "$SRC/dii-ess-aye/themes/rocknixds-pixel" "$dest"
+    ln -s ../rocknixds-dark/assets "$dest/assets"
     touch $BACKUP/.theme-installed-by-us
 
     say "Sway config, boot hook and ES settings"
@@ -448,7 +455,7 @@ say "Locking the settings that would break ROCKNIXDS; ROCKNIXDS updates"
 RD=/storage/.config/rocknixds
 mkdir -p $RD
 cp "$SRC/dsflip/device/rocknixds-update" $RD/ && chmod +x $RD/rocknixds-update
-printf 'dii-ess-aye\ncanvas-ds\nrocknixds-dark\nrocknixds-light\n' > $RD/themes.allow
+printf 'dii-ess-aye\ncanvas-ds\nrocknixds-dark\nrocknixds-light\nrocknixds-pixel\n' > $RD/themes.allow
 [ -f $SYSCFG ] && sed -i '/^nds\(\[.*\]\)\{0,1\}\.\(emulator\|core\)=/d' $SYSCFG       # a per-game RetroArch/melonDS choice
 if [ -f $SYSCFG ] && [ "$DEVICE" = "RG DS Plus" ]; then
     # The menu only stores stable or beta. On a Plus, beta is this branch: rocknixds-update maps it to

@@ -46,7 +46,7 @@ REVEAL_DELAY=1          # stock ES only: after it answers its API, before its wi
 # the Plus). Any other theme is drawn for one screen, so it gets stock ROCKNIX's layout: ES fullscreen on the
 # top panel, the bottom panel off. theme-changed.sh restarts ES when the choice switches between the two.
 # Dark and light share the canvas, so that switch does not restart ES. Keep the list in sync with it.
-DUAL_THEMES="dii-ess-aye canvas-ds rocknixds-dark rocknixds-light"
+DUAL_THEMES="dii-ess-aye canvas-ds rocknixds-dark rocknixds-light rocknixds-pixel"
 THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
 if [ -z "$THEME_SET" ] || case " $DUAL_THEMES " in *" $THEME_SET "*) true ;; *) false ;; esac; then
     ES_ARGS="--resolution $CANVAS_W $PH"

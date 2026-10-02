@@ -51,7 +51,7 @@ if [ -f /tmp/dsflip-vt ]; then
         # and pin at 0,0. The launcher's --resolution already made the window 3072x768.
         THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
         case "$THEME_SET" in
-            ""|dii-ess-aye|canvas-ds|rocknixds-dark|rocknixds-light)
+            ""|dii-ess-aye|canvas-ds|rocknixds-dark|rocknixds-light|rocknixds-pixel)
                 PANEL=; for m in /sys/class/drm/card*-DSI-*/modes; do read -r PANEL < "$m" 2>/dev/null && [ -n "$PANEL" ] && break; done
                 case "$PANEL" in [0-9]*x[0-9]*) ;; *) PANEL=640x480 ;; esac
                 PW=${PANEL%%x*}
