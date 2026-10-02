@@ -500,8 +500,16 @@ cp "$SRC/dsflip/device/rocknixds-update" $RD/ && chmod +x $RD/rocknixds-update
 themes_allow > $RD/themes.allow
 [ -f $SYSCFG ] && backup_once $SYSCFG
 [ -f $SYSCFG ] && sed -i '/^nds\(\[.*\]\)\{0,1\}\.\(emulator\|core\)=/d' $SYSCFG       # a per-game RetroArch/melonDS choice
-[ -f $SYSCFG ] && { grep -q '^rocknixds.channel=' $SYSCFG || set_cfg rocknixds.channel "$([ "$BRANCH" = beta ] && echo beta || echo stable)"
-                    grep -q '^rocknixds.autocheck=' $SYSCFG || set_cfg rocknixds.autocheck 1; }
+# The update channel follows what was installed, unless the player already chose one in the menu (which stores
+# only stable or beta; on a Plus, rocknixds-update maps beta to plus-beta). Plus beta 3 stored "plus", which the
+# menu shows as Stable: it meant the beta.
+if [ -f $SYSCFG ]; then
+    case "$(sed -n 's/^rocknixds\.channel=//p' $SYSCFG | tail -n1)" in
+    plus) set_cfg rocknixds.channel beta ;;
+    "") case "$BRANCH" in beta|plus-beta) set_cfg rocknixds.channel beta ;; *) set_cfg rocknixds.channel stable ;; esac ;;
+    esac
+fi
+[ -f $SYSCFG ] && { grep -q '^rocknixds.autocheck=' $SYSCFG || set_cfg rocknixds.autocheck 1; }
 cp "$SRC/dsflip/device/rocknixds-update-check.service" "$SRC/dsflip/device/rocknixds-update-check.timer" /storage/.config/system.d/
 mkdir -p /storage/.config/system.d/timers.target.wants
 ln -sf ../rocknixds-update-check.timer /storage/.config/system.d/timers.target.wants/rocknixds-update-check.timer
