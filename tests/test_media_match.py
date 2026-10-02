@@ -302,6 +302,34 @@ class MediaMatchTest(unittest.TestCase):
         self.assertEqual(self.mod.fill_cheevos_ids(dev, [offline]), {"g4"})
         self.assertNotIn("cheevosId", offline)
 
+    def test_ra_hash_pads_a_short_icon_block_like_rcheevos(self):
+        import hashlib
+        arm9, arm7, icon = b"\x01" * 16, b"\x02" * 16, b"\x03" * 0x40
+        short = self.root / "short.nds"
+        short.write_bytes(nds_rom(arm9, arm7, icon))
+        raw = short.read_bytes()
+        u = lambda o: int.from_bytes(raw[o:o + 4], "little")
+        want = hashlib.md5(raw[:0x160] + raw[u(0x20):u(0x20) + u(0x2c)] + raw[u(0x30):u(0x30) + u(0x3c)]
+                           + raw[u(0x68):].ljust(0xA00, b"\0")).hexdigest()
+        self.assertEqual(self._hashes([str(short)])[str(short)], want)
+
+    def test_fill_cheevos_ids_keeps_no_id_es_refused(self):
+        good = self.root / "good.nds"
+        good.write_bytes(nds_rom(b"\x11" * 8, b"\x22" * 8, b"\x33" * 0xA00))
+
+        class Dev:
+            def run(self, cmd, data=None, binary=False):
+                quoted = shlex.split(cmd)
+                return subprocess.run(quoted[:3], input=data, capture_output=True, check=True).stdout.decode()
+
+            def push_meta(self, gid, meta):
+                return "500"
+
+        self.mod.http = lambda url, timeout=40: json.dumps({"GameID": 42}).encode()
+        game = {"id": "g1", "name": "Good", "path": str(good), "cheevosId": 0}
+        self.assertEqual(self.mod.fill_cheevos_ids(Dev(), [game]), {"g1"})
+        self.assertEqual(game["cheevosId"], 0)
+
     def test_gamelist_entry_prefers_a_recovery_file_that_still_matches(self):
         sysroot = self.root / "roms" / "nds"
         sysroot.mkdir(parents=True)

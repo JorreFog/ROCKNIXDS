@@ -179,7 +179,7 @@ REGION_WORDS = {"USA": "USA", "U": "USA", "Europe": "Europe", "E": "Europe", "Wo
 # kiosk demos, betas and the like share the retail game's name once the brackets are stripped, and sort first
 # ("(USA) (Demo)" < "(USA, Australia)"): Mario Kart DS got the kiosk demo's box and screenshots
 NON_RETAIL = re.compile(r"\((?:[^)]*\b(?:Demo|Kiosk|Beta|Proto|Prototype|Sample|Preview|Debug|Pirate|Unl|Aftermarket|"
-                        r"Program|Competition|Taikenban|Trial)\b[^)]*)\)", re.I)
+                        r"Program|Competition|Taikenban|Trial|Hack|Translated|Overdump|Virtual Console)\b[^)]*)\)", re.I)
 
 
 def own_region(name):
@@ -234,7 +234,9 @@ for p in json.load(sys.stdin):
         if u(0x2c) + u(0x3c) > 16 << 20: raise ValueError("ARM9 + ARM7 code over 16 MB")
         m = hashlib.md5(h[:0x160])
         for o, n in ((u(0x20), u(0x2c)), (u(0x30), u(0x3c)), (u(0x68), 0xa00)):
-            f.seek(off + o); m.update(f.read(n))
+            f.seek(off + o); b = f.read(n)
+            if n == 0xa00: b += bytes(n - len(b))   # rcheevos pads a short icon/title read with zeros
+            m.update(b)
         out[p] = m.hexdigest()
     except Exception as e:
         out[p] = "error: %s" % e
@@ -259,7 +261,10 @@ def fill_cheevos_ids(dev, games):
         except (OSError, ValueError) as e:
             log(f"  {g['name']}: RetroAchievements lookup failed ({e})"); failed.add(g["id"]); continue
         if rid:
-            dev.push_meta(g["id"], {"cheevosHash": h.upper(), "cheevosId": str(rid)})   # upper case, as ES stores it
+            code = dev.push_meta(g["id"], {"cheevosHash": h.upper(), "cheevosId": str(rid)})   # upper case, as ES stores it
+            if code not in ("dry",) and not str(code).strip().startswith("2"):
+                log(f"  {g['name']}: RetroAchievements game {rid}, but ES didn't take it (answered {code or 'nothing'})")
+                failed.add(g["id"]); continue
             g["cheevosId"] = rid
             log(f"  {g['name']}: RetroAchievements game {rid} (hash {h})")
         else:

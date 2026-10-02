@@ -11,6 +11,9 @@ dual() { case " $DUAL_THEMES " in *" $1 "*) echo 1 ;; *) echo 0 ;; esac; }
 NEW=$1 OLD=$2
 [ "$NEW" = "$OLD" ] && exit 0
 [ "$(dual "$NEW")" = "$(dual "$OLD")" ] && exit 0
+# a second layout change while the first one's restart still waits: the latest choice wins (the unit name is taken
+# until the first one ends, so the new one would not start)
+systemctl stop rocknixds-theme-restart.service 2>/dev/null
 systemd-run --collect --unit=rocknixds-theme-restart sh -c '
     for i in $(seq 1 120); do
         grep -q "name=\"ThemeSet\" value=\"$0\"" /storage/.config/emulationstation/es_settings.cfg && break

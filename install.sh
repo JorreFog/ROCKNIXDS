@@ -95,6 +95,7 @@ es_set() {        # es_set <key> <value> in the live es_settings.cfg
         sed -i "s|<string name=\"$1\" value=\"[^\"]*\" />|<string name=\"$1\" value=\"$2\" />|" $ES_SETTINGS
     else sed -i "s|</config>|\t<string name=\"$1\" value=\"$2\" />\n</config>|" $ES_SETTINGS; fi
 }
+themes_allow() { printf 'dii-ess-aye\ncanvas-ds\nrocknixds-dark\nrocknixds-light\nrocknixds-pixel\n'; }   # pickable in the patched ES
 es_del() { sed -i "/<string name=\"$1\" /d" $ES_SETTINGS 2>/dev/null; }
 
 # ---- uninstall ---------------------------------------------------------------------------------------
@@ -131,8 +132,8 @@ if [ $UNINSTALL = 1 ]; then
         fi
         if [ -f $ESF ]; then
             sed -i -E '/value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"/d' $ESF   # our shader entries
-            # resume on quit / power profile feature blocks (same shape as es-features.sh's skip)
-            awk '/<feature name="resume on quit"/ || /<feature name="power profile"/ { skip = 1 }
+            # resume on quit / power profile / share performance logs (same shape as es-features.sh's skip)
+            awk '/<feature name="resume on quit"/ || /<feature name="power profile"/ || /<feature name="share performance logs"/ { skip = 1 }
                  skip { if (/<\/feature>/) skip = 0; next }
                  { print }' $ESF > $ESF.uninst && mv $ESF.uninst $ESF
         fi
@@ -296,6 +297,8 @@ if [ $THEME_ON = 1 ]; then
     cp -a "$SRC/dii-ess-aye/themes/rocknixds-pixel" "$dest"
     ln -s ../rocknixds-dark/assets "$dest/assets"
     touch $BACKUP/.theme-installed-by-us
+    # the patched ES offers every theme while this list is missing: write it as soon as the themes are in place
+    mkdir -p /storage/.config/rocknixds && themes_allow > /storage/.config/rocknixds/themes.allow
 
     say "Sway config, boot hook and ES settings"
     backup_once /storage/.config/sway/config
@@ -332,7 +335,12 @@ if [ $THEME_ON = 1 ] && [ $CANVAS_ON = 1 ]; then
         if curl -fsSL "https://codeload.github.com/$CANVAS_UPSTREAM/tar.gz/$CANVAS_COMMIT" |
            tar xz -C $WORK/canvas --exclude='*/previews' --exclude='*/customization examples' --exclude='*/scripts'; then
             [ -d $C ] && [ ! -e $C/.rocknixds-commit ] && backup_once $C      # someone's own copy: keep it
-            rm -rf $C; mv $WORK/canvas/canvas-ds-* $C && echo $CANVAS_COMMIT > $C/.rocknixds-commit
+            # the old copy goes only once the new one is in place next to it
+            if mv $WORK/canvas/canvas-ds-* $C.new 2>/dev/null; then
+                rm -rf $C; mv $C.new $C && echo $CANVAS_COMMIT > $C/.rocknixds-commit
+            else
+                rm -rf $C.new; say "canvas-ds download had an unexpected layout: kept the installed copy"
+            fi
         else
             say "canvas-ds couldn't be downloaded: skipped (the install goes on)"
         fi
@@ -455,7 +463,8 @@ say "Locking the settings that would break ROCKNIXDS; ROCKNIXDS updates"
 RD=/storage/.config/rocknixds
 mkdir -p $RD
 cp "$SRC/dsflip/device/rocknixds-update" $RD/ && chmod +x $RD/rocknixds-update
-printf 'dii-ess-aye\ncanvas-ds\nrocknixds-dark\nrocknixds-light\nrocknixds-pixel\n' > $RD/themes.allow
+themes_allow > $RD/themes.allow
+[ -f $SYSCFG ] && backup_once $SYSCFG
 [ -f $SYSCFG ] && sed -i '/^nds\(\[.*\]\)\{0,1\}\.\(emulator\|core\)=/d' $SYSCFG       # a per-game RetroArch/melonDS choice
 if [ -f $SYSCFG ] && [ "$DEVICE" = "RG DS Plus" ]; then
     # The menu only stores stable or beta. On a Plus, beta is this branch: rocknixds-update maps it to
