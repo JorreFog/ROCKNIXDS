@@ -5,7 +5,7 @@
 name: check
 on:
   push:
-    branches: [beta, main]
+    branches: [beta, plus-beta, main]
   pull_request:
   workflow_dispatch:
 
