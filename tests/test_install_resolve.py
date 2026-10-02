@@ -37,6 +37,8 @@ class InstallResolveTest(unittest.TestCase):
         src = src.replace("/etc/os-release", str(self.root / "os-release"))
         src = src.replace("/proc/device-tree/model", str(self.model))
         src = src.replace("/sys/class/drm/card*-DSI-*/modes", str(self.modes))
+        # its own (empty) backup folder: an uninstall in a test must never find a real install's
+        src = src.replace("/storage/rgds-rocknix-backup", str(self.root / "backup"))
         # never past the hand-over in a test: the install itself would run on this machine
         marker = "# ---- fetch this repo"
         self.assertIn(marker, src)
