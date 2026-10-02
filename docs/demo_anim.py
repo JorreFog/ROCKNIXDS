@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The README's animation: EmulationStation on both screens, then a DS game resuming where it was quit, framed as
+"""The 1.4 README's animation (since 1.5 docs/pixel_demo.py writes the README's demo-*.webp): EmulationStation on both screens, then a DS game resuming where it was quit, framed as
 the clamshell ds_frame.py draws. Writes docs/img/demo-light.webp and demo-dark.webp (animated WebP: full colour and
 a soft shadow, which a GIF's 256 colours and 1-bit transparency can't do).
 
