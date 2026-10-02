@@ -232,8 +232,9 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
         echo "The game didn't take over the screens within 10 seconds, so it was stopped. Logs: $D/dsflip" > $NOTICE
       fi ;;
   esac
-  [ -n "$WATCH" ] && kill $WATCH 2>/dev/null
   wait $P; rc=$?
+  # the watcher only now: killed before the wait, it never ran while the game did
+  [ -n "$WATCH" ] && kill $WATCH 2>/dev/null
   [ -n "$PINNER" ] && kill $PINNER 2>/dev/null
   # the full CPU clock back at once: libdsflip's governor may have lowered the limit, and everything until restore.sh
   # (play stats, sway and ES starting) ran at it (the way back to the menu was ~1.2 s slower)

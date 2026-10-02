@@ -200,6 +200,32 @@ walk(json.load(sys.stdin)); sys.exit(1)'; then
     done
 ) &
 
+# The game list's "UPDATE AVAILABLE" pill is ES noticing that `rocknix-update check` succeeded.
+# That checker runs only when updates.enabled=1 (NetworkThread). The menu that would install the
+# OS update is hidden while ROCKNIXDS is locked, so the pill has nothing behind it. Leave the
+# setting alone once the device is unlocked: the switch is visible then.
+if [ ! -e /storage/.config/rocknixds/unlocked ]; then
+    _cfg=/storage/.config/system/configs/system.cfg
+    if [ -f "$_cfg" ] && ! grep -q '^updates\.enabled=0$' "$_cfg"; then
+        if grep -q '^updates\.enabled=' "$_cfg"; then
+            sed -i 's/^updates\.enabled=.*/updates.enabled=0/' "$_cfg"
+        else
+            echo 'updates.enabled=0' >> "$_cfg"
+        fi
+    fi
+    unset _cfg
+fi
+
+# "Launch this game at startup" is global.bootgame.* and ES runs it before drawing the menu.
+# Quitting that game kills ES (the session stops essway) and coming back starts ES again, so the
+# game launched forever. The first ES of a boot still launches it. Every later start in that boot
+# passes --no-startup-game. /tmp is empty after a reboot, so the next boot launches it again.
+# Touch the marker before exec: a launch that kills ES still counts as a start.
+if [ -e /tmp/rocknixds-es-started ]; then
+    ES_ARGS="$ES_ARGS --no-startup-game"
+fi
+touch /tmp/rocknixds-es-started
+
 if [ -n "$USE_PATCHED" ]; then
     export ES_UI_WIDTH=$PW
     START=$(date +%s)
