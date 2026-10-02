@@ -328,12 +328,13 @@ def png_bytes(img):
     b = io.BytesIO(); img.save(b, "PNG", optimize=True); return b.getvalue()
 
 
-def cart_image(index, name, cache):
-    """A real cart scan from the LaunchBox index, fitted to the theme's card shape (cut-outs first)."""
+def cart_image(index, name, cache, region=None):
+    """A real cart scan from the LaunchBox index, fitted to the theme's card shape (cut-outs first). region: the
+    ROM's own (its file name's), when the name ES shows has none."""
     match, score = best_match(name, list(index))
     if not match:
         return None, "no LaunchBox entry"
-    own = {"USA": "North America", "Europe": "Europe", "Japan": "Japan", "Australia": "Australia"}.get(own_region(name) or "")
+    own = {"USA": "North America", "Europe": "Europe", "Japan": "Japan", "Australia": "Australia"}.get(own_region(name) or region or "")
     cands = sorted(index[match], key=lambda c: (0 if c[1].lower().endswith(".png") else 1, 0 if own and c[0] == own else 1,
                                                 LB_REGIONS.index(c[0]) if c[0] in LB_REGIONS else len(LB_REGIONS)))
     has_cutout = any(c[1].lower().endswith(".png") for c in cands)
@@ -433,7 +434,10 @@ def ra_rom(rom):
         return log("no RetroAchievements account in system.cfg")
     tmp = tempfile.mkdtemp(prefix="rgds-ra-")
     try:
-        info = rf.fetch(user, token, rid, g.findtext("name", "") or os.path.basename(rom), tmp)
+        try:
+            info = rf.fetch(user, token, rid, g.findtext("name", "") or os.path.basename(rom), tmp)
+        except (OSError, RuntimeError, ValueError) as e:      # offline, RA down, a refused token: the strip stays
+            return log(f"{rom}: RetroAchievements unreachable ({e}): strip kept")
         with open(os.path.join(tmp, "ra.json"), "w") as f:
             json.dump({"strip": info}, f)
         run_tool("ra_panel.py", os.path.join(tmp, "ra.json"), tmp, FONT_ON_DEVICE, os.path.join(tmp, "out"))
@@ -606,7 +610,7 @@ def main():
         elif have("cartridge"):
             results["cartridge"] = "kept"
         else:
-            img, why = cart_image(carts, name, cache)
+            img, why = cart_image(carts, name, cache, own_region(stem))
             log(f"  cartridge  {why}")
             if img is not None:
                 push("cartridge", img)
