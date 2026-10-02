@@ -2224,10 +2224,10 @@ index 00000000..fd1e242b
 +}
 diff --git a/es-app/src/rnds/RndsUI.cpp b/es-app/src/rnds/RndsUI.cpp
 new file mode 100644
-index 00000000..647879ad
+index 00000000..29cc27f9
 --- /dev/null
 +++ b/es-app/src/rnds/RndsUI.cpp
-@@ -0,0 +1,1703 @@
+@@ -0,0 +1,1704 @@
 +#include "RndsUI.h"
 +
 +#include <algorithm>
@@ -2718,8 +2718,9 @@ index 00000000..647879ad
 +				Bitmap art = labelArt(art0);
 +				if (!art.empty())
 +				{
-+					int wx = (int)std::lround(12 * sc), wy = (int)std::lround(20 * sc);
-+					int ww = (int)std::lround(88 * sc) - wx, wh = (int)std::lround(86 * sc) - wy;
++					// the shell's whole label (x 4..96, y 4..90): the art is all there is on it, no header or margin
++					int wx = (int)std::lround(4 * sc), wy = (int)std::lround(4 * sc);
++					int ww = (int)std::lround(96 * sc) - wx, wh = (int)std::lround(90 * sc) - wy;
 +					blit(master, cover(art, ww, wh), wx, wy);
 +				}
 +				if (!shellCopy.empty())

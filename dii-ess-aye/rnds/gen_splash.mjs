@@ -39,8 +39,8 @@ body { width: 1280px; height: 480px; display: flex; background: ${p.bg}; image-r
 .led { position: absolute; left: 446px; top: 324px; width: 14px; height: 10px; background: ${p.edge}; }
 .led i { position: absolute; left: 2px; top: 2px; width: 10px; height: 6px; background: #3ce07a; }
 .cart { position: absolute; left: 220px; top: 66px; width: 200px; height: 208px; overflow: hidden; }
-.cart .art { position: absolute; left: 24px; top: 40px; width: 152px; height: 132px; background: linear-gradient(135deg, #1a6ea3, #7ec8ee 55%, #3d8ec4); }
-.cart .art b { position: absolute; left: 0; right: 0; top: 46px; text-align: center; font: 26px PxM; color: #fff; text-shadow: 3px 3px 0 rgba(0,0,0,.35); letter-spacing: 1px; }
+.cart .art { position: absolute; left: 8px; top: 8px; width: 184px; height: 172px; background: linear-gradient(135deg, #1a6ea3, #7ec8ee 55%, #3d8ec4); }
+.cart .art b { position: absolute; left: 0; right: 0; top: 70px; text-align: center; font: 26px PxM; color: #fff; text-shadow: 3px 3px 0 rgba(0,0,0,.35); letter-spacing: 1px; }
 .cart img { position: absolute; left: 0; top: 0; width: 200px; height: 208px; }
 </style></head><body>
 <div class="scr"><div class="brand"><img src="${logo}"></div><div class="load">LOADING</div><div class="dots"><i></i><i></i><i></i></div></div>
