@@ -106,7 +106,11 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
       else RLOAD=1; echo "resuming from $RSTATE"; fi
     fi
     export DSFLIP_RESUME_FILE="$RSTATE" DSFLIP_RESUME_LOAD=$RLOAD
-    echo "-USR1 drastic" > /tmp/.process-kill-data    # ROCKNIX's exit hotkey: killall $(cat this); start_drastic.sh set -9
+    echo "-USR1 drastic" > /tmp/.process-kill-data    # ROCKNIX's exit hotkey: killall $(cat this); saves, then quits
+  elif [ ! -e /tmp/rocknixds-testing ]; then
+    # resume off. ES's start left the hotkey aimed at emulationstation, and this session has already stopped ES,
+    # so killall would signal nothing and DraStic would keep running. Stock start_drastic.sh sets "-9 drastic".
+    echo "-9 drastic" > /tmp/.process-kill-data
   fi
   # Power profile (ES: the game's or DS system's "power profile"; unset = balanced). libdsflip's CPU governor picks
   # the clock within the profile's range; the frame queue trades a refresh of input latency for riding out late
