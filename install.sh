@@ -219,7 +219,7 @@ if [ $UNINSTALL = 1 ]; then
         rmdir /storage/.config/system.d/input.service.d 2>/dev/null
         systemctl daemon-reload; systemctl restart input.service 2>/dev/null
     fi
-    echo performance > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor 2>/dev/null   # ROCKNIX's menu governor
+    { echo performance > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor; } 2>/dev/null || true   # ROCKNIX's menu governor
     rmdir /storage/.config/emulationstation/scripts/theme-changed /storage/.config/emulationstation/scripts/game-end \
           /storage/.config/emulationstation/scripts/game-start /storage/.config/emulationstation/scripts/start \
           /storage/.config/emulationstation/scripts 2>/dev/null
