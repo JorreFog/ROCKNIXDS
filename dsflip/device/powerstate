@@ -102,27 +102,30 @@ while true; do
     CURRENT_MODE="${AC_STATUS}"
   fi
   BATLEFT=; [ -n "$BAT" ] && read -r BATLEFT < $BAT/capacity 2>/dev/null
-  if (( "${BATCNT}" >= "20" )) && [[ "${AC_STATUS}" =~ Disch ]]; then
-    cfg_load
-    cfg system.battery.warning; AUDIBLEALERT=$REPLY
-    cfg system.battery.warning_threshold; AUDIBLEALERT_THRESHOLD=$REPLY
-    [[ -z $AUDIBLEALERT_THRESHOLD ]] && AUDIBLEALERT_THRESHOLD=25
-
-    if [[ ${BATLEFT} -le ${AUDIBLEALERT_THRESHOLD} ]]; then
-      if [ "${DEVICE_LED_CONTROL}" = "true" ] && [ ! "${DEVICE_BATTERY_LED_STATUS}" = "true" ]; then
-        # Flash the RGB or power LED if available.
-        led_flash
-        BATCNT=0
-      elif [ "${AUDIBLEALERT}" = "1" ]; then
-        say "BATTERY AT ${BATLEFT}%"
-        BATCNT=0
-      fi
-    fi
-  elif (( "${BATLEFT}" > "97" )); then
-    if [ "${DEVICE_LED_CHARGING}" = "true" ]; then
-      # Reset the LED as if the battery was full.
+  # Skip battery logic when capacity is unreadable (empty ((…)) is an arithmetic error; empty -le is treated as 0).
+  if [ -n "$BATLEFT" ]; then
+    if (( "${BATCNT}" >= "20" )) && [[ "${AC_STATUS}" =~ Disch ]]; then
       cfg_load
-      led_discharging
+      cfg system.battery.warning; AUDIBLEALERT=$REPLY
+      cfg system.battery.warning_threshold; AUDIBLEALERT_THRESHOLD=$REPLY
+      [[ -z $AUDIBLEALERT_THRESHOLD ]] && AUDIBLEALERT_THRESHOLD=25
+
+      if [[ ${BATLEFT} -le ${AUDIBLEALERT_THRESHOLD} ]]; then
+        if [ "${DEVICE_LED_CONTROL}" = "true" ] && [ ! "${DEVICE_BATTERY_LED_STATUS}" = "true" ]; then
+          # Flash the RGB or power LED if available.
+          led_flash
+          BATCNT=0
+        elif [ "${AUDIBLEALERT}" = "1" ]; then
+          say "BATTERY AT ${BATLEFT}%"
+          BATCNT=0
+        fi
+      fi
+    elif (( "${BATLEFT}" > "97" )); then
+      if [ "${DEVICE_LED_CHARGING}" = "true" ]; then
+        # Reset the LED as if the battery was full.
+        cfg_load
+        led_discharging
+      fi
     fi
   fi
   BATCNT=$(( ${BATCNT} + 1 ))
