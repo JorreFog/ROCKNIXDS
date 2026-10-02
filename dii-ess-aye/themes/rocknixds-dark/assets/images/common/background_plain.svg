@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="480" viewBox="0 0 1920 480">
-<defs><linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0" stop-color="#1c2836"/><stop offset="1" stop-color="#10161e"/></linearGradient>
-<radialGradient id="vig" cx="50%" cy="45%" r="75%"><stop offset="0.55" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity="0.42"/></radialGradient></defs>
-<rect width="1920" height="480" fill="url(#bg)"/>
-<rect width="640" height="480" fill="url(#vig)"/>
-<rect x="640" width="640" height="480" fill="url(#vig)"/>
-</svg>

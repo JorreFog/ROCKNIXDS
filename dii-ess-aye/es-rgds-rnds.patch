@@ -59,10 +59,10 @@ index 90df9a9b..75714e3d 100644
  			else if (complete || SDL_GetTicks() - firstFrame > 3000)
 diff --git a/es-app/src/rnds/RndsEs.cpp b/es-app/src/rnds/RndsEs.cpp
 new file mode 100644
-index 00000000..55d8a2ec
+index 00000000..236bbfc1
 --- /dev/null
 +++ b/es-app/src/rnds/RndsEs.cpp
-@@ -0,0 +1,1000 @@
+@@ -0,0 +1,1051 @@
 +#include "rnds/RndsEs.h"
 +#include "rnds/RndsUI.h"
 +
@@ -341,7 +341,7 @@ index 00000000..55d8a2ec
 +		Window* window;
 +		GlBackend backend;
 +		std::unique_ptr<UI> ui;
-+		std::string assetDir;
++		std::string assetDir, variant;
 +		float scale = 1;
 +
 +		SystemView* systemView = nullptr;
@@ -430,10 +430,22 @@ index 00000000..55d8a2ec
 +			return Utils::FileSystem::getParent(elem->get<std::string>("path"));
 +		}
 +
++		// the theme's palette: <text name="palette"><text>light</text></text> in its rnds view (dark without one)
++		std::string themeVariant(SystemData* sys)
++		{
++			if (sys == nullptr || sys->getTheme() == nullptr)
++				return "dark";
++			auto elem = sys->getTheme()->getElement("rnds", "palette", "text");
++			if (elem == nullptr || !elem->has("text"))
++				return "dark";
++			return Utils::String::toLower(Utils::String::trim(elem->get<std::string>("text"))) == "light" ? "light" : "dark";
++		}
++
 +		bool ensureUI()
 +		{
 +			SystemData* first = systems.size() ? systems[0] : (SystemData::sSystemVector.size() ? SystemData::sSystemVector[0] : nullptr);
 +			std::string dir = themeAssetDir(first);
++			std::string var = themeVariant(first);
 +			int W = Renderer::getScreenWidth(), H = Renderer::getScreenHeight();
 +			backend.dual = W * 3 >= H * 4 * 3 - 3;		// 1920x480 / 3072x768: three panels side by side
 +			float panelW = backend.dual ? W / 3.0f : (float)W;
@@ -442,13 +454,14 @@ index 00000000..55d8a2ec
 +			backend.originX[1] = backend.dual ? panelW : 0;
 +			if (dir.empty())
 +				return false;
-+			if (ui && dir == assetDir && std::fabs(s - scale) < 0.001f)
++			if (ui && dir == assetDir && var == variant && std::fabs(s - scale) < 0.001f)
 +				return true;
 +			std::lock_guard<std::mutex> l(uiLock);
 +			ui.reset();
 +			assetDir = dir;
++			variant = var;
 +			scale = s;
-+			ui.reset(new UI(this, &backend, dir, s));
++			ui.reset(new UI(this, &backend, dir, s, var));
 +			// a finished picture only needs a frame (it is uploaded in update)
 +			ui->setNotifiers([this] { kickWorker(); }, [] { PowerSaver::pushRefreshEvent(); });
 +			loadLooks();
@@ -565,6 +578,43 @@ index 00000000..55d8a2ec
 +			return r.size() >= 4 && r.substr(0, 4) != "0000" ? r.substr(0, 4) : "";
 +		}
 +
++		// a name as the engine shows it: no file-name leftovers ("(USA, Europe)", "[!]", underscores)
++		static std::string cleanTitle(std::string t)
++		{
++			for (auto& c : t) if (c == '_') c = ' ';
++			std::string r = Utils::String::trim(t);
++			for (;;)
++			{
++				if (r.size() < 3) break;
++				char e = r.back();
++				char o = e == ')' ? '(' : (e == ']' ? '[' : 0);
++				if (!o) break;
++				size_t at = r.rfind(o);
++				if (at == std::string::npos || at == 0) break;
++				std::string rest = Utils::String::trim(r.substr(0, at));
++				if (rest.empty()) break;
++				r = rest;
++			}
++			return r.empty() ? Utils::String::trim(t) : r;
++		}
++
++		// the first of the genres ("Action, Platform" / "Role-playing; Strategy" -> "Action" / "Role-playing")
++		static std::string firstGenre(const std::string& g)
++		{
++			size_t cut = g.find_first_of(",;/|");
++			return Utils::String::trim(cut == std::string::npos ? g : g.substr(0, cut));
++		}
++
++		// a media path from the metadata, absolute, or "" when the file isn't there
++		static std::string mediaPath(FileData* f, MetaDataId id)
++		{
++			std::string p = f->getMetadata(id);
++			if (p.empty()) return "";
++			if (p[0] != '/' && f->getSystem() != nullptr)
++				p = Utils::FileSystem::resolveRelativePath(p, f->getSystem()->getStartPath(), true);
++			return Utils::FileSystem::exists(p) ? p : "";
++		}
++
 +		static std::string join(const std::string& a, const std::string& b)
 +		{
 +			if (a.empty()) return b;
@@ -641,8 +691,10 @@ index 00000000..55d8a2ec
 +			{
 +				r.hasResume = true;
 +				r.resumeEyebrow = res->getMetadata(MetaDataId::LastPlayed).empty() ? "Not played yet" : "Last played";
-+				r.resumeTitle = res->getName();
++				r.resumeTitle = cleanTitle(res->getName());
 +				r.resumeBox = res->getThumbnailPath(true);
++				r.resumeCart = mediaPath(res, MetaDataId::Cartridge);
++				r.resumeLabel = mediaPath(res, MetaDataId::BoxBack);
 +			}
 +			return r;
 +		}
@@ -655,33 +707,30 @@ index 00000000..55d8a2ec
 +			if (!list || i < 0 || i >= (int)list->entries().size())
 +				return r;
 +			FileData* f = list->entries()[i];
-+			r.title = f->getPath() == ".." ? ". ." : f->getName();
++			r.title = f->getPath() == ".." ? ". ." : cleanTitle(f->getName());
++			r.plays = "-"; r.last = "-"; r.time = "-";
 +			if (f->getType() == FOLDER)
 +			{
 +				r.sub = "Folder";
-+				r.line = "Folder.";
 +				r.box = f->getThumbnailPath(true);
-+				r.snap = f->getImagePath();
 +				r.achLabel = "No achievements";
 +				return r;
 +			}
 +			if (f->getType() != GAME)
 +			{
 +				r.sub = "";
-+				r.line = f->getName() + ".";
 +				r.achLabel = "No achievements";
 +				return r;
 +			}
-+			std::string g = f->getGenre(), y = year(f);
++			std::string g = firstGenre(f->getGenre()), y = year(f);
 +			r.sub = join(g, y);
 +			int plays = atoi(f->getMetadata(MetaDataId::PlayCount).c_str());
-+			std::string playStr = plays ? std::to_string(plays) + (plays == 1 ? " play" : " plays") : "Never played";
-+			std::string first = join(g, y);
-+			r.line = (first.empty() ? "" : first + ". ") + playStr + " · " + relDay(f->getMetadata(MetaDataId::LastPlayed)) + " · " + fmtTime(atol(f->getMetadata(MetaDataId::GameTime).c_str())) + ".";
++			r.plays = std::to_string(plays);
++			r.last = relDay(f->getMetadata(MetaDataId::LastPlayed));
++			r.time = fmtTime(atol(f->getMetadata(MetaDataId::GameTime).c_str()));
 +			r.box = f->getThumbnailPath(true);
-+			r.snap = f->getImagePath();
-+			if (r.snap.empty() || !Utils::FileSystem::exists(r.snap))
-+				r.snap = f->getMetadata(MetaDataId::TitleShot);
++			r.cart = mediaPath(f, MetaDataId::Cartridge);
++			r.label = mediaPath(f, MetaDataId::BoxBack);
 +			r.fav = f->getFavorite();
 +
 +			int id = atoi(f->getMetadata(MetaDataId::CheevosId).c_str());
@@ -751,6 +800,8 @@ index 00000000..55d8a2ec
 +			if (s && s->getTheme())
 +				Sound::getFromTheme(s->getTheme(), "rnds", name)->play();
 +		}
++
++		void cue(const std::string& name) override { playSound(name); }
 +
 +		void selectSystem(int i) override
 +		{
@@ -1134,10 +1185,10 @@ index 00000000..85770a09
 +}
 diff --git a/es-app/src/rnds/RndsRaster.cpp b/es-app/src/rnds/RndsRaster.cpp
 new file mode 100644
-index 00000000..f22685fe
+index 00000000..cfa9c6c4
 --- /dev/null
 +++ b/es-app/src/rnds/RndsRaster.cpp
-@@ -0,0 +1,737 @@
+@@ -0,0 +1,820 @@
 +#include "RndsRaster.h"
 +
 +#include <ft2build.h>
@@ -1373,7 +1424,7 @@ index 00000000..f22685fe
 +			std::vector<uint8_t> colA(W), colB(W), rowA(H), rowB(H);
 +			for (int x = 0; x < W; x++) { colA[x] = inDot(x + 0.5f, P.x, 0); colB[x] = inDot(x + 0.5f, P.x, 2); }
 +			for (int y = 0; y < H; y++) { rowA[y] = inDot(y + 0.5f, P.y, 0); rowB[y] = inDot(y + 0.5f, P.y, 2); }
-+			Color w14(1, 1, 1, 0.14f), w07(1, 1, 1, 0.07f);
++			const Color& w14 = st.ditherA; const Color& w07 = st.ditherB;
 +			for (int y = oy; y < oy + h && y < H; y++)
 +			{
 +				if (!rowA[y] && !rowB[y]) continue;
@@ -1386,7 +1437,7 @@ index 00000000..f22685fe
 +					float a = c->a * cov;
 +					float* p = &s.d[((size_t)y * W + x) * 4];
 +					float k = 1 - a;
-+					p[0] = a + p[0] * k; p[1] = a + p[1] * k; p[2] = a + p[2] * k; p[3] = a + p[3] * k;
++					p[0] = c->r * a + p[0] * k; p[1] = c->g * a + p[1] * k; p[2] = c->b * a + p[2] * k; p[3] = a + p[3] * k;
 +				}
 +			}
 +		}
@@ -1843,6 +1894,89 @@ index 00000000..f22685fe
 +		return resize(crop, w, h);
 +	}
 +
++	Bitmap crop(const Bitmap& src, int x, int y, int w, int h)
++	{
++		if (src.empty() || src.alpha) return src;
++		x = std::max(0, std::min(x, src.w - 1)); y = std::max(0, std::min(y, src.h - 1));
++		w = std::max(1, std::min(w, src.w - x)); h = std::max(1, std::min(h, src.h - y));
++		Bitmap r;
++		r.w = w; r.h = h;
++		r.px.resize((size_t)w * h * 4);
++		for (int yy = 0; yy < h; yy++)
++			memcpy(&r.px[(size_t)yy * w * 4], &src.px[((size_t)(yy + y) * src.w + x) * 4], (size_t)w * 4);
++		return r;
++	}
++
++	static bool nearWhite(const uint8_t* p)
++	{
++		int mx = std::max(p[0], std::max(p[1], p[2])), mn = std::min(p[0], std::min(p[1], p[2]));
++		return mn > 190 && mx - mn < 40 && p[3] > 128;
++	}
++
++	Bitmap cardLabelArt(const Bitmap& scan)
++	{
++		if (scan.empty() || scan.alpha) return Bitmap();
++		// the card: the bounding box of what isn't transparent (cut-out scans) or the whole picture
++		int x0 = scan.w, y0 = scan.h, x1 = -1, y1 = -1;
++		for (int y = 0; y < scan.h; y++)
++			for (int x = 0; x < scan.w; x++)
++				if (scan.px[((size_t)y * scan.w + x) * 4 + 3] > 16)
++				{
++					x0 = std::min(x0, x); x1 = std::max(x1, x); y0 = std::min(y0, y); y1 = std::max(y1, y);
++				}
++		if (x1 < x0 || y1 < y0) return Bitmap();
++		int cw = x1 - x0 + 1, ch = y1 - y0 + 1;
++		// the label spans the card but for its plastic edges; its art is the rows between the white header (the
++		// NINTENDO DS band) and the white footer (the game code): the longest run of rows that are mostly not white
++		int lx0 = x0 + cw * 8 / 100, lx1 = x1 - cw * 8 / 100;
++		int best0 = -1, bestLen = 0, run0 = -1;
++		for (int y = y0; y <= y1 + 1; y++)
++		{
++			bool art = false;
++			if (y <= y1)
++			{
++				int white = 0, n = 0;
++				for (int x = lx0; x <= lx1; x += 2, n++)
++					if (nearWhite(&scan.px[((size_t)y * scan.w + x) * 4])) white++;
++				art = n > 0 && white < n * 45 / 100;
++			}
++			if (art && run0 < 0) run0 = y;
++			if (!art && run0 >= 0)
++			{
++				if (y - run0 > bestLen) { bestLen = y - run0; best0 = run0; }
++				run0 = -1;
++			}
++		}
++		int ay0, ay1;
++		if (best0 >= 0 && bestLen >= ch * 35 / 100 && bestLen <= ch * 80 / 100)
++		{
++			ay0 = best0 + 1; ay1 = best0 + bestLen - 2;
++		}
++		else
++		{
++			// where the art sits on a DS card's label when the scan doesn't say
++			ay0 = y0 + ch * 20 / 100; ay1 = y0 + ch * 76 / 100;
++		}
++		return crop(scan, lx0, ay0, lx1 - lx0 + 1, ay1 - ay0 + 1);
++	}
++
++	Bitmap coverWithoutStrip(const Bitmap& box)
++	{
++		if (box.empty() || box.alpha) return box;
++		// columns from the left that are mostly near-white, at least the 13.5% the strip takes on DS covers
++		int x = 0, limit = box.w / 5;
++		for (; x < limit; x++)
++		{
++			int white = 0, n = 0;
++			for (int y = 0; y < box.h; y += 2, n++)
++				if (nearWhite(&box.px[((size_t)y * box.w + x) * 4])) white++;
++			if (white < n * 55 / 100) break;
++		}
++		if (x <= box.w * 4 / 100) return box;
++		x = std::max(x, box.w * 135 / 1000) + 2;
++		return crop(box, x, 0, box.w - x, box.h);
++	}
++
 +	void containSize(int iw, int ih, int bw, int bh, float& outW, float& outH)
 +	{
 +		if (iw <= 0 || ih <= 0) { outW = (float)bw; outH = (float)bh; return; }
@@ -1877,10 +2011,10 @@ index 00000000..f22685fe
 +}
 diff --git a/es-app/src/rnds/RndsRaster.h b/es-app/src/rnds/RndsRaster.h
 new file mode 100644
-index 00000000..79fce01d
+index 00000000..fd1e242b
 --- /dev/null
 +++ b/es-app/src/rnds/RndsRaster.h
-@@ -0,0 +1,165 @@
+@@ -0,0 +1,173 @@
 +#pragma once
 +// ROCKNIXDS rnds engine: CPU rasterizer for the pieces the mockup is drawn from. Boxes are painted the way CSS paints a
 +// box (outer box-shadows, background colour, hard-stop gradient bands and the dither tile, inset box-shadows, border),
@@ -1959,6 +2093,7 @@ index 00000000..79fce01d
 +		std::vector<Band> bands;	// device pixels from the padding box's top; y1 < 0 means to the bottom
 +		bool dither = false;		// the mockup's --dither tile, origin at the padding box
 +		float ditherScale = 1;		// CSS px -> device px
++		Color ditherA = Color(1, 1, 1, 0.14f), ditherB = Color(1, 1, 1, 0.07f);	// the tile's two dots (light themes: dark dots)
 +		std::vector<Shadow> shadows;	// CSS order: the first one is on top
 +	};
 +
@@ -2045,13 +2180,20 @@ index 00000000..79fce01d
 +	void containSize(int iw, int ih, int bw, int bh, float& outW, float& outH);
 +	// draws src over dst at (x, y) (straight alpha both)
 +	void blit(Bitmap& dst, const Bitmap& src, int x, int y);
++	// a part of an RGBA8 bitmap (clamped to it)
++	Bitmap crop(const Bitmap& src, int x, int y, int w, int h);
++	// the artwork window of a real DS card scan: the label without its white NINTENDO DS header and code footer, and
++	// without the card's plastic around it
++	Bitmap cardLabelArt(const Bitmap& scan);
++	// a DS box cover without the case's white NINTENDO DS strip down its left edge
++	Bitmap coverWithoutStrip(const Bitmap& box);
 +}
 diff --git a/es-app/src/rnds/RndsUI.cpp b/es-app/src/rnds/RndsUI.cpp
 new file mode 100644
-index 00000000..d7122e31
+index 00000000..54b022c1
 --- /dev/null
 +++ b/es-app/src/rnds/RndsUI.cpp
-@@ -0,0 +1,1396 @@
+@@ -0,0 +1,1693 @@
 +#include "RndsUI.h"
 +
 +#include <algorithm>
@@ -2098,10 +2240,72 @@ index 00000000..d7122e31
 +
 +	// ---- mockup palette -------------------------------------------------------------------------------------------------
 +
-+	static const Color INK = Color::hex(0xe7eef6), MUTED = Color::hex(0x93a0b0), LINE = Color::hex(0x7d8b9c);
-+	static const Color EDGE = Color::hex(0xd5dee8), NAVY = Color::hex(0xe7f4ff), RED = Color::hex(0xff3b4a);
-+	static const Color SHADE40(0, 0, 0, 0.4f), SHADE45(0, 0, 0, 0.45f), SHADE35(0, 0, 0, 0.35f);
-+	static const Color BLACKISH = Color::hex(0x070a0e);
++	// every colour the screens use; dark is the mockup's, light the same pixel look on white
++	struct Pal
++	{
++		Color ink, muted, line, edge, navy, red, shade40, shade45, shade35, blackish;
++		Color screenBg, screenFrame, screenBand, ditherA, ditherB;
++		Color sheetBase, sheetHi, sheetLo; float sheetMix;
++		Color panelBand, panelBody, panelLow;		// hero, slots, the face buttons: top band, body, bottom inset
++		Color chipBand, chipBody;
++		Color frameBorder, frameBg;					// the box art's frame
++		Color meterBg, brandBg, kbdBg, kbdInk, rule;
++		Color bubbleBand, bubbleBody, bubbleLow;
++		Color trackBg, trackHi, trackShade;
++		Color slotOn, railBg, faceMuted;
++		Color favBorder, favBand, favBody, favInk;
++		Color glint, floor;							// the box art's shine and its shadow on the sheet
++		Color slotDark, slotLip;					// the console slot the cartridge goes into
++	};
++
++	static Pal darkPal()
++	{
++		Pal p;
++		p.ink = Color::hex(0xe7eef6); p.muted = Color::hex(0x93a0b0); p.line = Color::hex(0x7d8b9c);
++		p.edge = Color::hex(0xd5dee8); p.navy = Color::hex(0xe7f4ff); p.red = Color::hex(0xff3b4a);
++		p.shade40 = Color(0, 0, 0, 0.4f); p.shade45 = Color(0, 0, 0, 0.45f); p.shade35 = Color(0, 0, 0, 0.35f);
++		p.blackish = Color::hex(0x070a0e);
++		p.screenBg = Color::hex(0x121820); p.screenFrame = p.blackish; p.screenBand = Color::hex(0x243040);
++		p.ditherA = Color(1, 1, 1, 0.14f); p.ditherB = Color(1, 1, 1, 0.07f);
++		p.sheetBase = Color::hex(0x10161e); p.sheetMix = 0.34f; p.sheetHi = Color(1, 1, 1, 0.1f); p.sheetLo = p.shade35;
++		p.panelBand = Color::hex(0x2e3a48); p.panelBody = Color::hex(0x121820); p.panelLow = p.blackish;
++		p.chipBand = Color::hex(0x243040); p.chipBody = Color::hex(0x0e141c);
++		p.frameBorder = Color::hex(0xd5dee8); p.frameBg = Color::hex(0x12181f);
++		p.meterBg = Color::hex(0x10161e); p.brandBg = Color::hex(0x1b2330); p.kbdBg = Color::hex(0xe7eef6);
++		p.kbdInk = Color::hex(0x121820); p.rule = Color::hex(0x3a4654);
++		p.bubbleBand = Color::hex(0x2c3848); p.bubbleBody = Color::hex(0x141b24); p.bubbleLow = Color::hex(0x0c1218);
++		p.trackBg = Color::hex(0x0c1016); p.trackHi = Color::hex(0x2a3544); p.trackShade = p.shade45;
++		p.slotOn = Color::hex(0xffffff); p.railBg = Color::hex(0x0c1016); p.faceMuted = Color::hex(0x3a4654);
++		p.favBorder = p.red; p.favBand = Color::hex(0x5a2430); p.favBody = Color::hex(0x2a1016); p.favInk = Color::hex(0xff8a96);
++		p.glint = Color(1, 1, 1, 0.28f); p.floor = Color(0, 0, 0, 0.35f);
++		p.slotDark = Color::hex(0x05080b); p.slotLip = Color::hex(0x3a4654);
++		return p;
++	}
++
++	static Pal lightPal()
++	{
++		Pal p;
++		p.ink = Color::hex(0x1d2733); p.muted = Color::hex(0x66758a); p.line = Color::hex(0x8d9bab);
++		p.edge = Color::hex(0x2b3644); p.navy = Color::hex(0xf2faff); p.red = Color::hex(0xe23b4a);
++		Color sh = Color::hex(0x14233a);
++		p.shade40 = Color(sh.r, sh.g, sh.b, 0.22f); p.shade45 = Color(sh.r, sh.g, sh.b, 0.25f); p.shade35 = Color(sh.r, sh.g, sh.b, 0.14f);
++		p.blackish = Color(sh.r, sh.g, sh.b, 0.3f);
++		p.screenBg = Color::hex(0xe6ebf0); p.screenFrame = Color::hex(0xb9c4d0); p.screenBand = Color::hex(0xfbfcfd);
++		p.ditherA = Color(sh.r, sh.g, sh.b, 0.07f); p.ditherB = Color(sh.r, sh.g, sh.b, 0.035f);
++		p.sheetBase = Color::hex(0xfafbfc); p.sheetMix = 0.3f; p.sheetHi = Color(1, 1, 1, 0.55f); p.sheetLo = Color(sh.r, sh.g, sh.b, 0.12f);
++		p.panelBand = Color::hex(0xffffff); p.panelBody = Color::hex(0xedf1f6); p.panelLow = Color::hex(0xc5cfda);
++		p.chipBand = Color::hex(0xffffff); p.chipBody = Color::hex(0xeef2f7);
++		p.frameBorder = Color::hex(0x2b3644); p.frameBg = Color::hex(0xdfe5ec);
++		p.meterBg = Color::hex(0xd6dde6); p.brandBg = Color::hex(0x1b2330); p.kbdBg = Color::hex(0x2b3644);
++		p.kbdInk = Color::hex(0xf2f6fa); p.rule = Color::hex(0xc3ccd6);
++		p.bubbleBand = Color::hex(0xffffff); p.bubbleBody = Color::hex(0xf4f7fa); p.bubbleLow = Color::hex(0xcfd8e2);
++		p.trackBg = Color::hex(0xd9e0e8); p.trackHi = Color::hex(0xffffff); p.trackShade = Color(sh.r, sh.g, sh.b, 0.18f);
++		p.slotOn = Color::hex(0x1a6ea3); p.railBg = Color::hex(0xd9e0e8); p.faceMuted = Color::hex(0xc3ccd6);
++		p.favBorder = p.red; p.favBand = Color::hex(0xfff2f3); p.favBody = Color::hex(0xffdfe3); p.favInk = Color::hex(0xc8283a);
++		p.glint = Color(1, 1, 1, 0.45f); p.floor = Color(sh.r, sh.g, sh.b, 0.2f);
++		p.slotDark = Color::hex(0x1d2733); p.slotLip = Color::hex(0x8d9bab);
++		return p;
++	}
 +
 +	// a box in CSS px, the way the mockup's stylesheet declares it
 +	struct BoxCss
@@ -2132,6 +2336,11 @@ index 00000000..d7122e31
 +		float fromO = 1, toO = 1;
 +		double o0 = -1e9;
 +		bool otrans = false;
++		// wrapping around the end of the shelf: the item enters from the side it comes in by, and a copy of it
++		// leaves from its old place on the other side (with few items, both places are on screen)
++		bool ghost = false;
++		float gFromX = 0, gToX = 0, gS = 1, gO = 1;
++		double g0 = -1e9;
 +	};
 +
 +	struct CacheEntry
@@ -2199,12 +2408,14 @@ index 00000000..d7122e31
 +		double topAt = -1e9, shellAt = -1e9, popAt = -1e9;
 +		std::string shellKey;
 +		std::vector<SlotState> slots;
++		int prevCenter = -1;
 +		float thumbFrom = 0, thumbTo = 0;
 +		double thumbAt = -1e9;
 +		bool thumbKnown = false;
 +		bool launchFromHome = false;
 +		double launchAt = -1;		// auto-launch time on the ready screen
-+		bool launched = false;
++		double launchT0 = -1e9;		// the insert animation's start
++		bool launched = false, cued = false;
 +
 +		// touch
 +		bool pointerDown = false;
@@ -2216,7 +2427,17 @@ index 00000000..d7122e31
 +		std::vector<SysInfo> sysCache;
 +		std::map<int, GameInfo> gameCache;
 +
++		Pal P;
++		Color INK, MUTED, LINE, EDGE, NAVY, RED, SHADE40, SHADE45, SHADE35, BLACKISH;
++
 +		Impl(UI* u) : ui(u) {}
++
++		void setPalette(const std::string& variant)
++		{
++			P = variant == "light" ? lightPal() : darkPal();
++			INK = P.ink; MUTED = P.muted; LINE = P.line; EDGE = P.edge; NAVY = P.navy; RED = P.red;
++			SHADE40 = P.shade40; SHADE45 = P.shade45; SHADE35 = P.shade35; BLACKISH = P.blackish;
++		}
 +
 +		float X(float css) const { return css * s; }
 +
@@ -2301,6 +2522,7 @@ index 00000000..d7122e31
 +			for (auto b : css.bands) st.bands.push_back(Band{ X(b.y0), b.y1 < 0 ? -1 : X(b.y1), b.c });
 +			st.dither = css.dither;
 +			st.ditherScale = s;
++			st.ditherA = P.ditherA; st.ditherB = P.ditherB;
 +			for (auto sh : css.shadows) st.shadows.push_back(Shadow{ X(sh.dx), X(sh.dy), X(sh.spread), sh.c, sh.inset });
 +			if (css.async)
 +			{
@@ -2423,24 +2645,43 @@ index 00000000..d7122e31
 +			return put(key, G_ICON, b, smooth, 0, 0).sp;
 +		}
 +
-+		// the mockup's cartridge: box art covering the label window under the pixel shell, at this CSS size
-+		Sprite cart(const std::string& boxPath, float cw, float ch)
++		// what goes on a cartridge's label: the real card's label art (its scan), else the label art the media tool
++		// made from the cover, else the cover without its NINTENDO DS strip
++		struct CartArt { std::string scan, label, box; };
++		static CartArt artOf(const GameInfo& g) { return CartArt{ g.cart, g.label, g.box }; }
++		static Bitmap labelArt(const CartArt& a)
++		{
++			if (!a.scan.empty())
++			{
++				Bitmap b = cardLabelArt(decodeFile(a.scan));
++				if (!b.empty()) return b;
++			}
++			if (!a.label.empty())
++			{
++				Bitmap b = decodeFile(a.label);
++				if (!b.empty()) return b;
++			}
++			return a.box.empty() ? Bitmap() : coverWithoutStrip(decodeFile(a.box));
++		}
++
++		// the mockup's cartridge: the label art filling the label window under the pixel shell, at this CSS size
++		Sprite cart(const CartArt& art0, float cw, float ch)
 +		{
 +			int dw = (int)std::lround(X(cw)), dh = (int)std::lround(X(ch));
 +			char k[48];
 +			snprintf(k, sizeof k, "cart:%dx%d:", dw, dh);
-+			std::string key = std::string(k) + boxPath;
++			std::string key = std::string(k) + art0.scan + "|" + art0.label + "|" + art0.box;
 +			if (auto e = find(key)) return e->sp;
 +			Bitmap shellCopy = shell;
 +			float sc = s;
-+			request(key, G_CART, true, [boxPath, shellCopy, sc, dw, dh](float&, float&) -> Bitmap
++			request(key, G_CART, true, [art0, shellCopy, sc, dw, dh](float&, float&) -> Bitmap
 +			{
 +				// the canvas is 100x104 CSS px; bake it at device resolution, then resample to the drawn size
 +				int mw = (int)std::lround(100 * sc), mh = (int)std::lround(104 * sc);
 +				Bitmap master;
 +				master.w = mw; master.h = mh;
 +				master.px.assign((size_t)mw * mh * 4, 0);
-+				Bitmap art = decodeFile(boxPath);
++				Bitmap art = labelArt(art0);
 +				if (!art.empty())
 +				{
 +					int wx = (int)std::lround(12 * sc), wy = (int)std::lround(20 * sc);
@@ -2456,11 +2697,12 @@ index 00000000..d7122e31
 +			return Sprite();
 +		}
 +
-+		// the screenshot fitted into 512x212 CSS px, corners rounded by the frame's inner radius
-+		CacheEntry* photo(const std::string& path)
++		// the box cover fitted into COVER_W x COVER_H CSS px (its fitted CSS size in the cache entry)
++		static constexpr float COVER_W = 214, COVER_H = 280;
++		CacheEntry* coverArt(const std::string& path)
 +		{
 +			if (path.empty()) return nullptr;
-+			std::string key = "photo:" + path;
++			std::string key = "cover:" + path;
 +			if (auto e = find(key)) return e;
 +			float sc = s;
 +			request(key, G_PHOTO, true, [path, sc](float& cssW, float& cssH) -> Bitmap
@@ -2468,26 +2710,32 @@ index 00000000..d7122e31
 +				Bitmap img = decodeFile(path);
 +				if (img.empty()) return Bitmap();
 +				float fw, fh;
-+				containSize(img.w, img.h, 512, 212, fw, fh);
++				containSize(img.w, img.h, (int)COVER_W, (int)COVER_H, fw, fh);
 +				cssW = std::max(1.0f, std::round(fw));
 +				cssH = std::max(1.0f, std::round(fh));
-+				int dw = (int)std::lround(cssW * sc), dh = (int)std::lround(cssH * sc);
-+				Bitmap b = resize(img, dw, dh);
-+				// overflow: hidden on the frame clips the picture to its padding box (radius 8 - border 4)
-+				RRect clip(0, 0, (float)dw, (float)dh, 4 * sc);
-+				for (int y = 0; y < dh; y++)
-+					for (int x = 0; x < dw; x++)
-+					{
-+						float cov = clip.coverage(x + 0.5f, y + 0.5f);
-+						if (cov < 1)
-+						{
-+							uint8_t* p = &b.px[((size_t)y * dw + x) * 4];
-+							p[3] = (uint8_t)std::lround(p[3] * cov);
-+						}
-+					}
-+				return b;
++				return resize(img, (int)std::lround(cssW * sc), (int)std::lround(cssH * sc));
 +			});
 +			return nullptr;
++		}
++
++		// the shine that sweeps over the cover: a slanted band, A8, w x h CSS px plus the slant
++		Sprite glint(float h)
++		{
++			int dh = (int)std::lround(X(h)), band = (int)std::lround(X(22)), slant = (int)std::lround(X(h * 0.45f));
++			char k[48];
++			snprintf(k, sizeof k, "glint:%d", dh);
++			if (auto e = find(k)) return e->sp;
++			Bitmap b;
++			b.w = band + slant; b.h = dh; b.alpha = true;
++			b.px.assign((size_t)b.w * b.h, 0);
++			int px = std::max(1, (int)std::lround(s));		// the pixel grid of the look: whole CSS pixels
++			for (int y = 0; y < dh; y++)
++			{
++				int x0 = slant - (int)std::lround((float)(y / px * px) * slant / std::max(1, dh));
++				for (int x = x0; x < x0 + band && x < b.w; x++)
++					b.px[(size_t)y * b.w + x] = (x - x0) < band / 3 ? 150 : 255;
++			}
++			return put(k, G_BOX, b, false, 0, 0).sp;
 +		}
 +
 +		// ---- model ----
@@ -2552,23 +2800,52 @@ index 00000000..d7122e31
 +			else o = st.toO;
 +		}
 +
++		bool ghostValue(SlotState& st, float& x, float& sc, float& o)
++		{
++			if (!st.ghost) return false;
++			float p = (float)((now - st.g0) / 420.0);
++			if (p >= 1) { st.ghost = false; return false; }
++			float e = cubicBezier(0.2f, 1.4f, 0.32f, 1, p);
++			x = st.gFromX + (st.gToX - st.gFromX) * e;
++			sc = st.gS;
++			o = st.gO * (1 - stepsEnd(4, p));
++			return o > 0;
++		}
++
 +		void layout(bool animate)
 +		{
 +			int n = count();
-+			if ((int)slots.size() != n) { slots.assign(n, SlotState()); }
++			if ((int)slots.size() != n) { slots.assign(n, SlotState()); prevCenter = -1; }
 +			int c = center();
++			// how far the centre moved (in items, the short way round)
++			int move = prevCenter >= 0 && prevCenter < n ? delta(c, prevCenter, n) : 0;
++			if (std::abs(move) > 3) animate = false;
++			prevCenter = c;
 +			for (int i = 0; i < n; i++)
 +			{
 +				SlotState& st = slots[i];
 +				int d = delta(i, c, n);
-+				bool jump = st.known && std::abs(d - st.d) > 2;
 +				float cx, cs, co;
 +				slotValue(st, cx, cs, co);
 +				float tx = d * 122.0f, tsc = d == 0 ? 1.0f : 0.84f, to = std::abs(d) > 3 ? 0.0f : 1.0f;
-+				if (!animate || jump || !st.known)
++				bool wrapped = st.known && move != 0 && d != st.d - move;
++				if (!animate || !st.known)
 +				{
-+					st.trans = false; st.otrans = false;
++					st.trans = false; st.otrans = false; st.ghost = false;
 +					st.toX = tx; st.toS = tsc; st.toO = to;
++				}
++				else if (wrapped)
++				{
++					if (std::abs(st.d) <= 3 && co > 0)
++					{
++						st.ghost = true; st.g0 = now;
++						st.gFromX = cx; st.gToX = (st.d - move) * 122.0f; st.gS = cs; st.gO = co;
++					}
++					int from = d + move;
++					st.fromX = from * 122.0f; st.fromS = from == 0 ? 1.0f : 0.84f;
++					st.toX = tx; st.toS = tsc; st.t0 = now; st.trans = true;
++					st.fromO = 0; st.toO = to; st.o0 = now; st.otrans = to > 0;
++					if (!st.otrans) st.toO = to;
 +				}
 +				else
 +				{
@@ -2654,12 +2931,23 @@ index 00000000..d7122e31
 +				if (src->gameCount() == 0) return;
 +				ui->mView = LAUNCH;
 +				launchFromHome = false;
-+				launchAt = now + LAUNCH_DELAY;
-+				launched = false;
++				startInsert();
 +				render(false);
 +			}
-+			else if (ui->mView == LAUNCH && !launched)
-+				launchAt = now;	// A again: don't wait
++			else if (ui->mView == LAUNCH && !launched && now - launchT0 < INS_LIFT + INS_SLIDE)
++			{
++				// A again: straight to the click
++				launchT0 = now - (INS_LIFT + INS_SLIDE);
++				launchAt = now + (LAUNCH_DELAY - INS_LIFT - INS_SLIDE);
++			}
++		}
++
++		void startInsert()
++		{
++			launchT0 = now;
++			launchAt = now + LAUNCH_DELAY;
++			launched = false;
++			cued = false;
 +		}
 +
 +		void back()
@@ -2700,12 +2988,10 @@ index 00000000..d7122e31
 +			ui->mGame = g;
 +			ui->mView = LAUNCH;
 +			launchFromHome = true;
-+			launchAt = now + LAUNCH_DELAY;
-+			launched = false;
++			startInsert();
 +			render(false);
 +		}
 +
-+		static constexpr double LAUNCH_DELAY = 650;	// the ready screen shows this long before the game starts
 +
 +		// ---- geometry shared by drawing and hit tests ----
 +		struct Geo
@@ -2740,9 +3026,11 @@ index 00000000..d7122e31
 +				sub = v == LAUNCH ? "Ready" : gm.sub;
 +			}
 +			g.titleLines = layoutWrap(utf8to32(title), tstyle(tTitle()), 470, 2);
-+			g.subLines = layoutWrap(utf8to32(sub), tstyle(tSub()), 470);
-+			float content = g.titleLines.size() * 32.5f + 3 + g.subLines.size() * lineHeight(tSub());
-+			g.bubbleH = std::max(92.0f, content + 18 + 6);
++			g.subLines.clear();
++			if (!sub.empty()) g.subLines.push_back(layoutEllipsis(utf8to32(sub), tstyle(tSub()), 470));
++			// one height for every name: room for two title lines and the subtitle, so a long name doesn't move the
++			// shelf (the text is centred in it)
++			g.bubbleH = 2 * 32.5f + 3 + lineHeight(tSub()) + 18 + 6;
 +			g.bubbleY = v == LAUNCH ? 26 : 60;
 +			g.reelY = g.bubbleY + g.bubbleH + 8;
 +			g.reelH = 386 - g.reelY;
@@ -2778,8 +3066,8 @@ index 00000000..d7122e31
 +		// ---- styles ----
 +		BoxCss screenBox()
 +		{
-+			BoxCss b; b.key = "screen"; b.radius = 2; b.bg = Color::hex(0x121820); b.dither = true; b.async = true;
-+			b.shadows = { inset(0, 0, 4, BLACKISH), inset(0, 8, 0, Color::hex(0x243040)) };
++			BoxCss b; b.key = "screen"; b.radius = 2; b.bg = P.screenBg; b.dither = true; b.async = true;
++			b.shadows = { inset(0, 0, 4, P.screenFrame), inset(0, 8, 0, P.screenBand) };
 +			return b;
 +		}
 +		// the sheet without its background colour: dither, inset shadows, border and shadow over transparency; the
@@ -2787,82 +3075,83 @@ index 00000000..d7122e31
 +		BoxCss sheetOverlay()
 +		{
 +			BoxCss b; b.key = "sheet"; b.radius = 18; b.border = 3; b.borderColor = EDGE; b.dither = true; b.async = true;
-+			b.shadows = { inset(0, 6, 0, Color(1, 1, 1, 0.1f)), inset(0, -8, 0, SHADE35), outer(4, 4, SHADE40) };
++			b.shadows = { inset(0, 6, 0, P.sheetHi), inset(0, -8, 0, P.sheetLo), outer(4, 4, SHADE40) };
 +			return b;
 +		}
 +		void drawSheet(const Color& accent, float x, float y)
 +		{
 +			Sprite m = mask(18, 604, 406), o = box(sheetOverlay(), 604, 406);
 +			if (!m.valid() || !o.valid()) return;
-+			drawSprite(m, x, y, nullptr, mix(accent, 0.34f, Color::hex(0x10161e)));
++			drawSprite(m, x, y, nullptr, mix(accent, P.sheetMix, P.sheetBase));
 +			drawSprite(o, x, y);
 +		}
 +		BoxCss heroBox()
 +		{
-+			BoxCss b; b.key = "hero"; b.radius = 18; b.border = 3; b.borderColor = EDGE; b.bg = Color::hex(0x1a222c);
-+			b.bands = { Band{ 0, 8, Color::hex(0x2e3a48) }, Band{ 8, -1, Color::hex(0x121820) } };
-+			b.shadows = { inset(0, -6, 0, BLACKISH), outer(4, 4, SHADE45) };
++			BoxCss b; b.key = "hero"; b.radius = 18; b.border = 3; b.borderColor = EDGE; b.bg = P.panelBody;
++			b.bands = { Band{ 0, 8, P.panelBand }, Band{ 8, -1, P.panelBody } };
++			b.shadows = { inset(0, -6, 0, P.panelLow), outer(4, 4, SHADE45) };
 +			return b;
 +		}
 +		BoxCss chipBox()
 +		{
-+			BoxCss b; b.key = "chip"; b.radius = 12; b.border = 3; b.borderColor = EDGE; b.bg = Color::hex(0x121820);
-+			b.bands = { Band{ 0, 8, Color::hex(0x243040) }, Band{ 8, -1, Color::hex(0x0e141c) } };
++			BoxCss b; b.key = "chip"; b.radius = 12; b.border = 3; b.borderColor = EDGE; b.bg = P.chipBody;
++			b.bands = { Band{ 0, 8, P.chipBand }, Band{ 8, -1, P.chipBody } };
 +			b.shadows = { outer(3, 3, SHADE40) };
 +			return b;
 +		}
-+		BoxCss photoBox()
++		// the box art's frame: a pixel border, no fill (the cover covers it)
++		BoxCss coverBox()
 +		{
-+			BoxCss b; b.key = "photo"; b.radius = 8; b.border = 4; b.borderColor = Color::hex(0x2a3442); b.bg = Color::hex(0x12181f);
-+			b.shadows = { inset(0, 0, 3, BLACKISH), outer(4, 4, SHADE40) };
++			BoxCss b; b.key = "cover"; b.radius = 4; b.border = 3; b.borderColor = P.frameBorder; b.bg = P.frameBg;
++			b.shadows = { outer(4, 4, SHADE40) };
 +			return b;
 +		}
 +		BoxCss meterBox()
 +		{
-+			BoxCss b; b.key = "meter"; b.radius = 2; b.border = 3; b.borderColor = EDGE; b.bg = Color::hex(0x10161e);
++			BoxCss b; b.key = "meter"; b.radius = 2; b.border = 3; b.borderColor = EDGE; b.bg = P.meterBg;
 +			b.shadows = { inset(2, 2, 0, SHADE45) };
 +			return b;
 +		}
 +		BoxCss brandBox()
 +		{
-+			BoxCss b; b.key = "brand"; b.radius = 4; b.bg = Color::hex(0x1b2330);
++			BoxCss b; b.key = "brand"; b.radius = 4; b.bg = P.brandBg;
 +			b.shadows = { outer(2, 2, BLACKISH) };
 +			return b;
 +		}
-+		BoxCss kbdBox() { BoxCss b; b.key = "kbd"; b.radius = 4; b.bg = Color::hex(0xe7eef6); return b; }
-+		BoxCss ruleBox() { BoxCss b; b.key = "rule"; b.radius = 2; b.bg = Color::hex(0x3a4654); return b; }
++		BoxCss kbdBox() { BoxCss b; b.key = "kbd"; b.radius = 4; b.bg = P.kbdBg; return b; }
++		BoxCss ruleBox() { BoxCss b; b.key = "rule"; b.radius = 2; b.bg = P.rule; return b; }
 +		BoxCss bubbleBox()
 +		{
-+			BoxCss b; b.key = "bubble"; b.radius = 12; b.border = 3; b.borderColor = LINE; b.bg = Color::hex(0x1a222c);
-+			b.bands = { Band{ 0, 10, Color::hex(0x2c3848) }, Band{ 10, -1, Color::hex(0x141b24) } };
-+			b.shadows = { inset(0, -6, 0, Color::hex(0x0c1218)), outer(4, 4, BLACKISH) };
++			BoxCss b; b.key = "bubble"; b.radius = 12; b.border = 3; b.borderColor = LINE; b.bg = P.bubbleBody;
++			b.bands = { Band{ 0, 10, P.bubbleBand }, Band{ 10, -1, P.bubbleBody } };
++			b.shadows = { inset(0, -6, 0, P.bubbleLow), outer(4, 4, BLACKISH) };
 +			return b;
 +		}
 +		BoxCss trackBox()
 +		{
-+			BoxCss b; b.key = "reeltrack"; b.radius = 18; b.bg = Color::hex(0x0c1016); b.dither = true;
-+			b.shadows = { inset(0, 4, 0, SHADE45), inset(0, -4, 0, Color::hex(0x2a3544)) };
++			BoxCss b; b.key = "reeltrack"; b.radius = 18; b.bg = P.trackBg; b.dither = true;
++			b.shadows = { inset(0, 4, 0, P.trackShade), inset(0, -4, 0, P.trackHi) };
 +			return b;
 +		}
 +		BoxCss plateBox()
 +		{
 +			BoxCss b; b.key = "plate"; b.radius = 18; b.border = 3; b.borderColor = EDGE; b.bg = Color::hex(0x1a6ea3);
 +			b.bands = { Band{ 0, 14, Color::hex(0x7ec8ee) }, Band{ 132, -1, Color::hex(0x0c3d5c) } };
-+			b.shadows = { inset(0, -8, 0, SHADE35), outer(4, 4, SHADE40) };
++			b.shadows = { inset(0, -8, 0, Color(0, 0, 0, 0.35f)), outer(4, 4, SHADE40) };
 +			return b;
 +		}
 +		BoxCss slotBox(bool on)
 +		{
-+			BoxCss b; b.key = on ? "slot1" : "slot0"; b.radius = 14; b.border = 3; b.borderColor = on ? Color::hex(0xffffff) : EDGE;
-+			b.bg = Color::hex(0x1a222c);
-+			b.bands = { Band{ 0, 8, Color::hex(0x2e3a48) }, Band{ 8, -1, Color::hex(0x121820) } };
-+			b.shadows = { inset(0, -6, 0, BLACKISH), outer(3, 3, SHADE45) };
++			BoxCss b; b.key = on ? "slot1" : "slot0"; b.radius = 14; b.border = 3; b.borderColor = on ? P.slotOn : EDGE;
++			b.bg = P.panelBody;
++			b.bands = { Band{ 0, 8, P.panelBand }, Band{ 8, -1, P.panelBody } };
++			b.shadows = { inset(0, -6, 0, P.panelLow), outer(3, 3, SHADE45) };
 +			return b;
 +		}
 +		BoxCss badgeBox() { BoxCss b; b.key = "badge"; b.radius = 2; b.border = 2; b.borderColor = Color::hex(0xffffff); b.bg = RED; return b; }
 +		BoxCss railBox()
 +		{
-+			BoxCss b; b.key = "rail"; b.radius = 2; b.border = 2; b.borderColor = EDGE; b.bg = Color::hex(0x0c1016); b.dither = true;
++			BoxCss b; b.key = "rail"; b.radius = 2; b.border = 2; b.borderColor = EDGE; b.bg = P.railBg; b.dither = true;
 +			b.shadows = { inset(2, 2, 0, SHADE45) };
 +			return b;
 +		}
@@ -2877,17 +3166,24 @@ index 00000000..d7122e31
 +			BoxCss b; b.radius = 10; b.border = 3;
 +			if (kind == 1)
 +			{
-+				b.key = "face1"; b.borderColor = RED; b.bg = Color::hex(0x3a1820);
-+				b.bands = { Band{ 0, 8, Color::hex(0x5a2430) }, Band{ 8, -1, Color::hex(0x2a1016) } };
++				b.key = "face1"; b.borderColor = P.favBorder; b.bg = P.favBody;
++				b.bands = { Band{ 0, 8, P.favBand }, Band{ 8, -1, P.favBody } };
 +			}
 +			else
 +			{
-+				b.key = kind == 2 ? "face2" : "face0"; b.borderColor = kind == 2 ? Color::hex(0x3a4654) : EDGE; b.bg = Color::hex(0x1a222c);
-+				b.bands = { Band{ 0, 8, Color::hex(0x2c3848) }, Band{ 8, -1, Color::hex(0x121820) } };
++				b.key = kind == 2 ? "face2" : "face0"; b.borderColor = kind == 2 ? P.faceMuted : EDGE; b.bg = P.panelBody;
++				b.bands = { Band{ 0, 8, P.bubbleBand }, Band{ 8, -1, P.panelBody } };
 +			}
 +			if (kind == 2) {}
 +			else if (pressed) { b.key += "p"; b.shadows = { outer(1, 1, BLACKISH) }; }
-+			else b.shadows = { inset(0, -4, 0, BLACKISH), outer(3, 3, BLACKISH) };
++			else b.shadows = { inset(0, -4, 0, P.panelLow), outer(3, 3, BLACKISH) };
++			return b;
++		}
++		// the console's cartridge slot on the ready screen: a dark mouth with a lip
++		BoxCss slotMouthBox()
++		{
++			BoxCss b; b.key = "mouth"; b.radius = 6; b.border = 3; b.borderColor = EDGE; b.bg = P.slotDark;
++			b.shadows = { inset(0, 6, 0, Color(0, 0, 0, 0.5f)), outer(3, 3, SHADE40) };
 +			return b;
 +		}
 +
@@ -2932,6 +3228,136 @@ index 00000000..d7122e31
 +			drawText(clock, ts(true, 20), 622 - cw, 20 + ry, INK);
 +			drawText(date, ts(false, 20), 622 - cw - 8 - dw, 20 + ry, INK);
 +		}
++
++		// the game list's top screen, left: the box cover in a pixel frame, bobbing like the home screen's icon, its
++		// shadow on the sheet and a shine that sweeps over it every few seconds
++		void drawCover(const GameInfo& gm, const SysInfo& sy, float ry)
++		{
++			const float cx = 163, cy = 263;		// the cover's centre at rest
++			CacheEntry* ce = coverArt(gm.box);
++			bool pending = ce == nullptr && !gm.box.empty();
++			if (ce && !ce->sp.valid()) ce = nullptr;
++			float w = ce ? ce->cssW : 176, h = ce ? ce->cssH : 176;
++			float b = bob();
++			float x = std::round(cx - w / 2), y = std::round(cy - h / 2) + ry;
++			// the shadow: narrower while the cover is up
++			float fw = std::round(w * 0.78f) + (b < 0 ? -10 : 0), fy = std::round(cy + h / 2 + 18) + ry;
++			Color fl = P.floor;
++			for (int r = 0; r < 3; r++)
++			{
++				float rw = fw - r * r * 10;
++				be->fill(std::round(X(cx - rw / 2)), std::round(X(fy - 1 + r * 2)), std::round(X(rw)), std::round(X(2)), fl);
++			}
++			if (pending) return;		// the picture is on its way: the frame comes with it
++			drawBox(coverBox(), x - 3, y - 3 + b, w + 6, h + 6);
++			if (ce)
++			{
++				drawSprite(ce->sp, x, y + b);
++				// the shine: every 5 s, across the cover in 8 steps
++				double t = std::fmod(std::max(0.0, now - topAt), GLINT_PERIOD);
++				if (t < GLINT_SWEEP)
++				{
++					Sprite gl = glint(h);
++					float k = stepsEnd(8, (float)(t / GLINT_SWEEP));
++					float gw = gl.tex ? gl.tex->w / s : 0;
++					float gx = x - gw + (w + gw) * k;
++					be->pushClip(std::round(X(x)), std::round(X(y + b)), std::round(X(w)), std::round(X(h)));
++					if (gl.valid()) be->draw(gl.tex, std::round(X(gx)), std::round(X(y + b)), (float)gl.tex->w, (float)gl.tex->h, P.glint);
++					be->popClip();
++				}
++			}
++			else
++			{
++				// no cover: the system's icon on the frame's background
++				Sprite ic = icon(sy.icon);
++				if (ic.valid()) be->draw(ic.tex, std::round(X(cx - 48)), std::round(X(cy - 48 + ry + b)), std::round(X(96)), std::round(X(96)), Color(1, 1, 1, 1));
++			}
++		}
++
++		// the game list's top screen, right: title, genre and year, the play stats and the achievements
++		void drawGameInfo(const GameInfo& gm, const SysInfo& sy, float ry)
++		{
++			const float L = 300, W = 296;
++			TStyle tt = ts(true, 26, 0.52f), tsb = ts(false, 20);
++			std::vector<TextLine> tl = layoutWrap(utf8to32(gm.title), tstyle(tt), (int)W, 2);
++			bool launch = ui->mView == LAUNCH;
++			std::string subText = launch ? "Starting..." : gm.sub;
++			TextLine sl = layoutEllipsis(utf8to32(subText), tstyle(tsb), (int)(W - (launch ? 16 : 0)));
++
++			// the stats: values over labels, the columns as wide as their text
++			std::string vals[3] = { gm.plays, gm.last, gm.time };
++			std::string labs[3] = { "Plays", "Last played", "Time" };
++			float vsize = 24;
++			TStyle tv = ts(true, vsize), tlab = ts(false, 15, 1.2f, true);
++			TextLine lv[3], ll[3];
++			float colW[3], total = 0;
++			for (int pass = 0; pass < 2; pass++)
++			{
++				total = 0;
++				for (int i = 0; i < 3; i++)
++				{
++					lv[i] = line(vals[i], tv);
++					ll[i] = layoutLine(utf8to32(labs[i]), tstyle(tlab));
++					colW[i] = std::max(lv[i].width, ll[i].width);
++					total += colW[i];
++				}
++				if (total + 2 * 16 <= W || pass == 1) break;
++				tv = ts(true, vsize = 20);
++			}
++			float gap = std::min(28.0f, (W - total) / 2);
++
++			float titleH = tl.size() * 32.5f, block = titleH + 4 + 24 + 20 + 48 + 22 + 22 + 6 + 14;
++			float top = std::round(263 - block / 2) + ry;
++			float y = top;
++			for (size_t i = 0; i < tl.size(); i++)
++				drawLine(tl[i], tt, L, y + 32.5f * i, 32.5f, INK);
++			y += titleH + 4;
++			float sx = L;
++			if (launch)
++			{
++				// the live dot
++				float base = y + baseline(tsb, 24), dy = base - 1 - 8;
++				be->fill(std::round(X(sx - 2)), std::round(X(dy - 2)), std::round(X(12)), std::round(X(12)), EDGE);
++				be->fill(std::round(X(sx)), std::round(X(dy)), std::round(X(8)), std::round(X(8)), RED);
++				sx += 16;
++			}
++			drawLine(sl, tsb, sx, y, 24, launch ? INK : MUTED);
++			y += 24 + 20;
++			be->fill(std::round(X(L)), std::round(X(y - 10)), std::round(X(W)), std::round(X(2)), Color(LINE.r, LINE.g, LINE.b, 0.5f));
++			float x = L;
++			for (int i = 0; i < 3; i++)
++			{
++				drawLine(lv[i], tv, x, y, 28, INK);
++				drawLine(ll[i], tlab, x, y + 28, 20, MUTED);
++				x += colW[i] + gap;
++			}
++			y += 48 + 22;
++
++			// achievements
++			TStyle ta = ts(false, 16, 1.0f, true);
++			TextLine la = layoutEllipsis(utf8to32(gm.achLabel), tstyle(ta), (int)W);
++			drawLine(la, ta, L, y, 22, MUTED);
++			y += 22 + 6;
++			drawBox(meterBox(), L, y, W, 14);
++			float pct = gm.achB > 0 ? std::round(gm.achA * 100.0f / gm.achB) : 0;
++			float fillW = (W - 6) * pct / 100;
++			if (fillW > 0)
++			{
++				float l = std::round(X(L + 3)), t = std::round(X(y + 3)), r = std::round(X(L + 3 + fillW)), bt = std::round(X(y + 11));
++				be->fill(l, t, r - l, bt - t, sy.accent);
++				be->pushClip(l, t, r - l, bt - t);
++				float bp = march();
++				Color w45(1, 1, 1, 0.45f);
++				for (float mx = L + 3 + bp + 6 - 16; mx < L + 3 + fillW; mx += 8)
++				{
++					float a0 = std::round(X(mx)), a1 = std::round(X(mx + 2));
++					if (a1 > l && a0 < r) be->fill(a0, t, a1 - a0, bt - t, w45);
++				}
++				be->popClip();
++			}
++		}
++
++		static constexpr double GLINT_PERIOD = 5000, GLINT_SWEEP = 560;
 +
 +		void drawTop()
 +		{
@@ -2983,7 +3409,7 @@ index 00000000..d7122e31
 +					float cw = 3 + 8 + 54 + 10 + tw + 12 + 3;
 +					float cx = 320 - cw / 2, cy = y0 + 168;
 +					drawBox(chipBox(), cx, cy, cw, 74);
-+					Sprite c = cart(sy.resumeBox, 54, 56);
++					Sprite c = cart(CartArt{ sy.resumeCart, sy.resumeLabel, sy.resumeBox }, 54, 56);
 +					drawSprite(c, cx + 11, cy + 9);
 +					float tx = cx + 11 + 54 + 10, ty = cy + 13.5f;
 +					drawLine(le, te, tx, ty, lineHeight(te), MUTED);
@@ -2993,60 +3419,8 @@ index 00000000..d7122e31
 +			else
 +			{
 +				const GameInfo& gm = game(ui->mGame);
-+				// screenshot (adapts to the picture; centred in the mockup's 520x220 place)
-+				CacheEntry* ph = photo(gm.snap);
-+				bool snapMissing = gm.snap.empty() || (ph && !ph->sp.valid());
-+				if (ph && !ph->sp.valid()) ph = nullptr;
-+				float fw = 520, fh = 220;
-+				if (ph) { fw = ph->cssW + 8; fh = ph->cssH + 8; }
-+				float fx = 60 + std::round((520 - fw) / 2), fy = 217 + std::round((220 - fh) / 2) + ry;
-+				if (ph || snapMissing)
-+				{
-+					drawBox(photoBox(), fx, fy, fw, fh);
-+					if (ph) drawSprite(ph->sp, fx + 4, fy + 4);
-+				}
-+
-+				// achievements
-+				TStyle tl = ts(false, 18, 1.08f, true);
-+				TextLine ll = layoutLine(utf8to32(gm.achLabel), tstyle(tl));
-+				drawLine(ll, tl, 320 - ll.width / 2, 179 + ry, lineHeight(tl), MUTED);
-+				drawBox(meterBox(), 140, 153 + ry, 360, 14);
-+				float pct = gm.achB > 0 ? std::round(gm.achA * 100.0f / gm.achB) : 0;
-+				float fillW = 354 * pct / 100;
-+				if (fillW > 0)
-+				{
-+					float l = std::round(X(143)), t = std::round(X(156 + ry)), r = std::round(X(143 + fillW)), bt = std::round(X(164 + ry));
-+					be->fill(l, t, r - l, bt - t, sy.accent);
-+					be->pushClip(l, t, r - l, bt - t);
-+					float bp = march();
-+					Color w45(1, 1, 1, 0.45f);
-+					for (float sx = 143 + bp + 6 - 16; sx < 143 + fillW; sx += 8)
-+					{
-+						float a = std::round(X(sx)), b2 = std::round(X(sx + 2));
-+						if (b2 > l && a < r) be->fill(a, t, b2 - a, bt - t, w45);
-+					}
-+					be->popClip();
-+				}
-+
-+				// caption with the live dot
-+				TStyle tc = ts(false, 22);
-+				std::string capText = ui->mView == LAUNCH ? "Ready to start." : gm.line;
-+				std::vector<TextLine> lines = layoutWrap(utf8to32(capText), tstyle(tc), 554, 0, 16);
-+				float top = 141 - 28.6f * lines.size() + ry;
-+				for (size_t i = 0; i < lines.size(); i++)
-+				{
-+					float lw = lines[i].width + (i == 0 ? 16 : 0);
-+					float lx = 43 + (554 - lw) / 2, lt = top + 28.6f * i;
-+					if (i == 0)
-+					{
-+						float base = lt + baseline(tc, 28.6f);
-+						float dy = base - 1 - 8;
-+						be->fill(std::round(X(lx - 2)), std::round(X(dy - 2)), std::round(X(12)), std::round(X(12)), EDGE);
-+						be->fill(std::round(X(lx)), std::round(X(dy)), std::round(X(8)), std::round(X(8)), RED);
-+						lx += 16;
-+					}
-+					drawLine(lines[i], tc, lx, lt, 28.6f, INK);
-+				}
++				drawCover(gm, sy, ry);
++				drawGameInfo(gm, sy, ry);
 +			}
 +			be->endScreen();
 +		}
@@ -3056,13 +3430,13 @@ index 00000000..d7122e31
 +		{
 +			float dx = pressed ? 2 : 0;
 +			drawBox(faceBox(f.kind, pressed), x + dx, 422 + dx, w, 40);
-+			Color lc = f.kind == 1 ? Color::hex(0xff8a96) : (f.kind == 2 ? MUTED : INK);
++			Color lc = f.kind == 1 ? P.favInk : (f.kind == 2 ? MUTED : INK);
 +			float lx = x + 15 + dx;
 +			if (f.kind != 2)
 +			{
 +				float kw = kbdW(f.kbd);
 +				drawBox(kbdBox(), lx, 430.5f + dx, kw, 23);
-+				drawText(f.kbd, tKbd(), lx + 6, 432.5f + dx, Color::hex(0x121820));
++				drawText(f.kbd, tKbd(), lx + 6, 432.5f + dx, P.kbdInk);
 +				lx += kw + 8;
 +			}
 +			drawText(f.label, tFace(), lx, 431 + dx, lc);
@@ -3082,7 +3456,7 @@ index 00000000..d7122e31
 +				// shoulders
 +				float kl = kbdW("L"), kr = kbdW("R");
 +				drawBox(kbdBox(), 18, 21.5f + rb, kl, 23);
-+				drawText("L", tKbd(), 24, 23.5f + rb, Color::hex(0x121820));
++				drawText("L", tKbd(), 24, 23.5f + rb, P.kbdInk);
 +				std::string prev, next;
 +				if (n > 0 && v == HOME) { prev = sys((ui->mSys - 1 + n) % n).name; next = sys((ui->mSys + 1) % n).name; }
 +				else if (n > 0) { prev = game((ui->mGame - 1 + n) % n).title; next = game((ui->mGame + 1) % n).title; }
@@ -3091,7 +3465,7 @@ index 00000000..d7122e31
 +				drawLine(lp, tsh, 18 + kl + 8, 21 + rb, 24, INK);
 +				drawBox(ruleBox(), 284, 31.5f + rb, 72, 3);
 +				drawBox(kbdBox(), 622 - kr, 21.5f + rb, kr, 23);
-+				drawText("R", tKbd(), 622 - kr + 6, 23.5f + rb, Color::hex(0x121820));
++				drawText("R", tKbd(), 622 - kr + 6, 23.5f + rb, P.kbdInk);
 +				drawLine(ln, tsh, 622 - kr - 8 - ln.width, 21 + rb, 24, INK);
 +			}
 +
@@ -3109,23 +3483,18 @@ index 00000000..d7122e31
 +			// pointer: the border-coloured triangle and the inner one that opens the border into it
 +			float pb = by + g.bubbleH - 3;
 +			drawTriangle("ptrO", 306, pb, 334, pb, 320, pb + 16, LINE);
-+			drawTriangle("ptrI", 309, pb, 331, pb, 320, pb + 13, Color::hex(0x141b24));
++			drawTriangle("ptrI", 309, pb, 331, pb, 320, pb + 13, P.bubbleBody);
 +
 +			// reel
 +			float ry = g.reelY + rb;
 +			be->pushClip(std::round(X(10)), std::round(X(ry)), std::round(X(620)), std::round(X(g.reelH)));
 +			if (v != LAUNCH && n > 0)
 +				drawBox(trackBox(), 26, ry + 34, 588, 80);
-+			drawBox(plateBox(), 258, ry + 4, 124, 162);
++			if (v != LAUNCH)
++				drawBox(plateBox(), 258, ry + 4, 124, 162);
 +
 +			if (v == LAUNCH)
-+			{
-+				Sprite c = cart(game(ui->mGame).box, 100, 104);
-+				drawSprite(c, 270, ry + 12);
-+				TStyle tr = ts(true, 20, 2.4f);
-+				TextLine lr = line("READY", tr);
-+				drawLine(lr, tr, 320 - lr.width / 2, ry + 122, 24, NAVY);
-+			}
++				drawInsert(ry);
 +			else
 +			{
 +				// slots by z-index: |d| >= 2, |d| == 1, the centre; DOM order within a level
@@ -3137,17 +3506,22 @@ index 00000000..d7122e31
 +					order.push_back({ z, i });
 +				}
 +				std::stable_sort(order.begin(), order.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b) { return a.first < b.first; });
-+				for (auto& o : order)
++				// the copies leaving round the end go under everything
++				std::vector<std::pair<int, int>> all;
++				for (auto& o : order) if (slots[o.second].ghost) all.push_back({ -1, o.second });
++				all.insert(all.end(), order.begin(), order.end());
++				for (auto& o : all)
 +				{
 +					int i = o.second;
 +					float tx, sc, op;
-+					slotValue(slots[i], tx, sc, op);
++					if (o.first < 0) { if (!ghostValue(slots[i], tx, sc, op)) continue; }
++					else slotValue(slots[i], tx, sc, op);
 +					if (op <= 0) continue;
 +					Xf xf; xf.ox = 320; xf.oy = ry + 16; xf.sc = sc; xf.tx = tx; xf.alpha = op;
 +					if (v == HOME)
 +					{
 +						const SysInfo& si = sys(i);
-+						drawBox(slotBox(slots[i].d == 0), 272, ry + 16, 96, 96, &xf);
++						drawBox(slotBox(o.first >= 0 && slots[i].d == 0), 272, ry + 16, 96, 96, &xf);
 +						Sprite ic = icon(si.icon);
 +						if (ic.valid())
 +						{
@@ -3158,7 +3532,7 @@ index 00000000..d7122e31
 +					}
 +					else
 +					{
-+						Sprite c = cart(game(i).box, 92.3077f, 96);
++						Sprite c = cart(artOf(game(i)), 92.3077f, 96);
 +						drawSprite(c, 273.846f, ry + 16, &xf);
 +					}
 +				}
@@ -3189,6 +3563,64 @@ index 00000000..d7122e31
 +			drawFace(g.left, 18, g.leftW, pressedAction && pressedSide == 0);
 +			drawFace(g.right, 622 - g.rightW, g.rightW, pressedAction && pressedSide == 1 && g.right.kind != 2);
 +			be->endScreen();
++		}
++
++		// ---- the ready screen: the cartridge goes into the console ----
++		static constexpr double INS_LIFT = 120, INS_SLIDE = 400, INS_CLICK = 90, INS_SETTLE = 110;
++		static constexpr double LAUNCH_DELAY = INS_LIFT + INS_SLIDE + INS_CLICK + INS_SETTLE + 80;	// then the game starts
++
++		void drawInsert(float ry)
++		{
++			double t = now - launchT0;
++			// the console under it: a face with the slot's mouth and a power light
++			float mouthY = ry + 170, clipY = mouthY + 9;
++			drawBox(heroBox(), 150, ry + 154, 340, 110);
++			drawBox(slotMouthBox(), 230, mouthY, 180, 28);
++			bool clicked = t >= INS_LIFT + INS_SLIDE;
++			Color led = clicked ? Color::hex(0x3ce07a) : Color::hex(0x7a2a30);
++			be->fill(std::round(X(446)), std::round(X(mouthY + 8)), std::round(X(14)), std::round(X(10)), EDGE);
++			be->fill(std::round(X(448)), std::round(X(mouthY + 10)), std::round(X(10)), std::round(X(6)), led);
++
++			// where the cartridge's top is: lift, then down into the slot with an accelerating fall, a click past the
++			// end, and back up onto it
++			float y0 = ry + 14, yEnd = clipY - 47;
++			float y;
++			if (t < INS_LIFT) y = y0 - 6 * stepsEnd(2, (float)(t / INS_LIFT));
++			else if (t < INS_LIFT + INS_SLIDE)
++			{
++				float e = cubicBezier(0.55f, 0, 0.9f, 0.45f, (float)((t - INS_LIFT) / INS_SLIDE));
++				y = (y0 - 6) + (yEnd + 3 - (y0 - 6)) * e;
++			}
++			else if (t < INS_LIFT + INS_SLIDE + INS_CLICK) y = yEnd + 3;
++			else if (t < INS_LIFT + INS_SLIDE + INS_CLICK + INS_SETTLE)
++				y = yEnd + 3 - 3 * stepsEnd(3, (float)((t - INS_LIFT - INS_SLIDE - INS_CLICK) / INS_SETTLE));
++			else y = yEnd;
++			y = std::round(y);
++
++			// the cartridge, cut off where it enters the slot; the mouth's front edge over it
++			be->pushClip(std::round(X(10)), std::round(X(ry)), std::round(X(620)), std::round(X(clipY)) - std::round(X(ry)));
++			Sprite c = cart(artOf(game(ui->mGame)), 100, 104);
++			drawSprite(c, 270, y);
++			be->popClip();
++			be->fill(std::round(X(233)), std::round(X(clipY - 1)), std::round(X(174)), std::round(X(3)), P.slotLip);
++
++			// the click: sparks off the slot's corners for a moment
++			double ct = t - (INS_LIFT + INS_SLIDE);
++			if (ct >= 0 && ct < 240)
++			{
++				float k = stepsEnd(3, (float)(ct / 240));
++				float d = 8 + 18 * k;
++				Color sp(1, 1, 1, 1 - k * 0.8f);
++				const float sx[2] = { 262, 378 };
++				for (float x : sx)
++				{
++					float dir = x < 320 ? -1.0f : 1.0f;
++					be->fill(std::round(X(x + dir * d)), std::round(X(clipY - 6 - d * 0.6f)), std::round(X(4)), std::round(X(4)), sp);
++					be->fill(std::round(X(x + dir * (d + 6))), std::round(X(clipY - 1)), std::round(X(4)), std::round(X(4)), sp);
++					be->fill(std::round(X(x + dir * d * 0.5f)), std::round(X(clipY - 12 - d)), std::round(X(4)), std::round(X(4)), sp);
++				}
++			}
++			if (clicked && !cued) { cued = true; src->cue("insert"); }
 +		}
 +
 +		void drawTriangle(const char* name, float x0, float y0, float x1, float y1, float x2, float y2, const Color& c)
@@ -3257,8 +3689,9 @@ index 00000000..d7122e31
 +
 +	// ---- UI -----------------------------------------------------------------------------------------------------------
 +
-+	UI::UI(Source* src, Backend* be, const std::string& assetDir, float scale) : d(new Impl(this))
++	UI::UI(Source* src, Backend* be, const std::string& assetDir, float scale, const std::string& variant) : d(new Impl(this))
 +	{
++		d->setPalette(variant);
 +		d->src = src;
 +		d->be = be;
 +		d->dir = assetDir;
@@ -3294,8 +3727,7 @@ index 00000000..d7122e31
 +		mSys = sys;
 +		mGame = game;
 +		d->launchFromHome = fromHome;
-+		d->launchAt = d->now + Impl::LAUNCH_DELAY;
-+		d->launched = false;
++		d->startInsert();
 +		d->gameCache.clear();
 +		d->render(false);
 +	}
@@ -3402,7 +3834,7 @@ index 00000000..d7122e31
 +		double now = d->now;
 +		if (now - d->topAt < 280 || now - d->shellAt < 280 || now - d->popAt < 320 || now - d->thumbAt < 350) return true;
 +		for (auto& st : d->slots)
-+			if ((st.trans && now - st.t0 < 420) || (st.otrans && now - st.o0 < 240)) return true;
++			if ((st.trans && now - st.t0 < 420) || (st.otrans && now - st.o0 < 240) || (st.ghost && now - st.g0 < 420)) return true;
 +		if (d->launchAt >= 0) return true;
 +		std::lock_guard<std::mutex> l(d->qlock);
 +		return !d->jobs.empty() || !d->done.empty();
@@ -3412,10 +3844,17 @@ index 00000000..d7122e31
 +	{
 +		if (animating()) return 0;
 +		double now = d->now;
-+		// the looping animations step: the icon bob every 600 ms (home), the meter stripes every 200 ms (library)
-+		double period = mView == HOME ? 600 : 200;
++		// the looping animations step: the icon or cover bob every 600 ms; on a game list also the meter stripes every
++		// 200 ms and, every 5 s, the cover's shine in 8 steps
 +		double t = now - d->topAt;
-+		double next = (std::floor(t / period) + 1) * period - t;
++		auto nextOf = [t](double period) { return (std::floor(t / period) + 1) * period - t; };
++		double next = nextOf(600);
++		if (mView != HOME)
++		{
++			next = std::min(next, nextOf(200));
++			double g = std::fmod(t, Impl::GLINT_PERIOD), step = Impl::GLINT_SWEEP / 8;
++			next = std::min(next, g < Impl::GLINT_SWEEP ? (std::floor(g / step) + 1) * step - g : Impl::GLINT_PERIOD - g);
++		}
 +		return (int)std::ceil(next);
 +	}
 +
@@ -3450,10 +3889,10 @@ index 00000000..d7122e31
 +}
 diff --git a/es-app/src/rnds/RndsUI.h b/es-app/src/rnds/RndsUI.h
 new file mode 100644
-index 00000000..3542b415
+index 00000000..583dd668
 --- /dev/null
 +++ b/es-app/src/rnds/RndsUI.h
-@@ -0,0 +1,152 @@
+@@ -0,0 +1,158 @@
 +#pragma once
 +// ROCKNIXDS rnds engine: the ROCKNIXDS menu mockup (mockup/index.html) as a native two-screen UI. Three views: home
 +// (the system shelf), library (a system's games as cartridges) and the ready screen. Layout, colours, fonts and
@@ -3486,16 +3925,20 @@ index 00000000..3542b415
 +		bool hasResume = false;		// a game to show on the "last played" chip
 +		std::string resumeEyebrow;	// "Last played"
 +		std::string resumeTitle;
-+		std::string resumeBox;
++		std::string resumeBox;		// the chip's cartridge: box cover, the real cart scan, the label art (see GameInfo)
++		std::string resumeCart, resumeLabel;
 +	};
 +
 +	struct GameInfo
 +	{
 +		std::string title;
 +		std::string sub;		// bubble subtitle: "Role-playing · 2009"
-+		std::string line;		// top caption: "Role-playing · 2009. 14 plays · Yesterday · 22h 10m."
-+		std::string box;		// box art inside the cartridge
-+		std::string snap;		// screenshot on the top screen
++		std::string plays;		// top screen stats: "14", "Yesterday", "22h 10m"
++		std::string last;
++		std::string time;
++		std::string box;		// the 2D box cover (top screen)
++		std::string cart;		// the real cartridge scan (its label art fills the drawn cartridge)
++		std::string label;		// label art made from the cover (the media tool's "boxback"), when there is no scan
 +		int achA = 0, achB = 0;	// unlocked / total
 +		std::string achLabel;	// "28 / 50 achievements" (lower case; drawn upper)
 +		bool fav = false;
@@ -3523,6 +3966,7 @@ index 00000000..3542b415
 +		virtual void toggleSystemFav(int sys) = 0;
 +		virtual void toggleGameFav(int game) = 0;
 +		virtual int resumeGame(int sys) = 0;	// library index of the system's resume game, opening that list; -1 none
++		virtual void cue(const std::string& name) {}	// a theme sound for a moment of an animation ("insert")
 +	};
 +
 +	// ---- drawing ------------------------------------------------------------------------------------------------------
@@ -3566,7 +4010,8 @@ index 00000000..3542b415
 +	public:
 +		enum View { HOME, LIBRARY, LAUNCH };
 +
-+		UI(Source* src, Backend* be, const std::string& assetDir, float scale);
++		// variant: "dark" or "light" (the theme's palette)
++		UI(Source* src, Backend* be, const std::string& assetDir, float scale, const std::string& variant = "dark");
 +		~UI();
 +
 +		// state changes driven by the host

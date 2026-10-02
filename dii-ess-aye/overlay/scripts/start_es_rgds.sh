@@ -46,7 +46,7 @@ REVEAL_DELAY=1          # stock ES only: after it answers its API, before its wi
 # the Plus). Any other theme is drawn for one screen, so it gets stock ROCKNIX's layout: ES fullscreen on the
 # top panel, the bottom panel off. theme-changed.sh restarts ES when the choice switches between the two.
 # Dark and light share the canvas, so that switch does not restart ES. Keep the list in sync with it.
-DUAL_THEMES="dii-ess-aye canvas-ds rocknixds-dark rocknixds-light rocknixds-pixel"
+DUAL_THEMES="dii-ess-aye canvas-ds rocknixds-pixel-dark rocknixds-pixel-light"
 THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
 if [ -z "$THEME_SET" ] || case " $DUAL_THEMES " in *" $THEME_SET "*) true ;; *) false ;; esac; then
     ES_ARGS="--resolution $CANVAS_W $PH"
@@ -98,6 +98,8 @@ SPLASH_THEME=$THEME_SET
 case " $DUAL_THEMES " in *" $SPLASH_THEME "*) ;; *) SPLASH_THEME=dii-ess-aye ;; esac
 SPLASH_DIR=/storage/.config/emulationstation/themes/$SPLASH_THEME/assets/images/splash
 [ -d "$SPLASH_DIR" ] || SPLASH_DIR=/storage/.config/emulationstation/themes/dii-ess-aye/assets/images/splash
+# a theme's own splash in its folder (ROCKNIXDS Pixel: rgds-splash.png, rgds-splash-2048x768.png for the Plus) wins
+[ -f /storage/.config/emulationstation/themes/$SPLASH_THEME/rgds-splash.png ] && SPLASH_DIR=/storage/.config/emulationstation/themes/$SPLASH_THEME
 SPLASH=$SPLASH_DIR/rgds-splash.png
 SPLASH_G=1280,480
 if [ "$PW" -gt 640 ]; then

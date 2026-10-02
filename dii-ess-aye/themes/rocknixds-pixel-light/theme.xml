@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    ROCKNIXDS Pixel Light: the ROCKNIXDS menu mockup (pixel shelf, cartridges, ready screen) on both screens of the
+    RG DS and the RG DS Plus. The rnds engine in ROCKNIXDS's EmulationStation (es-rgds-rnds.patch) draws the system
+    shelf, the game list and the ready screen; everything it uses is in rocknixds-pixel-dark's ./rnds (the two
+    themes share it). This file switches the engine on, picks its palette, gives it its sounds and styles ES's own menus.
+-->
+<theme defaultTransition="instant" defaultView="gamecarousel">
+    <formatVersion>7</formatVersion>
+
+    <!-- Stock EmulationStation has no rnds engine: when the launcher has to run it (a ROCKNIX release the patched ES
+         doesn't link against), it shows dii-ess-aye's layout from here instead. The patched ES draws every view
+         with the engine and skips this include (rndsFallback). The installer links ./assets to dii-ess-aye's. -->
+    <include rndsFallback="true">./../dii-ess-aye/theme-rgds.xml</include>
+
+    <view name="rnds">
+        <!-- the engine finds its folder from this picture -->
+        <image name="assets" extra="false">
+            <path>./../rocknixds-pixel-dark/rnds/game_slot.png</path>
+        </image>
+        <text name="palette" extra="false">
+            <text>light</text>
+        </text>
+        <!-- the DSi sounds of the upstream dii-ess-aye theme (the installer links ./assets/sounds to them) -->
+        <sound name="scroll">
+            <path>./assets/sounds/scroll.wav</path>
+        </sound>
+        <sound name="launch">
+            <path>./assets/sounds/launch.wav</path>
+        </sound>
+        <!-- the cartridge clicking into the console on the ready screen -->
+        <sound name="insert">
+            <path>./../rocknixds-pixel-dark/rnds/sounds/insert.wav</path>
+        </sound>
+    </view>
+
+    <!-- ES's own clock, battery and controller indicators: the engine's status bar shows them -->
+    <view name="screen">
+        <controllerActivity name="controllerActivity">
+            <visible>false</visible>
+        </controllerActivity>
+        <batteryIndicator name="batteryIndicator">
+            <visible>false</visible>
+        </batteryIndicator>
+        <text name="clock">
+            <pos>1 1</pos>
+        </text>
+    </view>
+
+    <!-- ES's menus in the mockup's colours and font -->
+    <view name="menu">
+        <menuBackground name="menubg">
+            <color>EEF2F6FF</color>
+            <scrollbarColor>B9C4D0FF</scrollbarColor>
+        </menuBackground>
+
+        <menuText name="menutext, menufooter">
+            <fontSize>0.0375</fontSize>
+            <fontPath>./../rocknixds-pixel-dark/rnds/fonts/PixelifySans-Regular.ttf</fontPath>
+            <color>1D2733FF</color>
+            <selectedColor>FFFFFFFF</selectedColor>
+            <selectorColor>1A6EA3FF</selectorColor>
+            <separatorColor>D6DDE6FF</separatorColor>
+        </menuText>
+
+        <menuText name="menutitle">
+            <fontSize>0.0458</fontSize>
+            <fontPath>./../rocknixds-pixel-dark/rnds/fonts/PixelifySans-Medium.ttf</fontPath>
+            <color>1D2733FF</color>
+            <selectedColor>FFFFFFFF</selectedColor>
+            <selectorColor>1A6EA3FF</selectorColor>
+            <separatorColor>D6DDE6FF</separatorColor>
+        </menuText>
+
+        <menuTextSmall name="menutextsmall">
+            <fontSize>0.0333</fontSize>
+            <fontPath>./../rocknixds-pixel-dark/rnds/fonts/PixelifySans-Regular.ttf</fontPath>
+            <color>66758AFF</color>
+        </menuTextSmall>
+
+        <menuGroup name="menugroup">
+            <fontSize>0.0333</fontSize>
+            <fontPath>./../rocknixds-pixel-dark/rnds/fonts/PixelifySans-Medium.ttf</fontPath>
+            <color>1A6EA3FF</color>
+            <backgroundColor>FFFFFFFF</backgroundColor>
+            <separatorColor>D6DDE6FF</separatorColor>
+        </menuGroup>
+    </view>
+</theme>

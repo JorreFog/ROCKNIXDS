@@ -50,9 +50,10 @@ is no Plus release yet. So the merges can land before the releases are published
 >
 > For the Anbernic RG DS. RG DS Plus owners: take **v1.5-plus** (the installer and the updater do that for you).
 >
-> - ROCKNIXDS Pixel: a new theme drawn by its own engine. A pixel-art shelf of systems, games as cartridges,
->   a ready screen and the stats of every system and game, with springy, stepped pixel animations.
-> - Dark and light ROCKNIXDS themes, and canvas-ds as a second dual-screen theme.
+> - ROCKNIXDS Pixel, light and dark: a new theme drawn by its own engine. A pixel-art shelf of systems, games as
+>   cartridges with their real label art, the bobbing box cover on the top screen, and a cartridge that clicks into
+>   the console when a game starts. Pixel Light is the theme after the update.
+> - canvas-ds as a second dual-screen theme.
 > - The exit hotkey saves your place, and the next start resumes there (*resume on quit*, on by default).
 > - Power profiles per system or game: balanced (816–1416 MHz), performance, battery saver.
 > - The CPU clock remembers each game. DS games always run on the governor it needs. No more stutter storms.
@@ -69,7 +70,7 @@ is no Plus release yet. So the merges can land before the releases are published
 >
 > The first stable ROCKNIXDS for the Anbernic RG DS Plus: everything in 1.5, sized for the Plus's 1024x768 panels.
 >
-> - ROCKNIXDS Pixel at 1.6x, the dark and light ROCKNIXDS themes and canvas-ds on both panels.
+> - ROCKNIXDS Pixel (light and dark) at 1.6x, and canvas-ds, on both panels.
 > - DS games at full speed on the Plus: DraStic's emulation thread on a CPU of its own, its helper threads spread
 >   over the others, a later latch for the Plus's bottom panel, and PipeWire at the 48 kHz its speaker amp runs.
 > - Resume on quit, power profiles (battery saver runs 1104–1416 MHz on the Plus), the per-game CPU clock memory.
