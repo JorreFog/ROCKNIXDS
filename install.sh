@@ -534,6 +534,7 @@ if [ -f $SYSCFG ]; then
     esac
 fi
 [ -f $SYSCFG ] && { grep -q '^rocknixds.autocheck=' $SYSCFG || set_cfg rocknixds.autocheck 1; }
+mkdir -p /storage/.config/system.d
 cp "$SRC/dsflip/device/rocknixds-update-check.service" "$SRC/dsflip/device/rocknixds-update-check.timer" /storage/.config/system.d/
 mkdir -p /storage/.config/system.d/timers.target.wants
 ln -sf ../rocknixds-update-check.timer /storage/.config/system.d/timers.target.wants/rocknixds-update-check.timer
