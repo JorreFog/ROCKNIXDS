@@ -36,49 +36,19 @@ the Plus's releases on a Plus.
    `VERSION` is `1.5`.
 2. RG DS Plus: merge the Plus release branch (based on `plus-beta`; `VERSION` is `1.5-plus`) into `plus-beta`.
 3. Check CI on both (`check` and `unit tests`).
-4. Publish the release **`v1.5-plus`** from `plus-beta` (not a pre-release), with the notes below.
-5. Publish the release **`v1.5`** from `main` (not a pre-release), with the notes below. It becomes "latest".
+4. Push the tag **`v1.5-plus`** at `plus-beta`'s head; the release workflow publishes it (not a pre-release).
+5. Then push the tag **`v1.5`** at `main`'s head; the workflow publishes it and it becomes "latest".
 6. On one handheld of each kind, run the README command and check that *Updates & downloads > ROCKNIXDS* says
    "up to date". Then switch a beta handheld to stable and check that it is offered its own release.
 
 Before main's installer finds `v1.5`, it still installs `v1.4` (the newest RG DS release), and a Plus is told there
 is no Plus release yet. So the merges can land before the releases are published.
 
-## Release notes: v1.5 (RG DS)
+## Release notes
 
-> **ROCKNIXDS 1.5: a new pixel theme, resume where you quit, power profiles, art on the device**
->
-> For the Anbernic RG DS. RG DS Plus owners: take **v1.5-plus** (the installer and the updater do that for you).
->
-> - ROCKNIXDS Pixel, light and dark: a new theme drawn by its own engine. A pixel-art shelf of systems, games as
->   cartridges with their real label art, the bobbing box cover on the top screen, and a cartridge that clicks into
->   the console when a game starts. Pixel Light is the theme after the update.
-> - canvas-ds as a second dual-screen theme.
-> - The exit hotkey saves your place, and the next start resumes there (*resume on quit*, on by default).
-> - Power profiles per system or game: balanced (816–1416 MHz), performance, battery saver.
-> - The CPU clock remembers each game. DS games always run on the governor it needs. No more stutter storms.
-> - Game art and RetroAchievements strips are fetched and kept up to date on the handheld itself.
-> - Updates from the menu, each handheld to its own release. Settings that break ROCKNIXDS are hidden.
-> - Optional performance logs (asked once), an in-game volume card, and a faster way back to the menu.
->
-> Install or upgrade: `curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh | sh`
-> (from 1.5 on, *Updates & downloads > ROCKNIXDS*). Built for ROCKNIX 20260901.
-
-## Release notes: v1.5-plus (RG DS Plus)
-
-> **ROCKNIXDS 1.5 for the RG DS Plus**
->
-> The first stable ROCKNIXDS for the Anbernic RG DS Plus: everything in 1.5, sized for the Plus's 1024x768 panels.
->
-> - ROCKNIXDS Pixel (light and dark) at 1.6x, and canvas-ds, on both panels.
-> - DS games at full speed on the Plus: DraStic's emulation thread on a CPU of its own, its helper threads spread
->   over the others, a later latch for the Plus's bottom panel, and PipeWire at the 48 kHz its speaker amp runs.
-> - Resume on quit, power profiles (battery saver runs 1104–1416 MHz on the Plus), the per-game CPU clock memory.
-> - Game art and RetroAchievements strips on the device, updates from the menu, the volume indicator in the menus.
->
-> Install or upgrade: `curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh | sh`
-> (the same command as the RG DS: it installs this release on a Plus). Plus beta testers stay on the beta channel
-> unless they switch to stable in *Updates & downloads > ROCKNIXDS*.
+[`docs/releases/v1.5.md`](releases/v1.5.md) and [`docs/releases/v1.5-plus.md`](releases/v1.5-plus.md). Pushing a
+`v*` tag runs [`.github/workflows/release.yml`](../.github/workflows/release.yml), which publishes the release with
+that tag's notes file and the Pixel images attached. A `-plus` tag never becomes "latest".
 
 ## Known before release
 

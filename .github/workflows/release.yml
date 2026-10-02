@@ -1,0 +1,35 @@
+# Publishes the GitHub release for a pushed version tag that has notes, with docs/releases/<tag>.md as its notes (the file's first
+# line, "# <title>", is the release's name) and the README's Pixel images attached. A tag ending in -plus is the RG DS
+# Plus's release and never becomes "latest": the 1.5 betas' updaters read releases/latest as the RG DS's release.
+name: release
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Notes
+        id: notes
+        run: |
+          f="docs/releases/$GITHUB_REF_NAME.md"
+          # no notes file: a tag released by hand (the betas), nothing to do here
+          if [ ! -f "$f" ]; then echo "skip=1" >> "$GITHUB_OUTPUT"; echo "no $f"; exit 0; fi
+          echo "name=$(head -n1 "$f" | sed 's/^# *//')" >> "$GITHUB_OUTPUT"
+          tail -n +2 "$f" > body.md
+      - uses: softprops/action-gh-release@v2
+        if: steps.notes.outputs.skip != '1'
+        with:
+          name: ${{ steps.notes.outputs.name }}
+          body_path: body.md
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          make_latest: ${{ !endsWith(github.ref_name, '-plus') && !contains(github.ref_name, '-beta') && !contains(github.ref_name, '-alpha') }}
+          files: |
+            docs/img/demo-light.webp
+            docs/img/demo-dark.webp
+            docs/img/pixel-*.png

@@ -5,32 +5,48 @@
   </picture>
 </p>
 
-<p align="center"><b>Full-speed 2× DraStic and a DSi-style dual-screen frontend for the Anbernic RG DS on ROCKNIX.</b></p>
+<p align="center"><b>Full-speed 2× DraStic and ROCKNIXDS Pixel, a dual-screen frontend with its own engine, for the
+Anbernic RG DS and RG DS Plus on ROCKNIX.</b></p>
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/img/demo-dark.webp">
-    <img src="docs/img/demo-light.webp" width="372" alt="Animation: the DSi-style menu scrolling through systems and the DS game list on both screens, then Pokémon HeartGold resuming where it was quit (a 'Resumed where you left off' pop-up) and the player walking">
+    <img src="docs/img/demo-light.webp" width="372" alt="Animation: ROCKNIXDS Pixel scrolling the system shelf on the bottom screen while the top screen shows the system's stats, opening the Nintendo DS library with the box cover bobbing on the top screen, then starting Mario Kart DS: the cartridge slides into the console">
   </picture>
 </p>
-<p align="center"><sub>Recorded on the device: the menu and game list, then HeartGold picking up where the exit hotkey left it (new in 1.5).</sub></p>
+<p align="center"><sub>ROCKNIXDS Pixel, new in 1.5: the system shelf, the DS library, and a cartridge clicking into the console as the game starts. Pixel light here, Pixel dark on a dark page.</sub></p>
 
 <p align="center">
-  <img src="docs/img/es-home-ds.png" width="265" alt="Main menu: the selected system with its icon, counts and play stats on the top screen, system carousel on the bottom">
-  <img src="docs/img/es-games-ds.png" width="265" alt="Game list: 3D box, screenshot and RetroAchievements progress on top, real DS cartridges on the bottom">
-  <img src="docs/img/gameplay-hires-ds.png" width="265" alt="Pokémon HeartGold at 2x internal resolution on both panels">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/img/pixel-dark-home.png">
+    <img src="docs/img/pixel-light-home.png" width="248" alt="Home: the selected system with its pixel icon, games, played and time, and the last played game on the top screen; the system shelf on the bottom">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/img/pixel-dark-games.png">
+    <img src="docs/img/pixel-light-games.png" width="248" alt="Game list: the box cover on the top screen with title, genre, year, plays, last played, time and achievements; DS cartridges with their real label art on the bottom">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/img/pixel-dark-insert.png">
+    <img src="docs/img/pixel-light-insert.png" width="248" alt="Starting a game: the cartridge clicks into the console on the bottom screen">
+  </picture>
 </p>
-<p align="center"><sub>The main menu, the game list, and Pokémon HeartGold at 2× internal resolution (captured from the panels' scanout buffers).</sub></p>
+<p align="center"><sub>Home, the game list, and the ready screen (rendered by the theme engine's test harness; on the Plus it's drawn at 1.6×).</sub></p>
+
+<p align="center">
+  <img src="docs/img/gameplay-hires-ds.png" width="248" alt="Pokémon HeartGold at 2x internal resolution on both panels">
+</p>
+<p align="center"><sub>Pokémon HeartGold at 2× internal resolution (captured from the panels' scanout buffers).</sub></p>
 
 The Anbernic RG DS is a clamshell handheld with two 640×480 touch panels and an RK3566 (4× Cortex-A55,
-Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [ROCKNIX](https://rocknix.org) install:
+Mali-G52); the RG DS Plus has two 1024×768 panels. ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [ROCKNIX](https://rocknix.org) install:
 
 - **`libdsflip`**, a replacement display path for DraStic. It sends each DS screen straight to its own panel,
   so 2× internal resolution runs at full speed, with frame pacing that doesn't stutter. It also adds
   shaders, the microphone and RetroAchievements to standalone DraStic. It now also lives on its own as
   [SuperDrastic](https://github.com/JorreFog/SuperDrastic), for any Linux firmware.
-- **`dii-ess-aye`**, a DSi-style EmulationStation theme spread across both screens, with real DS cartridges,
-  3D boxes and RetroAchievements progress, and a patched ES build.
+- **ROCKNIXDS Pixel** (new in 1.5), a pixel-art frontend across both screens, in light and dark: a system shelf,
+  DS cartridges wearing their real label art, box covers, play stats and RetroAchievements progress, drawn by its
+  own engine inside a patched EmulationStation. The DSi-style **`dii-ess-aye`** theme is still there too.
 - The **panel timing fix**, the older **vsync pacing shim**, and the measurement tools (including a DS
   stress-test ROM) behind all the numbers below.
 
@@ -55,17 +71,24 @@ RG DS Plus.
   - The volume indicator works in the menus, and SuperDrastic draws its own while a game runs.
 - **ROCKNIXDS Pixel, the new theme, in light and dark.** The ROCKNIXDS menu mockup on both screens, drawn by its
   own engine inside the patched ES, at 1.6x on the Plus (`es-rgds-rnds.patch`):
-  - a pixel-art system shelf with an icon and a colour for every system;
-  - games as DS cartridges wearing their real card's label art;
-  - the game list's top screen: the box cover bobbing on its sheet, with a shine that sweeps across it, next to the
-    title, genre and year, plays, last played, time and the RetroAchievements progress;
-  - a ready screen where the cartridge clicks into the console before the game starts;
-  - a boot splash in the same look, in the Pixelify Sans pixel font throughout.
+  - a pixel-art system shelf that glides like a conveyor, with 31 hand-drawn icons and a colour for every system;
+  - games as DS cartridges wearing their real card's label art, edge to edge in the cartridge's label window
+    (the scan's white header and code strip trimmed off; the box cover until a card scan exists);
+  - the game list's top screen: the box cover bobbing above its shadow, with a shine that sweeps across it every
+    few seconds, next to the title (balanced over two lines), genre and year, plays, last played, time played and
+    the RetroAchievements progress;
+  - a title bubble of fixed height, so long names never push the layout around;
+  - a ready screen where the cartridge lifts, slides and clicks into the console before the game starts;
+  - chiptune menu sounds for moving, opening, going back, favouriting and the cartridge's click (switched on by
+    the installer; *Sound settings > Enable navigation sounds*);
+  - a boot splash in the same look, and the Pixelify Sans pixel font throughout.
 
   L/R or the d-pad move, A opens, B goes back, X resumes the system's last game, and Y favourites the system (home)
   or the game (game list). You can also tap or swipe the bottom screen. *rocknixds-pixel-light* is the theme after
   installing or updating to 1.5; *rocknixds-pixel-dark* is in the theme menu. An idle menu draws only when an
   animation steps. The 1.5 betas' *rocknixds-dark* and *rocknixds-light* skins are gone.
+
+  <p align="center"><img src="docs/img/pixel-icons.png" width="760" alt="The 31 pixel-art system icons: apps, arcade, book, cart, collection, computer, console, disc, fantasy, favourites, gamepad, Game Boy, Game Boy Advance, Game Boy Color, settings, handheld, joystick, Mega Drive, moon, music, Nintendo 64, Nintendo DS, NES, phone, picture, ports, PlayStation, Super Nintendo, sword, tools, video"></p>
 - **Pick up where you left off.** The exit hotkey saves your place and quits. The save is a savestate of its own,
   never one of your slots. The next start of that game resumes there, once. ES: the DS system's or game's *resume
   on quit* option (on by default). With it off, the hotkey quits as before. A resume state older than the game's
@@ -152,10 +175,13 @@ RG DS Plus.
   game lists fill the row.
 
 <p align="center">
-  <img src="docs/img/es-splash-ds.png" width="265" alt="The boot splash: ROCKNIXDS logo on top, a DS card and Loading on the bottom">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/img/pixel-dark-splash.png">
+    <img src="docs/img/pixel-light-splash.png" width="265" alt="The ROCKNIXDS Pixel boot splash: the ROCKNIXDS logo on top, a cartridge and Loading on the bottom">
+  </picture>
   <img src="docs/img/stress-rom-ds.png" width="265" alt="The dsstress ROM: 3D stress scene on top, level bar on the bottom">
 </p>
-<p align="center"><sub>Left: the boot splash while ES loads. Right: <code>dsstress</code>, the stress ROM used for the benchmarks.</sub></p>
+<p align="center"><sub>Left: the ROCKNIXDS Pixel boot splash while ES loads. Right: <code>dsstress</code>, the stress ROM used for the benchmarks.</sub></p>
 
 ---
 
@@ -173,8 +199,9 @@ RG DS Plus, v1.5 on the RG DS). `RGDS_BRANCH=beta` in front of `sh` installs the
 Plus), and a tag (`RGDS_BRANCH=v1.5-plus`) installs that release. After that, *Updates & downloads > ROCKNIXDS* in
 the menu keeps it up to date.
 
-It installs the dii-ess-aye theme (downloaded from [upstream](https://github.com/beebono/dii-ess-aye) at the pinned
-commit, then this repo's overlay), the patched EmulationStation, `libdsflip` as the default DraStic launcher, and
+It installs the ROCKNIXDS Pixel themes (light, the default, and dark), the dii-ess-aye theme (downloaded from
+[upstream](https://github.com/beebono/dii-ess-aye) at the pinned commit, then this repo's overlay), the patched
+EmulationStation, `libdsflip` as the default DraStic launcher, and
 switches on 2× resolution for DS. It also adds the ds-* shaders to ES's shader menu, and keeps them there when a
 ROCKNIX update changes that menu. Everything it replaces is backed up first under `/storage/rgds-rocknix-backup/`
 (the folder keeps its old name so earlier installs can still be undone).
@@ -218,7 +245,7 @@ To go back to the stock DraStic display path without uninstalling: `touch /stora
 | Display cost per frame on DraStic's main thread | ~3.6 ms (texture upload + GL + sway) | **0.07–0.29 ms** |
 | Frame pacing at 60 fps (HeartGold at 2×, walking) | 1550 dropped frames in 5 min (next-vblank presentation) | **~0.13 dropped frames/s (about 1 every 8 s); both screens always flip in the same refresh** |
 | Touch in DraStic | stock sway mapping lands on the wrong area | **calibrated to the pixel** |
-| Frontend | single-screen stock theme | **dual-screen DSi-style theme, patched ES, boot splash** |
+| Frontend | single-screen stock theme | **ROCKNIXDS Pixel (its own engine in a patched ES, light and dark) and a DSi-style theme, both dual-screen** |
 | RetroAchievements in standalone DraStic | not supported | **supported (softcore), pop-ups on the top screen** |
 
 <p align="center"><img src="docs/img/stress-ramp.svg" width="760" alt="fps per stress level: stock vs no-display vs libdsflip"></p>
