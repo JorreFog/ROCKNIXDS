@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="608" height="340" viewBox="0 0 608 340">
-<defs><linearGradient id="hh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c3a4a"/><stop offset="1" stop-color="#1a222c"/></linearGradient>
-<linearGradient id="well" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#10161c"/><stop offset="1" stop-color="#0c1016"/></linearGradient></defs>
+<defs><linearGradient id="hh" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0" stop-color="#2c3a4a"/><stop offset="1" stop-color="#1a222c"/></linearGradient>
+<linearGradient id="well" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0" stop-color="#10161c"/><stop offset="1" stop-color="#0c1016"/></linearGradient></defs>
 <path d="M20,6 H588 A18,18 0 0 1 606,24 V320 A18,18 0 0 1 588,338 H20 A18,18 0 0 1 2,320 V24 A18,18 0 0 1 20,6 Z" fill="#000000" fill-opacity="0.40"/>
 <path d="M20,2 H588 A18,18 0 0 1 606,20 V316 A18,18 0 0 1 588,334 H20 A18,18 0 0 1 2,316 V20 A18,18 0 0 1 20,2 Z" fill="url(#hh)" stroke="#070a0e" stroke-width="2"/>
 <path d="M20,4 H588 A16,16 0 0 1 604,20 V316 A16,16 0 0 1 588,332 H20 A16,16 0 0 1 4,316 V20 A16,16 0 0 1 20,4 Z" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.2"/>

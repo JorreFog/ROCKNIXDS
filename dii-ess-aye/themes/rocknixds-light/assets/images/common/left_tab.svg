@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="160" height="72" viewBox="0 0 160 72">
-<defs><linearGradient id="tab" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e4edf5"/></linearGradient></defs>
+<defs><linearGradient id="tab" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e4edf5"/></linearGradient></defs>
 <g>
 <path d="M0,10 H118 A30,30 0 0 1 148,40 V72 H0 Z" fill="url(#tab)"/>
 <path d="M0,11 H118 A29,29 0 0 1 147,40 V72" fill="none" stroke="#8aa0b4" stroke-width="2"/>

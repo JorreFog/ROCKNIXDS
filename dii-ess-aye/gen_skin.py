@@ -154,9 +154,23 @@ def write(name, w, h, body):
         f.write(svg)
 
 
+def gcoord(v):
+    """NanoSVG treats a bare number on an objectBoundingBox gradient as pixels.
+
+    x2="0" y2="1" is therefore a one-pixel ramp, and the rest of the shape clamps
+    to the last stop. 0 and 1 are the edges of the shape's box, which it applies
+    only when they are percentages.
+    """
+    if v == 0:
+        return "0%"
+    if v == 1:
+        return "100%"
+    return str(v)
+
+
 def grad(id_, stops, x2=0, y2=1):
     s = "".join(f'<stop offset="{o}" stop-color="{c}"/>' for o, c in stops)
-    return f'<linearGradient id="{id_}" x1="0" y1="0" x2="{x2}" y2="{y2}">{s}</linearGradient>'
+    return (f'<linearGradient id="{id_}" x1="0%" y1="0%" x2="{gcoord(x2)}" y2="{gcoord(y2)}">{s}</linearGradient>')
 
 
 # --- background: 1920x480 canvas (three 640px screens), DSi-style faint grid ---
@@ -234,7 +248,7 @@ write("menu_slot.svg", 125, 140, f'''<defs>{grad("ms", [(0, SLOT_HI), (1, SLOT_L
 # --- carousel_tray: the band the system carousel sits on, across the whole bottom screen (640x180, y232..412).
 #     Full width because the icon row itself spans x8..632: a box with ends (it was 600 wide) left the outer
 #     sockets hanging over its edges, and the icons scroll in from the panel edges anyway ---
-write("carousel_tray.svg", 640, 180, f'''<defs><linearGradient id="cty" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000" stop-opacity="{TRAY_A}"/><stop offset="1" stop-color="#000000" stop-opacity="{TRAY_B}"/></linearGradient></defs>
+write("carousel_tray.svg", 640, 180, f'''<defs><linearGradient id="cty" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0" stop-color="#000000" stop-opacity="{TRAY_A}"/><stop offset="1" stop-color="#000000" stop-opacity="{TRAY_B}"/></linearGradient></defs>
 <rect x="0" y="0" width="640" height="180" fill="url(#cty)"/>
 <path d="M0,0.75 H640 M0,179.25 H640" stroke="{TRAY_STROKE}" stroke-opacity="{TRAY_LINE}" stroke-width="1.5"/>
 <path d="M0,2.5 H640" stroke="{TRAY_STROKE}" stroke-opacity="0.08" stroke-width="1"/>''')
@@ -386,7 +400,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 # --- background split: static gradient + a grid layer the theme drifts slowly ---
 write("background_plain.svg", 1920, 480, f'''<defs>{grad("bg", [(0, BG_TOP), (1, BG_BOT)])}
-<radialGradient id="vig" cx="0.5" cy="0.45" r="0.75"><stop offset="0.55" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity="{VIG_OP}"/></radialGradient></defs>
+<radialGradient id="vig" cx="50%" cy="45%" r="75%"><stop offset="0.55" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity="{VIG_OP}"/></radialGradient></defs>
 <rect width="1920" height="480" fill="url(#bg)"/>
 <rect width="640" height="480" fill="url(#vig)"/>
 <rect x="640" width="640" height="480" fill="url(#vig)"/>''')
@@ -422,7 +436,7 @@ else:
     write("distro_logo.svg", round(WW), round(WH), WIDE)
 
 # --- soft light behind the logo (the theme makes it breathe) ---
-write("logo_glow.svg", 560, 240, f'''<defs><radialGradient id="g" cx="0.5" cy="0.5" r="0.5">
+write("logo_glow.svg", 560, 240, f'''<defs><radialGradient id="g" cx="50%" cy="50%" r="50%">
 <stop offset="0" stop-color="{ACCENT_HI}" stop-opacity="0.22"/>
 <stop offset="0.45" stop-color="{ACCENT}" stop-opacity="0.08"/>
 <stop offset="1" stop-color="{ACCENT}" stop-opacity="0"/></radialGradient></defs>
@@ -484,8 +498,8 @@ SPLASH = os.path.join(THEME, "assets/images/splash")
 os.makedirs(SPLASH, exist_ok=True)
 grid640 = " ".join([f"M{x},0 V480" for x in range(0, 641, 20)] + [f"M0,{y} H640" for y in range(0, 481, 20)])
 base = f'''<defs>{grad("bg", [(0, BG_TOP), (1, BG_BOT)])}
-<radialGradient id="vig" cx="0.5" cy="0.45" r="0.75"><stop offset="0.55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="{VIG_OP}"/></radialGradient>
-<radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="{ACCENT_HI}" stop-opacity="0.24"/><stop offset="0.45" stop-color="{ACCENT}" stop-opacity="0.09"/><stop offset="1" stop-color="{ACCENT}" stop-opacity="0"/></radialGradient></defs>
+<radialGradient id="vig" cx="50%" cy="45%" r="75%"><stop offset="0.55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="{VIG_OP}"/></radialGradient>
+<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="{ACCENT_HI}" stop-opacity="0.24"/><stop offset="0.45" stop-color="{ACCENT}" stop-opacity="0.09"/><stop offset="1" stop-color="{ACCENT}" stop-opacity="0"/></radialGradient></defs>
 <rect width="640" height="480" fill="url(#bg)"/>
 <path d="{grid640}" stroke="{GRID}" stroke-opacity="{GRID_OP}" stroke-width="1" fill="none"/>
 <rect width="640" height="480" fill="url(#vig)"/>'''

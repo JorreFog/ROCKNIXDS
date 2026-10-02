@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="608" height="360" viewBox="0 0 608 360">
-<defs><linearGradient id="ip" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e8f0f6"/></linearGradient>
-<linearGradient id="scr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e7eef5"/><stop offset="1" stop-color="#d5e0ea"/></linearGradient></defs>
+<defs><linearGradient id="ip" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e8f0f6"/></linearGradient>
+<linearGradient id="scr" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0" stop-color="#e7eef5"/><stop offset="1" stop-color="#d5e0ea"/></linearGradient></defs>
 <path d="M20,6 H588 A18,18 0 0 1 606,24 V340 A18,18 0 0 1 588,358 H20 A18,18 0 0 1 2,340 V24 A18,18 0 0 1 20,6 Z" fill="#000000" fill-opacity="0.14"/>
 <path d="M20,2 H588 A18,18 0 0 1 606,20 V336 A18,18 0 0 1 588,354 H20 A18,18 0 0 1 2,336 V20 A18,18 0 0 1 20,2 Z" fill="url(#ip)" stroke="#8aa0b4" stroke-width="2"/>
 <path d="M20,4 H588 A16,16 0 0 1 604,20 V336 A16,16 0 0 1 588,352 H20 A16,16 0 0 1 4,336 V20 A16,16 0 0 1 20,4 Z" fill="none" stroke="#1a2330" stroke-opacity="0.16" stroke-width="1.2"/>

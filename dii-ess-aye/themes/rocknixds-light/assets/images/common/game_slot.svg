@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="100" height="104" viewBox="0 0 100 104">
-<defs><linearGradient id="card" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#606166"/><stop offset="0.5" stop-color="#525358"/><stop offset="1" stop-color="#45464a"/></linearGradient>
-<linearGradient id="paper" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbfbf8"/><stop offset="1" stop-color="#ecebe6"/></linearGradient></defs>
+<defs><linearGradient id="card" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0" stop-color="#606166"/><stop offset="0.5" stop-color="#525358"/><stop offset="1" stop-color="#45464a"/></linearGradient>
+<linearGradient id="paper" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0" stop-color="#fbfbf8"/><stop offset="1" stop-color="#ecebe6"/></linearGradient></defs>
 <path d="M5,0 H95 A5,5 0 0 1 100,5 V99 A5,5 0 0 1 95,104 H11 L0,93 V66 H1.6 V55 H0 V5 A5,5 0 0 1 5,0 Z M13,21 A1,1 0 0 0 12,22 V86 A1,1 0 0 0 13,87 H87 A1,1 0 0 0 88,86 V22 A1,1 0 0 0 87,21 Z" fill="url(#card)" fill-rule="nonzero"/>
 <path d="M5.5,1 H94.5" stroke="#ffffff" stroke-opacity="0.22" stroke-width="1.2"/>
 <path d="M1.1,6 V54 M1.1,67 V92" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1"/>
