@@ -35,17 +35,17 @@ add_ours() {
             print ind "<choice name=\"ds-grid + NDS color\" value=\"ds-grid-color\" />"
             print ind "<choice name=\"ds-grid-2x (pixel-perfect + even DS grid)\" value=\"ds-grid-2x\" />"
             print ind "<choice name=\"ds-fsr (FSR 1.0, smooth edges)\" value=\"ds-fsr\" />"
-            print ind "<choice name=\"ds-integer (pixel-perfect, bezel if needed)\" value=\"ds-integer\" />"
+            print ind "<choice name=\"ds-integer (pixel-perfect)\" value=\"ds-integer\" />"
             shader = 0; added = 1; resume = 1
             print; fi = ind; sub(/  $/, "", fi)
             print fi "<feature name=\"resume on quit\">"
-            print ind "<choice name=\"on (save your place on the exit hotkey)\" value=\"1\" />"
+            print ind "<choice name=\"on\" value=\"1\" />"
             print ind "<choice name=\"off\" value=\"0\" />"
             print fi "</feature>"
             print fi "<feature name=\"power profile\">"
-            print ind "<choice name=\"balanced (up to 1416 MHz, +1 frame latency)\" value=\"balanced\" />"
-            print ind "<choice name=\"performance (up to 1992 MHz, lowest latency)\" value=\"performance\" />"
-            print ind "<choice name=\"battery saver (1104 MHz, +2 frames latency)\" value=\"battery\" />"
+            print ind "<choice name=\"balanced\" value=\"balanced\" />"
+            print ind "<choice name=\"performance\" value=\"performance\" />"
+            print ind "<choice name=\"battery saver\" value=\"battery\" />"
             print fi "</feature>"
             next
         }
