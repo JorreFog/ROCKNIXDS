@@ -141,8 +141,8 @@ struct MockSource : Source
 		GameInfo r;
 		r.title = g.title;
 		r.sub = g.genre + " · " + g.year;
-		r.line = g.genre + " · " + g.year + ". " + (g.plays ? std::to_string(g.plays) + " plays" : std::string("Never played")) + " · " + g.last + " · " + g.time + ".";
-		r.box = art + g.slug + "-box.jpg"; r.snap = art + g.slug + "-snap.jpg";
+		r.plays = std::to_string(g.plays); r.last = g.last; r.time = g.time;
+		r.box = art + g.slug + "-box.jpg";
 		r.achA = g.a; r.achB = g.b; r.achLabel = std::to_string(g.a) + " / " + std::to_string(g.b) + " achievements";
 		return r;
 	}
@@ -167,7 +167,7 @@ int main(int argc, char** argv)
 	float scale = atof(argv[3]);
 	MockSource src(argv[2]);
 	CpuBackend be((int)std::lround(640 * scale), (int)std::lround(480 * scale));
-	UI ui(&src, &be, argv[1], scale);
+	UI ui(&src, &be, argv[1], scale, argc > 6 ? argv[6] : "dark");
 	double now = 100000;
 	std::string script = argv[5], prefix = argv[4];
 	std::stringstream ss(script);

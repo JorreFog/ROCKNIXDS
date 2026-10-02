@@ -59,15 +59,15 @@ else
 fi
 
 # Keep a dual-screen theme the user already picked. A fresh install, or any other
-# theme, starts on dii-ess-aye; dark and light are in the theme menu.
+# theme, starts on ROCKNIXDS Pixel Light; the others are in the theme menu.
 CURRENT_THEME=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' "$ES_SETTINGS" 2>/dev/null)
 case "$CURRENT_THEME" in
-    dii-ess-aye|canvas-ds|rocknixds-dark|rocknixds-light|rocknixds-pixel) ;;
+    dii-ess-aye|canvas-ds|rocknixds-pixel-dark|rocknixds-pixel-light) ;;
     *)
         if grep -q '<string name="ThemeSet"' "$ES_SETTINGS" 2>/dev/null; then
-            sed -i 's|<string name="ThemeSet" value="[^"]*" />|<string name="ThemeSet" value="dii-ess-aye" />|' "$ES_SETTINGS"
+            sed -i 's|<string name="ThemeSet" value="[^"]*" />|<string name="ThemeSet" value="rocknixds-pixel-light" />|' "$ES_SETTINGS"
         else
-            sed -i 's|</config>|\t<string name="ThemeSet" value="dii-ess-aye" />\n</config>|' "$ES_SETTINGS"
+            sed -i 's|</config>|\t<string name="ThemeSet" value="rocknixds-pixel-light" />\n</config>|' "$ES_SETTINGS"
         fi
         ;;
 esac

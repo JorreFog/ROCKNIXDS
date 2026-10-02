@@ -1,6 +1,6 @@
 # rnds: the engine behind ROCKNIXDS Pixel
 
-ROCKNIXDS Pixel (`../themes/rocknixds-pixel`) is the ROCKNIXDS menu mockup drawn by a native engine in the patched
+ROCKNIXDS Pixel (`../themes/rocknixds-pixel-dark`) is the ROCKNIXDS menu mockup drawn by a native engine in the patched
 EmulationStation (`../es-rgds-rnds.patch`, sources in `es-app/src/rnds/`):
 
 | File | What it is |
@@ -13,10 +13,14 @@ EmulationStation (`../es-rgds-rnds.patch`, sources in `es-app/src/rnds/`):
 The theme's pictures and fonts are made by the scripts here:
 
 ```sh
-python3 gen_fonts.py 'PixelifySans[wght].ttf' ../themes/rocknixds-pixel/rnds/fonts   # static 400/500 + kern table
-node gen_assets.mjs <mockup dir> ../themes/rocknixds-pixel/rnds                       # wifi, battery, logo (Chromium)
-python3 gen_icons.py ../themes/rocknixds-pixel/rnds/icons                             # generic system icons
+python3 gen_fonts.py 'PixelifySans[wght].ttf' ../themes/rocknixds-pixel-dark/rnds/fonts   # static 400/500 + kern table
+node gen_assets.mjs <mockup dir> ../themes/rocknixds-pixel-dark/rnds                       # wifi, battery, logo (Chromium)
+python3 gen_icons.py ../themes/rocknixds-pixel-dark/rnds/icons                             # the drawn system icons
+node gen_splash.mjs ../themes                                                              # both themes' boot splash
 ```
+
+The light theme (`../themes/rocknixds-pixel-light`) has only its `theme.xml` (its palette: `<text name="palette">`)
+and its splash; it uses the dark theme's `rnds/` folder. `logo.svg` is the mockup's logo, for the splash.
 
 `gen_fonts.py` needs fontTools; `gen_assets.mjs` needs Playwright's Chromium. The variable font is
 `ofl/pixelifysans/PixelifySans[wght].ttf` in [google/fonts](https://github.com/google/fonts); the mockup is
@@ -32,15 +36,15 @@ animations finished) and compare:
 python3 test/mockdata.py <mockup dir>/index.html > test/mockdata.inc
 g++ -O2 -std=c++17 -I<es>/es-app/src -I/usr/include/freetype2 -I<stb> test/harness.cpp \
     <es>/es-app/src/rnds/RndsRaster.cpp <es>/es-app/src/rnds/RndsUI.cpp -lfreetype -lpthread -o harness
-./harness ../themes/rocknixds-pixel/rnds <mockup dir> 1   out/ "home 7; wait 2400; shot home-psx"
-./harness ../themes/rocknixds-pixel/rnds <mockup dir> 1.6 out/ "lib 0 0; wait 2400; shot lib-nds"
+./harness ../themes/rocknixds-pixel-dark/rnds <mockup dir> 1   out/ "home 7; wait 2400; shot home-psx"
+./harness ../themes/rocknixds-pixel-dark/rnds <mockup dir> 1.6 out/ "lib 0 0; wait 2400; shot lib-nds"
 compare -metric MAE chrome-home-psx-top.png out/home-psx-top.png null:
 ```
 
 Results when it was written (mean absolute difference over the screen): home 0.25% (top) and 0.33% (bottom), game
 list 0.74% / 0.66% at 1x; 1.7-3% at 1.6x, where Chrome's dither tile and glyph edges round differently. The game
-list's top screen differs on purpose: the screenshot frame takes the screenshot's shape instead of a fixed 520x220
-letterbox.
+list's top screen and the ready screen differ on purpose: the box cover replaces the screenshot, and the cartridge
+goes into the console. (The harness takes a 6th argument, `light`, for the light palette.)
 
 `test/fixture.py` builds a `/storage` with the mockup's systems and games (art, play counts, last played, favourites)
 for running the real ES on a desktop (`--resolution 1920 480 --windowed`, or 3072 768 for the RG DS Plus layout).

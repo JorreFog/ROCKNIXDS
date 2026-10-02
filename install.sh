@@ -158,7 +158,7 @@ es_set() {        # es_set <key> <value> in the live es_settings.cfg
         sed -i "s|<string name=\"$1\" value=\"[^\"]*\" />|<string name=\"$1\" value=\"$2\" />|" $ES_SETTINGS
     else sed -i "s|</config>|\t<string name=\"$1\" value=\"$2\" />\n</config>|" $ES_SETTINGS; fi
 }
-themes_allow() { printf 'dii-ess-aye\ncanvas-ds\nrocknixds-dark\nrocknixds-light\nrocknixds-pixel\n'; }   # pickable in the patched ES
+themes_allow() { printf 'rocknixds-pixel-light\nrocknixds-pixel-dark\ndii-ess-aye\ncanvas-ds\n'; }   # pickable in the patched ES
 es_del() { sed -i "/<string name=\"$1\" /d" $ES_SETTINGS 2>/dev/null; }
 
 # ---- uninstall ---------------------------------------------------------------------------------------
@@ -248,7 +248,8 @@ if [ $UNINSTALL = 1 ]; then
     [ -f $SYSCFG ] && sed -i '/^rocknixds\./d' $SYSCFG      # the update channel and the media and update switches
     [ -e $ES_THEMES/canvas-ds/.rocknixds-commit ] && rm -rf $ES_THEMES/canvas-ds      # the one this installer downloaded
     if [ -e $BACKUP/.theme-installed-by-us ]; then
-        rm -rf $THEME $ES_THEMES/rocknixds-dark $ES_THEMES/rocknixds-light $ES_THEMES/rocknixds-pixel
+        rm -rf $THEME $ES_THEMES/rocknixds-dark $ES_THEMES/rocknixds-light $ES_THEMES/rocknixds-pixel \
+               $ES_THEMES/rocknixds-pixel-dark $ES_THEMES/rocknixds-pixel-light
     fi
     [ -d $BACKUP/theme-previous ] && mv $BACKUP/theme-previous $THEME
     systemctl restart sway.service 2>/dev/null || true; sleep 2
@@ -327,32 +328,17 @@ if [ $THEME_ON = 1 ]; then
         fi
     fi
     chmod +x $THEME/bin/emulationstation $THEME/scripts/*.sh
-    # Two selectable skins of this same layout. Each is a full upstream theme plus the
-    # overlay, then its own colours. Fonts, sounds and system icons are the upstream
-    # copies (symlinked) so the three folders cannot drift apart.
-    for variant in rocknixds-dark rocknixds-light; do
+    # ROCKNIXDS Pixel, dark and light: the menu mockup, drawn by the rnds engine in the patched ES. Everything it draws
+    # is in rocknixds-pixel-dark/rnds (the light theme uses that folder too). Their theme.xml also includes
+    # dii-ess-aye's layout, which only stock ES uses (when the patched ES can't run); assets/ is dii-ess-aye's, for it
+    # and for the DSi sounds. 1.5 betas' rocknixds-dark, rocknixds-light and rocknixds-pixel go.
+    rm -rf $ES_THEMES/rocknixds-dark $ES_THEMES/rocknixds-light $ES_THEMES/rocknixds-pixel
+    for variant in rocknixds-pixel-dark rocknixds-pixel-light; do
         dest=$ES_THEMES/$variant
         rm -rf "$dest"
-        cp -a $WORK/theme "$dest"
-        cp -a "$SRC/dii-ess-aye/overlay/." "$dest/"
-        cp -a "$SRC/dii-ess-aye/themes/$variant/." "$dest/"
-        rm -rf "$dest/assets/fonts" "$dest/assets/sounds" "$dest/assets/images/systems"
-        # The target is resolved from the link's own directory. fonts/ and sounds/
-        # live in <theme>/assets (two levels below the themes folder); system icons
-        # live in <theme>/assets/images (three). "../dii-ess-aye" pointed inside the
-        # variant folder, so the DSi font, sounds and system art never opened.
-        ln -s ../../dii-ess-aye/assets/fonts "$dest/assets/fonts"
-        ln -s ../../dii-ess-aye/assets/sounds "$dest/assets/sounds"
-        ln -s ../../../dii-ess-aye/assets/images/systems "$dest/assets/images/systems"
-        chmod +x "$dest"/scripts/*.sh 2>/dev/null || true
+        cp -a "$SRC/dii-ess-aye/themes/$variant" "$dest"
+        ln -s ../dii-ess-aye/assets "$dest/assets"
     done
-    # ROCKNIXDS Pixel: the menu mockup, drawn by the rnds engine in the patched ES (everything it draws is in rnds/).
-    # Its theme.xml also includes rocknixds-dark's layout, which only stock ES uses (when the patched ES can't run);
-    # assets/ is that theme's, for it and for the DSi sounds.
-    dest=$ES_THEMES/rocknixds-pixel
-    rm -rf "$dest"
-    cp -a "$SRC/dii-ess-aye/themes/rocknixds-pixel" "$dest"
-    ln -s ../rocknixds-dark/assets "$dest/assets"
     touch $BACKUP/.theme-installed-by-us
     # the patched ES offers every theme while this list is missing: write it as soon as the themes are in place
     mkdir -p /storage/.config/rocknixds && themes_allow > /storage/.config/rocknixds/themes.allow
@@ -378,6 +364,12 @@ if [ $THEME_ON = 1 ]; then
     # ES's power saver on "enhanced": an idle menu draws nothing instead of 25-60 frames a second (the patched ES
     # still wakes each minute for the clock). Only if it's on ES's default: a choice made in the menu stays.
     case "$(es_get PowerSaverMode $ES_SETTINGS)" in ""|default) es_set PowerSaverMode enhanced ;; esac
+    # 1.5: ROCKNIXDS Pixel Light is the theme, once (the first install of 1.5 or later; a choice made after that stays,
+    # an uninstall forgets it). The 1.5 betas' rocknixds-dark/-light/-pixel are gone.
+    if [ ! -e /storage/.config/rocknixds/.pixel-default ]; then
+        es_set ThemeSet rocknixds-pixel-light
+        mkdir -p /storage/.config/rocknixds && touch /storage/.config/rocknixds/.pixel-default
+    fi
 fi
 
 # ---- canvas-ds: a second dual-screen theme ---------------------------------------------------------------

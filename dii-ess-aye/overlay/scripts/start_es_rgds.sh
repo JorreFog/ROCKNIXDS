@@ -37,7 +37,7 @@ REVEAL_DELAY=1          # stock ES only: after it answers its API, before its wi
 # forced the 1920 canvas on every theme, stretching them over both screens.) theme-changed.sh restarts ES when the
 # choice switches between the two. Dark and light share the canvas, so that switch does not restart ES.
 # Keep the list in sync with theme-changed.sh.
-DUAL_THEMES="dii-ess-aye canvas-ds rocknixds-dark rocknixds-light rocknixds-pixel"
+DUAL_THEMES="dii-ess-aye canvas-ds rocknixds-pixel-dark rocknixds-pixel-light"
 THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
 if [ -z "$THEME_SET" ] || case " $DUAL_THEMES " in *" $THEME_SET "*) true ;; *) false ;; esac; then
     ES_ARGS="--resolution 1920 480"
@@ -89,6 +89,8 @@ SPLASH_THEME=$THEME_SET
 case " $DUAL_THEMES " in *" $SPLASH_THEME "*) ;; *) SPLASH_THEME=dii-ess-aye ;; esac
 SPLASH=/storage/.config/emulationstation/themes/$SPLASH_THEME/assets/images/splash/rgds-splash.png
 [ -f "$SPLASH" ] || SPLASH=/storage/.config/emulationstation/themes/dii-ess-aye/assets/images/splash/rgds-splash.png
+# a theme's own splash in its folder (ROCKNIXDS Pixel: rgds-splash.png, and rgds-splash-2048x768.png for the RG DS Plus) wins
+[ -f /storage/.config/emulationstation/themes/$SPLASH_THEME/rgds-splash.png ] && SPLASH=/storage/.config/emulationstation/themes/$SPLASH_THEME/rgds-splash.png
 SPLASH_PID=
 if [ -f "$SPLASH" ] && [ -n "$SOCK" ] && command -v swayimg >/dev/null; then
     swayimg -g 1280,480 -s real -c info.mode=off "$SPLASH" >/dev/null 2>&1 &

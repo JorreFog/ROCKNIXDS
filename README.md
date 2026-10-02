@@ -46,17 +46,19 @@ Mali-G52). ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [R
 1.5 comes as two releases: **v1.5** for the RG DS (this one) and **v1.5-plus** for the RG DS Plus. The installer and
 the menu's updater pick the right one for the handheld they run on.
 
-- **ROCKNIXDS Pixel, a new theme drawn by its own engine.** The ROCKNIXDS menu mockup on both screens: a pixel-art
-  system shelf with each system's icon and colour, its games as cartridges with their box art, a ready screen before
-  a game starts, the stats of the selected system (games, played, time, the last game played) and of the selected
-  game (plays, last played, time, RetroAchievements progress, the screenshot), in the Pixelify Sans pixel font. L/R
-  or the d-pad move, A opens, B goes back, X resumes the system's last game, Y favourites the system (home) or the
-  game (game list); tap or swipe the bottom screen. A native engine inside the patched ES draws it
-  (`es-rgds-rnds.patch`), so it moves exactly like the mockup: the shelf's springy slide, the stepped pixel
-  animations, and a screenshot frame that takes each screenshot's shape. An idle menu draws only when an animation
-  steps (1.7 frames a second on the shelf, 5 on a game list). Pick *rocknixds-pixel* in the theme menu.
-- **Dark and light ROCKNIXDS themes**: *rocknixds-dark* and *rocknixds-light*, two skins of the dual-screen layout.
-  Switching between them doesn't restart the menu.
+- **ROCKNIXDS Pixel, the new theme, in light and dark.** The ROCKNIXDS menu mockup on both screens, drawn by its
+  own engine inside the patched ES (`es-rgds-rnds.patch`):
+  - a pixel-art system shelf with an icon and a colour for every system;
+  - games as DS cartridges wearing their real card's label art;
+  - the game list's top screen: the box cover bobbing on its sheet, with a shine that sweeps across it, next to the
+    title, genre and year, plays, last played, time and the RetroAchievements progress;
+  - a ready screen where the cartridge clicks into the console before the game starts;
+  - a boot splash in the same look, in the Pixelify Sans pixel font throughout.
+
+  L/R or the d-pad move, A opens, B goes back, X resumes the system's last game, and Y favourites the system (home)
+  or the game (game list). You can also tap or swipe the bottom screen. *rocknixds-pixel-light* is the theme after
+  installing or updating to 1.5; *rocknixds-pixel-dark* is in the theme menu. An idle menu draws only when an
+  animation steps. The 1.5 betas' *rocknixds-dark* and *rocknixds-light* skins are gone.
 - **Pick up where you left off.** The exit hotkey saves your place and quits. The save is a savestate of its own,
   never one of your slots. The next start of that game resumes there, once. ES: the DS system's or game's *resume
   on quit* option (on by default). With it off, the hotkey quits as before. Quitting from DraStic's own menu doesn't
@@ -499,12 +501,7 @@ the top panel, the bottom panel, and an unused third.
   count, and RetroAchievements progress (badge, N of M achievements, progress bar, points).
 - **Selection frame.** The pulsing START frame rides with the selected cartridge and appears once the carousel has
   stopped, so it never frames two half items mid-scroll. Short lists repeat to fill the row.
-- **Three skins of this layout.** `dii-ess-aye` is the original dark-grey skin. `rocknixds-dark` and
-  `rocknixds-light` are the dark and paper-white DSi skins. They share every view, sound and storyboard; only
-  the colours change. Pick either in EmulationStation's theme menu. `gen_themes.py` rebuilds them from
-  `overlay/theme-rgds.xml` and `gen_skin.py`. Every texture is SVG, so it stays sharp. All text uses the DSi
-  font from upstream. The cartridge art window is unchanged (x12..88, y21..87).
-- **ROCKNIXDS Pixel** (`themes/rocknixds-pixel`, 1.5): the ROCKNIXDS menu mockup, drawn by the **rnds engine**, a
+- **ROCKNIXDS Pixel** (`themes/rocknixds-pixel-dark` and `-light`, 1.5): the ROCKNIXDS menu mockup, drawn by the **rnds engine**, a
   native renderer in the patched ES (`es-rgds-rnds.patch`, `es-app/src/rnds/`). A theme that declares
   `<view name="rnds">` hands ES's system view and game lists to it; ES keeps its lists, cursors, menus, launching,
   favourites and scraping. The engine lays everything out as the mockup's CSS does (in CSS px of a 640x480 screen,
@@ -513,9 +510,13 @@ the top panel, the bottom panel, and an unused third.
   kerning (flattened into a `kern` table by `rnds/gen_fonts.py`), and the animations use the mockup's timing
   (`cubic-bezier(.2,1.4,.32,1)` for the shelf, `steps()` for the rest). Box art and screenshots are decoded and
   baked on a worker thread. The status bar's wifi, battery and logo are rendered by Chromium (`rnds/gen_assets.mjs`).
-  `rnds/systems.cfg` gives every system its icon and colour: the mockup's twelve, and generic pixel icons
-  (`rnds/gen_icons.py`) by kind for the rest. RetroAchievements progress comes from ES's own client for the selected
-  game (cached in `rnds-achievements.cfg`). Stock ES (when the launcher has to run it) shows rocknixds-dark's layout
+  `rnds/systems.cfg` gives every system its icon and colour: the mockup's twelve, and pixel icons drawn by
+  `rnds/gen_icons.py` for the rest (home consoles, handhelds, computers, fantasy consoles, phones, music, video,
+  pictures, streaming, engines...). The theme's `<text name="palette">` picks dark or light; the light theme uses the
+  dark one's `rnds/` folder. Cartridges show the card's label art: the real card scan's art window when the media
+  tool found one, else its label art made from the cover, else the cover without its NINTENDO DS strip.
+  `rnds/gen_splash.mjs` renders each theme's boot splash (`rgds-splash.png`, `rgds-splash-2048x768.png`). RetroAchievements progress comes from ES's own client for the selected
+  game (cached in `rnds-achievements.cfg`). Stock ES (when the launcher has to run it) shows dii-ess-aye's layout
   instead. `rnds/test/` has the host harness that renders the engine's frames from the mockup's own data, to compare
   them with the mockup in Chromium (mean difference under 1% at 1x).
 - **ROCKNIXDS logo** between the L2/R2 tabs and on the boot splash ([`logo/`](logo), see below).
@@ -549,8 +550,8 @@ the top panel, the bottom panel, and an unused third.
     closes under the screensaver too.
     The theme's looping animations now stop after a few cycles. Idle menu: ~101% -> ~13% CPU (of 400), average clock
     ~1390 -> ~530 MHz, GPU at its lowest clock.
-- **Other themes** (since 1.4): pick any theme that is not `dii-ess-aye`, `canvas-ds`, `rocknixds-dark`,
-  `rocknixds-light` or `rocknixds-pixel` and ES restarts in stock ROCKNIX's layout, the top panel at 640x480 with the bottom panel off.
+- **Other themes** (since 1.4): pick any theme that is not `dii-ess-aye`, `canvas-ds`, `rocknixds-pixel-light` or
+  `rocknixds-pixel-dark` and ES restarts in stock ROCKNIX's layout, the top panel at 640x480 with the bottom panel off.
   Pick one of those four again and it spans both panels. Switching between dark and light does not restart ES:
   they share a canvas. 1.3 stretched every theme across both screens. (`theme-changed.sh` does the restart when
   the canvas has to change.)
@@ -577,7 +578,7 @@ the top panel, the bottom panel, and an unused third.
 | `gen_skin.py` | SVG skin and splash generator (run against a full theme copy: it reads upstream's DSi font) |
 | `trace_logo.py`, `rocknix_logo.paths` | the traced stock ROCKNIX wordmark, kept for reference |
 | `es-rgds-*.patch`, `emulationstation-rgds` | ES patches and the built binary (aarch64); [`tools/build-es.sh`](tools/build-es.sh) builds it without ROCKNIX's build system |
-| `themes/rocknixds-pixel`, `rnds/` | ROCKNIXDS Pixel and the tools that make its fonts, icons and status-bar pictures; `rnds/test/` the engine's host harness |
+| `themes/rocknixds-pixel-dark`, `themes/rocknixds-pixel-light`, `rnds/` | ROCKNIXDS Pixel and the tools that make its fonts, icons and status-bar pictures; `rnds/test/` the engine's host harness |
 | `device/autostart-dii-ess-aye`, `device/sway-config.theme` | Boot hook: redoes the bind mount and restores the theme's sway config, which ROCKNIX's `111-sway-init` overwrites on every boot |
 | `scrape/` | Media tools: cart scans, 3D boxes, label art, RetroAchievements strip, HTTP-API push |
 
