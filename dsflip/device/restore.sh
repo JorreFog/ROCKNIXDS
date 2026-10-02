@@ -19,6 +19,9 @@ if [ -s /tmp/dsflip-cpu-max ]; then                  # the CPU clock limit libds
     cat /tmp/dsflip-cpu-max > /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq 2>/dev/null
     rm -f /tmp/dsflip-cpu-max
 fi
+# Resume-on-quit aimed the exit hotkey at "killall -USR1 drastic". Put stock's target back so a later
+# launcher is not left sending USR1. "-9" alone is not that target: killall needs the process name.
+[ -f /tmp/.process-kill-data ] && grep -qx -- '-USR1 drastic' /tmp/.process-kill-data 2>/dev/null && echo "-9 drastic" > /tmp/.process-kill-data
 XDG_RUNTIME_DIR=$RT pw-metadata -n settings 0 clock.force-rate 0 >/dev/null 2>&1          # PipeWire's own rate again
 sway_has_outputs() {
     SOCK=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
