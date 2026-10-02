@@ -1,0 +1,242 @@
+{
+  "games": {
+    "nsmb": {
+      "system": "Nintendo - Nintendo DS",
+      "name": "New Super Mario Bros. (USA)",
+      "box": "art/nsmb-box.jpg",
+      "snap": "art/nsmb-snap.jpg"
+    },
+    "mf": {
+      "system": "Nintendo - Game Boy Advance",
+      "name": "Metroid Fusion (USA)",
+      "box": "art/mf-box.jpg",
+      "snap": "art/mf-snap.jpg"
+    },
+    "mkds": {
+      "system": "Nintendo - Nintendo DS",
+      "name": "Mario Kart DS (USA) (Demo) (Kiosk)",
+      "box": "art/mkds-box.jpg",
+      "snap": "art/mkds-snap.jpg"
+    },
+    "hg": {
+      "system": "Nintendo - Nintendo DS",
+      "name": "Pokemon - HeartGold Version (USA)",
+      "box": "art/hg-box.jpg",
+      "snap": "art/hg-snap.jpg"
+    },
+    "cvds": {
+      "system": "Nintendo - Nintendo DS",
+      "name": "Castlevania - Dawn of Sorrow (USA)",
+      "box": "art/cvds-box.jpg",
+      "snap": "art/cvds-snap.jpg"
+    },
+    "pw": {
+      "system": "Nintendo - Nintendo DS",
+      "name": "Phoenix Wright - Ace Attorney (USA)",
+      "box": "art/pw-box.jpg",
+      "snap": "art/pw-snap.jpg"
+    },
+    "ctds": {
+      "system": "Nintendo - Nintendo DS",
+      "name": "Chrono Trigger (USA) (En,Fr)",
+      "box": "art/ctds-box.jpg",
+      "snap": "art/ctds-snap.jpg"
+    },
+    "st": {
+      "system": "Nintendo - Nintendo DS",
+      "name": "Legend of Zelda, The - Spirit Tracks (USA) (DPAD)",
+      "box": "art/st-box.jpg",
+      "snap": "art/st-snap.jpg"
+    },
+    "mc": {
+      "system": "Nintendo - Game Boy Advance",
+      "name": "Legend of Zelda, The - The Minish Cap (USA)",
+      "box": "art/mc-box.jpg",
+      "snap": "art/mc-snap.jpg"
+    },
+    "aw": {
+      "system": "Nintendo - Game Boy Advance",
+      "name": "Advance Wars (USA)",
+      "box": "art/aw-box.jpg",
+      "snap": "art/aw-snap.jpg"
+    },
+    "crystal": {
+      "system": "Nintendo - Game Boy Color",
+      "name": "Pokemon - Crystal Version (USA)",
+      "box": "art/crystal-box.jpg",
+      "snap": "art/crystal-snap.jpg"
+    },
+    "wl3": {
+      "system": "Nintendo - Game Boy Color",
+      "name": "Wario Land - Super Mario Land 3 DX (USA)",
+      "box": "art/wl3-box.jpg",
+      "snap": "art/wl3-snap.jpg"
+    },
+    "gs": {
+      "system": "Nintendo - Game Boy Advance",
+      "name": "Golden Sun (USA, Europe)",
+      "box": "art/gs-box.jpg",
+      "snap": "art/gs-snap.jpg"
+    },
+    "ww": {
+      "system": "Nintendo - Game Boy Advance",
+      "name": "WarioWare, Inc. - Trial Version (USA)",
+      "box": "art/ww-box.jpg",
+      "snap": "art/ww-snap.jpg"
+    },
+    "ooa": {
+      "system": "Nintendo - Game Boy Color",
+      "name": "Legend of Zelda, The - Oracle of Ages (USA, Australia)",
+      "box": "art/ooa-box.jpg",
+      "snap": "art/ooa-snap.jpg"
+    },
+    "la": {
+      "system": "Nintendo - Game Boy",
+      "name": "Legend of Zelda, The - Link's Awakening (USA, Europe)",
+      "box": "art/la-box.jpg",
+      "snap": "art/la-snap.jpg"
+    },
+    "sml2": {
+      "system": "Nintendo - Game Boy",
+      "name": "Super Mario Land 2 - 6 Golden Coins (USA, Europe)",
+      "box": "art/sml2-box.jpg",
+      "snap": "art/sml2-snap.jpg"
+    },
+    "alttp": {
+      "system": "Nintendo - Super Nintendo Entertainment System",
+      "name": "Legend of Zelda, The - A Link to the Past (USA)",
+      "box": "art/alttp-box.jpg",
+      "snap": "art/alttp-snap.jpg"
+    },
+    "smw": {
+      "system": "Nintendo - Super Nintendo Entertainment System",
+      "name": "Super Mario World (USA)",
+      "box": "art/smw-box.jpg",
+      "snap": "art/smw-snap.jpg"
+    },
+    "tetris": {
+      "system": "Nintendo - Game Boy",
+      "name": "Tetris (World) (Rev 1)",
+      "box": "art/tetris-box.jpg",
+      "snap": "art/tetris-snap.jpg"
+    },
+    "sm": {
+      "system": "Nintendo - Super Nintendo Entertainment System",
+      "name": "Super Metroid - Redux (USA)",
+      "box": "art/sm-box.jpg",
+      "snap": "art/sm-snap.jpg"
+    },
+    "ct": {
+      "system": "Nintendo - Super Nintendo Entertainment System",
+      "name": "Chrono Trigger (USA)",
+      "box": "art/ct-box.jpg",
+      "snap": "art/ct-snap.jpg"
+    },
+    "mm2": {
+      "system": "Nintendo - Nintendo Entertainment System",
+      "name": "Mega Man 2 (USA)",
+      "box": "art/mm2-box.jpg",
+      "snap": "art/mm2-snap.jpg"
+    },
+    "zelda1": {
+      "system": "Nintendo - Nintendo Entertainment System",
+      "name": "Legend of Zelda, The (USA)",
+      "box": "art/zelda1-box.jpg",
+      "snap": "art/zelda1-snap.jpg"
+    },
+    "smb3": {
+      "system": "Nintendo - Nintendo Entertainment System",
+      "name": "Super Mario Bros. 3 (USA)",
+      "box": "art/smb3-box.jpg",
+      "snap": "art/smb3-snap.jpg"
+    },
+    "oot": {
+      "system": "Nintendo - Nintendo 64",
+      "name": "Legend of Zelda, The - Ocarina of Time (USA)",
+      "box": "art/oot-box.jpg",
+      "snap": "art/oot-snap.jpg"
+    },
+    "mk64": {
+      "system": "Nintendo - Nintendo 64",
+      "name": "Mario Kart 64 (USA)",
+      "box": "art/mk64-box.jpg",
+      "snap": "art/mk64-snap.jpg"
+    },
+    "sm64": {
+      "system": "Nintendo - Nintendo 64",
+      "name": "Super Mario 64 (USA)",
+      "box": "art/sm64-box.jpg",
+      "snap": "art/sm64-snap.jpg"
+    },
+    "ff7": {
+      "system": "Sony - PlayStation",
+      "name": "Final Fantasy VII (USA)",
+      "box": "art/ff7-box.jpg",
+      "snap": "art/ff7-snap.jpg"
+    },
+    "mgs": {
+      "system": "Sony - PlayStation",
+      "name": "Metal Gear Solid (USA)",
+      "box": "art/mgs-box.jpg",
+      "snap": "art/mgs-snap.jpg"
+    },
+    "sonic2": {
+      "system": "Sega - Mega Drive - Genesis",
+      "name": "Sonic The Hedgehog 2 (USA)",
+      "box": "art/sonic2-box.jpg",
+      "snapError": "HTTP Error 404: Not Found"
+    },
+    "sotn": {
+      "system": "Sony - PlayStation",
+      "name": "Castlevania - Symphony of the Night (USA)",
+      "box": "art/sotn-box.jpg",
+      "snap": "art/sotn-snap.jpg"
+    },
+    "pac": {
+      "system": "FBNeo - Arcade Games",
+      "name": "Pac-Mania (Japan)",
+      "box": "art/pac-box.jpg",
+      "snap": "art/pac-snap.jpg"
+    },
+    "sor2": {
+      "system": "Sega - Mega Drive - Genesis",
+      "name": "Streets of Rage 2 (USA)",
+      "box": "art/sor2-box.jpg",
+      "snap": "art/sor2-snap.jpg"
+    },
+    "cave": {
+      "system": "Cave Story",
+      "name": "Cave Story (En)",
+      "box": "art/cave-box.jpg",
+      "snap": "art/cave-snap.jpg"
+    },
+    "gunstar": {
+      "system": "Sega - Mega Drive - Genesis",
+      "name": "Gunstar Heroes (USA)",
+      "box": "art/gunstar-box.jpg",
+      "snap": "art/gunstar-snap.jpg"
+    },
+    "mslug": {
+      "system": "FBNeo - Arcade Games",
+      "name": "Metal Slug - Super Vehicle-001",
+      "box": "art/mslug-box.jpg",
+      "snap": "art/mslug-snap.jpg"
+    },
+    "sf2": {
+      "system": "FBNeo - Arcade Games",
+      "name": "Street Fighter II_ The World Warrior (USA 920312)",
+      "box": "art/sf2-box.jpg",
+      "snap": "art/sf2-snap.jpg"
+    }
+  },
+  "errors": [
+    [
+      "celeste",
+      "deferred"
+    ],
+    [
+      "stardew",
+      "deferred"
+    ]
+  ]
+}
