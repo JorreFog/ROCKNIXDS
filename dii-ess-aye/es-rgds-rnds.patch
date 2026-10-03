@@ -74,10 +74,10 @@ index 90df9a9b..75714e3d 100644
  			else if (complete || SDL_GetTicks() - firstFrame > 3000)
 diff --git a/es-app/src/rnds/RndsEs.cpp b/es-app/src/rnds/RndsEs.cpp
 new file mode 100644
-index 00000000..76d02ecf
+index 00000000..83016369
 --- /dev/null
 +++ b/es-app/src/rnds/RndsEs.cpp
-@@ -0,0 +1,1095 @@
+@@ -0,0 +1,1098 @@
 +#include "rnds/RndsEs.h"
 +#include "rnds/RndsUI.h"
 +
@@ -371,6 +371,7 @@ index 00000000..76d02ecf
 +		std::atomic<bool> pendingRefresh{ false };
 +		// a held left/right (or L/R): moves again after a pause, faster the longer it is held, like ES's lists
 +		struct Held { bool on = false; UI::Button button = UI::LEFT; int device = 0, type = 0, id = 0; Uint32 since = 0, last = 0; } held;
++		Uint32 lastUpdate = 0;	// a held direction keeps frames coming: a longer gap means a menu was on top and got the release
 +		int launchedCheevos = 0;
 +
 +		// worker
@@ -1029,7 +1030,7 @@ index 00000000..76d02ecf
 +		{
 +			UI::Button b = left ? UI::LEFT : right ? UI::RIGHT : L ? UI::L : UI::R;
 +			h.on = true; h.button = b; h.device = input.device; h.type = input.type; h.id = input.id;
-+			h.since = h.last = SDL_GetTicks();
++			h.since = h.last = d->lastUpdate = SDL_GetTicks();
 +			return d->ui->press(b);
 +		}
 +		h.on = false;
@@ -1133,6 +1134,8 @@ index 00000000..76d02ecf
 +			d->ui->dataChanged();
 +		Uint32 now = SDL_GetTicks();
 +		auto& h = d->held;
++		if (h.on && now - d->lastUpdate > 250) h.on = false;
++		d->lastUpdate = now;
 +		if (h.on && d->ui->view() != UI::LAUNCH && now - h.since >= 350)
 +		{
 +			Uint32 every = now - h.since < 1500 ? 110 : 55;		// ramps up after 1.5 s held
