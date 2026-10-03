@@ -130,8 +130,12 @@ the menu's updater pick the right one for the handheld they run on.
   boot instead of again every time you quit. The menu is back ~0.5 s sooner after a DS game. ROCKNIX's charger
   watcher no longer starts a process every 2 s (2.2% -> 0.13% of a core).
 - **The DraStic engine is its own project now: [SuperDrastic](https://github.com/JorreFog/SuperDrastic)**, for any
-  Linux firmware. 1.5 shipped SuperDrastic 0.3.0-beta.3, 1.5.1 0.3.0-beta.4, 1.5.2 ships 0.3.0-beta.5 (the version in [`SUPERDRASTIC`](SUPERDRASTIC));
+  Linux firmware. 1.5 shipped SuperDrastic 0.3.0-beta.3, 1.5.1 0.3.0-beta.4, 1.5.2 0.3.0-beta.5, 1.5.5 ships 0.4.0-beta.1 with Gengis Engine (the version in [`SUPERDRASTIC`](SUPERDRASTIC));
   `dsflip/` keeps the ROCKNIX scripts.
+- **Gengis Engine, a new 3D renderer** (1.5.5). *Nintendo DS > 3D renderer*, or per game: *Gengis Engine* draws
+  DraStic's hi-res 3D with SuperDrastic's own rasterizer. It matches DraStic's picture pixel for pixel with about 20%
+  less work in DraStic's 3D threads. *DraStic* (the default) keeps DraStic's own. With Gengis Engine, *3D texture
+  filter* (nearest = the DS's, bilinear, sharp bilinear) smooths textures, at about twice the 3D cost.
 
 ### New in 1.4
 
