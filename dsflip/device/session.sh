@@ -11,6 +11,31 @@ ROM="$1"
 T0=$(date +%s%N)
 ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
 up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with restore.sh and switchtime.sh
+# DraStic still running: alive and not a zombie (an exited child stays in /proc, and kill -0 succeeds, until waited for)
+alive() { [ -d /proc/$1 ] && ! grep -q '^State:[[:space:]]*Z' /proc/$1/status 2>/dev/null; }
+# a SIGKILL that hasn't been delivered: the process is stuck in the kernel (state D) and can't die until that returns
+kill_pending() {
+  for m in $(awk '/^(SigPnd|ShdPnd):/ { print $2 }' /proc/$1/status 2>/dev/null); do
+    [ $(( 0x$m & 0x100 )) -ne 0 ] && return 0
+  done
+  return 1
+}
+# what a DraStic that can't be killed is waiting for, and the kernel's messages, in a file that survives a reset
+stuck_report() {
+  F=$D/dsflip/stuck-$(date +%Y%m%d-%H%M%S).txt
+  { echo "$(date) DraStic (pid $P) still alive 5 s after SIGKILL"
+    grep -E '^(State|SigPnd|ShdPnd):' /proc/$P/status 2>/dev/null
+    for t in /proc/$P/task/[0-9]*; do
+      echo "-- thread ${t##*/} $(cat $t/comm 2>/dev/null) state $(awk '{ print $3 }' $t/stat 2>/dev/null) wchan $(cat $t/wchan 2>/dev/null)"
+      cat $t/stack 2>/dev/null
+    done
+    echo "-- dmesg"; dmesg 2>/dev/null | tail -n 100
+  } > "$F" 2>&1
+  ls -t $D/dsflip/stuck-*.txt 2>/dev/null | tail -n +6 | while read -r old; do rm -f "$old"; done   # the last five
+  echo "DraStic is stuck in the kernel and can't be stopped: $F"
+  echo "The game got stuck while starting and couldn't be stopped. If the screens stay white, hold the power button to restart. Details: $F" > $NOTICE
+  sync
+}
 {
   echo "$(date) start: $ROM (shader: ${DSHOOK_SHADER:-none})"
   # gptokeyb (start_drastic.sh starts it inside ES's unit) takes ~1.1 s to die on the stop's TERM, and the stop
@@ -144,11 +169,24 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # play at the clocks the governor held; a bound that slows the game down saves nothing worth it.
   [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX} DSFLIP_CPU_MAX_SOFT=${DSFLIP_CPU_MAX_SOFT:-1}
   echo "power profile: $PROF (queue $DSFLIP_QUEUE, wait ${DSFLIP_QUEUE_WAIT} ms, CPU max ${DSFLIP_CPU_MAX:-hardware})"
+  # 3D renderer (ES: the game's or DS system's "3D renderer"): superdrastic = Gengis Engine, SuperDrastic's own
+  # rasterizer for DraStic's hi-res 3D (DSFLIP_RAST=1), anything else DraStic's own; and its "3D texture filter"
+  # (SuperDrastic ignores it with DraStic's renderer). 1.5.5 offers no 3x: nds.resolution3d is not read.
+  RND=$(grep -F "nds[\"$GAME\"].renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ -n "$RND" ] || RND=$(grep "^nds.renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ "$RND" = superdrastic ] && export DSFLIP_RAST=${DSFLIP_RAST:-1}
+  TF=$(grep -F "nds[\"$GAME\"].texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ -n "$TF" ] || TF=$(grep "^nds.texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  case "$TF" in bilinear) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-1} ;; sharp) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-2} ;; esac
+  if [ -n "$DSFLIP_RAST" ]; then echo "3D renderer: Gengis Engine (texture filter ${DSFLIP_RAST_TEXFILTER:-0})"; else echo "3D renderer: DraStic"; fi
   cd $D
   # no wait for the display: libdsflip retries DRM master itself while seatd lets go of it (~0.4 s after sway)
   SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log \
     LD_PRELOAD=$D/dsflip/libdsflip.so $D/dsflip/drastic "$ROM" > $D/dsflip/drastic.out 2>&1 &
   P=$!; TG=$(date +%s)
+  # A start that hangs often ends with a hard reset, which loses whatever of this log and dsflip.log is still only in
+  # memory: write them out a few times while the game starts
+  ( for s in 2 4 6; do sleep $s; sync; done ) &
   # CPU placement (DSFLIP_PIN=0 turns it off): DraStic's main (emulation) thread alone on CPU 3; its 3D helper
   # threads, libdsflip's and PipeWire's threads on CPUs 0-2. Measured on the RG DS Plus 2026-10-01 (Black 2,
   # balanced, 1416 MHz): the main thread was runnable but not running ~10% of the time on every core (its helpers
@@ -237,7 +275,15 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
         echo "The game didn't take over the screens within 10 seconds, so it was stopped. Logs: $D/dsflip" > $NOTICE
       fi ;;
   esac
-  wait $P; rc=$?
+  # Wait for DraStic, but not forever. One stuck in the kernel (state D: a display call that never returns) ignores
+  # kill -9, and waiting on it left the panels white, the exit hotkey dead and a reset the only way out (reported on
+  # the RG DS Plus, 1.5.1). Once a SIGKILL has been pending for 5 s, keep the evidence and bring the menu back.
+  stuck=0; k=0
+  while alive $P; do
+    if kill_pending $P; then k=$((k + 1)); [ $k -ge 25 ] && { stuck=1; break; }; else k=0; fi
+    sleep 0.2
+  done
+  if [ $stuck = 1 ]; then rc=255; stuck_report; else wait $P; rc=$?; fi
   # the watcher only now: killed before the wait, it never ran while the game did
   [ -n "$WATCH" ] && kill $WATCH 2>/dev/null
   [ -n "$PINNER" ] && kill $PINNER 2>/dev/null

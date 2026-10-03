@@ -122,7 +122,11 @@ RG DS Plus.
   upstream at a verified version (`--no-canvas` skips the ~180 MB). Only verified themes can be picked.
 - "Launch this game at startup" runs once per boot. The menu is back ~0.5 s sooner after a DS game.
 - **The DraStic engine is its own project now: [SuperDrastic](https://github.com/JorreFog/SuperDrastic)**. This
-  release installs SuperDrastic 0.3.0-beta.5, shipped in `dsflip/` (the version in [`SUPERDRASTIC`](SUPERDRASTIC)).
+  release installs SuperDrastic 0.4.0-beta.1 (with Gengis Engine), shipped in `dsflip/` (the version in [`SUPERDRASTIC`](SUPERDRASTIC)).
+- **Gengis Engine, a new 3D renderer** (1.5.5). *Nintendo DS > 3D renderer*, or per game: *Gengis Engine* draws
+  DraStic's hi-res 3D with SuperDrastic's own rasterizer. It matches DraStic's picture pixel for pixel with about 20%
+  less work in DraStic's 3D threads. *DraStic* (the default) keeps DraStic's own. With Gengis Engine, *3D texture
+  filter* (nearest = the DS's, bilinear, sharp bilinear) smooths textures, at about twice the 3D cost.
 
 ### New in 1.4
 
