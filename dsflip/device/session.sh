@@ -117,10 +117,14 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # the clock within the profile's range; the frame queue trades a refresh of input latency for riding out late
   # frames, and the wait keeps a full queue from dropping early ones (measured 2026-09-29, Black 2 at 2x, walking:
   # fixed 1416 MHz with a 2-frame queue + wait 0.07 hitches/s, 1104 MHz 0.13/s; without the wait 0.11-3.2 and 0.73).
-  #   performance: 816-1992 MHz, 1-frame queue (the lowest latency)
-  #   balanced:    816-1416 MHz, 2-frame queue + 20 ms wait
-  #   battery:     816-1104 MHz, 3-frame queue + 20 ms wait (more cover for the late frames a low clock makes)
-  # The 816 MHz floor is libdsflip's (repeated frames are not counted as drops). DSFLIP_CPU_MIN overrides it.
+  #   performance: 1104-1992 MHz, 1-frame queue (the lowest latency)
+  #   balanced:    1104-1416 MHz, 2-frame queue + 20 ms wait
+  #   battery:     1104 MHz, 3-frame queue + 20 ms wait (more cover for the late frames a low clock makes)
+  # The 1104 MHz floor is libdsflip's; DSFLIP_CPU_MIN overrides it. The profiles' upper bounds are soft
+  # (DSFLIP_CPU_MAX_SOFT): libdsflip goes past them only while the game is below full speed with real work going on.
+  # The players' 1.5 logs had heavy 3D games at 2x (Call of Duty, Final Fantasy - The 4 Heroes of Light, Pokemon
+  # Platinum with a shader) below full speed for 38-83% of their play at the clocks the governor held; a bound that
+  # slows the game down saves nothing worth it.
   # DSFLIP_* already in the environment (tests, systemctl set-environment) win over the profile.
   PROF=$(grep -F "nds[\"$GAME\"].power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$PROF" ] || PROF=$(grep "^nds.power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
@@ -130,7 +134,7 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
     *) PROF=balanced Q=2 QW=20 CMAX=1416000 ;;
   esac
   export DSFLIP_QUEUE=${DSFLIP_QUEUE:-$Q} DSFLIP_QUEUE_WAIT=${DSFLIP_QUEUE_WAIT:-$QW}
-  [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX}
+  [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX} DSFLIP_CPU_MAX_SOFT=${DSFLIP_CPU_MAX_SOFT:-1}
   echo "power profile: $PROF (queue $DSFLIP_QUEUE, wait ${DSFLIP_QUEUE_WAIT} ms, CPU max ${DSFLIP_CPU_MAX:-hardware})"
   # Performance log, the same samples tools/rgds-monitor.py takes, and only after the player allowed the upload
   # (first launch asks; Nintendo DS > Share performance logs changes it). restore.sh uploads on quit. Test
@@ -149,8 +153,9 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
     esac
   fi
   cd $D
-  # preload-guard.so keeps libdsflip out of the processes DraStic starts (SuperDrastic 0.3.0-beta.3 starts pactl and
-  # wpctl for the volume card; with libdsflip in them, they rotated the game's log and overwrote its verdict).
+  # preload-guard.so keeps libdsflip out of the processes DraStic starts (SuperDrastic 0.3.0-beta.3, 1.5's, started pactl
+  # and wpctl for its volume card; with libdsflip in them, they rotated the game's log and overwrote its verdict).
+  # SuperDrastic has its own guard since 0.3.0-beta.2; this one stays for a package from before it.
   # Listed last: glibc runs it first.
   PRE=$D/dsflip/libdsflip.so; [ -f $D/dsflip/preload-guard.so ] && PRE="$PRE $D/dsflip/preload-guard.so"
   # no wait for the display: libdsflip retries DRM master itself while seatd lets go of it (~0.4 s after sway)

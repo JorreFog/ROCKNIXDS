@@ -69,7 +69,7 @@ def log(*a):
 class Device:
     def __init__(self, ip, dry):
         self.ssh = shlex.split(os.environ["RGDS_SSH"]) if os.environ.get("RGDS_SSH") else ["ssh", "-o", "ConnectTimeout=8", f"root@{ip}"]
-        self.dry = dry
+        self.dry, self.spooled = dry, []
 
     def run(self, cmd, data=None, binary=False):
         r = subprocess.run(self.ssh + [cmd], input=data, capture_output=True, check=False)
@@ -83,9 +83,22 @@ class Device:
     def fetch(self, path):
         return self.run(f"cat {shlex.quote(path)}", binary=True)
 
+    # --auto spools what it pushes and sends it all at the end (flush): every push makes ES refresh the lists that show
+    # the game, and one push after another, game after game, kept ES's own themes redrawing (ROCKNIXDS issue 25)
+    spool = None
+
     def push_media(self, gid, mtype, data):
         if self.dry:
             return "dry"
+        if self.spool:
+            f = os.path.join(self.spool, f"{len(self.spooled)}.png")
+            with open(f, "wb") as o:
+                o.write(data)
+            self.spooled.append((gid, mtype, f))
+            return "ok"
+        return self.send_media(gid, mtype, data)
+
+    def send_media(self, gid, mtype, data):
         code = self.run(f"cat > /tmp/rgds-media.bin && curl -s -o /dev/null -w '%{{http_code}}' -X POST -H 'Content-Type: image/png' "
                         f"--data-binary @/tmp/rgds-media.bin localhost:1234/systems/nds/games/{gid}/media/{mtype}; "
                         f"rm -f /tmp/rgds-media.bin", data=data).strip()
@@ -97,6 +110,18 @@ class Device:
         return self.run(f"curl -s -o /dev/null -w '%{{http_code}}' -X POST -H 'Content-Type: application/json' "
                         f"--data-binary {shlex.quote(json.dumps(meta))} localhost:1234/systems/nds/games/{gid}")
 
+    def flush(self):
+        """Sends what was spooled; returns [(gid, mtype)] of what ES didn't take."""
+        bad, todo = [], self.spooled
+        self.spooled = []
+        for gid, mtype, f in todo:
+            with open(f, "rb") as i:
+                r = self.send_media(gid, mtype, i.read())
+            os.remove(f)
+            if r != "ok":
+                bad.append((gid, mtype)); log(f"  {gid} {mtype}: {r}")
+        return bad
+
     def es_up(self):
         return "true" in self.run("curl -s -m 2 localhost:1234/isIdle || true")
 
@@ -104,7 +129,7 @@ class Device:
 class Local(Device):
     """The device itself: the same commands, run here instead of over ssh."""
     def __init__(self, dry):
-        self.ssh, self.dry = ["sh", "-c"], dry
+        self.ssh, self.dry, self.spooled = ["sh", "-c"], dry, []
 
 
 # ---------- Pillow ----------
@@ -485,6 +510,8 @@ def main():
         if not art and not unhashed and not any(played(g) for g in games):
             save_state(st)
             return log(f"{len(games)} game(s), nothing missing")
+    if auto:
+        dev.spool = os.path.join(out, "spool"); shutil.rmtree(dev.spool, ignore_errors=True); os.makedirs(dev.spool)
     load_pil(a.local)
     lr = Libretro(cache)
     carts = json.load(open(os.path.join(HERE, "nds-carts.json")))["games"]
@@ -648,7 +675,21 @@ def main():
                 elif not failed:
                     st["tried"][g["path"]] = now        # no match anywhere for what's missing: try again next week
             save_state(st)
+    if auto and dev.spooled:
+        log(f"\nsending {len(dev.spooled)} picture(s) to ES")
+        bad = dev.flush()
+        if bad:
+            log(f"{len(bad)} not taken: tried again next time")
+            for gid, mtype in bad:
+                p = next((g["path"] for g in every if g["id"] == gid), None)
+                if p and mtype == "wheel":
+                    st["ra"].pop(p, None)
+                elif p:
+                    st["tried"].pop(p, None)
+            save_state(st)
     if auto:
+        if dev.spool:
+            shutil.rmtree(dev.spool, ignore_errors=True)
         # only the listings and the font are kept between runs
         for d in ("Named_Boxarts", "Named_Snaps", "Named_Titles", "lb", "ra", "wheel"):
             shutil.rmtree(os.path.join(cache if d.startswith(("Named", "lb")) else out, d), ignore_errors=True)

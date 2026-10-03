@@ -88,15 +88,15 @@ the menu's updater pick the right one for the handheld they run on.
   save. A resume state older than the game's own save file is dropped.
 - **Power profiles.** *Game settings > Per system advanced configuration > Nintendo DS > Power profile* (at the
   bottom of Game settings), or per game (hold A on it > *Advanced game options*):
-  - *balanced* (the default): CPU 816–1416 MHz, one more frame of queue (+17 ms input latency), and a full queue
+  - *balanced* (the default): CPU 1104–1416 MHz, one more frame of queue (+17 ms input latency), and a full queue
     holds DraStic for a moment instead of dropping a frame;
-  - *performance*: CPU 816–1992 MHz and the shortest queue, for the lowest latency;
-  - *battery saver*: CPU up to 1104 MHz, three frames of queue (+33 ms).
+  - *performance*: CPU 1104–1992 MHz and the shortest queue, for the lowest latency;
+  - *battery saver*: CPU at 1104 MHz, three frames of queue (+33 ms).
 
-  Measured (Black 2 at 2x, walking): 1416 MHz with balanced's queue gave 0.07 hitches/s and no dropped frames.
-  That's about what performance gets, which averages ~1570 MHz and goes up to 1992. The CPU governor can go down to
-  816 MHz: a repeated picture no longer counts as a dropped frame, and one heavy frame that the queue already hid
-  doesn't raise the clock.
+  A game that can't keep up at its profile's top clock gets more (1.5.1): the players' logs from 1.5 had heavy 3D
+  games at 2x (Call of Duty, The 4 Heroes of Light, Platinum with a shader) running below full speed for much of
+  their play. Measured (Black 2 at 2x, walking): 1416 MHz with balanced's queue gave 0.07 hitches/s and no dropped
+  frames. That's about what performance gets, which averages ~1570 MHz and goes up to 1992.
 - **The CPU clock remembers each game:** clocks that dropped frames are skipped from the start of the next session
   instead of being found again by dropping frames. Only drops that really come from the CPU count. A DS game now
   always runs on the performance CPU governor, which the clock control needs: one player's RG DS ran its games with
@@ -130,7 +130,7 @@ the menu's updater pick the right one for the handheld they run on.
   boot instead of again every time you quit. The menu is back ~0.5 s sooner after a DS game. ROCKNIX's charger
   watcher no longer starts a process every 2 s (2.2% -> 0.13% of a core).
 - **The DraStic engine is its own project now: [SuperDrastic](https://github.com/JorreFog/SuperDrastic)**, for any
-  Linux firmware. This release ships SuperDrastic 0.3.0-beta.3 (the version in [`SUPERDRASTIC`](SUPERDRASTIC));
+  Linux firmware. 1.5 shipped SuperDrastic 0.3.0-beta.3, 1.5.1 ships 0.3.0-beta.4 (the version in [`SUPERDRASTIC`](SUPERDRASTIC));
   `dsflip/` keeps the ROCKNIX scripts.
 
 ### New in 1.4

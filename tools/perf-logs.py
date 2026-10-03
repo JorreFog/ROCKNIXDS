@@ -1,18 +1,29 @@
 #!/usr/bin/env python3
 """perf-logs.py <dir>: one line per performance log under <dir>/<device>/*.jsonl (the device-logs branch's
 docs/data/device): fps, dropped and repeated frames a second, the drop sources, the CPU clock, battery current,
-temperature, governor steps and late latches. Used for docs/perf-logs-1.5-beta.md."""
+temperature, governor steps and late latches. Used for docs/perf-logs-1.5-beta.md and docs/perf-logs-1.5.md.
+The frame numbers count play only: a second in DraStic's menu (the bottom panel flips, the top doesn't) or under 10
+presents (loading, paused) is left out of them and counted on its own. "busy<top" is the share of the slow play
+seconds (under 57 fps) in which DraStic's threads were busy (a core or more) and the clock wasn't at its top."""
 import json, re, sys, glob, os, collections, statistics as st
 rows = []
 for f in sorted(glob.glob(sys.argv[1] + "/*/*.jsonl")):
-    S = None; samples = []; pres = []; gov = []; late = 0; other = collections.Counter()
+    S = None; samples = []; pres = []; gov = []; late = 0; other = collections.Counter(); menu = idle = slow = held = 0
     for l in open(f):
         d = json.loads(l)
         if d.get("summary"): S = d; continue
         samples.append(d)
         for x in d.get("log") or []:
-            m = re.match(r"\[dsflip\] present/s=([\d.]+) .*?dropped=(\d+).*?max-iv top=(\d+) bot=(\d+).*?drop-src=(\d+) drop-q=(\d+) drop-buf=(\d+)(?: dup=(\d+))? repeat=(\d+)", x)
-            if m: pres.append([float(v) if v else 0 for v in m.groups()]); continue
+            m = re.match(r"\[dsflip\] present/s=([\d.]+) .*?dropped=(\d+).*?flips top=(\d+) bot=(\d+).*?drop-src=(\d+) drop-q=(\d+) drop-buf=(\d+)(?: dup=(\d+))? repeat=(\d+)", x)
+            if m:
+                p = [float(v) if v else 0 for v in m.groups()]
+                if p[2] == 0 and p[3] > 0: menu += 1; continue
+                if p[0] < 10: idle += 1; continue
+                pres.append(p)
+                if p[0] < 57:
+                    slow += 1
+                    held += (d.get("game_cpu") or 0) >= 100 and (d.get("cpu_mhz") or 0) < (d.get("cpu_hw_max_mhz") or 1990)
+                continue
             if x.startswith("[cpugov]"): gov.append(x)
             elif x.startswith("[late"): late += 1
     if not samples: continue
@@ -28,7 +39,8 @@ for f in sorted(glob.glob(sys.argv[1] + "/*/*.jsonl")):
         secs=len(samples), fps=st.mean(fps) if fps else 0, below=100 * sum(1 for x in fps if x < 59.5) / n,
         drops=sum(p[1] for p in pres) / n, repeat=sum(p[8] for p in pres) / n, dsrc=sum(p[4] for p in pres) / n, dq=sum(p[5] for p in pres) / n,
         dbuf=sum(p[6] for p in pres) / n, mhz=st.mean(mhz) if mhz else 0, top=",".join(f"{k}:{100*v//len(mhz)}" for k, v in sorted(hist.items()) if 100 * v // len(mhz) >= 5),
-        ma=-st.mean(ma) if ma else 0, tmax=tmax, gov=len(gov), late=late, summary=bool(S)))
-print(f"{'dev':6} {'when':15} {'game':34} {'ver':22} {'prof':11} q {'shader':10} {'secs':>5} {'fps':>5} {'<59.5%':>6} {'drop/s':>6} {'rep/s':>5} {'src':>5} {'q':>5} {'buf':>5} {'MHz':>5} {'mA':>5} {'T':>4} gov late  clocks(MHz:%)")
+        ma=-st.mean(ma) if ma else 0, tmax=tmax, gov=len(gov), late=late, summary=bool(S),
+        play=len(pres), menu=menu, idle=idle, held=100 * held / slow if slow else 0))
+print(f"{'dev':6} {'when':15} {'game':34} {'ver':22} {'prof':11} q {'shader':10} {'play':>5} {'menu':>4} {'idle':>4} {'fps':>5} {'<59.5%':>6} {'drop/s':>6} {'rep/s':>5} {'src':>5} {'q':>5} {'buf':>5} {'MHz':>5} {'mA':>5} {'T':>4} gov late busy<top  clocks(MHz:%)")
 for r in rows:
-    print(f"{r['dev']:6} {r['file']:15} {r['game']:34} {r['ver'][:22]:22} {r['prof']:11} {r['q']} {r['shader'][:10]:10} {r['secs']:5} {r['fps']:5.2f} {r['below']:6.1f} {r['drops']:6.3f} {r['repeat']:5.2f} {r['dsrc']:5.2f} {r['dq']:5.2f} {r['dbuf']:5.2f} {r['mhz']:5.0f} {r['ma']:5.0f} {r['tmax']:4.0f} {r['gov']:3} {r['late']:4}  {r['top']}" + ("" if r["summary"] else "  (no summary)"))
+    print(f"{r['dev']:6} {r['file']:15} {r['game']:34} {r['ver'][:22]:22} {r['prof']:11} {r['q']} {r['shader'][:10]:10} {r['play']:5} {r['menu']:4} {r['idle']:4} {r['fps']:5.2f} {r['below']:6.1f} {r['drops']:6.3f} {r['repeat']:5.2f} {r['dsrc']:5.2f} {r['dq']:5.2f} {r['dbuf']:5.2f} {r['mhz']:5.0f} {r['ma']:5.0f} {r['tmax']:4.0f} {r['gov']:3} {r['late']:4} {r['held']:7.0f}%  {r['top']}" + ("" if r["summary"] else "  (no summary)"))
