@@ -74,10 +74,10 @@ index 90df9a9b..75714e3d 100644
  			else if (complete || SDL_GetTicks() - firstFrame > 3000)
 diff --git a/es-app/src/rnds/RndsEs.cpp b/es-app/src/rnds/RndsEs.cpp
 new file mode 100644
-index 00000000..83016369
+index 00000000..36a4ba6f
 --- /dev/null
 +++ b/es-app/src/rnds/RndsEs.cpp
-@@ -0,0 +1,1098 @@
+@@ -0,0 +1,1099 @@
 +#include "rnds/RndsEs.h"
 +#include "rnds/RndsUI.h"
 +
@@ -1037,8 +1037,9 @@ index 00000000..83016369
 +		if (up || down) { d->ui->press(up ? UI::UP : UI::DOWN); return true; }	// a page of a game list
 +
 +		RndsGameListView* lv = dynamic_cast<RndsGameListView*>(from);
-+		// L3 on a game list: on to the first game of the next letter (round to the start after the last)
-+		if (is("l3") && v == UI::LIBRARY && lv)
++		// L3 on a game list: on to the first game of the next letter (round to the start after the last). es_input.cfg
++		// calls the stick's button "leftthumb"; ES only says "l3" for pads it set up from an SDL mapping (issue 27)
++		if ((is("leftthumb") || is("l3")) && v == UI::LIBRARY && lv)
 +		{
 +			auto& es = lv->entries();
 +			int n = (int)es.size(), at = d->ui->gameIndex();
@@ -2301,10 +2302,10 @@ index 00000000..026769b4
 +}
 diff --git a/es-app/src/rnds/RndsUI.cpp b/es-app/src/rnds/RndsUI.cpp
 new file mode 100644
-index 00000000..71c0d16c
+index 00000000..e811969a
 --- /dev/null
 +++ b/es-app/src/rnds/RndsUI.cpp
-@@ -0,0 +1,1738 @@
+@@ -0,0 +1,1771 @@
 +#include "RndsUI.h"
 +
 +#include <algorithm>
@@ -3219,6 +3220,15 @@ index 00000000..71c0d16c
 +			b.shadows = { inset(0, -6, 0, P.panelLow), outer(4, 4, SHADE45) };
 +			return b;
 +		}
++		// the home screen's "last played" chip: 3 border + 8 + the 54 px cartridge + 10 + the text + 12 + 3 border; the text
++		// is the eyebrow or the title, at most 300 px of it
++		float chipWidth(const SysInfo& sy)
++		{
++			TStyle te = ts(false, 17, 1.36f, true), tt = ts(true, 20);
++			float tw = std::max(layoutLine(utf8to32(sy.resumeEyebrow), tstyle(te)).width,
++			                    std::min(300.0f, layoutLine(utf8to32(sy.resumeTitle), tstyle(tt)).width));
++			return 3 + 8 + 54 + 10 + tw + 12 + 3;
++		}
 +		BoxCss chipBox()
 +		{
 +			BoxCss b; b.key = "chip"; b.radius = 12; b.border = 3; b.borderColor = EDGE; b.bg = P.chipBody;
@@ -3341,14 +3351,17 @@ index 00000000..71c0d16c
 +				drawSprite(still("wifi", wifi, false), 18, 24 + ry, nullptr, Color(INK.r, INK.g, INK.b, src->online() ? 1.0f : 0.35f));
 +			std::string bmode = src->batteryMode();
 +			float lvl = src->battery();
-+			if (!batt.empty() && !bmode.empty())
++			bool pctText = bmode == "text" && lvl >= 0;
++			auto battery = [&](float bx)		// the 26x14 icon, its level 3 px in
 +			{
-+				drawSprite(still("batt", batt, false), 44, 25 + ry, nullptr, INK);
++				drawSprite(still("batt", batt, false), bx, 25 + ry, nullptr, INK);
 +				float l = lvl < 0 ? 0.75f : lvl;
 +				float fw = std::round(16 * std::min(1.0f, std::max(0.0f, l)) * s) / s;
 +				if (fw > 0)
-+					be->fill(std::round(X(47)), std::round(X(28 + ry)), std::round(X(fw)), std::round(X(8)), INK);
-+			}
++					be->fill(std::round(X(bx + 3)), std::round(X(28 + ry)), std::round(X(fw)), std::round(X(8)), INK);
++			};
++			if (!batt.empty() && !bmode.empty() && !pctText)
++				battery(44);
 +			drawBox(brandBox(), 78, 19 + ry, 148.23f, 26);
 +			if (!logo.empty())
 +				drawSprite(still("logo", logo, true), 85, 22 + ry);
@@ -3357,12 +3370,16 @@ index 00000000..71c0d16c
 +			float cw = line(clock, ts(true, 20)).width, dw = line(date, ts(false, 20)).width;
 +			drawText(clock, ts(true, 20), 622 - cw, 20 + ry, INK);
 +			drawText(date, ts(false, 20), 622 - cw - 8 - dw, 20 + ry, INK);
-+			// "icon and text": the battery's percentage on the right, before the date (the left is the brand's)
-+			if (bmode == "text" && lvl >= 0)
++			// "icon and text": the percentage and then the icon, on the right before the date (the left is the brand's;
++			// the icon moves over so the two read together, "78% [battery]", issue 27)
++			if (pctText)
 +			{
 +				std::string pct = std::to_string((int)std::round(std::min(1.0f, lvl) * 100)) + "%";
 +				float pw = line(pct, ts(false, 20)).width;
-+				drawText(pct, ts(false, 20), 622 - cw - 8 - dw - 16 - pw, 20 + ry, INK);
++				float bx = 622 - cw - 8 - dw - 16 - (batt.empty() ? 0 : 26);
++				if (!batt.empty())
++					battery(bx);
++				drawText(pct, ts(false, 20), bx - (batt.empty() ? 0 : 6) - pw, 20 + ry, INK);
 +			}
 +		}
 +
@@ -3550,10 +3567,8 @@ index 00000000..71c0d16c
 +				{
 +					TStyle te = ts(false, 17, 1.36f, true), tt = ts(true, 20);
 +					TextLine le = layoutLine(utf8to32(sy.resumeEyebrow), tstyle(te));
-+					TextLine full = layoutLine(utf8to32(sy.resumeTitle), tstyle(tt));
 +					TextLine lt = layoutEllipsis(utf8to32(sy.resumeTitle), tstyle(tt), 300);
-+					float tw = std::max(le.width, std::min(300.0f, full.width));	// the box is max-width: 300px of the whole title
-+					float cw = 3 + 8 + 54 + 10 + tw + 12 + 3;
++					float cw = chipWidth(sy);
 +					float cx = 320 - cw / 2, cy = y0 + 168;
 +					drawBox(chipBox(), cx, cy, cw, 74);
 +					Sprite c = cart(CartArt{ sy.resumeCart, sy.resumeLabel, sy.resumeBox }, 54, 56);
@@ -3561,6 +3576,18 @@ index 00000000..71c0d16c
 +					float tx = cx + 11 + 54 + 10, ty = cy + 13.5f;
 +					drawLine(le, te, tx, ty, lineHeight(te), MUTED);
 +					drawLine(lt, tt, tx, ty + 23, lineHeight(tt), INK);
++				}
++				// the systems either side: their chip's box and cartridge made on the worker now, so stepping to one
++				// draws it at once. Made when first shown, the box (12-15 ms, sized to the title) cost a frame and the
++				// cartridge came a few frames after the chip: a flicker on every new system (issue 27)
++				int n = sysCount();
++				for (int k = -1; n > 1 && k <= 1; k += 2)
++				{
++					const SysInfo& ny = sys((ui->mSys + k + n) % n);
++					if (!ny.hasResume) continue;
++					BoxCss b = chipBox(); b.async = true;
++					box(b, chipWidth(ny), 74);
++					cart(CartArt{ ny.resumeCart, ny.resumeLabel, ny.resumeBox }, 54, 56);
 +				}
 +			}
 +			else
@@ -3695,7 +3722,14 @@ index 00000000..71c0d16c
 +			drawBox(railBox(), 18, 396, trackW, 10);
 +			float target = thumbLeft(at, total, trackW - 4);
 +			if (!thumbKnown) { thumbKnown = true; thumbFrom = thumbTo = target; thumbAt = -1e9; }
-+			else if (target != thumbTo) { thumbFrom = thumbValue(); thumbTo = target; thumbAt = now; }
++			else if (target != thumbTo)
++			{
++				// a glide cut short starts the next one from where it was going: started from where it was, a held
++				// direction (a new target every few frames, before the first of the 5 steps at 70 ms) kept the thumb
++				// standing still until the button was let go (issue 27)
++				thumbFrom = now - thumbAt < 350 ? thumbTo : thumbValue();
++				thumbTo = target; thumbAt = now;
++			}
 +			drawBox(thumbBox(), 20 + thumbValue(), 394, 42, 14);
 +			char a[16], b[16];
 +			snprintf(a, sizeof a, "%02d", at + 1);

@@ -1,0 +1,74 @@
+diff --git a/es-core/src/components/HelpComponent.cpp b/es-core/src/components/HelpComponent.cpp
+index dba37647..bdf79b19 100644
+--- a/es-core/src/components/HelpComponent.cpp
++++ b/es-core/src/components/HelpComponent.cpp
+@@ -90,6 +90,17 @@ void HelpComponent::updateGrid()
+ 		maxWidth = Renderer::getScreenWidth() - size.x();
+ 	}
+ 
++	// ROCKNIXDS: the canvas spans several panels (ES_UI_WIDTH each) and the bar sits on one of them. Measured against
++	// the whole canvas, nothing was ever left out and the keyboard's prompts ran off the top screen onto the bottom
++	// one (ROCKNIXDS issue 30). Keep a left-aligned bar inside its panel, with the same margin on both sides.
++	const int uiWidth = Renderer::getUIWidth();
++	if (uiWidth < Renderer::getScreenWidth() && mStyle.origin.x() == 0.0f)
++	{
++		const float x = mStyle.position.x();
++		const float margin = x - floorf(x / uiWidth) * uiWidth;
++		maxWidth = Math::min(maxWidth, (int)(uiWidth - 2 * margin));
++	}
++
+ 	bool is43screen = Renderer::getScreenProportion() < 1.4;
+ 
+ 	float width = 0;
+@@ -120,10 +131,6 @@ void HelpComponent::updateGrid()
+ 		}
+ 
+ 		auto lbl = std::make_shared<TextComponent>(mWindow, text, font, mStyle.textColor);
+-		
+-		width += icon->getSize().x() + lbl->getSize().x() + ICON_TEXT_SPACING + ENTRY_SPACING;
+-		if (width >= maxWidth)
+-			break;
+ 
+ 		if (mStyle.glowSize)
+ 		{
+@@ -135,6 +142,28 @@ void HelpComponent::updateGrid()
+ 		items.push_back({ icon, lbl });
+ 	}
+ 
++	// When the prompts don't fit, close up the gaps between them first (down to half), and only then leave out the
++	// last ones. A prompt left out doesn't count towards the bar's width.
++	float content = 0;
++	for (auto& item : items)
++		content += item.first->getSize().x() + item.second->getSize().x();
++
++	const float gaps = items.size() * (ICON_TEXT_SPACING + ENTRY_SPACING);
++	const float spacing = content + gaps < maxWidth ? 1.0f : Math::max(0.5f, (maxWidth - content - 1) / gaps);
++	const float iconTextSpacing = ICON_TEXT_SPACING * spacing;
++	const float entrySpacing = ENTRY_SPACING * spacing;
++
++	for (size_t i = 0; i < items.size(); i++)
++	{
++		const float itemWidth = items[i].first->getSize().x() + items[i].second->getSize().x() + iconTextSpacing + entrySpacing;
++		if (width + itemWidth > maxWidth)
++		{
++			items.resize(i);
++			break;
++		}
++		width += itemWidth;
++	}
++
+ 	mGrid = std::make_shared<ComponentGrid>(mWindow, Vector2i(items.size() * 4, 1));
+ 	mGrid->setSize(width, height);
+ 	for (unsigned int i = 0; i < items.size(); i++)
+@@ -143,9 +172,9 @@ void HelpComponent::updateGrid()
+ 
+ 		const int col = i * 4;
+ 		mGrid->setColWidthPerc(col, item.first->getSize().x() / width);
+-		mGrid->setColWidthPerc(col + 1, ICON_TEXT_SPACING / width);
++		mGrid->setColWidthPerc(col + 1, iconTextSpacing / width);
+ 		mGrid->setColWidthPerc(col + 2, item.second->getSize().x() / width);
+-		mGrid->setColWidthPerc(col + 3, ENTRY_SPACING / width);
++		mGrid->setColWidthPerc(col + 3, entrySpacing / width);
+ 
+ 		mGrid->setEntry(item.first, Vector2i(col, 0), false, false);
+ 		mGrid->setEntry(item.second, Vector2i(col + 2, 0), false, false);
