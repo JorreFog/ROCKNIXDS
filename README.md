@@ -97,6 +97,13 @@ the menu's updater pick the right one for the handheld they run on.
   games at 2x (Call of Duty, The 4 Heroes of Light, Platinum with a shader) running below full speed for much of
   their play. Measured (Black 2 at 2x, walking): 1416 MHz with balanced's queue gave 0.07 hitches/s and no dropped
   frames. That's about what performance gets, which averages ~1570 MHz and goes up to 1992.
+- **3D renderer (test).** *Nintendo DS > 3D renderer*, or per game: *SuperDrastic (test)* draws DraStic's hi-res
+  3D with SuperDrastic's own rasterizer, which matches DraStic's picture pixel for pixel and needs fewer
+  instructions for it (18% fewer in the simulator). Off (*DraStic*) by default while it is measured on the
+  handhelds. The game's performance log says which one ran.
+
+### New in 1.4
+
 - **The CPU clock remembers each game:** clocks that dropped frames are skipped from the start of the next session
   instead of being found again by dropping frames. Only drops that really come from the CPU count. A DS game now
   always runs on the performance CPU governor, which the clock control needs: one player's RG DS ran its games with
@@ -132,13 +139,6 @@ the menu's updater pick the right one for the handheld they run on.
 - **The DraStic engine is its own project now: [SuperDrastic](https://github.com/JorreFog/SuperDrastic)**, for any
   Linux firmware. 1.5 shipped SuperDrastic 0.3.0-beta.3, 1.5.1 ships 0.3.0-beta.4 (the version in [`SUPERDRASTIC`](SUPERDRASTIC));
   `dsflip/` keeps the ROCKNIX scripts.
-- **3D renderer (test).** *Nintendo DS > 3D renderer*, or per game: *SuperDrastic (test)* draws DraStic's hi-res
-  3D with SuperDrastic's own rasterizer, which matches DraStic's picture pixel for pixel and needs fewer
-  instructions for it (18% fewer in the simulator). Off (*DraStic*) by default while it is measured on the
-  handhelds. The game's performance log says which one ran.
-
-### New in 1.4
-
 - **Longer battery life and a cooler handheld.** A menu left alone uses a sixth of the CPU it did in 1.3 (10% of one core instead of 57%), at under a quarter of the clock; DS games run the CPU at the
   clock the game needs instead of 1992 MHz, with the same smoothness; shaders take half or less of the GPU time;
   game audio half the CPU. Every change and every measurement is in the
