@@ -38,6 +38,20 @@ stuck_report() {
 }
 {
   echo "$(date) start: $ROM (shader: ${DSHOOK_SHADER:-none})"
+  # 3x TEST BUILD: Gengis Engine with ES's "3D resolution" at 3x. Measured on the RG DS Plus (HeartGold walking,
+  # 1992 MHz, 2026-10-04) it held 59.8-60.2 fps without the LCD shader and 56.5-58.1 with lcd3x: the shader's threads
+  # take cores the three 3D threads need, and 3x already smooths edges by supersampling. So at 3x the shader is off
+  # and the power profile is performance, unless this game has its own shader or power profile set in ES.
+  CFG=/storage/.config/system/configs/system.cfg GAME=$(basename "$ROM")
+  cfgval() { v=$(grep -F "nds[\"$GAME\"].$1=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+             [ -n "$v" ] || v=$(grep "^nds.$1=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2); echo "$v"; }
+  PROF3X=
+  if [ "$(cfgval renderer)" = superdrastic ] && [ "$(cfgval resolution3d)" = 3x ]; then
+    export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-3}
+    grep -qF "nds[\"$GAME\"].shader=" $CFG 2>/dev/null || export DSHOOK_SHADER=none
+    grep -qF "nds[\"$GAME\"].power_profile=" $CFG 2>/dev/null || PROF3X=performance
+    echo "3x (test build): shader ${DSHOOK_SHADER:-none}, power profile ${PROF3X:-the game's}"
+  fi
   # gptokeyb (start_drastic.sh starts it inside ES's unit) takes ~1.1 s to die on the stop's TERM, and the stop
   # waits for it: that was most of the switch. Nothing uses it in this session (the exit hotkey is ROCKNIX's
   # own), so kill it outright, as start_drastic.sh itself does after a game. One stop for both units: systemd
@@ -150,6 +164,7 @@ stuck_report() {
   # DSFLIP_* already in the environment (tests, systemctl set-environment) win over the profile.
   PROF=$(grep -F "nds[\"$GAME\"].power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$PROF" ] || PROF=$(grep "^nds.power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ -n "$PROF3X" ] && PROF=$PROF3X
   case "$PROF" in
     performance) Q=1 QW=0 CMAX= ;;
     # the Plus's frames cost more (the main thread ~62% of a core at ~1475 MHz in Black 2 = ~83% at 1104, single
@@ -171,14 +186,14 @@ stuck_report() {
   echo "power profile: $PROF (queue $DSFLIP_QUEUE, wait ${DSFLIP_QUEUE_WAIT} ms, CPU max ${DSFLIP_CPU_MAX:-hardware})"
   # 3D renderer (ES: the game's or DS system's "3D renderer"): superdrastic = Gengis Engine, SuperDrastic's own
   # rasterizer for DraStic's hi-res 3D (DSFLIP_RAST=1), anything else DraStic's own; and its "3D texture filter"
-  # (SuperDrastic ignores it with DraStic's renderer). 1.5.5 offers no 3x: nds.resolution3d is not read.
+  # (SuperDrastic ignores it with DraStic's renderer). 3x: see the test-build block at the start.
   RND=$(grep -F "nds[\"$GAME\"].renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$RND" ] || RND=$(grep "^nds.renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ "$RND" = superdrastic ] && export DSFLIP_RAST=${DSFLIP_RAST:-1}
   TF=$(grep -F "nds[\"$GAME\"].texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$TF" ] || TF=$(grep "^nds.texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   case "$TF" in bilinear) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-1} ;; sharp) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-2} ;; esac
-  if [ -n "$DSFLIP_RAST" ]; then echo "3D renderer: Gengis Engine (texture filter ${DSFLIP_RAST_TEXFILTER:-0})"; else echo "3D renderer: DraStic"; fi
+  if [ -n "$DSFLIP_RAST" ]; then echo "3D renderer: Gengis Engine (texture filter ${DSFLIP_RAST_TEXFILTER:-0}, scale ${DSFLIP_RAST_SCALE:-2})"; else echo "3D renderer: DraStic"; fi
   cd $D
   # no wait for the display: libdsflip retries DRM master itself while seatd lets go of it (~0.4 s after sway)
   SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log \

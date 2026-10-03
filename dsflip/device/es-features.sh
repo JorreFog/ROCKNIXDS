@@ -4,7 +4,8 @@
 # (nds.power_profile: balanced, performance or battery; unset = balanced; session.sh) and its "3D renderer" option
 # (nds.renderer: superdrastic = Gengis Engine, SuperDrastic's own hi-res rasterizer, DSFLIP_RAST=1 in session.sh; unset
 # or drastic = DraStic's) with a "3D texture filter" (nds.texture_filter: nearest, bilinear, sharp; DSFLIP_RAST_TEXFILTER)
-# that only applies to Gengis Engine. Their value attributes are the system.cfg keys: without one ES derives the key
+# and, in this 3x test build only, a "3D resolution" (nds.resolution3d: 2x, 3x; DSFLIP_RAST_SCALE),
+# which only apply to Gengis Engine. Their value attributes are the system.cfg keys: without one ES derives the key
 # from the name (nds.3D_renderer), which session.sh doesn't read. It also keeps the DS system on
 # ROCKNIXDS's DraStic: es_systems.cfg's nds entry offers only drastic/drastic-sa (ROCKNIX also lists RetroArch cores
 # and standalone melonDS, which don't use libdsflip). --unlock-nds puts ROCKNIX's list back (uninstall).
@@ -59,6 +60,10 @@ add_ours() {
             print ind "<choice name=\"nearest (DS)\" value=\"nearest\" />"
             print ind "<choice name=\"bilinear\" value=\"bilinear\" />"
             print ind "<choice name=\"sharp bilinear\" value=\"sharp\" />"
+            print fi "</feature>"
+            print fi "<feature name=\"3D resolution\" value=\"resolution3d\">"
+            print ind "<choice name=\"2x\" value=\"2x\" />"
+            print ind "<choice name=\"3x (test)\" value=\"3x\" />"
             print fi "</feature>"
             next
         }
