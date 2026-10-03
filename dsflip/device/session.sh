@@ -117,7 +117,9 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # frames, and the wait keeps a full queue from dropping early ones (measured 2026-09-29, Black 2 at 2x, walking:
   # fixed 1416 MHz with a 2-frame queue + wait 0.07 hitches/s, 1104 MHz 0.13/s; without the wait 0.11-3.2 and 0.73).
   #   performance: 1104-1992 MHz, 1-frame queue (the lowest latency)
-  #   balanced:    1104-1416 MHz, 2-frame queue + 20 ms wait
+  #   balanced:    1104-1416 MHz, 1-frame queue + 20 ms wait (1.5.5; was 2 frames: measured on the RG DS Plus, HeartGold
+  #                walking at 1104 MHz, 2026-10-04: +16.7 ms of queue latency instead of +33.2, with as few repeated
+  #                frames (13-14 against 15-19 in ~40 s) and dropped ones (2-6 against 2-4); without the wait 20 drops)
   #   battery:     1104 MHz, 3-frame queue + 20 ms wait (more cover for the late frames a low clock makes);
   #                on the Plus 1104-1416 MHz (see below)
   # DSFLIP_* already in the environment (tests, systemctl set-environment) win over the profile.
@@ -129,7 +131,7 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
     # frames seen at 44-80% of a refresh at 1416): a fixed 1104 MHz overruns the heavy ones, so there battery keeps
     # the deep queue but lets the governor step to 1416 on CPU-bound drops (it steps back down when frames are light)
     battery) Q=3 QW=20; if [ -n "$BIG" ]; then CMAX=1416000; else CMAX=1104000; fi ;;
-    *) PROF=balanced Q=2 QW=20 CMAX=1416000 ;;
+    *) PROF=balanced Q=1 QW=20 CMAX=1416000 ;;
   esac
   export DSFLIP_QUEUE=${DSFLIP_QUEUE:-$Q} DSFLIP_QUEUE_WAIT=${DSFLIP_QUEUE_WAIT:-$QW}
   # The latch (the commit of both panels' frames) must come early enough before the EARLIER panel's vblank; on the

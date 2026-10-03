@@ -95,9 +95,9 @@ RG DS Plus.
   own save file is dropped.
 - **Power profiles.** *Game settings > Per system advanced configuration > Nintendo DS > Power profile*, or per
   game (hold A on it > *Advanced game options*):
-  - *balanced* (the default): CPU up to 1416 MHz, one more frame of queue (+17 ms input latency), and a full queue
-    holds DraStic for a moment instead of dropping a frame;
-  - *performance*: CPU up to 1992 MHz and the shortest queue, for the lowest latency;
+  - *balanced* (the default): CPU up to 1416 MHz and the shortest queue, where a full queue holds DraStic for a
+    moment instead of dropping a frame (1.5.5: half the input latency of before, as smooth);
+  - *performance*: CPU up to 1992 MHz and the shortest queue without the hold, for the lowest latency;
   - *battery saver*: three frames of queue (+33 ms). On the Plus the CPU runs 1104–1416 MHz: its frames cost more,
     and a fixed 1104 MHz overran the heavy ones.
 
