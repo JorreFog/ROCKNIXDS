@@ -167,6 +167,12 @@ stuck_report() {
   # play at the clocks the governor held; a bound that slows the game down saves nothing worth it.
   [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX} DSFLIP_CPU_MAX_SOFT=${DSFLIP_CPU_MAX_SOFT:-1}
   echo "power profile: $PROF (queue $DSFLIP_QUEUE, wait ${DSFLIP_QUEUE_WAIT} ms, CPU max ${DSFLIP_CPU_MAX:-hardware})"
+  # 3D renderer (ES: the game's or DS system's "3D renderer"): superdrastic = SuperDrastic's own rasterizer for
+  # DraStic's hi-res 3D (DSFLIP_RAST=1; a test feature, off unless chosen), anything else DraStic's own.
+  RND=$(grep -F "nds[\"$GAME\"].renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ -n "$RND" ] || RND=$(grep "^nds.renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ "$RND" = superdrastic ] && export DSFLIP_RAST=${DSFLIP_RAST:-1}
+  echo "3D renderer: ${RND:-drastic}${DSFLIP_RAST:+ (DSFLIP_RAST=$DSFLIP_RAST)}"
   cd $D
   # no wait for the display: libdsflip retries DRM master itself while seatd lets go of it (~0.4 s after sway)
   SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log \

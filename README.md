@@ -123,6 +123,10 @@ RG DS Plus.
 - "Launch this game at startup" runs once per boot. The menu is back ~0.5 s sooner after a DS game.
 - **The DraStic engine is its own project now: [SuperDrastic](https://github.com/JorreFog/SuperDrastic)**. This
   release installs SuperDrastic 0.3.0-beta.4, shipped in `dsflip/` (the version in [`SUPERDRASTIC`](SUPERDRASTIC)).
+- **3D renderer (test).** *Nintendo DS > 3D renderer*, or per game: *SuperDrastic (test)* draws DraStic's hi-res
+  3D with SuperDrastic's own rasterizer, which matches DraStic's picture pixel for pixel and needs fewer
+  instructions for it (18% fewer in the simulator). Off (*DraStic*) by default while it is measured on the
+  handhelds. The game's performance log says which one ran.
 
 ### New in 1.4
 
