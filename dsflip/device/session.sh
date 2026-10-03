@@ -161,6 +161,12 @@ stuck_report() {
   export DSFLIP_QUEUE=${DSFLIP_QUEUE:-$Q} DSFLIP_QUEUE_WAIT=${DSFLIP_QUEUE_WAIT:-$QW}
   [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX} DSFLIP_CPU_MAX_SOFT=${DSFLIP_CPU_MAX_SOFT:-1}
   echo "power profile: $PROF (queue $DSFLIP_QUEUE, wait ${DSFLIP_QUEUE_WAIT} ms, CPU max ${DSFLIP_CPU_MAX:-hardware})"
+  # 3D renderer (ES: the game's or DS system's "3D renderer"): superdrastic = SuperDrastic's own rasterizer for
+  # DraStic's hi-res 3D (DSFLIP_RAST=1; a test feature, off unless chosen), anything else DraStic's own.
+  RND=$(grep -F "nds[\"$GAME\"].renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ -n "$RND" ] || RND=$(grep "^nds.renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ "$RND" = superdrastic ] && export DSFLIP_RAST=${DSFLIP_RAST:-1}
+  echo "3D renderer: ${RND:-drastic}${DSFLIP_RAST:+ (DSFLIP_RAST=$DSFLIP_RAST)}"
   # Performance log, the same samples tools/rgds-monitor.py takes, and only after the player allowed the upload
   # (first launch asks; Nintendo DS > Share performance logs changes it). restore.sh uploads on quit. Test
   # launches don't record.

@@ -132,6 +132,10 @@ the menu's updater pick the right one for the handheld they run on.
 - **The DraStic engine is its own project now: [SuperDrastic](https://github.com/JorreFog/SuperDrastic)**, for any
   Linux firmware. 1.5 shipped SuperDrastic 0.3.0-beta.3, 1.5.1 ships 0.3.0-beta.4 (the version in [`SUPERDRASTIC`](SUPERDRASTIC));
   `dsflip/` keeps the ROCKNIX scripts.
+- **3D renderer (test).** *Nintendo DS > 3D renderer*, or per game: *SuperDrastic (test)* draws DraStic's hi-res
+  3D with SuperDrastic's own rasterizer, which matches DraStic's picture pixel for pixel and needs fewer
+  instructions for it (18% fewer in the simulator). Off (*DraStic*) by default while it is measured on the
+  handhelds. The game's performance log says which one ran.
 
 ### New in 1.4
 
