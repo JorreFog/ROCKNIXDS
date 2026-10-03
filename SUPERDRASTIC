@@ -1,3 +1,3 @@
 # The SuperDrastic release install.sh installs (https://github.com/JorreFog/SuperDrastic): version and the sha256 of
 # superdrastic-<version>-aarch64.tar.gz. Bump both together. This release ships the package in dsflip/.
-0.4.0-beta.1 f20a33b9d8d0ec50216565f721667979669846b39b954ea6f9b209732724eae9
+0.4.0-beta.1 569c5906cf8de5d9477a5e9c8d31c38178f05e435f09b02a152c18f99a42ffd3
