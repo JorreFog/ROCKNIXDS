@@ -2302,10 +2302,10 @@ index 00000000..026769b4
 +}
 diff --git a/es-app/src/rnds/RndsUI.cpp b/es-app/src/rnds/RndsUI.cpp
 new file mode 100644
-index 00000000..e811969a
+index 00000000..114bd406
 --- /dev/null
 +++ b/es-app/src/rnds/RndsUI.cpp
-@@ -0,0 +1,1771 @@
+@@ -0,0 +1,1775 @@
 +#include "RndsUI.h"
 +
 +#include <algorithm>
@@ -3360,27 +3360,31 @@ index 00000000..e811969a
 +				if (fw > 0)
 +					be->fill(std::round(X(bx + 3)), std::round(X(28 + ry)), std::round(X(fw)), std::round(X(8)), INK);
 +			};
-+			if (!batt.empty() && !bmode.empty() && !pctText)
++			// on the left after the Wi-Fi: "icon only" the battery icon; "icon and text" the percentage and then the icon
++			// ("78% [battery]"), the percentage right-aligned in room for "100%" so nothing moves as it changes, and
++			// the brand moved right after them (1.5.5)
++			float brandX = 78;
++			if (pctText)
++			{
++				TStyle tp = ts(false, 20);
++				std::string pct = std::to_string((int)std::round(std::min(1.0f, lvl) * 100)) + "%";
++				float slot = line("100%", tp).width, pw = line(pct, tp).width;
++				drawText(pct, tp, 44 + slot - pw, 20 + ry, INK);
++				float bx = 44 + slot + 6;
++				if (!batt.empty())
++					battery(bx);
++				brandX = std::round(bx + (batt.empty() ? 0 : 26) + 10);
++			}
++			else if (!batt.empty() && !bmode.empty())
 +				battery(44);
-+			drawBox(brandBox(), 78, 19 + ry, 148.23f, 26);
++			drawBox(brandBox(), brandX, 19 + ry, 148.23f, 26);
 +			if (!logo.empty())
-+				drawSprite(still("logo", logo, true), 85, 22 + ry);
++				drawSprite(still("logo", logo, true), brandX + 7, 22 + ry);
 +
 +			std::string clock = src->clockText(), date = src->dateText();
 +			float cw = line(clock, ts(true, 20)).width, dw = line(date, ts(false, 20)).width;
 +			drawText(clock, ts(true, 20), 622 - cw, 20 + ry, INK);
 +			drawText(date, ts(false, 20), 622 - cw - 8 - dw, 20 + ry, INK);
-+			// "icon and text": the percentage and then the icon, on the right before the date (the left is the brand's;
-+			// the icon moves over so the two read together, "78% [battery]", issue 27)
-+			if (pctText)
-+			{
-+				std::string pct = std::to_string((int)std::round(std::min(1.0f, lvl) * 100)) + "%";
-+				float pw = line(pct, ts(false, 20)).width;
-+				float bx = 622 - cw - 8 - dw - 16 - (batt.empty() ? 0 : 26);
-+				if (!batt.empty())
-+					battery(bx);
-+				drawText(pct, ts(false, 20), bx - (batt.empty() ? 0 : 6) - pw, 20 + ry, INK);
-+			}
 +		}
 +
 +		// the game list's top screen, left: the box cover in a pixel frame, bobbing like the home screen's icon, its
