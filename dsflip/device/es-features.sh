@@ -4,7 +4,9 @@
 # (nds.power_profile: balanced, performance or battery; unset = balanced; session.sh) and its "share performance
 # logs" option (nds.share_performance_logs: 1 uploads a performance log on quit, 0 does not, unset asks) and its
 # "3D renderer" option (nds.renderer: superdrastic = SuperDrastic's own hi-res rasterizer, DSFLIP_RAST=1 in
-# session.sh; unset or drastic = DraStic's). It also keeps the DS system on
+# session.sh; unset or drastic = DraStic's) with its "3D texture filter" (nds.texture_filter: nearest, bilinear,
+# sharp; DSFLIP_RAST_TEXFILTER) and "3D resolution" (nds.resolution3d: 2x, 3x; DSFLIP_RAST_SCALE) options, which
+# only apply to that renderer. It also keeps the DS system on
 # ROCKNIXDS's DraStic: es_systems.cfg's nds entry offers only drastic/drastic-sa (ROCKNIX also lists RetroArch cores
 # and standalone melonDS, which don't use libdsflip). --unlock-nds puts ROCKNIX's list back (uninstall).
 # Run by the installer and at every boot (autostart hook rocknixds-es-features), before ES starts.
@@ -25,7 +27,7 @@ STATE=${ESF_STATE:-/storage/rgds-rocknix-backup}     # the installer's backup di
 # any earlier copy of them is dropped first, so this is idempotent. The resume option follows the shader option.
 add_ours() {
     grep -vE 'value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"' "$1" | awk '
-        /<feature name="resume on quit"/ || /<feature name="power profile"/ || /<feature name="share performance logs"/ || /<feature name="3D renderer"/ { skip = 1 }
+        /<feature name="resume on quit"/ || /<feature name="power profile"/ || /<feature name="share performance logs"/ || /<feature name="3D renderer"/ || /<feature name="3D texture filter"/ || /<feature name="3D resolution"/ { skip = 1 }
         skip { if (/<\/feature>/) skip = 0; next }
         /<core name="drastic-sa"/ { core = 1 }
         core && /<\/core>/ { core = 0 }
@@ -57,6 +59,15 @@ add_ours() {
             print fi "<feature name=\"3D renderer\">"
             print ind "<choice name=\"DraStic\" value=\"drastic\" />"
             print ind "<choice name=\"SuperDrastic (test)\" value=\"superdrastic\" />"
+            print fi "</feature>"
+            print fi "<feature name=\"3D texture filter\">"
+            print ind "<choice name=\"nearest (DS)\" value=\"nearest\" />"
+            print ind "<choice name=\"bilinear\" value=\"bilinear\" />"
+            print ind "<choice name=\"sharp bilinear\" value=\"sharp\" />"
+            print fi "</feature>"
+            print fi "<feature name=\"3D resolution\">"
+            print ind "<choice name=\"2x\" value=\"2x\" />"
+            print ind "<choice name=\"3x (supersampled to 2x)\" value=\"3x\" />"
             print fi "</feature>"
             next
         }

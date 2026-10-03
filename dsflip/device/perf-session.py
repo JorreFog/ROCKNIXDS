@@ -301,6 +301,36 @@ def running_game(pid):
     return None
 
 
+def thread_cpu(pid, prev, now, hz):
+    """per-thread CPU of the game, % of a core: {name: pct} for the threads above 2% (name = the thread's comm, the
+    main thread "main"; SuperDrastic names its 3D render threads rast-3d; several of a name are summed). prev:
+    {tid: (ticks, t)} from the last sample, updated in place."""
+    out, seen = {}, set()
+    try:
+        tids = os.listdir("/proc/%d/task" % pid)
+    except OSError:
+        return out
+    for t in tids:
+        st = rd("/proc/%s/task/%s/stat" % (pid, t))
+        if not st:
+            continue
+        name = st[st.find("(") + 1:st.rfind(")")]
+        f = st.rsplit(")", 1)[-1].split()
+        if len(f) < 13:
+            continue
+        ticks, tid = int(f[11]) + int(f[12]), int(t)
+        seen.add(tid)
+        if tid in prev:
+            pct = 100 * (ticks - prev[tid][0]) / hz / max(0.5, now - prev[tid][1])
+            if pct >= 2:
+                key = "main" if tid == pid else name
+                out[key] = round(out.get(key, 0) + pct)
+        prev[tid] = (ticks, now)
+    for tid in [k for k in prev if k not in seen]:
+        del prev[tid]
+    return out
+
+
 def one_sample(tail, pc, gt, pid, pid_t, pcpu, hz):
     now = time.time()
     c, g = cpustat(), gputime()
@@ -310,7 +340,7 @@ def one_sample(tail, pc, gt, pid, pid_t, pcpu, hz):
     gavg = round(sum(f * v for f, v in dg.items()) / tot / 1e6) if tot > 0 else None
     if time.monotonic() - pid_t > 2 or (pid and not os.path.exists("/proc/%d" % pid)):
         pid, pid_t = find_game_pid(), time.monotonic()
-    proc = None
+    proc, threads = None, None
     if pid:
         s = rd("/proc/%d/stat" % pid).rsplit(")", 1)[-1].split()
         if len(s) > 13:
@@ -318,6 +348,9 @@ def one_sample(tail, pc, gt, pid, pid_t, pcpu, hz):
             if pcpu and pcpu[0] == pid:
                 proc = round(100 * (ticks - pcpu[1]) / hz / max(0.5, now - pcpu[2]))
             pcpu = (pid, ticks, now)
+        if not hasattr(one_sample, "tprev") or one_sample.tpid != pid:
+            one_sample.tprev, one_sample.tpid = {}, pid
+        threads = thread_cpu(pid, one_sample.tprev, now, hz) or None
     tz = {}
     for z in range(4):
         ty = rd("/sys/class/thermal/thermal_zone%d/type" % z)
@@ -331,7 +364,7 @@ def one_sample(tail, pc, gt, pid, pid_t, pcpu, hz):
         "t": round(now, 2), "game": running_game(pid), "cpu_mhz": int(rd(CPU + "/scaling_cur_freq", "0")) // 1000,
         "cpu_max_mhz": int(rd(CPU + "/scaling_max_freq", "0")) // 1000, "cpu_load": load,
         "gpu_mhz": int(rd(GPU + "/cur_freq", "0")) // 1000000, "gpu_avg_mhz": gavg, "game_cpu": proc,
-        "temp": tz, "bat": bat, "log": tail.lines(),
+        "game_threads": threads, "temp": tz, "bat": bat, "log": tail.lines(),
     }
     return out, c, g, pid, pid_t, pcpu
 

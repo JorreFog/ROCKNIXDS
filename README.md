@@ -100,7 +100,10 @@ the menu's updater pick the right one for the handheld they run on.
 - **3D renderer (test).** *Nintendo DS > 3D renderer*, or per game: *SuperDrastic (test)* draws DraStic's hi-res
   3D with SuperDrastic's own rasterizer, which matches DraStic's picture pixel for pixel and needs fewer
   instructions for it (18% fewer in the simulator). Off (*DraStic*) by default while it is measured on the
-  handhelds. The game's performance log says which one ran.
+  handhelds. The game's performance log says which one ran. With it, *3D texture filter* (nearest = the DS's,
+  bilinear, sharp bilinear) smooths textures, and *3D resolution* 3x renders the scene at 768x576 and supersamples
+  it into the 2x frame (anti-aliased polygon edges). Both cost CPU: the filter about twice the raster stage, 3x
+  about 2.5 times; the performance log's `game_threads` shows what each thread of the emulator costs.
 
 ### New in 1.4
 

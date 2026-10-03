@@ -166,7 +166,14 @@ stuck_report() {
   RND=$(grep -F "nds[\"$GAME\"].renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$RND" ] || RND=$(grep "^nds.renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ "$RND" = superdrastic ] && export DSFLIP_RAST=${DSFLIP_RAST:-1}
-  echo "3D renderer: ${RND:-drastic}${DSFLIP_RAST:+ (DSFLIP_RAST=$DSFLIP_RAST)}"
+  # its options (ES "3D texture filter", "3D resolution"; SuperDrastic ignores them with DraStic's renderer)
+  TF=$(grep -F "nds[\"$GAME\"].texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ -n "$TF" ] || TF=$(grep "^nds.texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  case "$TF" in bilinear) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-1} ;; sharp) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-2} ;; esac
+  R3=$(grep -F "nds[\"$GAME\"].resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ -n "$R3" ] || R3=$(grep "^nds.resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ "$R3" = 3x ] && export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-3}
+  echo "3D renderer: ${RND:-drastic}${DSFLIP_RAST:+ (DSFLIP_RAST=$DSFLIP_RAST, texture filter ${DSFLIP_RAST_TEXFILTER:-0}, scale ${DSFLIP_RAST_SCALE:-2})}"
   # Performance log, the same samples tools/rgds-monitor.py takes, and only after the player allowed the upload
   # (first launch asks; Nintendo DS > Share performance logs changes it). restore.sh uploads on quit. Test
   # launches don't record.
