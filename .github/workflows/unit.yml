@@ -10,6 +10,7 @@ on:
       - 'dii-ess-aye/scrape/ra-fetch.py'
       - 'dsflip/device/rocknixds-update'
       - 'install.sh'
+      - 'tools/perf-logs.py'
       - '.github/workflows/unit.yml'
   pull_request:
     paths:
@@ -18,6 +19,7 @@ on:
       - 'dii-ess-aye/scrape/ra-fetch.py'
       - 'dsflip/device/rocknixds-update'
       - 'install.sh'
+      - 'tools/perf-logs.py'
       - '.github/workflows/unit.yml'
   workflow_dispatch:
 
