@@ -1,4 +1,4 @@
 # The SuperDrastic release install.sh installs (https://github.com/JorreFog/SuperDrastic): version and the sha256 of
 # superdrastic-<version>-aarch64.tar.gz. Bump both together. This test branch ships the package in dsflip/ (built from SuperDrastic's
 # claude/github-issues-1-5-1-release-dyv1zt branch: the 3D rasterizer test build).
-0.3.0-rast2 65da483c957a13f579fa0aea589075df9b2a2b72ed6515a9df8ef9f8ccf8d106
+0.3.0-rast3 445e658e1e4fe1e1a46983b74892188cb98bf832bd4cca2b6ab1299fe19f29cc
