@@ -6,7 +6,8 @@
 # "3D renderer" option (nds.renderer: superdrastic = SuperDrastic's own hi-res rasterizer, DSFLIP_RAST=1 in
 # session.sh; unset or drastic = DraStic's) with its "3D texture filter" (nds.texture_filter: nearest, bilinear,
 # sharp; DSFLIP_RAST_TEXFILTER) and "3D resolution" (nds.resolution3d: 2x, 3x; DSFLIP_RAST_SCALE) options, which
-# only apply to that renderer. It also keeps the DS system on
+# only apply to that renderer. Their value attributes are the system.cfg keys: without one ES derives the key from
+# the name (nds.3D_renderer), which session.sh doesn't read. It also keeps the DS system on
 # ROCKNIXDS's DraStic: es_systems.cfg's nds entry offers only drastic/drastic-sa (ROCKNIX also lists RetroArch cores
 # and standalone melonDS, which don't use libdsflip). --unlock-nds puts ROCKNIX's list back (uninstall).
 # Run by the installer and at every boot (autostart hook rocknixds-es-features), before ES starts.
@@ -52,20 +53,16 @@ add_ours() {
             print ind "<choice name=\"performance\" value=\"performance\" />"
             print ind "<choice name=\"battery saver\" value=\"battery\" />"
             print fi "</feature>"
-            print fi "<feature name=\"share performance logs\">"
-            print ind "<choice name=\"yes\" value=\"1\" />"
-            print ind "<choice name=\"no\" value=\"0\" />"
-            print fi "</feature>"
-            print fi "<feature name=\"3D renderer\">"
+            print fi "<feature name=\"3D renderer\" value=\"renderer\">"
             print ind "<choice name=\"DraStic\" value=\"drastic\" />"
             print ind "<choice name=\"SuperDrastic (test)\" value=\"superdrastic\" />"
             print fi "</feature>"
-            print fi "<feature name=\"3D texture filter\">"
+            print fi "<feature name=\"3D texture filter\" value=\"texture_filter\">"
             print ind "<choice name=\"nearest (DS)\" value=\"nearest\" />"
             print ind "<choice name=\"bilinear\" value=\"bilinear\" />"
             print ind "<choice name=\"sharp bilinear\" value=\"sharp\" />"
             print fi "</feature>"
-            print fi "<feature name=\"3D resolution\">"
+            print fi "<feature name=\"3D resolution\" value=\"resolution3d\">"
             print ind "<choice name=\"2x\" value=\"2x\" />"
             print ind "<choice name=\"3x (supersampled to 2x)\" value=\"3x\" />"
             print fi "</feature>"
