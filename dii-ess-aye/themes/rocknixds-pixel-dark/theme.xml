@@ -55,6 +55,15 @@
         </text>
     </view>
 
+    <!-- The menus' and keyboard's button hints (ES's help bar, styled from the system view) on the top screen: inside
+         the engine's sheet (x 18-622, y 60-466 of 640x480, a 3 px border), 12 px in from its left edge and 10 px above
+         its bottom edge. ES's default put them on the sheet's bottom border. Fractions of the 3-panel canvas. -->
+    <view name="system">
+        <helpsystem name="help">
+            <pos>0.0171875 0.90625</pos>
+        </helpsystem>
+    </view>
+
     <!-- ES's menus in the mockup's colours and font -->
     <view name="menu">
         <menuBackground name="menubg">

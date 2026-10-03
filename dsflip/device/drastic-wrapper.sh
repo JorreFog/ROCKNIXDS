@@ -1,5 +1,6 @@
 #!/bin/sh
-# DraStic launcher on the RG DS (installed as /storage/.config/drastic/drastic; start_drastic.sh runs it).
+# DraStic launcher on the RG DS (installed as /storage/.config/drastic/dsflip/drastic-wrapper.sh; start_drastic.sh
+# runs /storage/.config/drastic/drastic, drastic-launch, which execs this without LD_PRELOAD).
 # Default: libdsflip. DraStic draws straight into both panels' scanout buffers (KMS), which needs sway
 # stopped, so the game runs in a detached systemd unit that stops ES+sway and brings them back afterwards.
 # ES's DraStic "shader" and "microphone sensitivity" choices (DSHOOK_SHADER, DSHOOK_MIC_THRESH, set by
@@ -25,4 +26,9 @@ if [ "${DSFLIP:-1}" != "0" ] && [ ! -e $D/nodsflip ] && [ -f $D/dsflip/libdsflip
      $D/dsflip/session.sh "$@" >/dev/null 2>&1; then
     exec sleep 86400        # stopping ES (from the unit) ends this, start_drastic.sh and gptokeyb too
 fi
-exec $D/drastic.dvsync "$@"
+# Not exec: start_drastic.sh's "kill -9 $(pidof gptokeyb)" afterwards runs with libdrastouch preloaded, so with the
+# mic on pidof crashes and gptokeyb outlives the game. Here LD_PRELOAD is gone (drastic-launch), so stop it here.
+$D/drastic.dvsync "$@"
+r=$?
+kill -9 $(pidof gptokeyb) 2>/dev/null
+exit $r

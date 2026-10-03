@@ -122,7 +122,7 @@ RG DS Plus.
   upstream at a verified version (`--no-canvas` skips the ~180 MB). Only verified themes can be picked.
 - "Launch this game at startup" runs once per boot. The menu is back ~0.5 s sooner after a DS game.
 - **The DraStic engine is its own project now: [SuperDrastic](https://github.com/JorreFog/SuperDrastic)**. This
-  release installs SuperDrastic 0.3.0-beta.4, shipped in `dsflip/` (the version in [`SUPERDRASTIC`](SUPERDRASTIC)).
+  release installs SuperDrastic 0.3.0-beta.5, shipped in `dsflip/` (the version in [`SUPERDRASTIC`](SUPERDRASTIC)).
 
 ### New in 1.4
 

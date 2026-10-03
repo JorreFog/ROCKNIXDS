@@ -1,0 +1,23 @@
+diff --git a/es-core/src/components/NinePatchComponent.cpp b/es-core/src/components/NinePatchComponent.cpp
+index 8d62fc11..5f031ef8 100644
+--- a/es-core/src/components/NinePatchComponent.cpp
++++ b/es-core/src/components/NinePatchComponent.cpp
+@@ -86,7 +86,18 @@ void NinePatchComponent::updateColors()
+ void NinePatchComponent::buildVertices()
+ {
+ 	if (mTexture == nullptr || !mTexture->isLoaded())
++	{
++		// The vertices were made for the previous image and size. Kept, they were drawn at that size with this
++		// image unbound: a text field that got its focus image (which never loads when ROCKNIX's FreeImage rejects
++		// it) while it still had its initial 4096 px width showed as a white bar running off the screen
++		// (ROCKNIXDS issue 28). render() builds them again once the image is loaded.
++		if (mVertices != NULL)
++		{
++			delete[] mVertices;
++			mVertices = NULL;
++		}
+ 		return;
++	}
+ 
+ 	if (mVertices != NULL)
+ 		delete[] mVertices;	

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Run ON the RG DS (ROCKNIX) from a directory holding libdsflip.so, session.sh and drastic-wrapper.sh:
+# Run ON the RG DS (ROCKNIX) from a directory holding libdsflip.so, session.sh, drastic-wrapper.sh and drastic-launch:
 #   sh install.sh
 # Installs libdsflip as the default DraStic launcher. Keeps the previous launcher as drastic.dvsync
 # (fallback: touch /storage/.config/drastic/nodsflip) and a backup as drastic.pre-dsflip.bak.
@@ -26,5 +26,8 @@ chmod +x $D/dsflip/*.sh
 ln -sf ../drastic.real $D/dsflip/drastic          # named 'drastic' so the exit hotkey (killall drastic) matches
 [ -e $D/drastic.dvsync ] || cp -p $D/drastic $D/drastic.dvsync
 [ -e $D/drastic.pre-dsflip.bak ] || cp $D/drastic $D/drastic.pre-dsflip.bak   # once: on an upgrade it's our own wrapper
-cp "$HERE/drastic-wrapper.sh" $D/drastic; chmod +x $D/drastic
+cp "$HERE/drastic-wrapper.sh" $D/dsflip/; chmod +x $D/dsflip/drastic-wrapper.sh
+# the launcher start_drastic.sh runs: static, so libdrastouch (preloaded with the mic on) can't crash it (issue 26)
+if [ -f "$HERE/drastic-launch" ]; then cp "$HERE/drastic-launch" $D/drastic.new; chmod +x $D/drastic.new; mv -f $D/drastic.new $D/drastic
+else cp "$HERE/drastic-wrapper.sh" $D/drastic; chmod +x $D/drastic; fi
 echo "libdsflip installed. Fallback: touch $D/nodsflip"

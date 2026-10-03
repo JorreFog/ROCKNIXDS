@@ -438,7 +438,8 @@ if [ $DSFLIP_ON = 1 ]; then
     cp "$SRC/dsflip/device/session.sh" "$SRC/dsflip/device/restore.sh" \
        "$SRC/dsflip/device/drastic-wrapper.sh" "$SRC/dsflip/device/install.sh" "$SRC/dsflip/device/es-features.sh" \
        "$SRC/dsflip/device/fast-switch" "$SRC/dsflip/device/playstats.py" "$SRC/dsflip/device/menu-power.sh" \
-       "$SRC/dsflip/device/battery-led-status" "$SRC/dsflip/device/powerstate" "$SRC/dsflip/device/media-auto.sh" $WORK/dsflip/
+       "$SRC/dsflip/device/battery-led-status" "$SRC/dsflip/device/powerstate" "$SRC/dsflip/device/media-auto.sh" \
+       "$SRC/dsflip/device/drastic-launch" $WORK/dsflip/
     sh $WORK/dsflip/install.sh
 
     # DS-pixel-aware shaders for DraStic (sharp and LCD-grid looks that work at 1x and 2x) + their ES entries

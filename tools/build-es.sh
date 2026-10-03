@@ -14,7 +14,7 @@ HERE=$(cd "$(dirname "$0")/.." && pwd)
 WORK=${1:-$HERE/build/es}
 ES_REPO=https://github.com/ROCKNIX/emulationstation-next.git
 ES_COMMIT=bccd7157
-PATCHES="uiwidth bindings-clock carousel-repeat devkeys powersaver firstview lockdown rnds apirefresh"
+PATCHES="uiwidth bindings-clock carousel-repeat devkeys powersaver firstview lockdown rnds apirefresh ninepatch help"
 UBUNTU=noble
 PKGS="libc6 libc6-dev linux-libc-dev libgcc-13-dev libgcc-s1 libstdc++-13-dev libstdc++6 libsdl2-dev libsdl2-2.0-0
       libsdl2-mixer-dev libsdl2-mixer-2.0-0 libfreetype-dev libfreetype6 libfreeimage-dev libfreeimage3
@@ -73,6 +73,10 @@ set(CMAKE_C_COMPILER clang)
 set(CMAKE_CXX_COMPILER clang++)
 set(CMAKE_C_COMPILER_TARGET aarch64-linux-gnu)
 set(CMAKE_CXX_COMPILER_TARGET aarch64-linux-gnu)
+# what clang 18 does by default; newer clangs (or distro defaults) otherwise make the binary need CXXABI_1.3.9 (sized
+# delete) and ld-linux's __stack_chk_guard, which the check below rejects
+set(CMAKE_C_FLAGS_INIT "-fno-stack-protector")
+set(CMAKE_CXX_FLAGS_INIT "-fno-stack-protector -fno-sized-deallocation")
 set(CMAKE_EXE_LINKER_FLAGS_INIT "-fuse-ld=lld -Wl,--allow-shlib-undefined")
 set(CMAKE_SHARED_LINKER_FLAGS_INIT "-fuse-ld=lld")
 set(CMAKE_FIND_ROOT_PATH $WORK/sysroot)
