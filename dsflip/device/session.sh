@@ -38,6 +38,19 @@ stuck_report() {
 }
 {
   echo "$(date) start: $ROM (shader: ${DSHOOK_SHADER:-none})"
+  # 3x (SuperDrastic's renderer with ES's "3D resolution" at 3x): measured on the RG DS Plus (HeartGold walking,
+  # 1992 MHz, 2026-10-04) it held 59.8-60.2 fps without the LCD shader and 56.5-58.1 with lcd3x: the shader's threads
+  # take cores the three 3D threads need, and 3x already smooths edges by supersampling. So at 3x the shader is off
+  # and the power profile is performance, unless this game has its own shader or power profile set in ES.
+  CFG=/storage/.config/system/configs/system.cfg GAME=$(basename "$ROM")
+  cfgval() { v=$(grep -F "nds[\"$GAME\"].$1=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+             [ -n "$v" ] || v=$(grep "^nds.$1=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2); echo "$v"; }
+  PROF3X=
+  if [ "$(cfgval renderer)" = superdrastic ] && [ "$(cfgval resolution3d)" = 3x ]; then
+    grep -qF "nds[\"$GAME\"].shader=" $CFG 2>/dev/null || export DSHOOK_SHADER=none
+    grep -qF "nds[\"$GAME\"].power_profile=" $CFG 2>/dev/null || PROF3X=performance
+    echo "3x: shader ${DSHOOK_SHADER:-none}, power profile ${PROF3X:-the game's}"
+  fi
   # gptokeyb (start_drastic.sh starts it inside ES's unit) takes ~1.1 s to die on the stop's TERM, and the stop
   # waits for it: that was most of the switch. Nothing uses it in this session (the exit hotkey is ROCKNIX's
   # own), so kill it outright, as start_drastic.sh itself does after a game. One stop for both units: systemd
@@ -148,6 +161,7 @@ stuck_report() {
   # DSFLIP_* already in the environment (tests, systemctl set-environment) win over the profile.
   PROF=$(grep -F "nds[\"$GAME\"].power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$PROF" ] || PROF=$(grep "^nds.power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ -n "$PROF3X" ] && PROF=$PROF3X
   case "$PROF" in
     performance) Q=1 QW=0 CMAX= ;;
     # the Plus's frames cost more (the main thread ~62% of a core at ~1475 MHz in Black 2 = ~83% at 1104, single
