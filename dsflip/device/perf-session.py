@@ -340,6 +340,7 @@ def cmd_sample(directory):
     os.makedirs(directory, exist_ok=True)
     meta = {
         "profile": os.environ.get("ROCKNIXDS_PROFILE", ""),
+        "renderer": "superdrastic" if os.environ.get("DSFLIP_RAST") == "1" else "drastic",
         "queue": os.environ.get("DSFLIP_QUEUE", ""),
         "queue_wait": os.environ.get("DSFLIP_QUEUE_WAIT", ""),
         "cpu_max": os.environ.get("DSFLIP_CPU_MAX", ""),
