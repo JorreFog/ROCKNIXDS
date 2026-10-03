@@ -209048,3 +209048,18 @@ index f1eb87019..2b4e4b738 100644
  
  #~ msgid "FANART"
  #~ msgstr "粉絲繪圖"
+diff --git a/es-core/src/components/TextEditComponent.cpp b/es-core/src/components/TextEditComponent.cpp
+index f9749ebf..5566af4b 100644
+--- a/es-core/src/components/TextEditComponent.cpp
++++ b/es-core/src/components/TextEditComponent.cpp
+@@ -52,6 +52,10 @@ void TextEditComponent::onSizeChanged()
+ 	GuiComponent::onSizeChanged();
+ 	mBox.fitTo(mSize, Vector3f::Zero(), Vector2f(-34, -32 - TEXT_PADDING_VERT));
+ 	onTextChanged(); // wrap point probably changed
++	// the scroll was worked out for the old size: a popup sets the cursor (at the end of its text) while the field is
++	// still 4096 px wide, so a long value never scrolled and its cursor was drawn far past the box, off the screen
++	mScrollOffset = Vector2f(0.0f, 0.0f);
++	onCursorChanged();
+ }
+ 
+ void TextEditComponent::setValue(const std::string& val)

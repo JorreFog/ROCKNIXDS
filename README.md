@@ -100,6 +100,9 @@ RG DS Plus.
   - *performance*: CPU up to 1992 MHz and the shortest queue, for the lowest latency;
   - *battery saver*: three frames of queue (+33 ms). On the Plus the CPU runs 1104–1416 MHz: its frames cost more,
     and a fixed 1104 MHz overran the heavy ones.
+
+  A game that can't keep up at its profile's top clock gets more (1.5.1): the players' logs from 1.5 had heavy 3D
+  games at 2x running below full speed for much of their play at the clocks the governor held.
 - **The CPU clock remembers each game** and counts all of DraStic's threads. Clocks that dropped frames are skipped
   from the start of the next session, and no more stutter storms.
 - **The handheld fetches its own game art and RetroAchievements strips.** Each time the menu opens, a background job
@@ -119,7 +122,7 @@ RG DS Plus.
   upstream at a verified version (`--no-canvas` skips the ~180 MB). Only verified themes can be picked.
 - "Launch this game at startup" runs once per boot. The menu is back ~0.5 s sooner after a DS game.
 - **The DraStic engine is its own project now: [SuperDrastic](https://github.com/JorreFog/SuperDrastic)**. This
-  release installs SuperDrastic 0.3.0-beta.2 (the version in [`SUPERDRASTIC`](SUPERDRASTIC)).
+  release installs SuperDrastic 0.3.0-beta.4, shipped in `dsflip/` (the version in [`SUPERDRASTIC`](SUPERDRASTIC)).
 
 ### New in 1.4
 

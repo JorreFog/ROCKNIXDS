@@ -137,7 +137,10 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # (bottom flip pending at the next latch: a repeated frame, 2-4 times a second, Black 2 2026-10-01), where the RG DS
   # makes it with 0.6 ms. libdsflip widens the margin by itself on late latches; this is the floor it returns to.
   [ -n "$BIG" ] && export DSFLIP_LATCH_MARGIN=${DSFLIP_LATCH_MARGIN:-3000}
-  [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX}
+  # The bounds are soft (DSFLIP_CPU_MAX_SOFT): libdsflip goes past them only while the game is below full speed with
+  # real work going on. The players' 1.5 logs (RG DS) had heavy 3D games at 2x below full speed for 38-83% of their
+  # play at the clocks the governor held; a bound that slows the game down saves nothing worth it.
+  [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX} DSFLIP_CPU_MAX_SOFT=${DSFLIP_CPU_MAX_SOFT:-1}
   echo "power profile: $PROF (queue $DSFLIP_QUEUE, wait ${DSFLIP_QUEUE_WAIT} ms, CPU max ${DSFLIP_CPU_MAX:-hardware})"
   cd $D
   # no wait for the display: libdsflip retries DRM master itself while seatd lets go of it (~0.4 s after sway)

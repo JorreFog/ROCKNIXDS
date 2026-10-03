@@ -1,0 +1,156 @@
+es-rgds-apirefresh: changes made through the HTTP API refresh the game lists once, when they stop
+
+A media tool pushing art for every game (ROCKNIXDS's background scrape) made ES repopulate every list showing the
+game after each picture: themes drawn by ES itself (dii-ess-aye, Canvas-DS) blanked and reloaded their lists over
+and over and dropped input while they did (ROCKNIXDS issue 25). API changes are now collected, and the lists they
+touch repopulate once, 1.5 s after the last change and the last button press. Changes made in ES's own menus are
+unchanged (at once).
+
+diff --git a/es-app/src/services/HttpServerThread.cpp b/es-app/src/services/HttpServerThread.cpp
+index 1599fdf0..ab8f9306 100644
+--- a/es-app/src/services/HttpServerThread.cpp
++++ b/es-app/src/services/HttpServerThread.cpp
+@@ -440,7 +440,7 @@ void HttpServerThread::run()
+ 					if (HttpApi::ImportMedia(game, metadataName, contentType, req.body))
+ 					{
+ 						if (ViewController::hasInstance())
+-							mWindow->postToUiThread([game]() { ViewController::get()->onFileChanged(game, FileChangeType::FILE_METADATA_CHANGED); });
++							mWindow->postToUiThread([game]() { ViewController::get()->onFileChangedLater(game); });
+ 
+ 						return;
+ 					}
+@@ -476,7 +476,7 @@ void HttpServerThread::run()
+ 				if (HttpApi::ImportFromJson(game, req.body))
+ 				{
+ 					if (ViewController::hasInstance())
+-						mWindow->postToUiThread([game]() { ViewController::get()->onFileChanged(game, FileChangeType::FILE_METADATA_CHANGED); });					
++						mWindow->postToUiThread([game]() { ViewController::get()->onFileChangedLater(game); });					
+ 
+ 					return;
+ 				}
+diff --git a/es-app/src/views/ViewController.cpp b/es-app/src/views/ViewController.cpp
+index 9bd152a5..58fbb055 100644
+--- a/es-app/src/views/ViewController.cpp
++++ b/es-app/src/views/ViewController.cpp
+@@ -34,6 +34,7 @@
+ #include "VolumeControl.h"
+ #include "guis/GuiNetPlay.h"
+ #include "Gamelist.h"
++#include "PowerSaver.h"
+ 
+ ViewController* ViewController::sInstance = nullptr;
+ 
+@@ -886,11 +887,71 @@ void ViewController::changeVolume(int increment)
+ #endif
+ }
+ 
++#define LATER_QUIET_MS 1500
++
++static Uint32 laterWake(Uint32, void*) { PowerSaver::pushRefreshEvent(); return 0; }
++
++void ViewController::onFileChangedLater(FileData* file)
++{
++	if (file == nullptr)
++		return;
++	auto key = std::make_pair(file->getSourceFileData()->getSystem(), file->getFullPath());
++	if (std::find(mLaterChanges.begin(), mLaterChanges.end(), key) == mLaterChanges.end())
++		mLaterChanges.push_back(key);
++	mLaterChangedAt = SDL_GetTicks();
++	SDL_AddTimer(LATER_QUIET_MS + 100, laterWake, nullptr);	// the power saver may sleep until the next event
++}
++
++void ViewController::applyLaterChanges(bool force)
++{
++	if (mLaterChanges.empty())
++		return;
++	Uint32 now = SDL_GetTicks();
++	if (!force && (now - mLaterChangedAt < LATER_QUIET_MS || now - mLastInputAt < LATER_QUIET_MS))
++		return;
++	auto changes = mLaterChanges;
++	mLaterChanges.clear();
++	// every list that shows one of the changed games, once (a repopulate rebuilds the whole list anyway)
++	std::map<IGameListView*, FileData*> views;
++	for (auto& c : changes)
++	{
++		if (std::find(SystemData::sSystemVector.begin(), SystemData::sSystemVector.end(), c.first) == SystemData::sSystemVector.end())
++			continue;	// the systems were reloaded meanwhile
++		FileData* file = c.first->getRootFolder()->FindByPath(c.second);
++		if (file == nullptr)
++			continue;
++		auto it = mGameListViews.find(c.first);
++		if (it != mGameListViews.cend())
++			views.emplace(it->second.get(), file);
++		else
++			for (auto& v : mGameListViews)
++				if (v.first->isGroupSystem() && v.first->getRootFolder()->FindByPath(c.second)) { views.emplace(v.second.get(), file); break; }
++		for (auto& coll : CollectionSystemManager::get()->getAutoCollectionSystems())
++		{
++			auto cit = mGameListViews.find(coll.second.system);
++			if (cit != mGameListViews.cend() && coll.second.system->getRootFolder()->FindByPath(c.second))
++				views.emplace(cit->second.get(), file);
++		}
++		for (auto& coll : CollectionSystemManager::get()->getCustomCollectionSystems())
++		{
++			auto cit = mGameListViews.find(coll.second.system);
++			if (cit != mGameListViews.cend() && coll.second.system->getRootFolder()->FindByPath(c.second))
++				views.emplace(cit->second.get(), file);
++		}
++	}
++	for (auto& v : views)
++		v.first->onFileChanged(v.second, FileChangeType::FILE_METADATA_CHANGED);
++}
++
+ bool ViewController::input(InputConfig* config, Input input)
+ {
+ 	if (mLockInput)
+ 		return true;
+ 
++	mLastInputAt = SDL_GetTicks();
++	if (!mLaterChanges.empty())
++		SDL_AddTimer(LATER_QUIET_MS + 100, laterWake, nullptr);
++
+ 	// If we receive a button pressure for a non configured joystick, suggest the joystick configuration
+ 	if (!config->isConfigured() && (config->getDeviceId() == DEVICE_KEYBOARD || input.type == TYPE_BUTTON || input.type == TYPE_HAT))
+ 	{
+@@ -962,6 +1023,7 @@ bool ViewController::input(InputConfig* config, Input input)
+ void ViewController::update(int deltaTime)
+ {
+ 	mSize = Vector2f(Renderer::getScreenWidth(), Renderer::getScreenHeight());
++	applyLaterChanges(false);
+ 
+ 	if (mCurrentView)
+ 		mCurrentView->update(deltaTime);
+@@ -1157,6 +1219,7 @@ ViewController::ViewMode ViewController::getViewMode()
+ 
+ void ViewController::reloadAll(Window* window, bool reloadTheme)
+ {
++	mLaterChanges.clear();	// everything is rebuilt
+ 	if (reloadTheme)
+ 		Renderer::resetCache();
+ 
+diff --git a/es-app/src/views/ViewController.h b/es-app/src/views/ViewController.h
+index 12629d0d..a2f93c6a 100644
+--- a/es-app/src/views/ViewController.h
++++ b/es-app/src/views/ViewController.h
+@@ -60,6 +60,11 @@ public:
+ 	void ReloadAndGoToStart();
+ 
+ 	void onFileChanged(FileData* file, FileChangeType change);
++	// the same for changes made through the HTTP API (a media tool pushing art for every game): collected, and the
++	// lists they touch repopulate once, when the changes stop and nothing is being pressed. One repopulate per push
++	// redrew and reloaded the whole list again and again, which ate input (ROCKNIXDS issue 25).
++	void onFileChangedLater(FileData* file);
++	void applyLaterChanges(bool force);
+ 
+ 	// Plays a nice launch effect and launches the game at the end of it.
+ 	// Once the game terminates, plays a return effect.
+@@ -116,6 +121,9 @@ public:
+ 	virtual bool hitTest(int x, int y, Transform4x4f& parentTransform, std::vector<GuiComponent*>* pResult = nullptr) override;
+ 
+ private:
++	std::vector<std::pair<SystemData*, std::string>> mLaterChanges;	// (source system, full path)
++	unsigned int mLaterChangedAt = 0, mLastInputAt = 0;
++
+ 	ViewController(Window* window);
+ 	static ViewController* sInstance;
+ 

@@ -93,5 +93,11 @@
             <backgroundColor>1A222CFF</backgroundColor>
             <separatorColor>243040FF</separatorColor>
         </menuGroup>
+
+        <!-- text fields (the keyboard, metadata): ES's own boxes are white, under this theme's light text -->
+        <menuTextEdit name="menutextedit">
+            <active>./rnds/textinput_active.png</active>
+            <inactive>./rnds/textinput.png</inactive>
+        </menuTextEdit>
     </view>
 </theme>
