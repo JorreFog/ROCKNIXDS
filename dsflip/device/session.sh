@@ -118,7 +118,9 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   # frames, and the wait keeps a full queue from dropping early ones (measured 2026-09-29, Black 2 at 2x, walking:
   # fixed 1416 MHz with a 2-frame queue + wait 0.07 hitches/s, 1104 MHz 0.13/s; without the wait 0.11-3.2 and 0.73).
   #   performance: 1104-1992 MHz, 1-frame queue (the lowest latency)
-  #   balanced:    1104-1416 MHz, 2-frame queue + 20 ms wait
+  #   balanced:    1104-1416 MHz, 1-frame queue + 20 ms wait (1.5.5; was 2 frames: measured on the RG DS Plus, HeartGold
+  #                walking at 1104 MHz, 2026-10-04: +16.7 ms of queue latency instead of +33.2, with as few repeated
+  #                frames (13-14 against 15-19 in ~40 s) and dropped ones (2-6 against 2-4); without the wait 20 drops)
   #   battery:     1104 MHz, 3-frame queue + 20 ms wait (more cover for the late frames a low clock makes)
   # The 1104 MHz floor is libdsflip's; DSFLIP_CPU_MIN overrides it. The profiles' upper bounds are soft
   # (DSFLIP_CPU_MAX_SOFT): libdsflip goes past them only while the game is below full speed with real work going on.
@@ -131,7 +133,7 @@ up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with re
   case "$PROF" in
     performance) Q=1 QW=0 CMAX= ;;
     battery) Q=3 QW=20 CMAX=1104000 ;;
-    *) PROF=balanced Q=2 QW=20 CMAX=1416000 ;;
+    *) PROF=balanced Q=1 QW=20 CMAX=1416000 ;;
   esac
   export DSFLIP_QUEUE=${DSFLIP_QUEUE:-$Q} DSFLIP_QUEUE_WAIT=${DSFLIP_QUEUE_WAIT:-$QW}
   [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX} DSFLIP_CPU_MAX_SOFT=${DSFLIP_CPU_MAX_SOFT:-1}

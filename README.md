@@ -88,9 +88,9 @@ the menu's updater pick the right one for the handheld they run on.
   save. A resume state older than the game's own save file is dropped.
 - **Power profiles.** *Game settings > Per system advanced configuration > Nintendo DS > Power profile* (at the
   bottom of Game settings), or per game (hold A on it > *Advanced game options*):
-  - *balanced* (the default): CPU 1104–1416 MHz, one more frame of queue (+17 ms input latency), and a full queue
-    holds DraStic for a moment instead of dropping a frame;
-  - *performance*: CPU 1104–1992 MHz and the shortest queue, for the lowest latency;
+  - *balanced* (the default): CPU 1104–1416 MHz and the shortest queue, where a full queue holds DraStic for a
+    moment instead of dropping a frame (1.5.5: half the input latency of before, as smooth);
+  - *performance*: CPU 1104–1992 MHz and the shortest queue without the hold, for the lowest latency;
   - *battery saver*: CPU at 1104 MHz, three frames of queue (+33 ms).
 
   A game that can't keep up at its profile's top clock gets more (1.5.1): the players' logs from 1.5 had heavy 3D
