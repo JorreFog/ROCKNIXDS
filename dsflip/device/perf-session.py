@@ -102,6 +102,7 @@ class Session:
         self.game, self.t0, self.n = game, t, 0
         self.fps, self.drops, self.cpu, self.gpu, self.tmax = [], 0, [], [], {}
         self.bat0, self.mah, self.bat1, self.lib = None, 0.0, None, None
+        self.gcpu, self.threads, self.tn = [], {}, 0
 
     def add(self, s, st):
         self.n += 1
@@ -111,6 +112,12 @@ class Session:
         self.cpu.append(s["cpu_mhz"])
         if s.get("gpu_avg_mhz"):
             self.gpu.append(s["gpu_avg_mhz"])
+        if s.get("game_cpu") is not None:
+            self.gcpu.append(s["game_cpu"])
+        if s.get("game_threads") is not None:        # per-thread % of a core; threads below 2% are left out (count 0)
+            self.tn += 1
+            for k, v in s["game_threads"].items():
+                self.threads[k] = self.threads.get(k, 0) + v
         for k, v in s.get("temp", {}).items():
             self.tmax[k] = max(self.tmax.get(k, 0), v)
         b = s.get("bat", {})
@@ -131,6 +138,9 @@ class Session:
             "cpu_mhz_avg": round(sum(self.cpu) / len(self.cpu)) if self.cpu else None,
             "gpu_mhz_avg": round(sum(self.gpu) / len(self.gpu)) if self.gpu else None,
             "temp_max": self.tmax, "battery_pct": [self.bat0, self.bat1], "mah_drawn": round(self.mah),
+            "game_cpu_avg": round(sum(self.gcpu) / len(self.gcpu)) if self.gcpu else None,
+            # {thread: average % of a core over the session}, busiest first (main, the 2D render thread, rast-3d ...)
+            "threads_avg": {k: round(v / self.tn) for k, v in sorted(self.threads.items(), key=lambda kv: -kv[1])} if self.tn else None,
         }
         if self.lib:
             out["lib"] = self.lib
