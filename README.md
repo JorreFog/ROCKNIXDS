@@ -130,7 +130,7 @@ the menu's updater pick the right one for the handheld they run on.
   boot instead of again every time you quit. The menu is back ~0.5 s sooner after a DS game. ROCKNIX's charger
   watcher no longer starts a process every 2 s (2.2% -> 0.13% of a core).
 - **The DraStic engine is its own project now: [SuperDrastic](https://github.com/JorreFog/SuperDrastic)**, for any
-  Linux firmware. 1.5 shipped SuperDrastic 0.3.0-beta.3, 1.5.1 0.3.0-beta.4, 1.5.2 0.3.0-beta.5, 1.5.5 ships 0.4.0-beta.1 with Gengis Engine (the version in [`SUPERDRASTIC`](SUPERDRASTIC));
+  Linux firmware. 1.5 shipped SuperDrastic 0.3.0-beta.3, 1.5.1 0.3.0-beta.4, 1.5.2 0.3.0-beta.5, 1.5.5 0.4.0-beta.1 with Gengis Engine, 1.5.9 ships 0.4.0-beta.2 (the version in [`SUPERDRASTIC`](SUPERDRASTIC));
   `dsflip/` keeps the ROCKNIX scripts.
 - **Gengis Engine, a new 3D renderer** (1.5.5). *Nintendo DS > 3D renderer*, or per game: *Gengis Engine* draws
   DraStic's hi-res 3D with SuperDrastic's own rasterizer. It matches DraStic's picture pixel for pixel with about 20%
@@ -144,6 +144,9 @@ the menu's updater pick the right one for the handheld they run on.
   open on the bottom screen behind ROCKNIX's touch menu, and a tap on that menu could leave the game paused for good.
   They open on the top screen now, *Resume Game* resumes, and taps on the bottom screen reach the menu and the touch
   menu right after a reboot. Tested on the RG DS Plus.
+- **A faster Gengis Engine** (1.5.9, SuperDrastic 0.4.0-beta.2). A leaner rasterizer and a NEON compositor for the 3D
+  layer: Pokémon HeartGold takes ~5% less CPU than with 1.5.5's Gengis Engine and ~12% less than with DraStic's renderer,
+  and runs closer to full speed at 816 MHz (53 fps instead of 51.6). Still pixel for pixel the same picture as DraStic.
 
 ### New in 1.4
 
