@@ -55,6 +55,7 @@ add_ours() {
             print fi "<feature name=\"share performance logs\">"
             print ind "<choice name=\"yes\" value=\"1\" />"
             print ind "<choice name=\"no\" value=\"0\" />"
+            print fi "</feature>"
             print fi "<feature name=\"3D renderer\" value=\"renderer\">"
             print ind "<choice name=\"DraStic\" value=\"drastic\" />"
             print ind "<choice name=\"Gengis Engine\" value=\"superdrastic\" />"
@@ -63,7 +64,6 @@ add_ours() {
             print ind "<choice name=\"nearest (DS)\" value=\"nearest\" />"
             print ind "<choice name=\"bilinear\" value=\"bilinear\" />"
             print ind "<choice name=\"sharp bilinear\" value=\"sharp\" />"
-            print fi "</feature>"
             print fi "</feature>"
             next
         }

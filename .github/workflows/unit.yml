@@ -9,6 +9,10 @@ on:
       - 'dii-ess-aye/scrape/rocknixds-media.py'
       - 'dii-ess-aye/scrape/ra-fetch.py'
       - 'dsflip/device/rocknixds-update'
+      - 'dsflip/device/session.sh'
+      - 'dsflip/device/es-features.sh'
+      - 'dsflip/device/drastic-launch.c'
+      - 'dsflip/device/drastic-launch.h'
       - 'install.sh'
       - '.github/workflows/unit.yml'
   pull_request:
@@ -17,6 +21,10 @@ on:
       - 'dii-ess-aye/scrape/rocknixds-media.py'
       - 'dii-ess-aye/scrape/ra-fetch.py'
       - 'dsflip/device/rocknixds-update'
+      - 'dsflip/device/session.sh'
+      - 'dsflip/device/es-features.sh'
+      - 'dsflip/device/drastic-launch.c'
+      - 'dsflip/device/drastic-launch.h'
       - 'install.sh'
       - '.github/workflows/unit.yml'
   workflow_dispatch:
