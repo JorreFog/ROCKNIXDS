@@ -125,8 +125,9 @@ RG DS Plus.
   release installs SuperDrastic 0.3.0-beta.4, shipped in `dsflip/` (the version in [`SUPERDRASTIC`](SUPERDRASTIC)).
 - **3D renderer (test).** *Nintendo DS > 3D renderer*, or per game: *SuperDrastic (test)* draws DraStic's hi-res
   3D with SuperDrastic's own rasterizer, which matches DraStic's picture pixel for pixel and needs fewer
-  instructions for it (about 30% fewer in the simulator), and answers the 2D compositor's "which 3D pixels are
-  visible" question from a table the render threads fill (less work on the emulation thread). Off (*DraStic*) by
+  instructions for it (about 30% fewer in the simulator), and takes two steps of the 2D compositor off the emulation
+  thread's plate: "which 3D pixels are visible" is answered from a table the render threads fill, and a quarter line
+  that shows only the 3D layer and the backdrop is composited in one pass. Off (*DraStic*) by
   default while it is measured on the handhelds. With it, *3D texture filter* (nearest = the DS's, bilinear, sharp
   bilinear) smooths textures, and *3D resolution* 3x renders the scene at 768x576 and supersamples it into the 2x
   frame (anti-aliased polygon edges). Both cost CPU: the filter about twice the raster stage, 3x about three times.
