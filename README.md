@@ -136,6 +136,10 @@ the menu's updater pick the right one for the handheld they run on.
   DraStic's hi-res 3D with SuperDrastic's own rasterizer. It matches DraStic's picture pixel for pixel with about 20%
   less work in DraStic's 3D threads. *DraStic* (the default) keeps DraStic's own. With Gengis Engine, *3D texture
   filter* (nearest = the DS's, bilinear, sharp bilinear) smooths textures, at about twice the 3D cost.
+- **Nintendo DS settings show again** (1.5.6). 1.5.5 wrote *3D renderer* inside *Share performance logs*, and the next
+  time the menu started that options file no longer parsed, so DraStic's settings disappeared from the Nintendo DS
+  menu (#37). They are listed again, including *3D resolution* (2× or 3×, used by Gengis Engine). A handheld already
+  on 1.5.5 gets them back the next time the menu starts.
 
 ### New in 1.4
 

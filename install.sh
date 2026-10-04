@@ -198,12 +198,11 @@ if [ $UNINSTALL = 1 ]; then
                 if [ -n "$old" ]; then es_set $k "$old"; else es_del $k; fi
             done
         fi
-        if [ -f $ESF ]; then
-            sed -i -E '/value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"/d' $ESF   # our shader entries
-            # resume on quit / power profile / share performance logs (same shape as es-features.sh's skip)
-            awk '/<feature name="resume on quit"/ || /<feature name="power profile"/ || /<feature name="share performance logs"/ { skip = 1 }
-                 skip { if (/<\/feature>/) skip = 0; next }
-                 { print }' $ESF > $ESF.uninst && mv $ESF.uninst $ESF
+        if [ -f $ESF ] && [ -f $DRASTIC/dsflip/es-features.sh ]; then
+            # shader choices, resume, power profile, share performance logs, 3D renderer and texture filter.
+            # Depth-aware (--strip-options): 1.5.5 nested the 3D options, and a skip that stops at the first
+            # </feature> leaves the file unparsable.
+            sh $DRASTIC/dsflip/es-features.sh --strip-options
         fi
     fi
     rm -f /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh

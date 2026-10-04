@@ -180,15 +180,23 @@ stuck_report() {
     esac
   fi
   # 3D renderer (ES: the game's or DS system's "3D renderer"): superdrastic = Gengis Engine, SuperDrastic's own
-  # rasterizer for DraStic's hi-res 3D (DSFLIP_RAST=1), anything else DraStic's own; and its "3D texture filter"
-  # (SuperDrastic ignores it with DraStic's renderer). 1.5.5 offers no 3x: nds.resolution3d is not read.
+  # rasterizer for DraStic's hi-res 3D (DSFLIP_RAST=1), anything else DraStic's own. "3D resolution" (nds.resolution3d)
+  # and "3D texture filter" apply to Gengis Engine; DraStic's renderer ignores both. Unset resolution is 2x.
   RND=$(grep -F "nds[\"$GAME\"].renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$RND" ] || RND=$(grep "^nds.renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ "$RND" = superdrastic ] && export DSFLIP_RAST=${DSFLIP_RAST:-1}
   TF=$(grep -F "nds[\"$GAME\"].texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$TF" ] || TF=$(grep "^nds.texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   case "$TF" in bilinear) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-1} ;; sharp) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-2} ;; esac
-  if [ -n "$DSFLIP_RAST" ]; then echo "3D renderer: Gengis Engine (texture filter ${DSFLIP_RAST_TEXFILTER:-0})"; else echo "3D renderer: DraStic"; fi
+  if [ "$RND" = superdrastic ]; then
+    RES=$(grep -F "nds[\"$GAME\"].resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+    [ -n "$RES" ] || RES=$(grep "^nds.resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+    case "$RES" in
+      3x|3) export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-3} ;;
+      2x|2) export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-2} ;;
+    esac
+  fi
+  if [ -n "$DSFLIP_RAST" ]; then echo "3D renderer: Gengis Engine (scale ${DSFLIP_RAST_SCALE:-2}, texture filter ${DSFLIP_RAST_TEXFILTER:-0})"; else echo "3D renderer: DraStic"; fi
   cd $D
   # preload-guard.so keeps libdsflip out of the processes DraStic starts (SuperDrastic 0.3.0-beta.3, 1.5's, started pactl
   # and wpctl for its volume card; with libdsflip in them, they rotated the game's log and overwrote its verdict).
