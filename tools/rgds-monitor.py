@@ -68,7 +68,26 @@ class Tail:
         self.first = False
         return [l.rstrip("\n") for l in self.f.readlines()]
     first = True
-tail = Tail(LOG); pc, gt = cpustat(), gputime(); pid, pid_t, pcpu = None, 0, None; t0 = time.monotonic()
+def thread_cpu(pid, prev, now):
+    """{thread name: % of a core} for the game's threads above 2% ("main" = the main thread; threads of one name are
+    summed: SuperDrastic's 3D render threads are all rast-3d). prev: {tid: (ticks, t)} from the last sample, updated."""
+    out, seen = {}, set()
+    try: tids = os.listdir("/proc/%d/task" % pid)
+    except OSError: return out
+    for t in tids:
+        st = rd("/proc/%s/task/%s/stat" % (pid, t))
+        if not st: continue
+        name = st[st.find("(") + 1:st.rfind(")")]; f = st.rsplit(")", 1)[-1].split()
+        if len(f) < 13: continue
+        ticks, tid = int(f[11]) + int(f[12]), int(t); seen.add(tid)
+        if tid in prev:
+            pct = 100 * (ticks - prev[tid][0]) / HZ / max(0.5, now - prev[tid][1])
+            if pct >= 2:
+                key = "main" if tid == pid else name; out[key] = round(out.get(key, 0) + pct)
+        prev[tid] = (ticks, now)
+    for tid in [k for k in prev if k not in seen]: del prev[tid]
+    return out
+tail = Tail(LOG); pc, gt = cpustat(), gputime(); pid, pid_t, pcpu = None, 0, None; t0 = time.monotonic(); tprev, tpid = {}, None
 while True:
     time.sleep(max(0, 1 - (time.monotonic() - t0) % 1))
     now = time.time(); c, g = cpustat(), gputime()
@@ -78,13 +97,15 @@ while True:
     pc, gt = c, g
     if time.monotonic() - pid_t > 2 or (pid and not os.path.exists("/proc/%d" % pid)):
         pid, pid_t = find_game_pid(), time.monotonic()
-    proc = None
+    proc, threads = None, None
     if pid:
         s = rd("/proc/%d/stat" % pid).rsplit(")", 1)[-1].split()
         if len(s) > 13:
             ticks = int(s[11]) + int(s[12])
             if pcpu and pcpu[0] == pid: proc = round(100 * (ticks - pcpu[1]) / HZ / max(0.5, now - pcpu[2]))
             pcpu = (pid, ticks, now)
+        if tpid != pid: tprev, tpid = {}, pid
+        threads = thread_cpu(pid, tprev, now) or None
     tz = {}
     for z in range(4):
         ty = rd("/sys/class/thermal/thermal_zone%d/type" % z)
@@ -94,7 +115,7 @@ while True:
     out = {"t": round(now, 2), "game": running_game(pid), "cpu_mhz": int(rd(CPU + "/scaling_cur_freq", "0")) // 1000,
            "cpu_max_mhz": int(rd(CPU + "/scaling_max_freq", "0")) // 1000, "cpu_load": load,
            "gpu_mhz": int(rd(GPU + "/cur_freq", "0")) // 1000000, "gpu_avg_mhz": gavg, "game_cpu": proc,
-           "temp": tz, "bat": bat, "log": tail.lines()}
+           "game_threads": threads, "temp": tz, "bat": bat, "log": tail.lines()}
     sys.stdout.write(json.dumps(out) + "\n"); sys.stdout.flush()
 '''
 
@@ -129,6 +150,7 @@ class Session:
         self.path = os.path.join(logdir, time.strftime("%Y%m%d-%H%M%S", time.localtime(t)) + "_" + name + ".jsonl")
         self.f = open(self.path, "a"); self.game = game; self.t0 = t; self.n = 0
         self.fps, self.drops, self.cpu, self.gpu, self.tmax, self.bat0, self.mah = [], 0, [], [], {}, None, 0.0
+        self.gcpu, self.threads, self.tn = [], {}, 0
 
     def add(self, s, st):
         self.f.write(json.dumps(s) + "\n"); self.f.flush(); self.n += 1
@@ -136,6 +158,10 @@ class Session:
             self.fps.append(st["fps"]); self.drops += st.get("dropped", 0)
         self.cpu.append(s["cpu_mhz"])
         if s.get("gpu_avg_mhz"): self.gpu.append(s["gpu_avg_mhz"])
+        if s.get("game_cpu") is not None: self.gcpu.append(s["game_cpu"])
+        if s.get("game_threads") is not None:            # per-thread % of a core (threads below 2% are left out: 0)
+            self.tn += 1
+            for k, v in s["game_threads"].items(): self.threads[k] = self.threads.get(k, 0) + v
         for k, v in s.get("temp", {}).items(): self.tmax[k] = max(self.tmax.get(k, 0), v)
         b = s.get("bat", {})
         if self.bat0 is None: self.bat0 = b.get("pct")
@@ -149,10 +175,24 @@ class Session:
                 "drops": self.drops, "drops_per_s": round(self.drops / len(f), 3) if f else None,
                 "cpu_mhz_avg": round(sum(self.cpu) / len(self.cpu)) if self.cpu else None,
                 "gpu_mhz_avg": round(sum(self.gpu) / len(self.gpu)) if self.gpu else None,
-                "temp_max": self.tmax, "battery_pct": [self.bat0, getattr(self, "bat1", None)], "mah_drawn": round(self.mah)}
+                "temp_max": self.tmax, "battery_pct": [self.bat0, getattr(self, "bat1", None)], "mah_drawn": round(self.mah),
+                "game_cpu_avg": round(sum(self.gcpu) / len(self.gcpu)) if self.gcpu else None,
+                "threads_avg": thread_avg(self.threads, self.tn)}
 
     def close(self, t):
         s = self.summary(t); self.f.write(json.dumps(s) + "\n"); self.f.close(); return s
+
+
+def thread_avg(threads, n):
+    """{thread: average % of a core over n samples}, busiest first, or None without per-thread samples"""
+    return {k: round(v / n) for k, v in sorted(threads.items(), key=lambda kv: -kv[1])} if n else None
+
+
+def fmt_threads(s):
+    """'  game 142% of a core: main 93, rast-3d 35, drastic 14' from a summary, or '' when it was not logged"""
+    th = s.get("threads_avg")
+    g = f"  game {s['game_cpu_avg']}% of a core" if s.get("game_cpu_avg") is not None else ""
+    return g + (": " + ", ".join(f"{k} {v}" for k, v in th.items()) if th else "")
 
 
 def fmt_summary(s):
@@ -160,7 +200,7 @@ def fmt_summary(s):
     return (f"{g.get('rom') or g.get('name')}: {s['seconds'] // 60} min, {s['fps_avg']} fps avg (min {s['fps_min']}), "
             f"{s['drops_per_s']} drops/s, {s['pct_seconds_below_59_5']}% of seconds <59.5 fps, CPU {s['cpu_mhz_avg']} MHz, "
             f"GPU {s['gpu_mhz_avg']} MHz, max {', '.join(f'{k} {v:.0f} C' for k, v in s['temp_max'].items())}, "
-            f"battery {s['battery_pct'][0]}% -> {s['battery_pct'][1]}% ({s['mah_drawn']} mAh)")
+            f"battery {s['battery_pct'][0]}% -> {s['battery_pct'][1]}% ({s['mah_drawn']} mAh)" + fmt_threads(s))
 
 
 def report(files):
@@ -365,6 +405,8 @@ def main():
                     load = s.get("cpu_load", [])
                     lines.append(f"CPU      {s['cpu_mhz']:4d} MHz (limit {s['cpu_max_mhz']})   load {' '.join(f'{v:3d}%' for v in load)}" +
                                  (f"   game process {s['game_cpu']}% of a core" if s.get("game_cpu") is not None else ""))
+                    if s.get("game_threads"):
+                        lines.append("Threads  " + "   ".join(f"{k} {v}%" for k, v in sorted(s["game_threads"].items(), key=lambda kv: -kv[1])))
                     lines.append(f"GPU      {s['gpu_mhz']:4d} MHz" + (f"   (avg {s['gpu_avg_mhz']} MHz last second)" if s.get("gpu_avg_mhz") else ""))
                     lines.append("Temps    " + "   ".join(f"{k} {v:.1f} C" for k, v in s.get("temp", {}).items()))
                     b = s.get("bat", {})
