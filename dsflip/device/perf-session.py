@@ -8,7 +8,9 @@ selftest       check the summary, the redaction and the upload request
 
 A session file is the monitor's JSON lines (game, fps, drops, clocks, load, temperature, battery, the new
 dsflip.log lines) and, at the end, the same summary object. Quit is a hard exit here, so the session closes in
-finish instead of after the monitor's 6 s gap (that gap is only for an SSH connection dropping).
+finish instead of after the monitor's 6 s gap (that gap is only for an SSH connection dropping). With the profile
+flag file, SuperDrastic's sampling profiler (DSFLIP_PROF, session.sh) writes prof-<pid>.txt into the same directory:
+it is kept and uploaded next to the log as <log>.prof.txt.
 
 Upload publishes the file on the device-logs branch of JorreFog/ROCKNIXDS (docs/data/device/<id>/). The beta
 branch the updater tracks is left alone. The handheld posts the log to a queue (.github/ingest-perf.py on main
@@ -635,11 +637,16 @@ def logs_dir():
 def prune(d):
     names = sorted(n for n in os.listdir(d) if n.endswith(".jsonl"))
     for n in names[:-40]:
-        for suf in ("", ".uploaded", ".upload-error", ".queued"):
+        for suf in ("", ".uploaded", ".upload-error", ".queued", ".prof.txt"):
             try:
                 os.remove(os.path.join(d, n + suf))
             except OSError:
                 pass
+    for n in sorted(n for n in os.listdir(d) if n.endswith("_profile.prof.txt"))[:-10]:   # profiles without a log
+        try:
+            os.remove(os.path.join(d, n))
+        except OSError:
+            pass
 
 
 def mark_uploaded(path, text):
@@ -648,6 +655,19 @@ def mark_uploaded(path, text):
         os.remove(path + ".upload-error")
     except OSError:
         pass
+
+
+def send_profile(path, send):
+    """The profiler's report of the session, if there is one (<log>.prof.txt), after its log: a file of its own next
+    to it. Its failure is only noted: the log is what counts."""
+    try:
+        prof = open(path + ".prof.txt").read()
+    except OSError:
+        return
+    try:
+        send(prof)
+    except Exception as e:
+        note("profile not uploaded: " + str(getattr(e, "body", e))[:200])
 
 
 def try_upload(path, text, summary):
@@ -668,6 +688,7 @@ def try_upload(path, text, summary):
             sha = upload_text(rel, text, commit_message(summary), tok)
             mark_uploaded(path, sha)
             note("uploaded %s %s" % (rel, sha[:12]))
+            send_profile(path, lambda prof: upload_text(rel + ".prof.txt", prof, "perf: profile of " + name, tok))
             return True
         except Exception as e:
             body = getattr(e, "body", str(e))[:200].replace(tok, "[redacted]")
@@ -688,18 +709,38 @@ def try_upload(path, text, summary):
     except OSError:
         pass
     note("queued " + name)
+    send_profile(path, lambda prof: queue_log(dev, name + ".prof.txt", prof))
     return True
+
+
+def profile_text(directory):
+    """SuperDrastic's sampling profiler reports (prof-<pid>.txt, DSFLIP_PROF), written beside the samples."""
+    out = []
+    for n in sorted(os.listdir(directory)):
+        if n.startswith("prof-") and n.endswith(".txt"):
+            try:
+                out.append(open(os.path.join(directory, n)).read())
+            except OSError:
+                pass
+    return "\n".join(t for t in out if t)
 
 
 def cmd_finish(directory):
     name, body = build_session(directory)
+    prof = profile_text(directory)
     if not name:
+        if prof:   # profiled with sharing off: kept for the player, not uploaded
+            with open(os.path.join(logs_dir(), time.strftime("%Y%m%d-%H%M%S") + "_profile.prof.txt"), "w") as f:
+                f.write(prof)
         shutil.rmtree(directory, ignore_errors=True)
         return
     summary = json.loads(body.strip().splitlines()[-1])
     dest = os.path.join(logs_dir(), name)
     with open(dest, "w") as f:
         f.write(body)
+    if prof:
+        with open(dest + ".prof.txt", "w") as f:
+            f.write(prof)
     shutil.rmtree(directory, ignore_errors=True)
     prune(os.path.dirname(dest))
     rom = (summary.get("game") or {}).get("rom")
@@ -966,7 +1007,7 @@ def selftest():
         def do_POST(self):
             body = self._json()
             if self.path == "/git/blobs":
-                assert body["content"].rstrip().endswith('"summary": true') or '"summary": true' in body["content"]
+                assert '"summary": true' in body["content"] or body["content"].startswith("# SuperDrastic sampling profiler")
                 box["blobs"].append(body["content"])
                 return self._send(201, {"sha": "blobsha"})
             if self.path == "/git/trees":
@@ -989,6 +1030,7 @@ def selftest():
             n = int(self.headers.get("Content-Length", 0))
             raw = self.rfile.read(n)
             box["put"] = {"title": self.headers.get("Title"), "filename": self.headers.get("Filename"), "body": raw.decode()}
+            box.setdefault("puts", []).append(box["put"])
             self._send(200, {"id": "queued"})
 
     httpd = http.server.HTTPServer(("127.0.0.1", 0), H)
@@ -1017,13 +1059,18 @@ def selftest():
                 f.write(json.dumps(sample) + "\n")
         json.dump({"profile": "balanced", "queue": "2", "queue_wait": "20", "cpu_max": "1416000", "rom": "Heart Gold.nds"},
                   open(os.path.join(d, "meta.json"), "w"))
+        prof = "# SuperDrastic sampling profiler 0.3.0, pid 4219: report 4 (periodic)\n  main  5776\n"
+        open(os.path.join(d, "prof-4219.txt"), "w").write(prof)
+        open(os.path.join(d, "prof-4219.txt.tmp"), "w").write("# half a report\n")
         # finish uploads because sharing is on and the fake GitHub answers
         os.environ.pop("ROCKNIXDS_TESTING", None)
         cmd_finish(d)
         assert box["patched"] == "newcommit", box
         assert "Heart_Gold.nds" in box["blobs"][0] or "Heart Gold.nds" in box["blobs"][0]
+        assert box["blobs"][1] == prof, box["blobs"]                      # the profile, after the log, whole
         saved = os.listdir(os.path.join(STATE, "logs"))
         assert any(n.endswith(".jsonl") for n in saved), saved
+        assert any(n.endswith(".jsonl.prof.txt") for n in saved), saved
         assert any(n.endswith(".uploaded") for n in saved), saved
         text = box["blobs"][0]
         assert "hunter2" not in text and "shouldnotappear" not in text and "github_pat_" not in text
@@ -1034,10 +1081,18 @@ def selftest():
         QUEUE = API
         queued = os.path.join(STATE, "logs", "20231114-221320_Heart_Gold.nds.jsonl")
         open(queued, "w").write(text)
+        open(queued + ".prof.txt", "w").write(prof)                      # its profile goes to the queue after it
         assert try_upload(queued, text, summ)
-        assert box["put"]["title"] == "abc123def456"
-        assert box["put"]["filename"] == "20231114-221320_Heart_Gold.nds.jsonl"
-        assert "hunter2" not in box["put"]["body"] and '"summary": true' in box["put"]["body"]
+        log, pf = box["puts"]
+        assert log["title"] == "abc123def456" and pf["title"] == "abc123def456"
+        assert log["filename"] == "20231114-221320_Heart_Gold.nds.jsonl"
+        assert "hunter2" not in log["body"] and '"summary": true' in log["body"]
+        assert pf["filename"] == "20231114-221320_Heart_Gold.nds.jsonl.prof.txt" and pf["body"] == prof
+        d = os.path.join(tmp, "active")                                   # sharing off: no log, the profile is kept
+        os.makedirs(d)
+        open(os.path.join(d, "prof-77.txt"), "w").write(prof)
+        cmd_finish(d)
+        assert any(n.endswith("_profile.prof.txt") for n in os.listdir(os.path.join(STATE, "logs"))) and not os.path.isdir(d)
     finally:
         httpd.shutdown()
         shutil.rmtree(tmp)

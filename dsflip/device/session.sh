@@ -204,6 +204,16 @@ stuck_report() {
         ;;
     esac
   fi
+  # SuperDrastic's sampling profiler (DSFLIP_PROF, src/prof.c) while the flag file exists: which thread spends its
+  # time in which functions. Its report is rewritten every 10 s (the exit hotkey's kill -9 leaves the last one) into
+  # the performance log's directory; restore.sh's perf-session.py finish keeps it next to the log
+  # (logs/<session>.jsonl.prof.txt, or <time>_profile.prof.txt with sharing off) and uploads it with the log.
+  if [ -e /storage/.config/drastic/dsflip/profile ]; then
+    [ -f /tmp/dsflip-perf/active/pid ] || rm -rf /tmp/dsflip-perf/active   # no sampler: a session's leftovers
+    mkdir -p /tmp/dsflip-perf/active
+    export DSFLIP_PROF=${DSFLIP_PROF:-1} DSFLIP_PROF_OUT=/tmp/dsflip-perf/active
+    echo "profiler: on (DSFLIP_PROF=$DSFLIP_PROF, report in $DSFLIP_PROF_OUT)"
+  fi
   cd $D
   # preload-guard.so keeps libdsflip out of the processes DraStic starts (SuperDrastic 0.3.0-beta.3, 1.5's, started pactl
   # and wpctl for its volume card; with libdsflip in them, they rotated the game's log and overwrote its verdict).

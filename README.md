@@ -138,7 +138,10 @@ the menu's updater pick the right one for the handheld they run on.
   game, B does not. Change it later under *Nintendo DS > Share performance logs*. The log is the same once-a-second
   record as [`tools/rgds-monitor.py`](tools/rgds-monitor.py) and lands on the
   [`device-logs`](https://github.com/JorreFog/ROCKNIXDS/tree/device-logs) branch, with no token on the device. What
-  the beta logs showed: [docs/perf-logs-1.5-beta.md](docs/perf-logs-1.5-beta.md).
+  the beta logs showed: [docs/perf-logs-1.5-beta.md](docs/perf-logs-1.5-beta.md). With the flag file
+  `/storage/.config/drastic/dsflip/profile` present, SuperDrastic's sampling profiler runs too (`DSFLIP_PROF=1`): its
+  report, which thread spends its time in which functions, is kept and uploaded next to the log as
+  `<session>.jsonl.prof.txt`.
 - **The volume rocker shows a card on the top screen during a game.** "Launch this game at startup" runs once per
   boot instead of again every time you quit. The menu is back ~0.5 s sooner after a DS game. ROCKNIX's charger
   watcher no longer starts a process every 2 s (2.2% -> 0.13% of a core).
