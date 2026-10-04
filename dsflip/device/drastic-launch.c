@@ -12,6 +12,8 @@
  * Build: clang --target=aarch64-linux-gnu -O2 -static -nostdlib -ffreestanding -fno-stack-protector -fuse-ld=lld \
  *        -Wl,--build-id=none -o drastic-launch drastic-launch.c && llvm-strip drastic-launch
  */
+#include "drastic-launch.h"
+
 #define SYS_execve 221
 #define SYS_exit   93
 
@@ -22,19 +24,11 @@ static long sys3(long n, long a, long b, long c)
     return x0;
 }
 
-static int is_preload(const char *e)
-{
-    const char *k = "LD_PRELOAD=";
-    while (*k) if (*e++ != *k++) return 0;
-    return 1;
-}
-
 __attribute__((used)) void launch(long *sp)
 {
     long argc = sp[0];
-    char **argv = (char **)(sp + 1), **envp = argv + argc + 1, **o = envp;
-    for (char **e = envp; *e; e++) if (!is_preload(*e)) *o++ = *e;
-    *o = 0;
+    char **argv = (char **)(sp + 1), **envp = argv + argc + 1;
+    drop_preload(envp);
     sys3(SYS_execve, (long)"/storage/.config/drastic/dsflip/drastic-wrapper.sh", (long)argv, (long)envp);
     sys3(SYS_execve, (long)"/storage/.config/drastic/drastic.dvsync", (long)argv, (long)envp);   /* older layout */
     sys3(SYS_exit, 127, 0, 0);
