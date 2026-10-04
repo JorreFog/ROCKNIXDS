@@ -10,6 +10,7 @@ on:
       - 'dii-ess-aye/scrape/ra-fetch.py'
       - 'dsflip/device/rocknixds-update'
       - 'dsflip/device/es-features.sh'
+      - 'dsflip/device/session.sh'
       - 'install.sh'
       - '.github/workflows/unit.yml'
   pull_request:
@@ -19,6 +20,7 @@ on:
       - 'dii-ess-aye/scrape/ra-fetch.py'
       - 'dsflip/device/rocknixds-update'
       - 'dsflip/device/es-features.sh'
+      - 'dsflip/device/session.sh'
       - 'install.sh'
       - '.github/workflows/unit.yml'
   workflow_dispatch:

@@ -4,9 +4,10 @@
 # (nds.power_profile: balanced, performance or battery; unset = balanced; session.sh) and its "share performance
 # logs" option (nds.share_performance_logs: 1 uploads a performance log on quit, 0 does not, unset asks). Its "3D renderer"
 # option (nds.renderer: superdrastic = Gengis Engine, SuperDrastic's own hi-res rasterizer, DSFLIP_RAST=1 in session.sh;
-# unset or drastic = DraStic's), its "3D resolution" (nds.resolution3d: 2x or 3x; DSFLIP_RAST_SCALE, Gengis Engine only;
-# unset = 2x) and its "3D texture filter" (nds.texture_filter: nearest, bilinear, sharp; DSFLIP_RAST_TEXFILTER, only
-# used with Gengis Engine) are their own options, siblings of share performance logs.
+# unset or drastic = DraStic's), its "3D resolution" (nds.resolution3d: 2x; DSFLIP_RAST_SCALE, Gengis Engine only;
+# unset is the menu's Auto, and Gengis Engine keeps its own scale) and its "3D texture filter" (nds.texture_filter:
+# nearest, bilinear, sharp; DSFLIP_RAST_TEXFILTER, only used with Gengis Engine) are their own options, siblings of
+# share performance logs. 3x is not offered. 1.5.6 saved nds.resolution3d=3x; that line is removed so the menu shows Auto.
 # Their value attributes are the system.cfg keys: without one ES derives the key from the name (nds.3D_renderer), which
 # session.sh doesn't read. It also keeps the DS system on
 # ROCKNIXDS's DraStic: es_systems.cfg's nds entry offers only drastic/drastic-sa (ROCKNIX also lists RetroArch cores
@@ -25,6 +26,7 @@
 SYS=${ESF_SYSTEM:-/usr/config/emulationstation/es_features.cfg}
 ESF=${ESF_USER:-/storage/.config/emulationstation/es_features.cfg}
 STATE=${ESF_STATE:-/storage/rgds-rocknix-backup}     # the installer's backup dir: .esf-created, .esf-system-md5
+SYSCFG=${SYSCFG:-/storage/.config/system/configs/system.cfg}
 
 # Drop ROCKNIXDS's shader choices and options. 1.5.5 wrote "3D renderer" and "3D texture filter" before
 # "share performance logs" was closed. CustomFeatures::loadCustomFeatures only keeps a <feature>'s <choice>
@@ -85,7 +87,6 @@ add_ours() {
             print fi "</feature>"
             print fi "<feature name=\"3D resolution\" value=\"resolution3d\">"
             print ind "<choice name=\"2x\" value=\"2x\" />"
-            print ind "<choice name=\"3x\" value=\"3x\" />"
             print fi "</feature>"
             print fi "<feature name=\"3D texture filter\" value=\"texture_filter\">"
             print ind "<choice name=\"nearest (DS)\" value=\"nearest\" />"
@@ -97,6 +98,20 @@ add_ours() {
         { print }
         END { if (!added) exit 3 }'
 }
+
+# 1.5.6 wrote nds.resolution3d=3x (and the same per game). EmulationStation would keep showing that value
+# after the choice is gone. Drop those lines; 2x stays. Auto is an empty value, which ES already lists.
+drop_unreleased_3x() {
+    [ -f "$SYSCFG" ] || return 0
+    awk '
+        /^nds\.resolution3d=3x$/ { next }
+        /^nds\[.*\]\.resolution3d=3x$/ { next }
+        { print }
+    ' "$SYSCFG" > "$SYSCFG.new"
+    if cmp -s "$SYSCFG.new" "$SYSCFG"; then rm -f "$SYSCFG.new"
+    else mv "$SYSCFG.new" "$SYSCFG"; echo "es-features: removed 3D resolution 3x from $SYSCFG"; fi
+}
+drop_unreleased_3x
 
 # uninstall: take our options back out, including a 1.5.5 file whose 3D options were nested, without leaving
 # a stray </feature> that would hide every system's options

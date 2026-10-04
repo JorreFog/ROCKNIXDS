@@ -148,6 +148,7 @@ class EsFeaturesTest(unittest.TestCase):
             "ESF_STATE": str(self.state),
             "ESS_USER": str(self.systems),
             "ESS_SYSTEM": str(self.root / "missing-systems.cfg"),
+            "SYSCFG": str(self.root / "syscfg"),
         })
         subprocess.run(["sh", str(SCRIPT), *args], check=True, env=env)
 
@@ -170,8 +171,10 @@ class EsFeaturesTest(unittest.TestCase):
         self.assertEqual(feats["3D resolution"]["value"], "resolution3d")
         self.assertEqual(
             [(name, value) for tag, name, value in feats["3D resolution"]["kids"]],
-            [("2x", "2x"), ("3x", "3x")],
+            [("2x", "2x")],
         )
+        self.assertNotIn('value="3x"', text)
+        self.assertNotIn('name="3x"', text)
         self.assertEqual(feats["3D texture filter"]["value"], "texture_filter")
         self.assertEqual(
             [value for tag, _, value in feats["3D texture filter"]["kids"]],
@@ -272,6 +275,34 @@ class EsFeaturesTest(unittest.TestCase):
         self.user.write_text(original)
         self.run_script()
         self.assertEqual(self.user.read_text(), original)
+
+    def test_drops_a_saved_3x_and_keeps_2x(self):
+        cfg = self.root / "syscfg"
+        cfg.write_text(
+            "nds.renderer=superdrastic\n"
+            "nds.resolution3d=3x\n"
+            'nds["HeartGold"].resolution3d=3x\n'
+            "nds.resolution3d=2x\n"
+            'nds["Platinum"].resolution3d=2x\n'
+            "other.resolution3d=3x\n"
+        )
+        self.user.write_text(BASE)
+        self.run_script()
+        self.assertEqual(
+            cfg.read_text(),
+            "nds.renderer=superdrastic\n"
+            "nds.resolution3d=2x\n"
+            'nds["Platinum"].resolution3d=2x\n'
+            "other.resolution3d=3x\n",
+        )
+        self.run_script()
+        self.assertEqual(cfg.read_text().count("resolution3d=2x"), 2)
+
+    def test_session_does_not_apply_3x(self):
+        text = (ROOT / "dsflip" / "device" / "session.sh").read_text()
+        self.assertNotIn("DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-3}", text)
+        self.assertIn("2x|2)", text)
+        self.assertIn("3x is not offered", text)
 
     def test_uninstall_calls_the_depth_aware_strip(self):
         install = (ROOT / "install.sh").read_text()
