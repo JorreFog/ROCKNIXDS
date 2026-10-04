@@ -154,18 +154,23 @@ class EsFeaturesTest(unittest.TestCase):
     def assert_siblings(self, text):
         feats = core_features(text, "drastic-sa")
         self.assertIn("3D renderer", feats)
+        self.assertIn("3D resolution", feats)
         self.assertIn("3D texture filter", feats)
         self.assertIn("share performance logs", feats)
         self.assertIn("resume on quit", feats)
         self.assertIn("power profile", feats)
         self.assertIn("microphone sensitivity", feats)
-        self.assertNotIn("3D resolution", feats)
-        for name in ("share performance logs", "3D renderer", "3D texture filter", "microphone sensitivity"):
+        for name in ("share performance logs", "3D renderer", "3D resolution", "3D texture filter", "microphone sensitivity"):
             self.assertFalse(any(tag == "feature" for tag, _, _ in feats[name]["kids"]), name)
         self.assertEqual(feats["3D renderer"]["value"], "renderer")
         self.assertEqual(
             [(name, value) for tag, name, value in feats["3D renderer"]["kids"]],
             [("DraStic", "drastic"), ("Gengis Engine", "superdrastic")],
+        )
+        self.assertEqual(feats["3D resolution"]["value"], "resolution3d")
+        self.assertEqual(
+            [(name, value) for tag, name, value in feats["3D resolution"]["kids"]],
+            [("2x", "2x"), ("3x", "3x")],
         )
         self.assertEqual(feats["3D texture filter"]["value"], "texture_filter")
         self.assertEqual(

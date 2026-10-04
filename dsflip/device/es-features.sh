@@ -4,8 +4,9 @@
 # (nds.power_profile: balanced, performance or battery; unset = balanced; session.sh) and its "share performance
 # logs" option (nds.share_performance_logs: 1 uploads a performance log on quit, 0 does not, unset asks). Its "3D renderer"
 # option (nds.renderer: superdrastic = Gengis Engine, SuperDrastic's own hi-res rasterizer, DSFLIP_RAST=1 in session.sh;
-# unset or drastic = DraStic's) and its "3D texture filter" (nds.texture_filter: nearest, bilinear, sharp;
-# DSFLIP_RAST_TEXFILTER, only used with Gengis Engine) are their own options, siblings of share performance logs.
+# unset or drastic = DraStic's), its "3D resolution" (nds.resolution3d: 2x or 3x; DSFLIP_RAST_SCALE, Gengis Engine only;
+# unset = 2x) and its "3D texture filter" (nds.texture_filter: nearest, bilinear, sharp; DSFLIP_RAST_TEXFILTER, only
+# used with Gengis Engine) are their own options, siblings of share performance logs.
 # Their value attributes are the system.cfg keys: without one ES derives the key from the name (nds.3D_renderer), which
 # session.sh doesn't read. It also keeps the DS system on
 # ROCKNIXDS's DraStic: es_systems.cfg's nds entry offers only drastic/drastic-sa (ROCKNIX also lists RetroArch cores
@@ -81,6 +82,10 @@ add_ours() {
             print fi "<feature name=\"3D renderer\" value=\"renderer\">"
             print ind "<choice name=\"DraStic\" value=\"drastic\" />"
             print ind "<choice name=\"Gengis Engine\" value=\"superdrastic\" />"
+            print fi "</feature>"
+            print fi "<feature name=\"3D resolution\" value=\"resolution3d\">"
+            print ind "<choice name=\"2x\" value=\"2x\" />"
+            print ind "<choice name=\"3x\" value=\"3x\" />"
             print fi "</feature>"
             print fi "<feature name=\"3D texture filter\" value=\"texture_filter\">"
             print ind "<choice name=\"nearest (DS)\" value=\"nearest\" />"
