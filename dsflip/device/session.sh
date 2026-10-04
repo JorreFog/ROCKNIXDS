@@ -181,7 +181,8 @@ stuck_report() {
   fi
   # 3D renderer (ES: the game's or DS system's "3D renderer"): superdrastic = Gengis Engine, SuperDrastic's own
   # rasterizer for DraStic's hi-res 3D (DSFLIP_RAST=1), anything else DraStic's own. "3D resolution" (nds.resolution3d)
-  # and "3D texture filter" apply to Gengis Engine; DraStic's renderer ignores both. Unset resolution is 2x.
+  # and "3D texture filter" apply to Gengis Engine; DraStic's renderer ignores both. The menu lists Auto (unset) and
+  # 2x. Unset leaves the scale to Gengis Engine. 3x is not offered, and a 1.5.6 value of 3x is ignored.
   RND=$(grep -F "nds[\"$GAME\"].renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$RND" ] || RND=$(grep "^nds.renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ "$RND" = superdrastic ] && export DSFLIP_RAST=${DSFLIP_RAST:-1}
@@ -192,7 +193,6 @@ stuck_report() {
     RES=$(grep -F "nds[\"$GAME\"].resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
     [ -n "$RES" ] || RES=$(grep "^nds.resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
     case "$RES" in
-      3x|3) export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-3} ;;
       2x|2) export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-2} ;;
     esac
   fi
