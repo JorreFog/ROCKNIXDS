@@ -27,13 +27,16 @@ STATE=${ESF_STATE:-/storage/rgds-rocknix-backup}     # the installer's backup di
 # any earlier copy of them is dropped first, so this is idempotent. The resume option follows the shader option.
 add_ours() {
     grep -vE 'value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"' "$1" | awk '
-        /<feature name="resume on quit"/ || /<feature name="power profile"/ || /<feature name="share performance logs"/ || /<feature name="3D renderer"/ || /<feature name="3D texture filter"/ || /<feature name="3D resolution"/ { skip = 1 }
-        skip { if (/<\/feature>/) skip = 0; next }
+        # Drop our own features, including ones 1.5.5 nested inside "share performance logs". A bare
+        # </feature> match would stop at the first nested close and leave the rest, plus a stray close, so
+        # the next boot leaves es_features.cfg unparsable. </features> is the wrapper, not a feature.
+        /<feature name="resume on quit"/ || /<feature name="power profile"/ || /<feature name="share performance logs"/ || /<feature name="3D renderer"/ || /<feature name="3D texture filter"/ || /<feature name="3D resolution"/ { skip = 1; next }
+        skip { if (/<feature[ \t]/) skip++; if (/<\/feature>[ \t]*$/) skip--; next }
         /<core name="drastic-sa"/ { core = 1 }
         core && /<\/core>/ { core = 0 }
         core && /<feature name="shader"/ { shader = 1 }
         shader && /<choice / { ind = $0; sub(/<choice.*/, "", ind) }
-        shader && /<\/feature>/ {
+        shader && /<\/feature>[ \t]*$/ {
             print ind "<choice name=\"ds-crisp (sharp, 1x and 2x)\" value=\"ds-crisp\" />"
             print ind "<choice name=\"ds-crisp + NDS color\" value=\"ds-crisp-color\" />"
             print ind "<choice name=\"ds-grid (sharp + DS pixel grid)\" value=\"ds-grid\" />"
@@ -42,7 +45,7 @@ add_ours() {
             print ind "<choice name=\"ds-fsr (FSR 1.0, smooth edges)\" value=\"ds-fsr\" />"
             print ind "<choice name=\"ds-integer (pixel-perfect 2x + bezel)\" value=\"ds-integer\" />"
             shader = 0; added = 1; resume = 1
-            print; fi = ind; sub(/  $/, "", fi)
+            print; fi = ind; sub(/  $/, "", fi); feat--
             print fi "<feature name=\"resume on quit\">"
             print ind "<choice name=\"on\" value=\"1\" />"
             print ind "<choice name=\"off\" value=\"0\" />"
@@ -55,6 +58,8 @@ add_ours() {
             print fi "<feature name=\"share performance logs\">"
             print ind "<choice name=\"yes\" value=\"1\" />"
             print ind "<choice name=\"no\" value=\"0\" />"
+            print fi "</feature>"
+            # siblings of share performance logs. Nested inside it, ES only reads that feature choices.
             print fi "<feature name=\"3D renderer\" value=\"renderer\">"
             print ind "<choice name=\"DraStic\" value=\"drastic\" />"
             print ind "<choice name=\"Gengis Engine\" value=\"superdrastic\" />"
@@ -64,9 +69,11 @@ add_ours() {
             print ind "<choice name=\"bilinear\" value=\"bilinear\" />"
             print ind "<choice name=\"sharp bilinear\" value=\"sharp\" />"
             print fi "</feature>"
-            print fi "</feature>"
             next
         }
+        # a stray </feature> left by the nested 1.5.5 rewrite (feat is how many features are still open)
+        /<\/feature>[ \t]*$/ { if (feat <= 0) next; feat-- }
+        /<feature[ \t]/ { feat++ }
         { print }
         END { if (!added) exit 3 }'
 }
