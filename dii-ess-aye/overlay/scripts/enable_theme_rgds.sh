@@ -27,6 +27,14 @@ output DSI-1 bg #000000 solid_color
 output DSI-2 allow_tearing yes
 output DSI-2 max_render_time off
 for_window [title=".*(Secondary|\[w2\]|Sub|Bottom|Screen 2|GamePad).*"] move window to output DSI-1
+# RetroArch must open on the top panel. With the dual-screen ES window spanning both outputs, a new
+# fullscreen window can land on DSI-1 (bottom); lowerdeck then covers it. Move + focus first; vertical-check
+# still runs for vertical cores (melonDS etc.) and for lowerdeck on non-vertical ones.
+for_window [title="RetroArch.*"] move window to output DSI-2, focus
+# Touch on the whole layout while RetroArch runs, where ROCKNIX's udev calibration puts it on DSI-1 (the bottom panel,
+# lowerdeck). ROCKNIX's sway-touch.service (off by install.sh's drop-in) or a DraStic window can leave it mapped to
+# DSI-2; taps then go to RetroArch on the top panel and the bottom-screen menu can't be reached (issue #33).
+for_window [title="RetroArch.*"] input "1046:911:Goodix_Capacitive_TouchScreen" map_to_output *
 for_window [title="RetroArch.*"] exec /usr/bin/vertical-check
 for_window [app_id="lowerdeck"] floating enable, fullscreen enable, move window to output DSI-1
 no_focus [app_id="lowerdeck"]

@@ -127,6 +127,10 @@ RG DS Plus.
   DraStic's hi-res 3D with SuperDrastic's own rasterizer. It matches DraStic's picture pixel for pixel with about 20%
   less work in DraStic's 3D threads. *DraStic* (the default) keeps DraStic's own. With Gengis Engine, *3D texture
   filter* (nearest = the DS's, bilinear, sharp bilinear) smooths textures, at about twice the 3D cost.
+- **RetroArch games and the bottom screen** (1.5.8, #33). Games RetroArch runs (GBA, SNES, N64 and the rest) could
+  open on the bottom screen behind ROCKNIX's touch menu, and a tap on that menu could leave the game paused for good.
+  They open on the top screen now, *Resume Game* resumes, and taps on the bottom screen reach the menu and the touch
+  menu right after a reboot.
 
 ### New in 1.4
 

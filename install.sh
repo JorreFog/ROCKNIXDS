@@ -187,6 +187,15 @@ if [ $UNINSTALL = 1 ]; then
         [ -f $B/.config/sway/config ] && cp -a $B/.config/sway/config /storage/.config/sway/config    # ROCKNIX regenerates it at boot anyway
         [ -f $B/dii-ess-aye-backup/sway-config.theme ] && cp -a $B/dii-ess-aye-backup/sway-config.theme /storage/dii-ess-aye-backup/sway-config.theme
         [ -f $B/.config/autostart/dii-ess-aye ] && cp -a $B/.config/autostart/dii-ess-aye /storage/.config/autostart/dii-ess-aye
+        if [ -f $B/.config/retroarch/retroarch.cfg ] && [ -f /storage/.config/retroarch/retroarch.cfg ]; then
+            # only the pause_nonactive line we change for lowerdeck + seat0 touch
+            old=$(sed -n 's/^pause_nonactive = //p' $B/.config/retroarch/retroarch.cfg | head -n1)
+            if [ -n "$old" ]; then
+                sed -i "s/^pause_nonactive.*/pause_nonactive = $old/" /storage/.config/retroarch/retroarch.cfg
+            else
+                sed -i '/^pause_nonactive/d' /storage/.config/retroarch/retroarch.cfg
+            fi
+        fi
         if [ -f $B/.config/system/configs/system.cfg ] && [ -f $SYSCFG ]; then      # nds.hires_3d only
             old=$(sed -n 's/^nds\.hires_3d=//p' $B/.config/system/configs/system.cfg | head -n1)
             if [ -n "$old" ]; then set_cfg nds.hires_3d "$old"; else sed -i '/^nds\.hires_3d=/d' $SYSCFG; fi
@@ -227,6 +236,11 @@ if [ $UNINSTALL = 1 ]; then
         rm -f /storage/.config/system.d/input.service.d/rocknixds.conf
         rmdir /storage/.config/system.d/input.service.d 2>/dev/null
         systemctl daemon-reload; systemctl restart input.service 2>/dev/null
+    fi
+    if [ -f /storage/.config/system.d/sway-touch.service.d/rocknixds.conf ]; then           # ROCKNIX's touch mapping again
+        rm -f /storage/.config/system.d/sway-touch.service.d/rocknixds.conf
+        rmdir /storage/.config/system.d/sway-touch.service.d 2>/dev/null
+        systemctl daemon-reload     # takes effect at the next boot
     fi
     { echo performance > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor; } 2>/dev/null || true   # ROCKNIX's menu governor
     rmdir /storage/.config/emulationstation/scripts/theme-changed /storage/.config/emulationstation/scripts/game-end \
@@ -365,6 +379,7 @@ if [ $THEME_ON = 1 ]; then
     backup_once $ES_SETTINGS
     backup_once /storage/.config/autostart/dii-ess-aye        # an earlier manual install's hook: keep it on uninstall
     backup_once /storage/dii-ess-aye-backup/sway-config.theme
+    backup_once /storage/.config/retroarch/retroarch.cfg
     mkdir -p /storage/dii-ess-aye-backup /storage/.config/autostart
     cp "$SRC/dii-ess-aye/device/sway-config.theme" /storage/dii-ess-aye-backup/sway-config.theme
     cp "$SRC/dii-ess-aye/device/autostart-dii-ess-aye" /storage/.config/autostart/dii-ess-aye
@@ -378,6 +393,27 @@ if [ $THEME_ON = 1 ]; then
     touch /tmp/has-restarted-for-theme
     XDG_RUNTIME_DIR=/var/run/0-runtime-dir SWAYSOCK=$(ls /var/run/0-runtime-dir/sway-ipc.*.sock 2>/dev/null | head -n1) \
         bash $THEME/scripts/enable_theme_rgds.sh
+    # Goodix is also on seat0 so ES gets touch (see sway-config.theme). A tap on lowerdeck then moves seat0
+    # focus off RetroArch; with pause_nonactive on, the game stays paused even after Resume. Off: lowerdeck's
+    # own MENU_TOGGLE still pauses for the VC menu, and Resume works.
+    RACFG=/storage/.config/retroarch/retroarch.cfg
+    if [ -f "$RACFG" ]; then
+        if grep -q '^pause_nonactive' "$RACFG"; then
+            sed -i 's/^pause_nonactive.*/pause_nonactive = "false"/' "$RACFG"
+        else
+            echo 'pause_nonactive = "false"' >> "$RACFG"
+        fi
+    fi
+    # ROCKNIX's sway-touch service maps the touchscreen to the top panel at boot (the focused output under the
+    # dual-screen menu): taps on the bottom panel then reached neither the menu nor RetroArch's bottom-screen menu
+    # (issue #33). Off; the touchscreen is unmapped now as well, as it is after the next boot.
+    if [ -f /usr/lib/systemd/system/sway-touch.service ]; then
+        mkdir -p /storage/.config/system.d/sway-touch.service.d
+        cp "$SRC/dsflip/device/sway-touch-rocknixds.conf" /storage/.config/system.d/sway-touch.service.d/rocknixds.conf
+        systemctl daemon-reload
+        XDG_RUNTIME_DIR=/var/run/0-runtime-dir SWAYSOCK=$(ls /var/run/0-runtime-dir/sway-ipc.*.sock 2>/dev/null | head -n1) \
+            swaymsg input 1046:911:Goodix_Capacitive_TouchScreen map_to_output '*' >/dev/null 2>&1
+    fi
     # ES's power saver on "enhanced": an idle menu draws nothing instead of 25-60 frames a second (the patched ES
     # still wakes each minute for the clock). Only if it's on ES's default: a choice made in the menu stays.
     case "$(es_get PowerSaverMode $ES_SETTINGS)" in ""|default) es_set PowerSaverMode enhanced ;; esac
