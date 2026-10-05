@@ -194,6 +194,13 @@ stuck_report() {
   [ -n "$R3" ] || R3=$(grep "^nds.resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ "$R3" = 3x ] && export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-3}
   echo "3D renderer: ${RND:-drastic}${DSFLIP_RAST:+ (DSFLIP_RAST=$DSFLIP_RAST, texture filter ${DSFLIP_RAST_TEXFILTER:-0}, scale ${DSFLIP_RAST_SCALE:-2})}"
+  # SuperDrastic's sampling profiler (DSFLIP_PROF, src/prof.c) while the flag file exists: which thread spends its
+  # time in which functions. Its report, prof-<pid>.txt, is rewritten every 10 s (the exit hotkey's kill -9 leaves the
+  # last one) next to dsflip.log in $D/dsflip (the profiler's default: DSFLIP_LOG's directory).
+  if [ -e /storage/.config/drastic/dsflip/profile ]; then
+    export DSFLIP_PROF=${DSFLIP_PROF:-1}
+    echo "profiler: on (DSFLIP_PROF=$DSFLIP_PROF, report in $D/dsflip)"
+  fi
   cd $D
   # no wait for the display: libdsflip retries DRM master itself while seatd lets go of it (~0.4 s after sway)
   SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log \

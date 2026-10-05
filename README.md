@@ -131,6 +131,9 @@ RG DS Plus.
   default while it is measured on the handhelds. With it, *3D texture filter* (nearest = the DS's, bilinear, sharp
   bilinear) smooths textures, and *3D resolution* 3x renders the scene at 768x576 and supersamples it into the 2x
   frame (anti-aliased polygon edges). Both cost CPU: the filter about twice the raster stage, 3x about three times.
+  With the flag file `/storage/.config/drastic/dsflip/profile` present, SuperDrastic's sampling profiler runs too
+  (`DSFLIP_PROF=1`): its report, which thread spends its time in which functions, is written next to `dsflip.log` as
+  `prof-<pid>.txt` (it needs a SuperDrastic build with the profiler).
 
 ### New in 1.4
 
