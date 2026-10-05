@@ -420,9 +420,11 @@ if [ $THEME_ON = 1 ]; then
     [ -n "$(es_get LastSystem $ES_SETTINGS)" ] || es_set LastSystem nds
     # a card that once started without DS games: ES then saved the system it fell back to (the menu starts on
     # LastSystem), and up to 1.5.12 the DS wasn't listed until a game was there. The patched ES now lists it even
-    # empty (es-rgds-emptylibrary.patch): back to the DS from those fallbacks, never from a system the player chose.
+    # empty (es-rgds-emptylibrary.patch): back to the DS from those fallbacks (ES names the collections favorites,
+    # recent and all; music and tools are ROCKNIX's systems), once per install. A player who left the menu on Tools
+    # on purpose is sent to the DS this once; a DS game is never left for another emulator's system.
     case "$(es_get LastSystem $ES_SETTINGS)" in
-        favorites|auto-favorites|recent|lastplayed|auto-lastplayed|allgames|auto-allgames|music|musicplayer|tools) es_set LastSystem nds ;;
+        favorites|recent|all|music|tools) es_set LastSystem nds ;;
     esac
     # 1.5: ROCKNIXDS Pixel Light is the theme, once (the first install of 1.5 or later; a choice made after that stays,
     # an uninstall forgets it). The 1.5 betas' rocknixds-dark/-light/-pixel are gone.

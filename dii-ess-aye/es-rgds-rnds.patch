@@ -74,10 +74,10 @@ index 90df9a9b..75714e3d 100644
  			else if (complete || SDL_GetTicks() - firstFrame > 3000)
 diff --git a/es-app/src/rnds/RndsEs.cpp b/es-app/src/rnds/RndsEs.cpp
 new file mode 100644
-index 00000000..e8a55711
+index 00000000..140407d8
 --- /dev/null
 +++ b/es-app/src/rnds/RndsEs.cpp
-@@ -0,0 +1,1138 @@
+@@ -0,0 +1,1143 @@
 +#include "rnds/RndsEs.h"
 +#include "rnds/RndsUI.h"
 +
@@ -737,9 +737,13 @@ index 00000000..e8a55711
 +			return i >= 0 && i < (int)systems.size() ? systems[i] : nullptr;
 +		}
 +
++		// a list with games that a filter (the game list options) hides shows the same placeholder: say so
++		static bool filtered(SystemData* s) { return s->getFilterIndex() != nullptr && s->getFilterIndex()->isFiltered(); }
++
 +		std::string emptyTitle() override
 +		{
 +			SystemData* s = librarySystem();
++			if (s && filtered(s)) return "Nothing matches";
 +			return s && s->isCollection() ? "Nothing here yet" : "No games yet";
 +		}
 +
@@ -747,6 +751,7 @@ index 00000000..e8a55711
 +		{
 +			SystemData* s = librarySystem();
 +			if (!s) return "";
++			if (filtered(s)) return "Clear the filter in the game list options";
 +			if (s->isCollection())
 +			{
 +				if (s->getName() == "favorites") return "Y on a game adds it here";

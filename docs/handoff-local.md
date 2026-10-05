@@ -55,8 +55,10 @@ The Pixel engine (its files live in `es-rgds-rnds.patch`; after editing them in 
 as no game and draws an empty state: the bubble **No games yet / Copy .nds files to roms/nds** over an empty reel (no
 cartridge, no plate, no START), the rail `00 / 00`, the faces *B Back* and a muted *No games*; the top screen the DS
 icon in the cover frame with the same two lines. Collections say **Nothing here yet** with their own hint (Favorites:
-*Y on a game adds it here*; Last played: *Games you play show up here*). The engine never asks the host for a game
-past the count, never opens a library with no systems and never favourites nothing (`RndsUI.cpp`, `RndsEs.cpp`).
+*Y on a game adds it here*; Last played: *Games you play show up here*); a list that a filter from ES's game list
+options empties says **Nothing matches / Clear the filter in the game list options**. The engine never asks the
+host for a game past the count, never opens a library with no systems and never favourites nothing (`RndsUI.cpp`,
+`RndsEs.cpp`).
 The host harness (`dii-ess-aye/rnds/test`, built with `-DMOCKDATA='"empty.inc"'`) renders that state under the
 address sanitizer, and with games present 24 frames (home, library, ready screen, back; dark and light) are
 byte-identical to the previous engine. `emulationstation-rgds` rebuilt; `install.sh` sends `LastSystem` back to
@@ -90,14 +92,17 @@ byte-identical to the previous engine. `emulationstation-rgds` rebuilt; `install
 7. A card that ran 1.5.10-1.5.12 without games holds `LastSystem` = music/tools/favorites/recent in
    `/storage/.config/emulationstation/es_settings.cfg`; after the update it says `nds` and the menu opens on the DS.
 
-**Acceptance:** steps 2, 4 and 5; with games present nothing looks different; `grep -c "nds" /var/log/es_log.txt`
-shows the system loaded ("Loading system nds" or its gamelist line) on the empty run.
+**Acceptance:** steps 2, 4 and 5; with games present nothing looks different; on the empty run ES's log (default
+level: warnings only) has no `System "nds" has no games! Ignoring it.` line, and the shelf shows the DS (there is no
+positive "system loaded" line at that level; `LogLevel=information` in `es_settings.cfg` adds `Parsing XML file
+"/storage/roms/nds/gamelist.xml"` on the run with games).
 
 ## 3. The real microphone
 
 **What is known.** Issue 26: on an RG DS Plus (ROCKNIX 20261001) blowing into the mic does nothing at *microphone
 sensitivity* high, while a button bound to DraStic's *Fake Microphone* in DraStic's own menu works. So DraStic's
-fake-microphone path (it plays `config/microphone/microphone.wav` into the DS mic while the control is held) is fine;
+fake-microphone path (it plays `microphone/microphone.wav`, next to `config/`, into the DS mic while the control is
+held) is fine;
 what fails is between libdsflip's capture and that control. The path: ES's setting → `DSHOOK_MIC_THRESH` (high 0.03,
 medium 0.15, low 0.3; *Auto* is off) → libdsflip's mic thread (`src/audio.c`: ALSA `default` capture, 44.1 kHz mono,
 RMS per 1024-sample block, a noise floor learned over the first 1.4 s, then `level > floor + threshold`, and an
@@ -142,9 +147,9 @@ handheld* in `dsflip/superdrastic-0.4.0-beta.2-rocknixds.3.patch`; nothing needs
 - `session.sh` repairs H1 before the game starts: with the mic on and `controls_a[...FAKE_MICROPHONE] = 65535` it
   writes 327 there and says so in `last-session.log` (`microphone: bound DraStic's fake microphone ...`). DraStic
   saves the file on exit, so a later rebinding by the player stays.
-- `[mic] capture is silent (peak 0.00000 in 5 s): is a microphone source behind ALSA's default? (wpctl status)`
-  after 5 s of exact zeros (H3). A capture that never returns frames shows `[mic] listening` and then never the
-  `[mic] 10 s:` line.
+- `[mic] capture is silent (peak 0.00031 in 5 s): is a microphone source behind ALSA's default? (wpctl status)`
+  after ~5 s with every block's RMS below 0.0005, near silence (H3; a muted source with dither noise counts). A
+  capture that never returns frames shows `[mic] listening` and then never the `[mic] 10 s:` line.
 - Switches, read once at the game's start, set with `systemctl set-environment NAME=value` over ssh (the game unit
   inherits them; `systemctl unset-environment NAME` removes them; `last-session.log` does not list them):
   - `DSFLIP_MIC_DEBUG=1`: a line every 8 blocks (~190 ms) `[mic] level L floor F out O coup C bleed B bar X down D`
@@ -207,8 +212,11 @@ thread, so it separates DraStic's side from ours when both lines are on the desk
    `git am dsflip/superdrastic-0.4.0-beta.2-rocknixds.3.patch` on tag `v0.4.0-beta.2`), bump `VERSION` to
    `0.4.0-beta.2-rocknixds.4`, `sh build.sh <arm64 sysroot>` and `sh package.sh` (the `SUPERDRASTIC` file's comment
    names the toolchain), ship the tarball in `dsflip/`, regenerate the patch (`git format-patch --stdout
-   v0.4.0-beta.2..rocknixds-wfc`), pin version and sha256 in `SUPERDRASTIC`, and test the package with
-   `RGDS_SUPERDRASTIC=<tarball> sh install.sh`. Then `systemctl unset-environment DSFLIP_MIC_DEBUG DSFLIP_MIC_GATE
+   v0.4.0-beta.2..rocknixds-wfc`), pin version and sha256 in `SUPERDRASTIC`, and test it with `RGDS_SRC=<checkout>
+   sh install.sh` on the device (the installer takes `dsflip/superdrastic-<ver>-aarch64.tar.gz` from the checkout by
+   itself; without `RGDS_SRC` it fetches the latest release and compares the tarball against that release's pin, and
+   dies; `RGDS_SUPERDRASTIC=<tarball>` is only for a package that is not in `dsflip/`). Then `systemctl
+   unset-environment DSFLIP_MIC_DEBUG DSFLIP_MIC_GATE
    DSFLIP_MIC_COUPLING_MAX DSFLIP_MIC_HOLD_MS DSFLIP_MIC_KEY DSFLIP_MIC_LF` and run the acceptance with no switches
    set.
 6. **Medium and low.** Repeat the candle at *medium*; note whether *low* can work at all with music (if not, say so

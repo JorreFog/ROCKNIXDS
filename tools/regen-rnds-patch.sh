@@ -4,7 +4,7 @@
 # SystemView, ViewController, ThemeData) stay as they are. The tree is the one tools/build-es.sh patched (the engine
 # files are untracked there), after editing the engine.
 set -e
-SRC=$1; PATCH=$2
+SRC=$1; PATCH=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")   # absolute: the script cds into the tree
 FILES="es-app/src/rnds/RndsEs.cpp es-app/src/rnds/RndsEs.h es-app/src/rnds/RndsRaster.cpp es-app/src/rnds/RndsRaster.h
        es-app/src/rnds/RndsUI.cpp es-app/src/rnds/RndsUI.h es-app/src/views/gamelist/RndsGameListView.cpp
        es-app/src/views/gamelist/RndsGameListView.h"
