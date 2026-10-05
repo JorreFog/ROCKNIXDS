@@ -4,7 +4,7 @@
 # (nds.power_profile: balanced, performance or battery; unset = balanced; session.sh) and its "share performance
 # logs" option (nds.share_performance_logs: 1 uploads a performance log on quit, 0 does not, unset asks). Its "3D renderer"
 # option (nds.renderer: superdrastic = Gengis Engine, SuperDrastic's own hi-res rasterizer, DSFLIP_RAST=1 in session.sh;
-# unset or drastic = DraStic's), its "3D resolution" (nds.resolution3d: 2x; DSFLIP_RAST_SCALE, Gengis Engine only;
+# drastic = DraStic's; unset, the menu's Auto, is Gengis Engine since 1.5.13), its "3D resolution" (nds.resolution3d: 2x; DSFLIP_RAST_SCALE, Gengis Engine only;
 # unset is the menu's Auto, and Gengis Engine keeps its own scale) and its "3D texture filter" (nds.texture_filter:
 # nearest, bilinear, sharp; DSFLIP_RAST_TEXFILTER, only used with Gengis Engine) are their own options, siblings of
 # share performance logs. 3x is not offered. 1.5.6 saved nds.resolution3d=3x; that line is removed so the menu shows Auto.

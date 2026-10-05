@@ -185,23 +185,27 @@ stuck_report() {
     esac
   fi
   # 3D renderer (ES: the game's or DS system's "3D renderer"): superdrastic = Gengis Engine, SuperDrastic's own
-  # rasterizer for DraStic's hi-res 3D (DSFLIP_RAST=1), anything else DraStic's own. "3D resolution" (nds.resolution3d)
-  # and "3D texture filter" apply to Gengis Engine; DraStic's renderer ignores both. The menu lists Auto (unset) and
-  # 2x. Unset leaves the scale to Gengis Engine. 3x is not offered, and a 1.5.6 value of 3x is ignored.
+  # rasterizer for DraStic's hi-res 3D (DSFLIP_RAST=1), drastic = DraStic's own. Auto (unset, the menu's default) is
+  # Gengis Engine since 1.5.13: the same picture as DraStic's renderer pixel for pixel with ~12% less CPU (1.5.9), and
+  # the README asked every new player to switch it on by hand. A player who chose DraStic keeps it. "3D resolution"
+  # (nds.resolution3d) and "3D texture filter" apply to Gengis Engine; DraStic's renderer ignores both. The menu lists
+  # Auto (unset) and 2x. Unset leaves the scale to Gengis Engine. 3x is not offered, and a 1.5.6 value of 3x is ignored.
+  # DSFLIP_RAST=0 in the environment (tests, systemctl set-environment) forces DraStic's renderer whatever the setting.
   RND=$(grep -F "nds[\"$GAME\"].renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$RND" ] || RND=$(grep "^nds.renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  [ "$RND" = superdrastic ] && export DSFLIP_RAST=${DSFLIP_RAST:-1}
+  case "$RND" in drastic) ;; superdrastic|""|auto) export DSFLIP_RAST=${DSFLIP_RAST:-1} ;; esac
+  [ "$DSFLIP_RAST" = 0 ] && unset DSFLIP_RAST
   TF=$(grep -F "nds[\"$GAME\"].texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$TF" ] || TF=$(grep "^nds.texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   case "$TF" in bilinear) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-1} ;; sharp) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-2} ;; esac
-  if [ "$RND" = superdrastic ]; then
+  if [ -n "$DSFLIP_RAST" ]; then
     RES=$(grep -F "nds[\"$GAME\"].resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
     [ -n "$RES" ] || RES=$(grep "^nds.resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
     case "$RES" in
       2x|2) export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-2} ;;
     esac
   fi
-  if [ -n "$DSFLIP_RAST" ]; then echo "3D renderer: Gengis Engine (scale ${DSFLIP_RAST_SCALE:-2}, texture filter ${DSFLIP_RAST_TEXFILTER:-0})"; else echo "3D renderer: DraStic"; fi
+  if [ -n "$DSFLIP_RAST" ]; then echo "3D renderer: Gengis Engine (${RND:-Auto}; scale ${DSFLIP_RAST_SCALE:-2}, texture filter ${DSFLIP_RAST_TEXFILTER:-0})"; else echo "3D renderer: DraStic"; fi
   cd $D
   # preload-guard.so keeps libdsflip out of the processes DraStic starts (SuperDrastic 0.3.0-beta.3, 1.5's, started pactl
   # and wpctl for its volume card; with libdsflip in them, they rotated the game's log and overwrote its verdict).

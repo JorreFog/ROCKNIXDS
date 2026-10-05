@@ -70,18 +70,20 @@ erased**), and a computer with an SD card reader.
    IP) in File Explorer's address bar; on a Mac use *Go > Connect to Server* with `smb://192.168.1.23`. User `root`,
    password `rocknix`. Copy your DS games (`.nds` or `.zip`) into `roms` > `nds`, then restart the handheld.
 
-6. **Set the best settings.** Every setting starts on *Auto*. For the best performance, open *Start > Game settings >
-   Per system advanced configuration > Nintendo DS* and set:
+6. **Play.** The best settings are the defaults since 1.5.13: every Nintendo DS setting on *Auto* means Gengis
+   Engine (the same picture as DraStic's renderer with about 12% less CPU work), the DS's own nearest texture filter,
+   2× resolution with threaded 3D (the installer switches both on), the balanced power profile and ROCKNIX's bilinear
+   scaling (no GPU work). They are under *Start > Game settings > Per system advanced configuration > Nintendo DS*
+   if you want something else:
 
-   | Setting | Set to | Why |
+   | Setting | Auto means | Other choices |
    |---|---|---|
-   | 3D renderer | **Gengis Engine** | The same picture as DraStic's renderer, with about 12% less CPU work |
+   | 3D renderer | **Gengis Engine** | *DraStic*: DraStic's own renderer, the same picture at more CPU work |
    | 3D texture filter | **nearest (DS)** | Bilinear smooths textures but doubles the 3D work |
-   | 3D resolution | Auto | Gengis Engine's 2×. 3× isn't offered yet |
-   | Shader | **default (bilinear)** for the best performance and battery, or **ds-crisp** for a sharp picture | default needs no GPU work; ds-crisp is the light sharp choice. ds-fsr (smooth edges) is the heaviest: it runs the GPU at full clock |
-   | Power profile | **balanced** | Full speed with the lowest input lag. *performance* only if a game slows down |
-   | Hires 3D | **on** | 2× resolution. The installer already switches it on |
-   | Threaded 3D | **on** | Spreads the 3D work over the cores |
+   | 3D resolution | Gengis Engine's 2× | 3× isn't offered yet |
+   | Shader | **default (bilinear)**, no GPU work | **ds-crisp** for a sharp picture; ds-fsr (smooth edges) is the heaviest and runs the GPU at full clock |
+   | Power profile | **balanced**: full speed with the lowest input lag | *performance* only if a game slows down; *battery saver* |
+   | Hires 3D, Threaded 3D | **on** (the installer sets them) | off: 1× resolution; the 3D on the emulation thread |
 
    The same settings can be changed for a single game: highlight it, press **X** for its options and choose the
    game's advanced settings.
@@ -196,6 +198,9 @@ the menu's updater pick the right one for the handheld they run on.
 - **A faster Gengis Engine** (1.5.9, SuperDrastic 0.4.0-beta.2). A leaner rasterizer and a NEON compositor for the 3D
   layer: Pokémon HeartGold takes ~5% less CPU than with 1.5.5's Gengis Engine and ~12% less than with DraStic's renderer,
   and runs closer to full speed at 816 MHz (53 fps instead of 51.6). Still pixel for pixel the same picture as DraStic.
+- **The recommended settings are the defaults** (1.5.13). *3D renderer* on *Auto* is Gengis Engine (a player who
+  picked *DraStic* keeps it), and the installer switches threaded 3D on where it was never set, as the Plus line did
+  since 1.5. The README's "set the best settings" step is gone: a fresh install plays with them.
 - **The menu stays up during DS games** (1.5.13). Fast switching, opt-in since 1.4, is on for everyone: the game runs on
   another console (VT) while ES and sway wait, so after a quit the menu is back about a second later, however many
   games the library holds. Before, ES was stopped and started again for every game, and its start grew with every

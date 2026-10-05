@@ -210,6 +210,7 @@ if [ $UNINSTALL = 1 ]; then
             old=$(sed -n 's/^nds\.hires_3d=//p' $B/.config/system/configs/system.cfg | head -n1)
             if [ -n "$old" ]; then set_cfg nds.hires_3d "$old"; else sed -i '/^nds\.hires_3d=/d' $SYSCFG; fi
         fi
+        [ -e $BACKUP/.threaded-3d-set ] && { sed -i '/^nds\.threaded_3d=/d' $SYSCFG 2>/dev/null; rm -f $BACKUP/.threaded-3d-set; }   # the threaded 3D the installer set
         if [ -f $B/.config/emulationstation/es_settings.cfg ] && [ -f $ES_SETTINGS ]; then   # the theme's keys only
             for k in ThemeSet FullScreenMenu GameTransitionStyle PowerSaverMode; do
                 old=$(es_get $k $B/.config/emulationstation/es_settings.cfg)
@@ -548,6 +549,17 @@ if [ $HIRES_ON = 1 ] && [ -f $SYSCFG ]; then
     say "Switching on hires 3D (2x internal resolution) for Nintendo DS"
     backup_once $SYSCFG
     set_cfg nds.hires_3d 1
+fi
+# DraStic's threaded 3D (ES: Nintendo DS > threaded 3d) is off until the player sets it; on, the 3D work leaves the
+# main (emulation) thread, which is what sets the clock a game needs (the RG DS measurements behind the power profiles
+# were made with it on; a fresh RG DS Plus install had it off and Mario Kart ran at 58.8 fps at 1104 MHz). Set it on
+# once where it has never been set (the Plus line since 1.5-plus; both handhelds since 1.5.13), with or without hires;
+# uninstall removes it again. The other recommended settings need no key: an unset 3D renderer is Gengis Engine
+# (session.sh), an unset texture filter is nearest, an unset power profile is balanced, an unset shader is ROCKNIX's
+# bilinear (no GPU work).
+if [ $DSFLIP_ON = 1 ] && [ -f $SYSCFG ] && ! grep -q '^nds\.threaded_3d=' $SYSCFG 2>/dev/null; then
+    backup_once $SYSCFG
+    set_cfg nds.threaded_3d 1; touch $BACKUP/.threaded-3d-set
 fi
 
 # ---- 60 Hz panels (opt-in) -----------------------------------------------------------------------------
