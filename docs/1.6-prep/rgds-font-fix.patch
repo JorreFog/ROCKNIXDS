@@ -1,0 +1,421 @@
+diff --git a/dii-ess-aye/rnds/gen_fonts.py b/dii-ess-aye/rnds/gen_fonts.py
+index 527d2c8..8884c54 100644
+--- a/dii-ess-aye/rnds/gen_fonts.py
++++ b/dii-ess-aye/rnds/gen_fonts.py
+@@ -2,20 +2,63 @@
+ """Static Pixelify Sans instances for the rnds engine, with the GPOS kerning as a legacy 'kern' table.
+ 
+     python3 gen_fonts.py PixelifySans[wght].ttf outdir
++    python3 gen_fonts.py --glyphs PixelifySans-Regular.ttf PixelifySans-Medium.ttf    (only the redrawn glyphs, in place)
+ 
+ Chrome shapes Pixelify Sans with HarfBuzz, which applies GPOS kerning. FreeType's FT_Get_Kerning only reads the
+ legacy 'kern' table, so the pairs that GPOS defines for the characters the engine draws (Latin-1, Latin Extended-A
+ and general punctuation) are flattened into one, per weight (the variable font's kerning varies with wght).
++
++Four glyphs are redrawn for legibility (issue #34): Pixelify Sans's 5 has a rounded top and no stem, so "05" read as
++"0S"; its 2 and Z are near twins, and its B reads as G or 8 ("Pokémon Glack"). The new ones sit on the font's own 5x7
++pixel grid (taken from the zero's bounds) with the same advance widths, so spacing and kerning stay as they were.
+ """
+ import os, sys
+ from fontTools.ttLib import TTFont, newTable
+ from fontTools.ttLib.tables._k_e_r_n import KernTable_format_0
+ from fontTools.varLib import instancer
++from fontTools.pens.ttGlyphPen import TTGlyphPen
+ 
+ WEIGHTS = {"Regular": 400, "Medium": 500}
+ CHARS = [c for c in range(0x20, 0x250)] + [c for c in range(0x2000, 0x2070)] + [0x20AC, 0x2122]
+ 
+ 
++CLEARER = {
++    "five": ["#####", "#....", "####.", "....#", "....#", "#...#", ".###."],
++    "two":  [".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"],
++    "Z":    ["#####", "....#", "...#.", "..#..", ".#...", "#....", "#####"],
++    "B":    ["####.", "#...#", "#...#", "####.", "#...#", "#...#", "####."],
++}
++
++
++def clearer_glyphs(font):
++    """Redraw CLEARER's glyphs on the font's 5x7 grid: one clockwise rectangle per run of pixels in a row."""
++    glyf, cmap = font["glyf"], font.getBestCmap()
++    zero = glyf[cmap[ord("0")]]
++    zero.recalcBounds(glyf)
++    x0, x1, y0, y1 = zero.xMin, zero.xMax, zero.yMin, zero.yMax
++    cw, rh = (x1 - x0) / 5, (y1 - y0) / 7
++    for name, rows in CLEARER.items():
++        pen = TTGlyphPen(None)
++        for r, row in enumerate(rows):
++            top, bot = round(y1 - r * rh), round(y1 - (r + 1) * rh)
++            c = 0
++            while c < 5:
++                if row[c] != "#":
++                    c += 1
++                    continue
++                e = c
++                while e < 5 and row[e] == "#":
++                    e += 1
++                left, right = round(x0 + c * cw), round(x0 + e * cw)
++                pen.moveTo((left, bot)); pen.lineTo((left, top)); pen.lineTo((right, top)); pen.lineTo((right, bot))
++                pen.closePath()
++                c = e
++        g = pen.glyph()
++        glyf[name] = g
++        g.recalcBounds(glyf)
++        font["hmtx"][name] = (font["hmtx"][name][0], g.xMin)
++
++
+ def pair_values(font):
+     """{(left glyph, right glyph): x advance adjustment} from GPOS PairPos (formats 1 and 2), kern feature only."""
+     gpos = font["GPOS"].table
+@@ -55,6 +98,13 @@ def pair_values(font):
+ 
+ 
+ def main():
++    if sys.argv[1] == "--glyphs":
++        for path in sys.argv[2:]:
++            f = TTFont(path)
++            clearer_glyphs(f)
++            f.save(path)
++            print(path, "glyphs redrawn:", " ".join(CLEARER))
++        return
+     src, outdir = sys.argv[1], sys.argv[2]
+     os.makedirs(outdir, exist_ok=True)
+     for style, wght in WEIGHTS.items():
+@@ -74,6 +124,7 @@ def main():
+             kern.kernTables.append(st)
+         if kern.kernTables:
+             inst["kern"] = kern
++        clearer_glyphs(inst)
+         name = inst["name"]
+         for rec in name.names:
+             if rec.nameID in (2, 17):
+diff --git a/dii-ess-aye/themes/rocknixds-pixel-dark/rnds/fonts/OFL.txt b/dii-ess-aye/themes/rocknixds-pixel-dark/rnds/fonts/OFL.txt
+index 6aa5bfb..9365ac2 100644
+--- a/dii-ess-aye/themes/rocknixds-pixel-dark/rnds/fonts/OFL.txt
++++ b/dii-ess-aye/themes/rocknixds-pixel-dark/rnds/fonts/OFL.txt
+@@ -1,93 +1,96 @@
+-Copyright 2021 The Pixelify Sans Project Authors (https://github.com/eifetx/Pixelify-Sans)
+-
+-This Font Software is licensed under the SIL Open Font License, Version 1.1.
+-This license is copied below, and is also available with a FAQ at:
+-https://scripts.sil.org/OFL
+-
+-
+------------------------------------------------------------
+-SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+------------------------------------------------------------
+-
+-PREAMBLE
+-The goals of the Open Font License (OFL) are to stimulate worldwide
+-development of collaborative font projects, to support the font creation
+-efforts of academic and linguistic communities, and to provide a free and
+-open framework in which fonts may be shared and improved in partnership
+-with others.
+-
+-The OFL allows the licensed fonts to be used, studied, modified and
+-redistributed freely as long as they are not sold by themselves. The
+-fonts, including any derivative works, can be bundled, embedded, 
+-redistributed and/or sold with any software provided that any reserved
+-names are not used by derivative works. The fonts and derivatives,
+-however, cannot be released under any other type of license. The
+-requirement for fonts to remain under this license does not apply
+-to any document created using the fonts or their derivatives.
+-
+-DEFINITIONS
+-"Font Software" refers to the set of files released by the Copyright
+-Holder(s) under this license and clearly marked as such. This may
+-include source files, build scripts and documentation.
+-
+-"Reserved Font Name" refers to any names specified as such after the
+-copyright statement(s).
+-
+-"Original Version" refers to the collection of Font Software components as
+-distributed by the Copyright Holder(s).
+-
+-"Modified Version" refers to any derivative made by adding to, deleting,
+-or substituting -- in part or in whole -- any of the components of the
+-Original Version, by changing formats or by porting the Font Software to a
+-new environment.
+-
+-"Author" refers to any designer, engineer, programmer, technical
+-writer or other person who contributed to the Font Software.
+-
+-PERMISSION & CONDITIONS
+-Permission is hereby granted, free of charge, to any person obtaining
+-a copy of the Font Software, to use, study, copy, merge, embed, modify,
+-redistribute, and sell modified and unmodified copies of the Font
+-Software, subject to the following conditions:
+-
+-1) Neither the Font Software nor any of its individual components,
+-in Original or Modified Versions, may be sold by itself.
+-
+-2) Original or Modified Versions of the Font Software may be bundled,
+-redistributed and/or sold with any software, provided that each copy
+-contains the above copyright notice and this license. These can be
+-included either as stand-alone text files, human-readable headers or
+-in the appropriate machine-readable metadata fields within text or
+-binary files as long as those fields can be easily viewed by the user.
+-
+-3) No Modified Version of the Font Software may use the Reserved Font
+-Name(s) unless explicit written permission is granted by the corresponding
+-Copyright Holder. This restriction only applies to the primary font name as
+-presented to the users.
+-
+-4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+-Software shall not be used to promote, endorse or advertise any
+-Modified Version, except to acknowledge the contribution(s) of the
+-Copyright Holder(s) and the Author(s) or with their explicit written
+-permission.
+-
+-5) The Font Software, modified or unmodified, in part or in whole,
+-must be distributed entirely under this license, and must not be
+-distributed under any other license. The requirement for fonts to
+-remain under this license does not apply to any document created
+-using the Font Software.
+-
+-TERMINATION
+-This license becomes null and void if any of the above conditions are
+-not met.
+-
+-DISCLAIMER
+-THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+-OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+-COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+-INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+-DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+-FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+-OTHER DEALINGS IN THE FONT SOFTWARE.
++Copyright 2021 The Pixelify Sans Project Authors (https://github.com/eifetx/Pixelify-Sans)
++
++Modified for ROCKNIXDS: static Regular and Medium instances with the glyphs 2, 5, B and Z redrawn for legibility
++(dii-ess-aye/rnds/gen_fonts.py).
++
++This Font Software is licensed under the SIL Open Font License, Version 1.1.
++This license is copied below, and is also available with a FAQ at:
++https://scripts.sil.org/OFL
++
++
++-----------------------------------------------------------
++SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
++-----------------------------------------------------------
++
++PREAMBLE
++The goals of the Open Font License (OFL) are to stimulate worldwide
++development of collaborative font projects, to support the font creation
++efforts of academic and linguistic communities, and to provide a free and
++open framework in which fonts may be shared and improved in partnership
++with others.
++
++The OFL allows the licensed fonts to be used, studied, modified and
++redistributed freely as long as they are not sold by themselves. The
++fonts, including any derivative works, can be bundled, embedded, 
++redistributed and/or sold with any software provided that any reserved
++names are not used by derivative works. The fonts and derivatives,
++however, cannot be released under any other type of license. The
++requirement for fonts to remain under this license does not apply
++to any document created using the fonts or their derivatives.
++
++DEFINITIONS
++"Font Software" refers to the set of files released by the Copyright
++Holder(s) under this license and clearly marked as such. This may
++include source files, build scripts and documentation.
++
++"Reserved Font Name" refers to any names specified as such after the
++copyright statement(s).
++
++"Original Version" refers to the collection of Font Software components as
++distributed by the Copyright Holder(s).
++
++"Modified Version" refers to any derivative made by adding to, deleting,
++or substituting -- in part or in whole -- any of the components of the
++Original Version, by changing formats or by porting the Font Software to a
++new environment.
++
++"Author" refers to any designer, engineer, programmer, technical
++writer or other person who contributed to the Font Software.
++
++PERMISSION & CONDITIONS
++Permission is hereby granted, free of charge, to any person obtaining
++a copy of the Font Software, to use, study, copy, merge, embed, modify,
++redistribute, and sell modified and unmodified copies of the Font
++Software, subject to the following conditions:
++
++1) Neither the Font Software nor any of its individual components,
++in Original or Modified Versions, may be sold by itself.
++
++2) Original or Modified Versions of the Font Software may be bundled,
++redistributed and/or sold with any software, provided that each copy
++contains the above copyright notice and this license. These can be
++included either as stand-alone text files, human-readable headers or
++in the appropriate machine-readable metadata fields within text or
++binary files as long as those fields can be easily viewed by the user.
++
++3) No Modified Version of the Font Software may use the Reserved Font
++Name(s) unless explicit written permission is granted by the corresponding
++Copyright Holder. This restriction only applies to the primary font name as
++presented to the users.
++
++4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
++Software shall not be used to promote, endorse or advertise any
++Modified Version, except to acknowledge the contribution(s) of the
++Copyright Holder(s) and the Author(s) or with their explicit written
++permission.
++
++5) The Font Software, modified or unmodified, in part or in whole,
++must be distributed entirely under this license, and must not be
++distributed under any other license. The requirement for fonts to
++remain under this license does not apply to any document created
++using the Font Software.
++
++TERMINATION
++This license becomes null and void if any of the above conditions are
++not met.
++
++DISCLAIMER
++THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
++MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
++OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
++COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
++DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
++OTHER DEALINGS IN THE FONT SOFTWARE.
+diff --git a/dii-ess-aye/themes/rocknixds-pixel-dark/rnds/fonts/PixelifySans-Medium.ttf b/dii-ess-aye/themes/rocknixds-pixel-dark/rnds/fonts/PixelifySans-Medium.ttf
+index 965515669bb622b245279ca26983fdecf49639d8..6bbfaa38afc28a38e356ef0874f66a4ce4b8d9f9 100644
+GIT binary patch
+delta 1850
+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
+
+delta 1547
+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
+
+diff --git a/dii-ess-aye/themes/rocknixds-pixel-dark/rnds/fonts/PixelifySans-Regular.ttf b/dii-ess-aye/themes/rocknixds-pixel-dark/rnds/fonts/PixelifySans-Regular.ttf
+index 454a98d266da511c87c0c1d1889a3ea4a60a4860..fe44c8971766e45645682c700e4b42f3a2fda9d0 100644
+GIT binary patch
+delta 1823
+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
+W5*rH((jG=}>>i7W*{qOqU?%|o-Vm$+
+
+delta 1547
+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
+B(slp<
+

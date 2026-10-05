@@ -78,7 +78,9 @@ class Device:
         return r.stdout if binary else r.stdout.decode(errors="replace")
 
     def games(self):
-        return json.loads(self.run("curl -s localhost:1234/systems/nds/games"))
+        # no DS games yet (a fresh SD card): ES has no nds system and answers "404 system not found"
+        out = self.run("curl -s localhost:1234/systems/nds/games")
+        return json.loads(out) if out.lstrip().startswith("[") else []
 
     def fetch(self, path):
         return self.run(f"cat {shlex.quote(path)}", binary=True)
