@@ -37,6 +37,32 @@ Anbernic RG DS and RG DS Plus on ROCKNIX.</b></p>
 </p>
 <p align="center"><sub>Pokémon HeartGold at 2× internal resolution (captured from the panels' scanout buffers).</sub></p>
 
+## Get started
+
+The easiest way: put ROCKNIXDS on a fresh microSD card. No ssh, no commands.
+
+**You need:** an Anbernic RG DS or RG DS Plus, a microSD card of 16 GB or more (**everything on it will be
+erased**), and a computer with an SD card reader.
+
+1. **Download the image for your handheld.** Don't unzip it.
+   - RG DS Plus: [rocknixds-v1.5.10-plus-rocknix-20261001.img.gz](https://github.com/JorreFog/ROCKNIXDS/releases/download/v1.5.10-plus/rocknixds-v1.5.10-plus-rocknix-20261001.img.gz)
+   - RG DS: [rocknixds-v1.5.10-rocknix-20261001.img.gz](https://github.com/JorreFog/ROCKNIXDS/releases/download/v1.5.10/rocknixds-v1.5.10-rocknix-20261001.img.gz)
+2. **Install [balenaEtcher](https://etcher.balena.io/)** on your computer (free, for Windows, macOS and Linux).
+3. **Write the image to the card.** Put the microSD card in your computer and open balenaEtcher.
+   Click *Flash from file* and pick the file you downloaded. Click *Select target* and pick the microSD card.
+   Click *Flash!* and wait for *Flash Complete!*
+4. **Start the handheld.** Put the card in the handheld and switch it on. The first start takes a few minutes and
+   restarts once by itself: ROCKNIX sets up the card, then ROCKNIXDS installs itself. Leave it on until the
+   menu appears.
+5. **Add your games.** In the menu, connect to Wi-Fi (*Start > Network Settings*). On your computer, open the
+   handheld's network share: on Windows type `\\ROCKNIX.local` in File Explorer's address bar, on a Mac use
+   *Go > Connect to Server* with `smb://ROCKNIX.local` (or the handheld's IP address from *Network Settings*).
+   User `root`, password `rocknix`. Copy your DS games (`.nds` or `.zip`) into `roms` > `nds`. They show up the
+   next time the menu loads (or after a restart).
+
+Updates come through the menu: *Updates & downloads > ROCKNIXDS*. Already running ROCKNIX?
+See [Install](#install) for the one-line install over ssh.
+
 The Anbernic RG DS is a clamshell handheld with two 640×480 touch panels and an RK3566 (4× Cortex-A55,
 Mali-G52); the RG DS Plus has two 1024×768 panels. ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [ROCKNIX](https://rocknix.org) install:
 
