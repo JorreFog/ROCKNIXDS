@@ -10,6 +10,7 @@
 # from the name (nds.3D_renderer), which session.sh doesn't read. It also keeps the DS system on
 # ROCKNIXDS's DraStic: es_systems.cfg's nds entry offers only drastic/drastic-sa (ROCKNIX also lists RetroArch cores
 # and standalone melonDS, which don't use libdsflip). --unlock-nds puts ROCKNIX's list back (uninstall).
+# --strip-options removes the shader choices and options above (uninstall) and repairs a stray </feature>.
 # Run by the installer and at every boot (autostart hook rocknixds-es-features), before ES starts.
 #
 # ES reads /storage/.config/emulationstation/es_features.cfg instead of ROCKNIX's read-only
@@ -24,17 +25,37 @@ SYS=${ESF_SYSTEM:-/usr/config/emulationstation/es_features.cfg}
 ESF=${ESF_USER:-/storage/.config/emulationstation/es_features.cfg}
 STATE=${ESF_STATE:-/storage/rgds-rocknix-backup}     # the installer's backup dir: .esf-created, .esf-system-md5
 
+# Drop ROCKNIXDS's shader choices and options, as the RG DS line does. Its 1.5.5 wrote "3D renderer" and "3D texture
+# filter" before "share performance logs" (an RG DS option) was closed. CustomFeatures::loadCustomFeatures only keeps
+# a <feature>'s <choice> children, so those options never appeared. The next boot's skip, the one-level skip the Plus
+# used as well, stopped at the first </feature> and left the rest, including a stray close. es_features.cfg then
+# failed to parse (CustomFeatures::loadEsFeaturesFile returns without a fallback to ROCKNIX's copy), so every system's
+# options in that file disappeared, DraStic's included (#36, #37).
+# Depth counts nested <feature> elements. A </feature> with nothing open is the stray close, and is dropped.
+# </features> is the wrapper, not a feature. Reads stdin.
+strip_ours() {
+    grep -vE 'value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"' | awk '
+        depth == 0 && ($0 ~ /<feature name="resume on quit"/ || $0 ~ /<feature name="power profile"/ || $0 ~ /<feature name="share performance logs"/ || $0 ~ /<feature name="3D renderer"/ || $0 ~ /<feature name="3D texture filter"/ || $0 ~ /<feature name="3D resolution"/ || $0 ~ /<feature name="wfc dns"/) { depth = 1; next }
+        depth > 0 {
+            if ($0 ~ /<feature[ \t]/ && $0 !~ /\/>[ \t\r]*$/) depth++
+            if ($0 ~ /<\/feature>[ \t\r]*$/) depth--
+            next
+        }
+        /<\/feature>[ \t\r]*$/ { if (opened <= 0) next; opened-- }
+        /<feature[ \t]/ && $0 !~ /\/>[ \t\r]*$/ { opened++ }
+        { print }
+    '
+}
+
 # our choices go at the end of the drastic-sa core's <feature name="shader">, indented like its other choices;
 # any earlier copy of them is dropped first, so this is idempotent. The resume option follows the shader option.
 add_ours() {
-    grep -vE 'value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"' "$1" | awk '
-        /<feature name="resume on quit"/ || /<feature name="power profile"/ || /<feature name="3D renderer"/ || /<feature name="3D texture filter"/ || /<feature name="3D resolution"/ || /<feature name="wfc dns"/ { skip = 1 }
-        skip { if (/<\/feature>/) skip = 0; next }
+    strip_ours < "$1" | awk '
         /<core name="drastic-sa"/ { core = 1 }
         core && /<\/core>/ { core = 0 }
         core && /<feature name="shader"/ { shader = 1 }
         shader && /<choice / { ind = $0; sub(/<choice.*/, "", ind) }
-        shader && /<\/feature>/ {
+        shader && /<\/feature>[ \t\r]*$/ {
             print ind "<choice name=\"ds-crisp (sharp, 1x and 2x)\" value=\"ds-crisp\" />"
             print ind "<choice name=\"ds-crisp + NDS color\" value=\"ds-crisp-color\" />"
             print ind "<choice name=\"ds-grid (sharp + DS pixel grid)\" value=\"ds-grid\" />"
@@ -42,7 +63,7 @@ add_ours() {
             print ind "<choice name=\"ds-grid-2x (pixel-perfect + even DS grid)\" value=\"ds-grid-2x\" />"
             print ind "<choice name=\"ds-fsr (FSR 1.0, smooth edges)\" value=\"ds-fsr\" />"
             print ind "<choice name=\"ds-integer (pixel-perfect)\" value=\"ds-integer\" />"
-            shader = 0; added = 1; resume = 1
+            shader = 0; added = 1
             print; fi = ind; sub(/  $/, "", fi)
             print fi "<feature name=\"resume on quit\">"
             print ind "<choice name=\"on\" value=\"1\" />"
@@ -73,6 +94,16 @@ add_ours() {
         { print }
         END { if (!added) exit 3 }'
 }
+
+# uninstall: take our options back out, including an RG DS 1.5.5 copy whose 3D options were nested, without leaving
+# a stray </feature> that would hide every system's options
+if [ "$1" = --strip-options ]; then
+    [ -f "$ESF" ] || exit 0
+    strip_ours < "$ESF" > "$ESF.new"
+    if cmp -s "$ESF.new" "$ESF"; then rm -f "$ESF.new"
+    else mv "$ESF.new" "$ESF"; echo "es-features: ROCKNIXDS options removed from $ESF"; fi
+    exit 0
+fi
 
 # the DS system's emulators: DraStic only (ROCKNIX's own copy of the list when unlocking)
 ESS=${ESS_USER:-/storage/.config/emulationstation/es_systems.cfg}
