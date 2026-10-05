@@ -9,11 +9,14 @@
 // no sprite of either set touches, so the result does not depend on the exact line of the write. DraStic logs
 // register, palette and OAM writes with their line and replays them per line; an HBlank DMA into VRAM (T3), VRAM
 // display mode (T3, T9) and main-memory display mode (T3) make it render line by line at each hblank ("catch-up").
+// No state crosses a quarter boundary: each quarter starts from reset 2D registers, palettes and OAM, rewrites every
+// page of the VRAM it uses, and (T9) submits its own 3D geometry while the display is off. So the frame at (scene,
+// quarter, t) is the same in the cycle ROM and in the scene's own ROM, whatever ran before (checked frame by frame).
 //
 // Content. Tiles, maps, bitmaps, sprite sheets and extended palettes are built once at boot into a library in main
-// RAM (LIB, 1.3 MB); each scene quarter declares the VRAM bank mapping and which library pages each bank must hold
-// (plans), and the pages that differ are DMA-copied while the display is off (white, 1-4 frames at a scene or quarter
-// change), 128K a frame.
+// RAM (LIB, 1.7 MB, ready at frame 36); each scene quarter declares the VRAM bank mapping and which library pages each bank holds
+// (plans: all pages of every bank it maps), copied by DMA while the display is off (white: 2 to 5 frames at every
+// scene or quarter start, 128K a frame).
 //
 // The config block (crt9.s, patched by build.py) picks the scene: mode 0 = fixed scene `level`, mode 1 = cycle
 // through the ten scenes, `ramp` frames each (build.py: 240 = 4 s). A scene runs in four quarters of ramp/4 frames
@@ -29,13 +32,15 @@
 //   T2 affine BGs    DISPCNT char/screen base 64K for all layers (q0-q2). q0 mode 2: rotating 256x256 affine BG with
 //                    wrap over a zooming 512x512 one without wrap; q1 mode 1: a perspective floor (1024x1024 affine,
 //                    wrap) from a per-line HBlank DMA of BG3PA..BG3Y, sky lines from single texels, and DISPCNT per
-//                    line (mode 0 without BG3 above line 32); q2 mode 4 / 5: extended affine BGs (16-bit map: flips,
-//                    ext palettes on/off) and a 128x128 affine BG with wrap toggling; q3 mode 6: the large 8bpp
-//                    bitmap, 512x1024 then 1024x512, rotating, wrap toggling.
+//                    line (mode 0 without BG3 above line 32); q2 mode 4 / 5: extended affine BGs (16-bit maps
+//                    512x512 and 256x256: flips, palette numbers, ext palettes on/off) and a 128x128 affine BG with
+//                    wrap toggling; q3 mode 6: the large 8bpp bitmap (a 512x1024 picture of labelled 64x64 cells
+//                    in banks A-D), 512x1024 then the same memory as 1024x512, rotating, wrap toggling.
 //   T3 bitmap BGs    q0 mode 5: a 16-bit 256x256 bitmap at identity (DraStic's "direct layer"; every other 16 frames
 //                    shifted one pixel, which is the general path) over a rotating 8bpp bitmap, then with a window
 //                    hiding it and panels alpha-blended over it; q1 mode 3: 16-bit 512x256 scrolling with wrap; q2
-//                    mode 4 / 5: rotated/zoomed 16-bit and 8bpp bitmaps, 256x256 and 128x128; q3 in thirds: VRAM
+//                    mode 4 / 5: rotated/zoomed bitmaps, 16-bit 256x256 over an 8-bit-map affine BG, then 16-bit
+//                    128x128 (clipped) over 8bpp 128x128 (wrap) from bank C; q3 in thirds: VRAM
 //                    display mode (bank B), main-memory display mode (a start-mode-4 DMA), and an image streamed
 //                    into one bitmap row per line by HBlank DMA into VRAM.
 //   T4 sprites       the 12 sizes in 4bpp and 8bpp, priorities interleaved with two BG layers, flips; q0 1D mapping
@@ -51,26 +56,33 @@
 //                    bitmap (12 64x64 bitmap sprites tiling the screen: DraStic's OBJ "image" path), the special case
 //                    broken (one sprite moved by a pixel) every other 16 frames.
 //   T6 windows       q0 WIN0 / WIN1 rectangles moving and overlapping, layers and effects selected per region; q1 the
-//                    OBJ window (an affine double-size sprite and a 32x64 sprite in OBJ mode 2) with WIN0; q2 edge
+//                    OBJ window (an affine double-size sprite and a 32x64 sprite in OBJ mode 2) with WIN0 and WIN1
+//                    (lines with one, two and all three windows: DraStic's triple-window mask path); q2 edge
 //                    cases: X1 > X2, Y1 > Y2, Y2 > 192, X1 = X2, full height; q3 a round spotlight from a per-line
 //                    WIN0H (HBlank DMA), darkened outside.
 //   T7 effects       q0 alpha BG over BG (EVA/EVB sweep, EVA+EVB > 16, values > 16); q1 OBJ and semi-transparent OBJ
 //                    over BG, backdrop as 2nd target; q2 brightness up then down (EVY sweep past 16); q3 master
 //                    brightness up / down fades with alpha blending and per-frame palette cycling.
-//   T8 mosaic        q0 text BG mosaic (H and V sizes sweeping); q1 affine BG mosaic (mode 2) then a 16-bit bitmap BG
-//                    (mode 5); q2 OBJ mosaic, normal and affine sprites; q3 MOSAIC changed per line (HBlank DMA bands).
+//   T8 mosaic        q0 text BG mosaic (H and V sizes sweeping); q1 affine BG mosaic (mode 2: left half, through WIN0,
+//                    next to the same BG without mosaic) then a 16-bit bitmap BG (mode 5); q2 OBJ mosaic, normal and
+//                    affine sprites; q3 MOSAIC changed per line (HBlank DMA bands).
 //   T9 3D            BG0 = 3D (spinning opaque and translucent quads, transparent clear colour). q0 3D at priority 1
 //                    between 2D layers and sprites, BG0HOFS shifting the 3D layer; q1 3D blending (per-pixel alpha
 //                    over 2nd targets), brightness on the 3D layer, a window without 3D and one without effects; q2
 //                    display capture every frame: a feedback loop through a 16-bit bitmap BG at identity (banks C/D
 //                    alternate as capture target and BG; DraStic's hi-res capture path), then a captured frame shown
-//                    as the full-screen OBJ bitmap; q3 VRAM display mode of bank D with a blended capture (3D, then the
-//                    whole screen with VRAM read offset 32K, over the previous frame): motion trails.
+//                    as the full-screen OBJ bitmap (the screen, then the 3D layer alone); q3 VRAM display mode of
+//                    bank D with a blended capture (3D, then the whole screen with VRAM read offset 32K, over the
+//                    previous frame): motion trails, every other 8 frames of the second half the VRAM source alone.
 // Engine A is on the top LCD; engine B is off (white).
 // What DraStic r2.5.2.2 does with these (the oracle, so a replacement must do the same): OBJ-OBJ order is priority
-// first, then OAM index; no per-line OBJ limit (all 90 crowd sprites are drawn); DISPCNT.7 is ignored; when the 12
-// image sprites of T5 q3 / T9 q2 qualify for its full-screen OBJ path, no other sprite is drawn (the title and the
-// moving sprites vanish, and come back in the "broken" frames).
+// first, then OAM index; no per-line OBJ limit (all 90 crowd sprites are drawn); no OBJ mosaic; DISPCNT.7 is
+// ignored; when the 12 image sprites of T5 q3 / T9 q2 qualify for its full-screen OBJ path, every OBJ pixel takes
+// its colour from the image (the 2x capture when there is one): the title and the moving sprites vanish into a
+// screen image (they come back in the "broken" frames) and show as silhouettes in the 3D clear colour after the
+// capture of the 3D layer alone (T9 q2 from tq 46; the OBJ palette plays no part); an affine OBJ can draw one extra
+// pixel at its edge whose texel is fetched up to 64K past the sprite's data (so all OBJ VRAM pages are planned); a
+// capture of the VRAM source alone (T9 q3) leaves its destination unchanged (the VRAM display does not scroll).
 #include "tables.h"
 
 typedef unsigned int u32; typedef unsigned short u16; typedef unsigned char u8; typedef int s32; typedef short s16;
@@ -194,18 +206,20 @@ extern volatile struct { u32 magic, mode, level, ramp, max, cpu; } cfg;
 /* the content library in main RAM (built once at boot, copied into the VRAM banks a scene needs) */
 #define LIB        0x02100000u
 #define L_A0       (LIB + 0x000000)       /* bank A, lower 64K: 4bpp tiles, 8bpp tiles, text and small affine maps */
-#define L_A1AFF    (LIB + 0x010000)       /* bank A, upper 64K for T2 (DISPCNT bases 64K): affine content */
+#define L_A1AFF    (LIB + 0x010000)       /* bank A, upper 64K (T2's DISPCNT bases 64K, other scenes): affine content */
 #define L_A1BMP8   (LIB + 0x020000)       /* bank A, upper 64K for T3: 8bpp 256x256 bitmap */
 #define L_BMP16    (LIB + 0x030000)       /* 16-bit 256x256 bitmap, 128K */
 #define L_BMP16W   (LIB + 0x050000)       /* 16-bit 512x256 bitmap, 256K */
-#define L_LARGE    (LIB + 0x090000)       /* 8bpp 512x512: the lower half of the 512x1024 large bitmap, 256K */
-#define L_OBJ1D    (LIB + 0x0D0000)       /* OBJ VRAM image, 1D mapping, 64K */
-#define L_OBJ2D    (LIB + 0x0E0000)       /* OBJ VRAM image, 2D mapping, 64K */
-#define L_OBJFULL  (LIB + 0x0F0000)       /* OBJ VRAM image: 2D sheet + full-screen bitmap (256-wide 2D), 128K */
-#define L_EXTBG    (LIB + 0x110000)       /* BG extended palettes, 4 slots, 32K */
-#define L_EXTOBJ   (LIB + 0x118000)       /* OBJ extended palette, 8K (16K page) */
-#define L_STREAM   (LIB + 0x11C000)       /* 16-bit 256x448 image streamed by HBlank DMA (T3), 224K */
-#define L_END      (LIB + 0x154000)
+#define L_OBJ1D    (LIB + 0x090000)       /* OBJ VRAM image, 1D mapping, 64K */
+#define L_OBJ2D    (LIB + 0x0A0000)       /* OBJ VRAM image, 2D mapping, 64K (L_OBJ1D + 128K = both) */
+#define L_OBJFULL  (LIB + 0x0B0000)       /* OBJ VRAM image: 2D sheet + full-screen bitmap (256-wide 2D), 128K */
+#define L_EXTBG    (LIB + 0x0D0000)       /* BG extended palettes, 4 slots, 32K */
+#define L_EXTOBJ   (LIB + 0x0D8000)       /* OBJ extended palette, 8K (16K page) */
+#define L_SMALL    (LIB + 0x0DC000)       /* 16-bit 128x128 bitmap, 8bpp 128x128 bitmap, zeros: 128K */
+#define L_STREAM   (LIB + 0x0FC000)       /* 16-bit 256x448 image streamed by HBlank DMA (T3), 224K */
+#define L_LARGE    (LIB + 0x134000)       /* 8bpp 512x1024 large bitmap (mode 6), 512K */
+#define L_END      (LIB + 0x1B4000)       /* below the ARM7 stub (0x02380000, build.py) and the stack (0x023F0000) */
+_Static_assert(L_END <= 0x02380000u, "the library would overwrite the ARM7 stub");
 
 /* ---------------------------------------------------------------------------------- libc and EABI helpers */
 void *memset(void *d, int c, unsigned long n) { unsigned char *p = d; while (n--) *p++ = (unsigned char)c; return d; }
@@ -524,7 +538,7 @@ static void build_maps_a0(void) {
     for (int i = 0; i < 1024; i++) m[i] = 0;
     tmap_pic(m, 0, 1, 4, T8_PIC, 0, 0);
     tmap_pic(m, 0, 22, 13, T8_PIC, 3, 0);
-    for (int iy = 0; iy < 4; iy++) for (int ix = 0; ix < 16; ix++) tmap(m, 0, 12 + (ix & 7), 2 + iy + (ix >> 3) * 4, me(T8_SWATCH + (u32)(iy * 16 + ix) * 2, 0, 0));
+    for (int iy = 0; iy < 8; iy++) for (int ix = 0; ix < 8; ix++) tmap(m, 0, 12 + ix, 2 + iy, me(T8_SWATCH + (u32)(iy * 8 + ix), 0, 0));
     for (int tx = 0; tx < 16; tx++) tmap(m, 0, 4 + tx, 26, me(T8_RAMP + (u32)tx, 0, 0));
     tmap_text(m, 0, 11, 11, "PICS 8BPP", T8_GLYPH, 0);
     /* BARS: 16 opaque horizontal ramps, bar b = bank b, its digit at the left */
@@ -549,7 +563,7 @@ static void build_maps_a0(void) {
 
 /* T2's half of bank A (DISPCNT char base 1 and screen base 1 = +64K): 8bpp tiles (char block 0), affine maps
    512x512 (screen block 8), 256x256 (10), 128x128 (11), the extended 16-bit 512x512 map (12-15), the 1024x1024 floor
-   (16-23), 4bpp tiles (char block 3), the text overlay map (28) and the sky map (29) */
+   (16-23), 4bpp tiles (char block 3), the text overlay map (28), the sky map (29) and an extended 256x256 map (30) */
 #define AF_TILES8 (L_A1AFF + 0x0000)
 #define AF_M512   (L_A1AFF + 0x4000)
 #define AF_M256   (L_A1AFF + 0x5000)
@@ -559,6 +573,7 @@ static void build_maps_a0(void) {
 #define AF_TILES4 (L_A1AFF + 0xC000)
 #define AF_TEXT   (L_A1AFF + 0xE000)
 #define AF_SKY    (L_A1AFF + 0xE800)
+#define AF_EXT256 (L_A1AFF + 0xF000)
 static void build_a1aff(void) {
     build_tiles8(AF_TILES8);
     build_tiles4(AF_TILES4, 256);
@@ -602,6 +617,14 @@ static void build_a1aff(void) {
             else if ((tx & 15) == 0 || (ty & 15) == 0) v = T8_WHITE;
             else v = (u8)(T8_RAMP + ((((tx >> 1) ^ (ty >> 1)) & 1) ? ((tx >> 4) + (ty >> 4)) & 15 : 13));
             a[ty * 128 + tx] = v;
+        }
+    e = (u16 *)AF_EXT256;                            /* extended 256x256: 4x4 blocks, other flips and palettes */
+    for (int ty = 0; ty < 32; ty++)
+        for (int tx = 0; tx < 32; tx++) {
+            int bx = tx >> 3, by = ty >> 3, ix = tx & 7, iy = ty & 7;
+            u32 flip = (u32)(bx + by + 1) & 3, pal = (u32)(bx * 5 + by * 3 + 2) & 15;
+            u32 tile = ix == 0 && iy == 0 ? T8_GLYPH + (u32)hexd[pal] : T8_PIC + (u32)((flip & 2 ? 7 - iy : iy) * 8 + (flip & 1 ? 7 - ix : ix));
+            e[ty * 32 + tx] = (u16)me(tile, ix == 0 && iy == 0 ? 0 : flip, pal);
         }
     u16 *m = (u16 *)AF_TEXT;                         /* the text overlay: one boxed caption */
     for (int i = 0; i < 1024; i++) m[i] = 0;
@@ -679,19 +702,35 @@ static void build_stream(void) {                     /* 256x448 16-bit: rows 256
     }
     for (int i = 0; i < 192 * 256; i++) d[256 * 256 + i] = d[i];
 }
-static void build_large(void) {                      /* 8bpp 512x512: 64x64 cells with coordinates and holes */
+static void build_large(void) {                      /* 8bpp 512x1024: 64x64 cells "x,y" (hex), holes */
     u8 *d = (u8 *)L_LARGE;
-    for (int y = 0; y < 512; y++)
+    for (int y = 0; y < 1024; y++)
         for (int x = 0; x < 512; x++) {
             int cx = x >> 6, cy = y >> 6, lx = x & 63, ly = y & 63, hx = lx - 48, hy = ly - 48;
             d[y * 512 + x] = (u8)(lx == 0 || ly == 0 ? 0x0F : (cx + cy) & 1 && hx * hx + hy * hy < 100 ? 0
                                   : ((cx + cy * 3) & 15) * 16 + 2 + (lx + ly) * 12 / 126);
         }
-    for (int cy = 0; cy < 8; cy++)
+    for (int cy = 0; cy < 16; cy++)
         for (int cx = 0; cx < 8; cx++) {
-            char s[4] = {hexd[cx], ',', hexd[cy + 8], 0};
-            plot_text(d, 1, 512, 512, 512, cx * 64 + 6, cy * 64 + 10, s, 3, 0x0F, 0x01);
+            char s[4] = {hexd[cx], ',', hexd[cy], 0};
+            plot_text(d, 1, 512, 512, 1024, cx * 64 + 6, cy * 64 + 10, s, 3, 0x0F, 0x01);
         }
+}
+static void build_small(void) {                      /* 128x128: a 16-bit target (+32K: an 8bpp checker), zeros */
+    u16 *d = (u16 *)L_SMALL;
+    for (int y = 0; y < 128; y++)
+        for (int x = 0; x < 128; x++) {
+            int dx = x - 64, dy = y - 64, r = (int)isqrt((u32)(dx * dx + dy * dy));
+            u16 c = x == 0 || y == 0 || x == 127 || y == 127 ? rgb(31, 31, 31) : r < 60 ? pal16[((r >> 3) & 15) * 16 + 4 + (r & 7)] : rgb(4, 4, 12);
+            d[y * 128 + x] = (u16)(dx * dy > 0 && r > 20 && r < 28 ? c : c | 0x8000);    /* two transparent arcs */
+        }
+    plot_text(d, 2, 128, 128, 128, 22, 58, "128X128", 2, 0xFFFF, 0x8000);
+    u8 *e = (u8 *)(L_SMALL + 0x8000);
+    for (int y = 0; y < 128; y++)
+        for (int x = 0; x < 128; x++)
+            e[y * 128 + x] = (u8)(x == 0 || y == 0 ? 0x0F : ((x >> 4) ^ (y >> 4)) & 1 ? 0 : (((x >> 4) + (y >> 4) * 2) & 15) * 16 + 2 + ((x + y) & 15) * 12 / 15);
+    plot_text(e, 1, 128, 128, 128, 10, 4, "8BPP 128", 1, 0x0F, 0x01);
+    for (u32 *z = (u32 *)(L_SMALL + 0xC000); z < (u32 *)(L_SMALL + 0x20000); z++) *z = 0;
 }
 
 /* ------------------------------------------------------------------------------------------------ sprites */
@@ -822,39 +861,53 @@ static void build_extpal(void) {
 }
 
 /* ------------------------------------------------------------------------ VRAM plans and the copy jobs */
+/* A plan names the content of every 16K page of every bank the quarter maps (and of the LCDC banks its capture or
+   VRAM display uses), and all of it is copied at every quarter start: no page is skipped because it already holds
+   the right data. So no VRAM a renderer can read (DraStic's affine OBJs fetch up to 64K past the sprite's data at
+   their edge pixels) holds content from an earlier scene, and the white period has the same length in the cycle ROM
+   as in the scene's own ROM: a frame is a function of (scene, t). */
 enum { VA, VB, VC, VD, VE, VF, VG, NBANK };
 static const u32 bank_lcdc[NBANK] = {0x06800000, 0x06820000, 0x06840000, 0x06860000, 0x06880000, 0x06890000, 0x06894000};
-static u32 page_src[NBANK][8];                       /* library address each 16K page holds (0 = unknown) */
-static u8 plan_cnt[NBANK];
-static struct { u32 dst, src; } jobs[96];
-static int njobs, job_i;
-static u32 job_banks;
+static const u8 bank_pages[NBANK] = {8, 8, 8, 8, 4, 1, 1};   /* A-D 128K, E 64K, F and G 16K */
+static u8 plan_cnt[NBANK], plan_pages[NBANK];        /* the VRAMCNT value; bit p = page p planned */
+static struct { u32 dst, src; } jobs[48];
+static int njobs, job_i, plan_dup;
 
 static void need(int bank, int page, int npages, u32 src) {
     for (int i = 0; i < npages; i++) {
-        u32 s = src + (u32)i * 0x4000;
-        if (page_src[bank][page + i] == s) continue;
-        page_src[bank][page + i] = s;
-        jobs[njobs].dst = bank_lcdc[bank] + (u32)(page + i) * 0x4000; jobs[njobs].src = s; njobs++;
-        job_banks |= 1u << bank;
+        jobs[njobs].dst = bank_lcdc[bank] + (u32)(page + i) * 0x4000; jobs[njobs].src = src + (u32)i * 0x4000; njobs++;
+        plan_dup |= plan_pages[bank] >> (page + i) & 1;     /* a page planned twice costs a white frame for nothing */
+        plan_pages[bank] |= (u8)(1u << (page + i));
     }
 }
-static void dirty(int bank, int page, int npages) { for (int i = 0; i < npages; i++) page_src[bank][page + i] = 0; }
-static void plan_begin(void) { for (int b = 0; b < NBANK; b++) plan_cnt[b] = 0x80; njobs = job_i = 0; job_banks = 0; }
+static void plan_begin(void) { for (int b = 0; b < NBANK; b++) { plan_cnt[b] = 0x80; plan_pages[b] = 0; } njobs = job_i = plan_dup = 0; }
 static void apply_mapping(void) { for (int b = 0; b < NBANK; b++) VRAMCNT(b) = plan_cnt[b]; }
 static void run_jobs(void) {                         /* one frame's share: up to 128K */
-    for (int b = 0; b < NBANK; b++) if (job_banks >> b & 1) VRAMCNT(b) = 0x80;
+    for (int b = 0; b < NBANK; b++) if (plan_pages[b]) VRAMCNT(b) = 0x80;
     for (int n = 0; n < 8 && job_i < njobs; n++, job_i++) dma_copy(jobs[job_i].dst, jobs[job_i].src, 0x4000);
 }
+#ifdef DS2D_CHECK
+static int plan_complete(void) {                     /* every page of every mapped bank planned, each once */
+    if (plan_dup || njobs > (int)(sizeof jobs / sizeof jobs[0])) return 0;
+    for (int b = 0; b < NBANK; b++)
+        if (plan_cnt[b] != 0x80 && plan_pages[b] != (u8)((1u << bank_pages[b]) - 1)) return 0;
+    return 1;
+}
+#endif
 #define CNT_ABG(o)  (u8)(0x81 | (o) << 3)
 #define CNT_AOBJ    (u8)0x82
 #define CNT_BGEXT   (u8)0x84                         /* bank E: BG extended palette slots 0-3 */
 #define CNT_OBJEXT  (u8)0x85                         /* bank F: OBJ extended palette */
 #define CNT_LCDC    (u8)0x80
+/* bank A as BG at 0x06000000: the shared tiles and maps below, `upper` above 64K; a bank as OBJ: all its pages */
+static void plan_a(u32 upper) { plan_cnt[VA] = CNT_ABG(0); need(VA, 0, 4, L_A0); need(VA, 4, 4, upper); }
+static void plan_obj(int bank, u32 src) { plan_cnt[bank] = CNT_AOBJ; need(bank, 0, bank_pages[bank], src); }
 
 /* ----------------------------------------------------------------------------------------- OAM and titles */
 static u16 oam[512];
-static void oam_hide(void) { for (int i = 0; i < 128; i++) { oam[i * 4] = 0x0200; oam[i * 4 + 1] = 0; oam[i * 4 + 2] = 0; } }
+static void oam_hide(void) {                        /* all OBJs disabled, all 32 affine groups zero */
+    for (int i = 0; i < 128; i++) { oam[i * 4] = 0x0200; oam[i * 4 + 1] = 0; oam[i * 4 + 2] = 0; oam[i * 4 + 3] = 0; }
+}
 static void oam_set(int i, u32 a0, u32 a1, u32 a2) { oam[i * 4] = (u16)a0; oam[i * 4 + 1] = (u16)a1; oam[i * 4 + 2] = (u16)a2; }
 static void oam_aff(int g, s32 pa, s32 pb, s32 pc, s32 pd) { oam[g * 16 + 3] = (u16)pa; oam[g * 16 + 7] = (u16)pb; oam[g * 16 + 11] = (u16)pc; oam[g * 16 + 15] = (u16)pd; }
 /* rotation a, scale (8.8 texels per pixel) */
@@ -932,7 +985,7 @@ static u32 qlen;                                     /* frames a quarter */
 #define HALF(tq) ((tq) * 2 >= qlen)
 
 /* --- T0: text BGs */
-static void p_text(int q) { (void)q; plan_cnt[VA] = CNT_ABG(0); need(VA, 0, 4, L_A0); plan_cnt[VB] = CNT_AOBJ; need(VB, 0, 1, L_OBJ1D); }
+static void p_text(int q) { (void)q; plan_a(L_A1AFF); plan_obj(VB, L_OBJ1D); }
 static void s_text(u32 t, int q, u32 tq) {
     static const u8 pri[4][4] = {{1, 0, 2, 3}, {1, 1, 0, 2}, {1, 0, 2, 3}, {0, 0, 0, 0}};
     g_dc = DC_ON | DC_MODE(0) | DC_BG(0) | DC_BG(1) | DC_BG(2) | DC_BG(3) | DC_OBJ | DC_OBJ1D;
@@ -960,7 +1013,7 @@ static void s_text(u32 t, int q, u32 tq) {
 }
 
 /* --- T1: extended palettes */
-static void p_extpal(int q) { (void)q; p_text(0); plan_cnt[VE] = CNT_BGEXT; need(VE, 0, 2, L_EXTBG); }
+static void p_extpal(int q) { (void)q; p_text(0); plan_cnt[VE] = CNT_BGEXT; need(VE, 0, 4, L_EXTBG); }
 static void s_extpal(u32 t, int q, u32 tq) {
     int hi = q == 2 || (q == 3 && ((tq >> 4) & 1));
     g_dc = DC_ON | DC_MODE(0) | DC_BG(0) | DC_BG(1) | DC_BG(2) | DC_BG(3) | DC_OBJ | DC_OBJ1D | (q == 1 ? 0 : DC_BGEXT);
@@ -977,15 +1030,13 @@ static void s_extpal(u32 t, int q, u32 tq) {
 
 /* --- T2: affine BGs */
 static void p_affine(int q) {
-    plan_cnt[VA] = CNT_ABG(0); need(VA, 0, 4, L_A0); need(VA, 4, 4, L_A1AFF);
-    need(VC, 0, 8, L_LARGE); need(VD, 0, 8, L_LARGE + 0x20000);
     if (q < 3) {
-        plan_cnt[VB] = CNT_AOBJ; need(VB, 0, 1, L_OBJ1D);
-        plan_cnt[VE] = CNT_BGEXT; need(VE, 0, 2, L_EXTBG);
-    } else {                                          /* mode 6: A..D = the 512K of BG VRAM; the title from bank G */
-        plan_cnt[VB] = CNT_ABG(1); need(VB, 0, 8, L_OBJ1D);
-        plan_cnt[VC] = CNT_ABG(2); plan_cnt[VD] = CNT_ABG(3);
-        plan_cnt[VG] = CNT_AOBJ; need(VG, 0, 1, L_OBJ1D);
+        plan_a(L_A1AFF);
+        plan_obj(VB, L_OBJ1D);
+        plan_cnt[VE] = CNT_BGEXT; need(VE, 0, 4, L_EXTBG);
+    } else {                                          /* mode 6: A..D = the 512K of BG VRAM (the picture); title from G */
+        for (int b = VA; b <= VD; b++) { plan_cnt[b] = CNT_ABG(b); need(b, 0, 8, L_LARGE + (u32)b * 0x20000); }
+        plan_obj(VG, L_OBJ1D);
     }
 }
 static void s_affine(u32 t, int q, u32 tq) {
@@ -1033,7 +1084,7 @@ static void s_affine(u32 t, int q, u32 tq) {
         BGCNT(0) = bgcnt(0, 3, 28, 0, 0);
         BGCNT(3) = bgcnt(2, 0, 12, 2, BG_WRAP);       /* 16-bit map, flips and palette numbers, ext slot 3 */
         bg_aff(3, (s32)t, 320 + (sn(t * 2) >> 5), 320, 256, 256, 128, 96);
-        if (m5) { BGCNT(2) = bgcnt(1, 0, 12, 1, 0); bg_aff(2, -(s32)t * 2, 200, 200, 128, 128, 96, 96); }
+        if (m5) { BGCNT(2) = bgcnt(1, 0, 30, 1, 0); bg_aff(2, -(s32)t * 2, 200, 200, 128, 128, 96, 96); }     /* 16-bit map 256x256 */
         else { BGCNT(2) = bgcnt(1, 0, 11, 0, (tq >> 4) & 1 ? BG_WRAP : 0); bg_aff(2, 0, 128, 128, 64 - (s32)(tq & 31), 64, 192, 96); }
         break; }
     default: {                                        /* mode 6: the large bitmap */
@@ -1041,7 +1092,7 @@ static void s_affine(u32 t, int q, u32 tq) {
         g_dc = DC_ON | DC_MODE(6) | DC_BG(2) | DC_OBJ | DC_OBJ1D;
         BGCNT(2) = bgcnt(0, 0, 0, wide ? 1 : 0, wrap ? BG_WRAP : 0);
         if (wide) bg_aff(2, (s32)t, 512 + (sn(t * 3) >> 3), 512 + (sn(t * 3) >> 3), 768, 384, 128, 96);
-        else bg_aff(2, -(s32)t, 640 + (sn(t * 2) >> 3), 640 + (sn(t * 2) >> 3), 256, 768, 128, 96);
+        else bg_aff(2, -(s32)t, 640 + (sn(t * 2) >> 3), 640 + (sn(t * 2) >> 3), 256, 512, 128, 96);
         break; }
     }
     if (q != 1) { hdma_off(0); hdma_off(1); }
@@ -1050,13 +1101,12 @@ static void s_affine(u32 t, int q, u32 tq) {
 }
 
 /* --- T3: bitmap BGs */
-static void p_bitmap(int q) {
-    (void)q;
-    plan_cnt[VA] = CNT_ABG(0); need(VA, 0, 4, L_A0); need(VA, 4, 4, L_A1BMP8);
+static void p_bitmap(int q) {                        /* BG: A 0K, B 128K, C 256K, D 384K; OBJ: G */
+    plan_a(L_A1BMP8);
     plan_cnt[VB] = CNT_ABG(1); need(VB, 0, 8, L_BMP16);
-    plan_cnt[VC] = CNT_ABG(2); need(VC, 0, 8, L_BMP16W);
-    plan_cnt[VD] = CNT_ABG(3); need(VD, 0, 8, L_BMP16W + 0x20000);
-    plan_cnt[VG] = CNT_AOBJ; need(VG, 0, 1, L_OBJ1D);
+    if (q == 1) { plan_cnt[VC] = CNT_ABG(2); need(VC, 0, 8, L_BMP16W); plan_cnt[VD] = CNT_ABG(3); need(VD, 0, 8, L_BMP16W + 0x20000); }
+    if (q == 2) { plan_cnt[VC] = CNT_ABG(2); need(VC, 0, 8, L_SMALL); }
+    plan_obj(VG, L_OBJ1D);
 }
 static void s_bitmap(u32 t, int q, u32 tq) {
     u32 obj = DC_OBJ | DC_OBJ1D;
@@ -1087,9 +1137,9 @@ static void s_bitmap(u32 t, int q, u32 tq) {
         int small = HALF(tq);
         g_dc = DC_ON | DC_MODE(small ? 5 : 4) | DC_BG(0) | DC_BG(2) | DC_BG(3) | obj;
         BGCNT(0) = bgcnt(0, 0, SB_PANEL, 0, 0);
-        if (small) { BGCNT(2) = bgcnt(2, 0, 4, 0, BG_BMP8 | BG_WRAP); bg_aff(2, (s32)t, 128, 128, 64, 64, 64, 96); }
+        if (small) { BGCNT(2) = bgcnt(2, 0, 18, 0, BG_BMP8 | BG_WRAP); bg_aff(2, (s32)t, 128, 128, 64, 64, 64, 96); }   /* C+32K */
         else { BGCNT(2) = bgcnt(2, 1, SB_AFF, 1, BG_WRAP); bg_aff(2, (s32)t, 256, 256, 128, 128, 128, 96); }
-        BGCNT(3) = bgcnt(1, 0, 8, small ? 0 : 1, BG_BMP16);
+        BGCNT(3) = small ? bgcnt(1, 0, 16, 0, BG_BMP16) : bgcnt(1, 0, 8, 1, BG_BMP16);                              /* C / B */
         bg_aff(3, -(s32)t, 160 + tri(t, 64) * 4, 160 + tri(t, 64) * 4, small ? 64 : 128, small ? 64 : 128, 168, 96);
         break; }
     default:
@@ -1111,7 +1161,6 @@ static void s_bitmap(u32 t, int q, u32 tq) {
             u32 row = t % 256;
             dma_copy(0x06020000, L_STREAM + row * 512, 512);
             hdma(2, (const void *)(L_STREAM + (row + 1) * 512), 0x06020000, 128, DMA_32 | DMA_DST_RELOAD);
-            dirty(VB, 0, 1);
         }
         break;
     }
@@ -1121,8 +1170,8 @@ static void s_bitmap(u32 t, int q, u32 tq) {
 
 /* --- T4: sprites */
 static void p_sprites(int q) {
-    plan_cnt[VA] = CNT_ABG(0); need(VA, 0, 4, L_A0);
-    plan_cnt[VB] = CNT_AOBJ; if (q < 2) need(VB, 0, 2, L_OBJ1D); else need(VB, 0, 2, L_OBJ2D);
+    plan_a(L_A1AFF);
+    plan_obj(VB, q < 2 ? L_OBJ1D : L_OBJ2D);
     plan_cnt[VF] = CNT_OBJEXT; need(VF, 0, 1, L_EXTOBJ);
 }
 /* the 12 sizes in a row at y (4bpp: palette bank k, priority k & 3; 8bpp: flips, priority (k+1) & 3) */
@@ -1170,9 +1219,8 @@ static void s_sprites(u32 t, int q, u32 tq) {
 
 /* --- T5: affine, bitmap and semi-transparent sprites, the full-screen OBJ bitmap */
 static void p_objfx(int q) {
-    plan_cnt[VA] = CNT_ABG(0); need(VA, 0, 4, L_A0);
-    plan_cnt[VB] = CNT_AOBJ;
-    if (q < 2) need(VB, 0, 4, L_OBJ1D); else if (q == 2) need(VB, 0, 4, L_OBJ2D); else need(VB, 0, 8, L_OBJFULL);
+    plan_a(L_A1AFF);
+    plan_obj(VB, q < 2 ? L_OBJ1D : q == 2 ? L_OBJ2D : L_OBJFULL);
     plan_cnt[VC] = CNT_ABG(1); need(VC, 0, 8, L_BMP16);
 }
 static void s_objfx(u32 t, int q, u32 tq) {
@@ -1246,7 +1294,7 @@ static void s_objfx(u32 t, int q, u32 tq) {
 
 /* --- T6: windows */
 static u16 spot_w[64];
-static void p_windows(int q) { (void)q; p_text(0); need(VB, 0, 4, L_OBJ1D); }
+static void p_windows(int q) { (void)q; p_text(0); }
 static void s_windows(u32 t, int q, u32 tq) {
     g_dc = DC_ON | DC_MODE(0) | DC_BG(0) | DC_BG(1) | DC_BG(2) | DC_BG(3) | DC_OBJ | DC_OBJ1D | DC_WIN0;
     BGCNT(0) = bgcnt(2, 0, SB_PATTERN, 0, 0);
@@ -1269,10 +1317,12 @@ static void s_windows(u32 t, int q, u32 tq) {
         WININ = (u16)((W_BG(3) | W_BG(1) | W_OBJ) | (W_BG(0) | W_BG(2) | W_FX) << 8);
         WINOUT = (u16)(W_BG(0) | W_BG(1) | W_OBJ | W_BG(3));
         break;
-    case 1:                                           /* OBJ window: an affine double-size sprite and a 32x64 sprite */
-        g_dc |= DC_OBJWIN;
-        WIN0H = winh(180, 240); WIN0V = winh(20, 60);
-        WININ = (u16)(W_BG(3) | W_OBJ | W_FX);
+    case 1:                                           /* OBJ window (an affine double-size sprite and a 32x64 sprite) with
+                                                         WIN0 and WIN1: lines with 1, 2 and all 3 windows */
+        g_dc |= DC_OBJWIN | DC_WIN1;
+        WIN0H = winh(180, 240); WIN0V = winh(20, 120);
+        WIN1H = winh(8 + tri(t, 40), 100 + tri(t, 40)); WIN1V = winh(96, 176);
+        WININ = (u16)((W_BG(3) | W_OBJ | W_FX) | (W_BG(1) | W_BG(2) | W_OBJ) << 8);
         WINOUT = (u16)((W_BG(0) | W_BG(1) | W_OBJ) | (W_BG(2) | W_BG(3) | W_OBJ) << 8);
         oam_rot(0, (s32)t * 2, 256 - tri(t, 96), 256 - tri(t, 96));
         spr(i++, 3, 0, 40 + (sn(t) >> 6), 20, A0_WIN | A0_AFF | A0_DBL, 0, 0, 0);
@@ -1311,7 +1361,7 @@ static void s_windows(u32 t, int q, u32 tq) {
 }
 
 /* --- T7: colour effects */
-static void p_blend(int q) { (void)q; p_text(0); need(VB, 0, 4, L_OBJ1D); }
+static void p_blend(int q) { (void)q; p_text(0); }
 static void s_blend(u32 t, int q, u32 tq) {
     g_dc = DC_ON | DC_MODE(0) | DC_BG(0) | DC_BG(1) | DC_BG(3) | DC_OBJ | DC_OBJ1D;
     DISPCNT = g_dc;
@@ -1351,7 +1401,7 @@ static void s_blend(u32 t, int q, u32 tq) {
 }
 
 /* --- T8: mosaic */
-static void p_mosaic(int q) { (void)q; p_text(0); need(VB, 0, 4, L_OBJ1D); plan_cnt[VC] = CNT_ABG(1); need(VC, 0, 8, L_BMP16); }
+static void p_mosaic(int q) { (void)q; p_text(0); plan_cnt[VC] = CNT_ABG(1); need(VC, 0, 8, L_BMP16); }
 static void s_mosaic(u32 t, int q, u32 tq) {
     u32 m = (t >> 2) & 15;
     g_dc = DC_ON | DC_MODE(0) | DC_BG(0) | DC_BG(1) | DC_BG(2) | DC_OBJ | DC_OBJ1D;
@@ -1366,12 +1416,14 @@ static void s_mosaic(u32 t, int q, u32 tq) {
     switch (q) {
     case 0: break;
     case 1:
-        if (!HALF(tq)) {                              /* mode 2: affine BG with mosaic next to the same without */
-            g_dc = DC_ON | DC_MODE(2) | DC_BG(1) | DC_BG(2) | DC_BG(3) | DC_OBJ | DC_OBJ1D;
+        if (!HALF(tq)) {                              /* mode 2: affine BG with mosaic (left, WIN0) next to the same without */
+            g_dc = DC_ON | DC_MODE(2) | DC_BG(1) | DC_BG(2) | DC_BG(3) | DC_OBJ | DC_OBJ1D | DC_WIN0;
             BGCNT(2) = bgcnt(1, 1, SB_AFF, 1, BG_MOS | BG_WRAP);
             BGCNT(3) = bgcnt(2, 1, SB_AFF, 1, BG_WRAP);
             bg_aff(2, (s32)t, 200, 200, 128, 128, 64, 96);
-            bg_aff(3, (s32)t, 200, 200, 0, 128, 0, 96);
+            bg_aff(3, (s32)t, 200, 200, 128, 128, 192, 96);
+            WIN0H = winh(0, 128); WIN0V = winh(0, 192);
+            WININ = (u16)(W_BG(1) | W_BG(2) | W_OBJ); WINOUT = (u16)(W_BG(1) | W_BG(3) | W_OBJ);
         } else {                                      /* mode 5: 16-bit bitmap with mosaic */
             g_dc = DC_ON | DC_MODE(5) | DC_BG(1) | DC_BG(3) | DC_OBJ | DC_OBJ1D;
             BGCNT(3) = bgcnt(2, 0, 8, 1, BG_BMP16 | BG_MOS | BG_WRAP);
@@ -1431,10 +1483,10 @@ static void gx_scene(u32 t) {
     SWAP_BUF = 0;
 }
 static void p_3d(int q) {
-    plan_cnt[VA] = CNT_ABG(0); need(VA, 0, 4, L_A0);
-    plan_cnt[VB] = CNT_AOBJ;
-    if (q < 2) need(VB, 0, 4, L_OBJ1D); else need(VB, 0, 2, L_OBJFULL);
-    if (q == 2) { need(VC, 0, 8, L_BMP16); need(VD, 0, 8, L_BMP16); }      /* the feedback starts from the landscape */
+    plan_a(L_A1AFF);
+    plan_obj(VB, q < 2 ? L_OBJ1D : L_OBJFULL);
+    if (q == 2) need(VC, 0, 8, L_BMP16);              /* the feedback (C/D) and the trails (D) start from the landscape */
+    if (q >= 2) need(VD, 0, 8, L_BMP16);
 }
 static void s_3d(u32 t, int q, u32 tq) {
     int half = HALF(tq), i = 0;
@@ -1468,19 +1520,18 @@ static void s_3d(u32 t, int q, u32 tq) {
             int odd = t & 1;
             VRAMCNT(VC) = odd ? CNT_ABG(1) : CNT_LCDC;
             VRAMCNT(VD) = odd ? CNT_LCDC : CNT_ABG(1);
-            dirty(VC, 0, 8); dirty(VD, 0, 8);
             g_dc = (g_dc & ~7u) | DC_MODE(5);
             BGCNT(3) = bgcnt(3, 0, 8, 1, BG_BMP16);   /* 16-bit 256x256 at identity: DraStic's direct layer */
             bg_ident(3, 0, 0);
             BLDCNT = (u16)(T_BG(3) | BL_DOWN | T2(T_BG(3))); BLDY = 1;
             DISPCAPCNT = 16u | (odd ? 3u : 2u) << 16 | 3u << 20 | 1u << 31;
         } else {                                      /* a captured frame shown as the full-screen OBJ bitmap */
-            int cap = tq == qlen / 2 || tq == qlen / 2 + 16;
+            int cap = tq == qlen / 2 || tq == qlen / 2 + 16;  /* the screen, then the 3D layer alone */
             g_dc |= DC_BMP256;
             VRAMCNT(VC) = CNT_LCDC; VRAMCNT(VD) = CNT_LCDC;
             if (cap) {                                /* B as LCDC: no sprites this frame; capture into B + 32K */
-                VRAMCNT(VB) = CNT_LCDC; dirty(VB, 2, 6);
-                DISPCAPCNT = 16u | 1u << 16 | 1u << 18 | 3u << 20 | 1u << 31;
+                VRAMCNT(VB) = CNT_LCDC;
+                DISPCAPCNT = 16u | 1u << 16 | 1u << 18 | 3u << 20 | (tq == qlen / 2 ? 0 : 1u << 24) | 1u << 31;
             } else {                                  /* OAM 0-11: the image (priority 3), the 3D in front of it */
                 VRAMCNT(VB) = CNT_AOBJ;
                 for (int c = 0; c < 12; c++)
@@ -1490,10 +1541,11 @@ static void s_3d(u32 t, int q, u32 tq) {
         }
         break;
     default:                                          /* VRAM display of D with a blended capture into D: trails */
-        VRAMCNT(VD) = CNT_LCDC; dirty(VD, 0, 8);
+        VRAMCNT(VD) = CNT_LCDC;
         g_dc = DC_VRAMDISP(3) | DC_3D | DC_BG(0) | DC_BG(1) | DC_BG(3) | DC_OBJ | objmap;
         if (!half) DISPCAPCNT = 8u | 8u << 8 | 3u << 16 | 3u << 20 | 1u << 24 | 2u << 29 | 1u << 31;   /* 3D + VRAM */
-        else DISPCAPCNT = 4u | 12u << 8 | 3u << 16 | 2u << 20 | 1u << 26 | 2u << 29 | 1u << 31;      /* screen + VRAM +32K, 256x128 */
+        else DISPCAPCNT = 4u | 12u << 8 | 3u << 16 | 2u << 20 | 1u << 26 | ((tq >> 3) & 1 ? 1u : 2u) << 29 | 1u << 31;
+                                                      /* screen + VRAM +32K, 256x128; every other 8 frames VRAM +32K alone */
         break;
     }
     for (int n = 0; n < 6; n++) spr(i++, 2, n & 1, 10 + n * 40, 140 + (sn(t * 2 + n * 40) >> 7), 0, 0, (u32)(n & 3), (u32)n + 4);
@@ -1513,7 +1565,7 @@ static const char *const titles[NSCENES][4] = {
     {"T3 BITMAP Q0 MODE 5 DIRECT+8BPP", "T3 BITMAP Q1 MODE 3 512X256", "T3 BITMAP Q2 MODE 4/5 AFFINE", "T3 BITMAP Q3 VRAM/MAIN MEM/HDMA ROW"},
     {"T4 OBJ Q0 1D/32,64 SIZES FLIPS", "T4 OBJ Q1 1D/128,256 EXTPAL CROWD", "T4 OBJ Q2 2D MAP MULTIPLEX", "T4 OBJ Q3 2D OVERLAP WRAP"},
     {"T5 OBJ FX Q0 AFFINE DOUBLE", "T5 OBJ FX Q1 BITMAP ALPHA", "T5 OBJ FX Q2 SEMI-TRANSPARENT", "T5 OBJ FX Q3 FULL-SCREEN BITMAP"},
-    {"T6 WINDOW Q0 WIN0 WIN1 OUT", "T6 WINDOW Q1 OBJ WINDOW", "T6 WINDOW Q2 EDGE CASES", "T6 WINDOW Q3 HDMA SPOTLIGHT"},
+    {"T6 WINDOW Q0 WIN0 WIN1 OUT", "T6 WINDOW Q1 OBJ WIN+WIN0+WIN1", "T6 WINDOW Q2 EDGE CASES", "T6 WINDOW Q3 HDMA SPOTLIGHT"},
     {"T7 EFFECT Q0 ALPHA BG/BG", "T7 EFFECT Q1 ALPHA OBJ/BD", "T7 EFFECT Q2 BRIGHT UP/DOWN", "T7 EFFECT Q3 MASTER BRIGHT"},
     {"T8 MOSAIC Q0 TEXT BG", "T8 MOSAIC Q1 AFFINE/BITMAP", "T8 MOSAIC Q2 OBJ", "T8 MOSAIC Q3 HDMA PER LINE"},
     {"T9 3D Q0 LAYER PRI HOFS", "T9 3D Q1 BLEND WINDOWS", "T9 3D Q2 CAPTURE FEEDBACK/OBJ", "T9 3D Q3 VRAM DISPLAY TRAILS"}};
@@ -1535,6 +1587,7 @@ int main(void) {
     build_bmp16w();
     build_stream();
     build_large();
+    build_small();
     build_obj();
     build_extpal();
     for (int l = 0; l < 64; l++) spot_w[l] = (u16)isqrt((u32)(60 * 60 - l * l));
@@ -1551,18 +1604,20 @@ int main(void) {
         else { scene = cfg.level % NSCENES; t = frame; }
         int q = (int)((t / qlen) & 3);
         u32 tq = t % qlen;
-        if ((int)scene != cur_scene || q != cur_q) {
-            if ((int)scene != cur_scene) reset2d();
+        if ((int)scene != cur_scene || q != cur_q) {     /* a quarter starts from reset registers, palettes and OAM */
             cur_scene = (int)scene; cur_q = q;
-            for (int c = 0; c < 3; c++) hdma_off(c);
-            DISPCAPCNT = 0;
+            reset2d();
             plan_begin();
             plans[scene](q);
+#ifdef DS2D_CHECK
+            if (!plan_complete()) { DISPCNT = 0; for (;;) {} }
+#endif
             ready = 0;
         }
         if (!ready) {
             if (job_i < njobs) {                      /* display off (white) while VRAM is filled */
                 DISPCNT = 0; run_jobs();
+                if (scene == 9) { gx_setup(0); gx_scene(t); }   /* so the first frame shown has the 3D of frame t-1 */
 #ifdef DS2D_CHECK
                 if (VCOUNT < 192) { for (;;) {} }
 #endif
