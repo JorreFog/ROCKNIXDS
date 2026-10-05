@@ -39,19 +39,145 @@ where it was never set (uninstall removes it); README step 6 and the release not
 
 ## 2. Empty `roms/nds` breaks the menu
 
-In progress: the investigation's plan is being applied (an ES patch that keeps the DS system loaded with no games,
-an empty state the Pixel engine draws, guards for a library with no games). This section is filled in when it lands.
+**What it was.** EmulationStation drops a game system with no files, so with `roms/nds` empty the DS did not exist:
+the `LastSystem=nds` the installer seeds resolved to nothing, the menu opened on the first system left (Music Player,
+Tools, Favorites, Last played), and the two empty collections' library showed ES's `<No Entries Found>` placeholder
+drawn as a cartridge. A tap on that cartridge or on START entered the ready screen and stayed on "Starting..." for
+good (the gamepad's A was filtered out, the touch path was not). ES also overwrote `LastSystem` with the fallback
+system on exit, so even after adding a game the menu did not open on the DS. Found by reading the code and running
+the Pixel engine on the host with empty data (no crash, no bad layout: the engine itself survives 0 games and 0
+systems, under the address sanitizer).
+
+**Done on the host.** `dii-ess-aye/es-rgds-emptylibrary.patch` (in `tools/build-es.sh`'s list, `emulationstation-rgds`
+rebuilt): the systems in `RGDS_KEEP_SYSTEMS` (default `nds`) are loaded, themed and visible with zero games (five
+gates in `SystemData.cpp`); the engine shows the placeholder as **No games yet / Copy games to roms/nds** and
+refuses to start it (`RndsEs.cpp`, `RndsUI.cpp`). `install.sh` sends `LastSystem` back to `nds` when it holds one of
+the fallback systems. README and release notes updated.
+
+**On the device** (a handheld with DS games; simulate the fresh card):
+
+1. `mv /storage/roms/nds /storage/roms/nds.bak && mkdir /storage/roms/nds && systemctl restart essway.service`
+   (ES reads `roms/nds` at start; the directory must exist, as ROCKNIX creates it at boot).
+2. The shelf shows **Nintendo DS** (0 games) and the menu opens on it. Open it: the bottom screen shows one
+   cartridge card named "No games yet", the top screen the title with "Copy games to roms/nds". **A** does nothing,
+   **a tap on the cartridge and on START does nothing** (before the fix: "Starting..." for ever), **B** goes back.
+   `grep -c 'System "nds" has no games' /var/log/es_log.txt` is `0`.
+3. Still with the empty folder: Music Player / Tools / the collections look as before; nothing else gained a shelf
+   entry (`LoadEmptySystems` stays off).
+4. `rm -rf /storage/roms/nds && mv /storage/roms/nds.bak /storage/roms/nds && systemctl restart essway.service`: the
+   games are back, play stats intact (they live in gamelist.xml inside the folder, which moved with it).
+5. The real thing, if a spare card is at hand: flash the image, boot with no games: step 2's menu on the first boot,
+   then copy one game over the network and restart: it opens on the DS with the game.
+
+**Acceptance:** steps 2 and 4; with games present nothing looks different; `grep -c "nds" /var/log/es_log.txt` shows
+the system loaded ("Loading system nds" or its gamelist line) on the empty run.
 
 ## 3. The real microphone
 
-In progress: the investigation's plan is being applied (per-block logging behind `DSFLIP_MIC_DEBUG`, tunables for the
-echo gate, the most likely fix switchable). This section is filled in when it lands.
+**What is known.** Issue 26: on an RG DS Plus (ROCKNIX 20261001) blowing into the mic does nothing at *microphone
+sensitivity* high, while a button bound to DraStic's *Fake Microphone* in DraStic's own menu works. So DraStic's
+fake-microphone path (it plays `config/microphone/microphone.wav` into the DS mic while the control is held) is fine;
+what fails is between libdsflip's capture and that control. The path: ES's setting → `DSHOOK_MIC_THRESH` (high 0.03,
+medium 0.15, low 0.3; *Auto* is off) → libdsflip's mic thread (`src/audio.c`: ALSA `default` capture, 44.1 kHz mono,
+RMS per 1024-sample block, a noise floor learned over the first 1.4 s, then `level > floor + threshold`, and an
+**echo gate** that also demands `level > 3 × learned speaker leak × speaker level + threshold`) → an SDL key event
+for Scroll Lock, which DraStic reads as control code 327 → `controls_a[CONTROL_INDEX_FAKE_MICROPHONE]` in
+`config/drastic.cfg`. Four hypotheses came out of the code, in order of likelihood, each now visible in the log:
+
+- **H2, the echo gate swallows real blows.** The leak factor is learned from every block that is not a blow,
+  including quiet passages where the room noise, not the speaker, sets the ratio, and it is capped at 4: with music
+  at speaker level 0.15 the bar can sit at 0.5-1.8 RMS, above any blow (0.1-0.4). *Low* (0.3) is unreachable with
+  any music. The gate was tuned on an RG DS at one volume (0 false presses); the Plus's louder speakers next to its
+  mic make it worse.
+- **H1, the control is unbound.** ROCKNIX's `drastic.cfg.rgds` has bound 327 in both control sets since 2026-02-04,
+  but a `/storage/.config/drastic` created by an older nightly keeps `65535` (unbound) for ever, and rebinding a
+  button in DraStic's menu overwrites whichever set DraStic edits.
+- **H3, the Plus's capture is silent.** The Plus's mic sits on the `rk817_hp` card (the speakers are `aw88166`), its
+  UCM declares capture gains it never sets; a muted or zero-gain source reads as all zeros, a missing source as a
+  capture that never returns frames.
+- **H5, the key flickers.** The key follows every 23 ms block; a blow hovering around the bar presses and releases
+  several times inside one DraStic frame, which a game's blow detector never sees as held.
+
+**Done on the host** (SuperDrastic `0.4.0-beta.2-rocknixds.3`, commit *Microphone: tunables and logs for the
+handheld* in `dsflip/superdrastic-0.4.0-beta.2-rocknixds.3.patch`; nothing needs a rebuild to test):
+
+- `dsflip.log` says at start how the control is bound: `[mic] fake microphone: drastic.cfg controls_a 327 (Scroll
+  Lock), controls_b N: pressing the key`, or `... pressing joystick button N` when the keyboard set is unbound but
+  the joystick set has a button (the thread then sends that button, as DraStic's own binding would), or `...
+  pressing Scroll Lock (327), which this config does NOT map` (H1 confirmed from the log alone).
+- `session.sh` repairs H1 before the game starts: with the mic on and `controls_a[...FAKE_MICROPHONE] = 65535` it
+  writes 327 there and says so in `last-session.log` (`microphone: bound DraStic's fake microphone ...`). DraStic
+  saves the file on exit, so a later rebinding by the player stays.
+- `[mic] capture is silent (peak 0.00000 in 5 s): is a microphone source behind ALSA's default? (wpctl status)`
+  after 5 s of exact zeros (H3). A capture that never returns frames shows `[mic] listening` and then never the
+  `[mic] 10 s:` line.
+- Switches, read once at the game's start, set with `systemctl set-environment NAME=value` over ssh (the game unit
+  inherits them; `systemctl unset-environment NAME` removes them; `last-session.log` does not list them):
+  - `DSFLIP_MIC_DEBUG=1`: a line every 8 blocks (~190 ms) `[mic] level L floor F out O coup C bleed B bar X down D`
+    and one on every `PRESS` / `release`.
+  - `DSFLIP_MIC_GATE=k`: the gate's factor (3 is the shipped value; `0` turns the gate off, which is libdrastouch's
+    behaviour: floor + threshold only).
+  - `DSFLIP_MIC_COUPLING_MAX=r`: the most leak the gate may learn (4 shipped; 1 keeps the bar reachable at any
+    volume while music plays).
+  - `DSFLIP_MIC_HOLD_MS=ms`: the key stays down at least this long after a press (0 shipped).
+  - `DSFLIP_MIC_KEY=auto|key|button`: what presses the control (auto as described above).
+  - The `[mic] listening, threshold T, echo gate on (x3.0, leak cap 4.0), hold 0 ms` line echoes what was read.
+
+**On the device** (an RG DS Plus, the reporter's model; an RG DS too if one is at hand). Phantom Hourglass's first
+candle (Mercay Island, the two candles in Oshus's house, blow to put them out) or Nintendogs are the games; the
+*Blow* entry of SuperDrastic 0.5.0's in-game menu (the plus-beta line) holds the control for 3 s *without* the mic
+thread, so it separates DraStic's side from ours when both lines are on the desk.
+
+1. **Baseline.** In ES set *Nintendo DS > microphone sensitivity* to *high*. `systemctl set-environment
+   DSFLIP_MIC_DEBUG=1`. Start the game, reach the candle, blow 3-4 times over ~15 s with the music on, quit.
+   `grep -n '\[mic\]' /storage/.config/drastic/dsflip/dsflip.log` and `grep -n microphone
+   /storage/.config/drastic/dsflip/last-session.log`. Read it like this:
+   - no `[mic] listening` but `[mic] off`: the setting never reached the game (`grep -i micro
+     /storage/.config/system/configs/system.cfg`; ROCKNIX's `start_drastic.sh` exports `DSHOOK_MIC_THRESH`).
+   - `[mic] no capture device` or `capture is silent`, or `listening` with no `10 s:` line ever: **H3**, step 2.
+   - `fake microphone: ... does NOT map`: **H1**; the launcher should have repaired it (its `microphone:` line);
+     if `controls_a` holds a button code instead of 65535, `DSFLIP_MIC_KEY=button` or rebind in DraStic's menu.
+   - debug lines during a blow with `level` well above `floor + 0.03` but below `bar`, and no `PRESS`: **H2**, step 3.
+   - `PRESS`/`release` pairs many times per blow (10+ in one `10 s:` line): **H5**, step 4.
+   - `PRESS` once or twice per blow, held through it, and the candle still burns: the key reached DraStic and was
+     ignored: run DraStic's menu, *Fake Microphone*, and check the keyboard set shows Scroll Lock; try
+     `DSFLIP_MIC_KEY=button` after binding a button there.
+2. **H3, capture sanity** (ES menu, no game running): `cat /proc/asound/cards` (expect `rk817_hp` and `aw88166`);
+   `XDG_RUNTIME_DIR=/var/run/0-runtime-dir wpctl status | sed -n '/Sources:/,/Filters:/p'` (an rk817 mic source,
+   not muted); `XDG_RUNTIME_DIR=/var/run/0-runtime-dir arecord -q -D default -d 3 -f S16_LE -r 44100 -c 1
+   /tmp/blow.wav` while blowing, then its RMS with `python3 -c "import wave,struct,math;w=wave.open('/tmp/blow.wav');
+   d=w.readframes(w.getnframes());s=struct.unpack('<%dh'%(len(d)//2),d);print(math.sqrt(sum(x*x for x in s)/len(s))/32768)"`
+   (a blow: > 0.05; < 0.002: silent). Silent: `amixer -c <rk817 index> contents | grep -A4 -i capture`, raise *Mic
+   Capture Gain* / *Master Capture Volume* with `amixer cset`, and then the fix is a `wpctl set-volume` / amixer line
+   in `session.sh`'s audio block (next to the 48 kHz PipeWire setting) plus ROCKNIX's UCM, to report upstream.
+3. **H2, the gate.** Repeat step 1 with `DSFLIP_MIC_GATE=0`: if the candle now goes out, the gate was the cause;
+   then find the setting that keeps it out and gives 0 false presses in 2 minutes of the game's music at the
+   handheld's full volume: try `DSFLIP_MIC_GATE=1.5`, then `DSFLIP_MIC_COUPLING_MAX=1` with the gate at 3. Note
+   the debug lines' `coup` and `bleed` during music for the record. The fix is the found values as the defaults in
+   `src/audio.c` (`envf("DSFLIP_MIC_GATE", ...)`, `envf("DSFLIP_MIC_COUPLING_MAX", ...)`), or, if only the gate off
+   works, the gate learning its leak from `level - floor_` instead of `level`.
+4. **H5, flicker.** `DSFLIP_MIC_HOLD_MS=150` (then 300): the `PRESS` count per blow drops to 1-2 and the candle goes
+   out. The fix is that value as `envf("DSFLIP_MIC_HOLD_MS", ...)`'s default.
+5. **Rebuild** once the defaults are known: in a SuperDrastic checkout on branch `rocknixds-wfc` (or
+   `git am dsflip/superdrastic-0.4.0-beta.2-rocknixds.3.patch` on tag `v0.4.0-beta.2`), bump `VERSION` to
+   `0.4.0-beta.2-rocknixds.4`, `sh build.sh <arm64 sysroot>` and `sh package.sh` (the `SUPERDRASTIC` file's comment
+   names the toolchain), ship the tarball in `dsflip/`, regenerate the patch (`git format-patch --stdout
+   v0.4.0-beta.2..rocknixds-wfc`), pin version and sha256 in `SUPERDRASTIC`, and test the package with
+   `RGDS_SUPERDRASTIC=<tarball> sh install.sh`. Then `systemctl unset-environment DSFLIP_MIC_DEBUG DSFLIP_MIC_GATE
+   DSFLIP_MIC_COUPLING_MAX DSFLIP_MIC_HOLD_MS DSFLIP_MIC_KEY` and run the acceptance with no switches set.
+6. **Medium and low.** Repeat the candle at *medium*; note whether *low* can work at all with music (if not, say so
+   in the README's microphone paragraph: *high* or *medium*).
+
+**Acceptance:** with no switches set and the shipped defaults, *microphone sensitivity* at *high* and at *medium*, a
+real blow puts out the candle in Phantom Hourglass on the first or second try, and 2 minutes of the game's music at
+full volume with nobody blowing give `0 presses` in every `[mic] 10 s:` line. Then close issue 26 with the log
+excerpt, and add the found defaults to the release notes' microphone section.
 
 ## 4. Wi-Fi online play (Nintendo WFC)
 
 **Nothing in this section has run on a handheld.** DraStic has no Wi-Fi emulation: its wifi register handlers are
-stubs. The SuperDrastic package this branch ships (`0.4.0-beta.2-rocknixds.2`, source in
-`dsflip/superdrastic-0.4.0-beta.2-rocknixds.2.patch`, SuperDrastic branch `rocknixds-wfc`) carries the port of
+stubs. The SuperDrastic package this branch ships (`0.4.0-beta.2-rocknixds.3`, source in
+`dsflip/superdrastic-0.4.0-beta.2-rocknixds.3.patch`, SuperDrastic branch `rocknixds-wfc`) carries the port of
 ROCKNIXDS's unmerged `origin/cursor/drastic-wfc-dns-24ad` (b1a4564): `src/wifi.c` replaces DraStic r2.5.2.2's wifi
 load/store handler tables (at fixed offsets, for build id `7a5e0e5fc6e52e6e8f5499c3d4d667ef51db0748` only), answers
 the game as an open access point named `rocknixds`, hands it the chosen DNS server over DHCP and carries the game's

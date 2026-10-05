@@ -88,10 +88,6 @@ erased**), and a computer with an SD card reader.
    The same settings can be changed for a single game: highlight it, press **X** for its options and choose the
    game's advanced settings.
 
-> [!NOTE]
-> Known issue: until there is at least one DS game in `roms` > `nds`, the menu has a UI bug. It is harmless and goes
-> away once you add a DS game and restart.
-
 Updates come through the menu: *Updates & downloads > ROCKNIXDS*. Already running ROCKNIX?
 See [Install](#install) for the one-line install over ssh.
 
@@ -198,6 +194,10 @@ the menu's updater pick the right one for the handheld they run on.
 - **A faster Gengis Engine** (1.5.9, SuperDrastic 0.4.0-beta.2). A leaner rasterizer and a NEON compositor for the 3D
   layer: Pokémon HeartGold takes ~5% less CPU than with 1.5.5's Gengis Engine and ~12% less than with DraStic's renderer,
   and runs closer to full speed at 816 MHz (53 fps instead of 51.6). Still pixel for pixel the same picture as DraStic.
+- **A fresh card opens on the DS** (1.5.13). ES drops a system with no games, so until the first DS game was copied
+  the menu landed on Music Player, Tools and two empty collections, their "no entries" placeholder dressed as a
+  cartridge that hung the ready screen when tapped. The patched ES keeps the DS listed and themed with no games
+  (`es-rgds-emptylibrary.patch`), and its library says "No games yet: copy games to roms/nds".
 - **The recommended settings are the defaults** (1.5.13). *3D renderer* on *Auto* is Gengis Engine (a player who
   picked *DraStic* keeps it), and the installer switches threaded 3D on where it was never set, as the Plus line did
   since 1.5. The README's "set the best settings" step is gone: a fresh install plays with them.
@@ -205,6 +205,11 @@ the menu's updater pick the right one for the handheld they run on.
   community replacement for Nintendo Wi-Fi Connection (Kaeru WFC into Wiimmfi, WiiLink's DNS, AltWFC): the engine
   answers the game as an open access point and carries its traffic over the handheld's network. Not yet run on a
   handheld; see *Using it* and `docs/handoff-local.md`.
+- **The microphone, ready for its test on the handheld** (1.5.13, SuperDrastic 0.4.0-beta.2-rocknixds.3). A real
+  blow did nothing on an RG DS Plus (issue 26) while a bound button did. The engine now logs how DraStic's fake
+  microphone is bound and presses the bound joystick button when the key is unbound, the launcher repairs an unbound
+  key, a silent capture is reported, and the echo gate, a minimum hold and the debug trace are switches that need no
+  rebuild (`DSFLIP_MIC_*`; `docs/handoff-local.md`). The cause is to be read off the handheld's log.
 - **The menu stays up during DS games** (1.5.13). Fast switching, opt-in since 1.4, is on for everyone: the game runs on
   another console (VT) while ES and sway wait, so after a quit the menu is back about a second later, however many
   games the library holds. Before, ES was stopped and started again for every game, and its start grew with every
@@ -452,8 +457,12 @@ Install from a checkout: `RGDS_SRC=<checkout> sh install.sh` on the device, with
 **Microphone.** libdsflip captures the mic over ALSA and holds DraStic's own "fake mic" control while you blow or
 speak, like ROCKNIX's `libdrastouch` does: an RMS level per block against an adaptive noise floor, with ES's DraStic
 *microphone sensitivity* setting as the threshold. **That setting is off by default:** set it (medium is a good
-start) under the Nintendo DS system's or the game's options, or the mic stays off, as on stock ROCKNIX. The mic also hears the speaker, so an echo gate fed by the audio
-pump's output level keeps game music from pressing it (0 false presses in testing, with music playing).
+start) under the Nintendo DS system's or the game's options, or the mic stays off, as on stock ROCKNIX. The mic also
+hears the speaker, so an echo gate fed by the audio pump's output level keeps game music from pressing it (0 false
+presses in testing, with music playing). If a blow does nothing (reported once, on an RG DS Plus), `dsflip.log`'s
+`[mic]` lines say what the engine captured, how DraStic's fake microphone is bound and what pressed it; `DSFLIP_MIC_DEBUG=1`,
+`DSFLIP_MIC_GATE=0` (gate off) and the other `DSFLIP_MIC_*` switches (`systemctl set-environment`) narrow it down
+without a rebuild. The launcher binds the control (Scroll Lock) where an old `drastic.cfg` left it unbound.
 
 **Wi-Fi online play (1.5.13, experimental, not yet tried on a handheld).** DraStic itself has no Wi-Fi: its wifi
 registers are stubs. With ES's DraStic *wfc dns* option set (under the Nintendo DS system's or a game's options; off
@@ -751,8 +760,12 @@ dark-background and a light-background version, a stacked version for small squa
 
 ## Known issues
 
-- **No DS games yet:** with an empty `roms/nds` (as on a freshly flashed card), the menu has a UI bug. It goes away
-  once a DS game is added and the menu restarts.
+- **No DS games yet** (fixed in 1.5.13, not yet seen on a handheld): with an empty `roms/nds` ES dropped the DS
+  system, so a fresh card opened on Music Player and two empty collections whose placeholder was drawn as a cartridge
+  (and a tap on it hung the ready screen). The patched ES keeps the DS listed and shows "No games yet".
+- **A real blow did nothing on an RG DS Plus** (issue 26; a button bound to DraStic's *Fake Microphone* works).
+  1.5.13 ships the engine's microphone with logs and switches to find the cause on the handheld (`docs/handoff-local.md`,
+  section 3); the shipped defaults are unchanged until a device run settles them.
 - **RetroAchievements:** softcore only.
 - **Heavy stretches at 2× can still drop frames** (up to ~10/s in one run). There, DraStic's own frame
   times vary so much that its frames arrive spread over the whole refresh cycle, and no latch position can

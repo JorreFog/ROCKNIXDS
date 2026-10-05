@@ -216,6 +216,17 @@ stuck_report() {
   case "$WFC" in ""|off|auto|none) WFC= ;; esac
   [ -n "$WFC" ] && export DSFLIP_WFC=${DSFLIP_WFC:-$WFC}
   echo "wifi: ${DSFLIP_WFC:-off}"
+  # The real microphone presses DraStic's "fake microphone" control (Scroll Lock, code 327 in the keyboard set).
+  # ROCKNIX's drastic.cfg for the RG DS binds it in both control sets since 2026-02-04, but a config/drastic.cfg that
+  # dates from an earlier nightly has it unbound (65535), and ROCKNIX copies its template only once: then blowing
+  # into the mic reached nothing (issue 26's second suspect). With the mic on, bind it. DraStic saves this file on
+  # exit, so a later rebinding by the player in DraStic's menu stays. libdsflip logs what it found ("[mic] fake
+  # microphone: ..." in dsflip.log); DSFLIP_MIC_DEBUG=1, DSFLIP_MIC_GATE, DSFLIP_MIC_COUPLING_MAX, DSFLIP_MIC_HOLD_MS
+  # and DSFLIP_MIC_KEY (systemctl set-environment) are its test switches: docs/handoff-local.md, section 3.
+  if [ "${DSHOOK_MIC_THRESH:-0}" != 0 ] && grep -q '^controls_a\[CONTROL_INDEX_FAKE_MICROPHONE\] = 65535' $D/config/drastic.cfg 2>/dev/null; then
+    sed -i 's/^controls_a\[CONTROL_INDEX_FAKE_MICROPHONE\] = 65535/controls_a[CONTROL_INDEX_FAKE_MICROPHONE] = 327/' $D/config/drastic.cfg
+    echo "microphone: bound DraStic's fake microphone to Scroll Lock (327) in config/drastic.cfg (it was unbound)"
+  fi
   cd $D
   # preload-guard.so keeps libdsflip out of the processes DraStic starts (SuperDrastic 0.3.0-beta.3, 1.5's, started pactl
   # and wpctl for its volume card; with libdsflip in them, they rotated the game's log and overwrote its verdict).

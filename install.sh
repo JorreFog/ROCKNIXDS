@@ -418,6 +418,12 @@ if [ $THEME_ON = 1 ]; then
     # ES starts on the system it was last on; with none yet (a fresh SD card) it took the first in its list, Favorites,
     # not the DS. The patched ES always lists the DS, even before there are games.
     [ -n "$(es_get LastSystem $ES_SETTINGS)" ] || es_set LastSystem nds
+    # a card that once started without DS games: ES then saved the system it fell back to (the menu starts on
+    # LastSystem), and up to 1.5.12 the DS wasn't listed until a game was there. The patched ES now lists it even
+    # empty (es-rgds-emptylibrary.patch): back to the DS from those fallbacks, never from a system the player chose.
+    case "$(es_get LastSystem $ES_SETTINGS)" in
+        favorites|auto-favorites|recent|lastplayed|auto-lastplayed|allgames|auto-allgames|music|musicplayer|tools) es_set LastSystem nds ;;
+    esac
     # 1.5: ROCKNIXDS Pixel Light is the theme, once (the first install of 1.5 or later; a choice made after that stays,
     # an uninstall forgets it). The 1.5 betas' rocknixds-dark/-light/-pixel are gone.
     if [ ! -e /storage/.config/rocknixds/.pixel-default ]; then

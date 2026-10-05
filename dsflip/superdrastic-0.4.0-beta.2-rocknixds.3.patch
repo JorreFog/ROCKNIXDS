@@ -1,7 +1,7 @@
 From 12c47969f20dd71ea90f1917b67a60caf895042f Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 15:21:56 +0000
-Subject: [PATCH 1/3] Shaders can draw a smaller buffer than the panel; ds-fsr
+Subject: [PATCH 1/4] Shaders can draw a smaller buffer than the panel; ds-fsr
  draws 3x on the RG DS Plus
 
 A shader's source may say "// dsflip-output: Nx" (N times the DS screen's 256x192) or "dsflip-output: WxH": its
@@ -320,7 +320,7 @@ index 1939acf..e7dd4a9 100644
 From 21b1c799ac3a55200a4c925bacc63aeebee75185 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 17:39:05 +0000
-Subject: [PATCH 2/3] Port the Wi-Fi (Nintendo WFC) path from ROCKNIXDS
+Subject: [PATCH 2/4] Port the Wi-Fi (Nintendo WFC) path from ROCKNIXDS
  cursor/drastic-wfc-dns into SuperDrastic
 
 Ported, unchanged in logic, from ROCKNIXDS commit b1a4564 (branch origin/cursor/drastic-wfc-dns-24ad,
@@ -2204,7 +2204,7 @@ index 0000000..535fe1c
 From b4a9eb6f2b52caf2a3f6e1a2fa985b08d552b108 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 17:56:24 +0000
-Subject: [PATCH 3/3] Wi-Fi: ARP only for the gateway, RX records with their
+Subject: [PATCH 3/4] Wi-Fi: ARP only for the gateway, RX records with their
  FCS and W_RXLEN_CROP, a probe of DraStic's W_IF store;
  0.4.0-beta.2-rocknixds.2
 
@@ -2422,6 +2422,183 @@ index 535fe1c..a90f87d 100644
  
      c.n = 0;
      uint8_t echo[16]; memset(echo, 0, sizeof echo);
+-- 
+2.43.0
+
+
+From c4ef045443f0957d0a782e72d3c465829f9ebfd0 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 5 Oct 2026 18:07:03 +0000
+Subject: [PATCH 4/4] Microphone: tunables and logs for the handheld, a
+ joystick-button fallback for the fake microphone; 0.4.0-beta.2-rocknixds.3
+
+A real blow does nothing on the RG DS (ROCKNIXDS issue 26). The mic thread can now be tuned and watched without a
+rebuild: DSFLIP_MIC_DEBUG prints the level, floor, speaker level, learned leak, the gate's bar and the key's state
+every ~190 ms and on every press and release; DSFLIP_MIC_GATE sets the echo gate's factor (0 turns it off);
+DSFLIP_MIC_COUPLING_MAX caps the leak it learns; DSFLIP_MIC_HOLD_MS keeps the key down for a minimum time.
+
+The thread reads how config/drastic.cfg binds DraStic's fake microphone (resume_control_code) and says so at start:
+the keyboard set (327, Scroll Lock) is what we press; when it is unbound but the joystick set has a button, it presses
+that button instead (dsflip_mic_button, an SDL_JOYBUTTON event with the joystick DraStic opened), DSFLIP_MIC_KEY picks.
+A capture that stays at zero for 5 s is reported as silent (no source behind ALSA's default).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01EHHmyacNZtyRhmxZoUYRa8
+---
+ VERSION      |  2 +-
+ src/audio.c  | 62 ++++++++++++++++++++++++++++++++++++++++++++++------
+ src/dsflip.c | 10 +++++++++
+ src/resume.c | 11 ++++++++++
+ 4 files changed, 77 insertions(+), 8 deletions(-)
+
+diff --git a/VERSION b/VERSION
+index b67ae5d..96a43ed 100644
+--- a/VERSION
++++ b/VERSION
+@@ -1 +1 @@
+-0.4.0-beta.2-rocknixds.2
++0.4.0-beta.2-rocknixds.3
+diff --git a/src/audio.c b/src/audio.c
+index e1c246c..86e5b45 100644
+--- a/src/audio.c
++++ b/src/audio.c
+@@ -289,17 +289,49 @@ void audio_pump_log(void) {
+  * The threshold is ES's "microphone sensitivity" (DSHOOK_MIC_THRESH: high 0.03, medium 0.15, low 0.3; off 0).
+  * Capture goes straight through ALSA (PipeWire's mic source). */
+ void dsflip_mic_key(int down);
++void dsflip_mic_button(int button, int down);
++int resume_control_code(const char *set, const char *name);   /* resume.c: a drastic.cfg control code, -1 if unset */
++/* Tunables, for finding out on a handheld why a real blow does nothing (ROCKNIXDS issue 26) without a rebuild:
++ *   DSFLIP_MIC_DEBUG=1        one line per 8 blocks (~5 a second) with level, floor, speaker level, coupling, bleed,
++ *                             the gate's bar and the key's state, every press and release, and a silence check
++ *   DSFLIP_MIC_GATE=<k>       the echo gate's factor: the mic must be above k x the expected bleed (3, the measured
++ *                             setting; 0 turns the gate off: libdrastouch's plain floor + threshold)
++ *   DSFLIP_MIC_COUPLING_MAX=<r>  the most speaker-to-mic leak the gate may learn (4; the learned leak includes the
++ *                             room's noise, so a lower cap keeps the bar reachable while music plays)
++ *   DSFLIP_MIC_HOLD_MS=<ms>   once pressed, the key stays down at least this long (0: it follows every 23 ms block)
++ *   DSFLIP_MIC_KEY=auto|key|button  what presses DraStic's fake microphone: the keyboard control (Scroll Lock, 327),
++ *                             the joystick button drastic.cfg maps to it, or auto: the key when controls_a maps 327,
++ *                             else the button when controls_b has one, else the key with a warning (ROCKNIX's
++ *                             drastic.cfg for the RG DS maps 327 in both sets since 2026-02-04; older copies 65535) */
++static float envf(const char *name, float dflt) { const char *e = getenv(name); return e && *e ? (float)strtod(e, 0) : dflt; }
+ static void *mic_thread(void *a) {
+     float thresh = *(float *)a;
+     void *cap = 0;
++    int debug = getenv("DSFLIP_MIC_DEBUG") && strcmp(getenv("DSFLIP_MIC_DEBUG"), "0");
++    float gate_k = envf("DSFLIP_MIC_GATE", 3.0f), coup_max = envf("DSFLIP_MIC_COUPLING_MAX", 4.0f);
++    int hold_ms = (int)envf("DSFLIP_MIC_HOLD_MS", 0);
++    if (gate_k < 0) gate_k = 0; if (coup_max < 0.1f) coup_max = 0.1f; if (hold_ms < 0) hold_ms = 0;
++    /* how the fake microphone is pressed: DraStic reads keyboard controls as 256 + the key's code (Scroll Lock = 327)
++     * and joystick buttons as 1024 + the button; the setting it has decides which of ours can reach it */
++    const char *how = getenv("DSFLIP_MIC_KEY"); if (!how || !*how) how = "auto";
++    int code_a = resume_control_code("a", "FAKE_MICROPHONE"), code_b = resume_control_code("b", "FAKE_MICROPHONE");
++    int use_button = -1;
++    if (!strcmp(how, "button")) use_button = code_b >= 1024 && code_b < 1024 + 64 ? code_b - 1024 : (code_a >= 1024 && code_a < 1024 + 64 ? code_a - 1024 : -1);
++    else if (strcmp(how, "key") && code_a != 327 && code_b >= 1024 && code_b < 1024 + 64) use_button = code_b - 1024;
+     if (alsa_pcm(&cap, 1 /* SND_PCM_STREAM_CAPTURE */, 1, 44100, 100000, "mic") < 0) {
+         dsflip_log("[mic] no capture device\n");
+         return 0;
+     }
+-    dsflip_log("[mic] listening, threshold %.3f, echo gate %s\n", thresh, dcb ? "on" : "off (no audio pump)");
++    dsflip_log("[mic] listening, threshold %.3f, echo gate %s (x%.1f, leak cap %.1f), hold %d ms\n", thresh,
++               dcb && gate_k > 0 ? "on" : dcb ? "off (DSFLIP_MIC_GATE=0)" : "off (no audio pump)", gate_k, coup_max, hold_ms);
++    if (use_button >= 0) dsflip_log("[mic] fake microphone: drastic.cfg controls_a %d, controls_b %d: pressing joystick button %d\n", code_a, code_b, use_button);
++    else if (code_a == 327) dsflip_log("[mic] fake microphone: drastic.cfg controls_a 327 (Scroll Lock), controls_b %d: pressing the key\n", code_b);
++    else dsflip_log("[mic] fake microphone: drastic.cfg controls_a %d, controls_b %d: pressing Scroll Lock (327), which %s\n",
++                    code_a, code_b, code_a < 0 ? "no config maps (config/drastic.cfg unreadable?)" : "this config does NOT map: bind it, or let session.sh repair it");
+     float coup = 0; int coup_n = 0;     /* how much speaker output leaks into the mic (mic rms / output rms) */
+     int16_t buf[1024];
+-    float floor_ = 0, peak = 0; int n = 0, down = 0, blocks = 0, presses = 0;
++    float floor_ = 0, peak = 0, allpeak = 0; int n = 0, down = 0, blocks = 0, presses = 0, total = 0, silent_said = 0;
++    long long down_since = 0;
+     int errs = 0;
+     for (;;) {
+         long r = a_readi(cap, buf, 1024);
+@@ -313,6 +345,12 @@ static void *mic_thread(void *a) {
+         double acc = 0;
+         for (long i = 0; i < r; i++) { float v = buf[i] * (1.0f / 32768); acc += v * v; }
+         float level = (float)sqrt(acc / r);
++        if (level > allpeak) allpeak = level;
++        total++;
++        if (total == 215 && !silent_said && allpeak < 0.0005f) {   /* ~5 s of nothing at all: no source behind "default"? */
++            silent_said = 1;
++            dsflip_log("[mic] capture is silent (peak %.5f in 5 s): is a microphone source behind ALSA's default? (wpctl status)\n", allpeak);
++        }
+         if (n < 60) { floor_ = (floor_ * n + level) / (n + 1); n++; continue; }
+         floor_ = floor_ * 0.999f + level * 0.001f;
+         /* echo gate: the mic hears the game's own sound from the speaker (measured: bleed peaks 0.13-0.23, far
+@@ -320,13 +358,23 @@ static void *mic_thread(void *a) {
+          * is played: learn the leak (mic/output ratio while not triggered) and require the mic to be clearly above
+          * the expected bleed. out: the loudest output chunk of the last ~186 ms (covers the output latency). */
+         float out = 0; for (int i = 0; i < 32; i++) if (out_hist[i] > out) out = out_hist[i];
+-        float bleed = coup * out;
+-        int loud = level > floor_ + thresh && (!dcb || level > 3 * bleed + thresh);
++        float bleed = coup * out, bar = floor_ + thresh;
++        if (dcb && gate_k > 0 && gate_k * bleed + thresh > bar) bar = gate_k * bleed + thresh;
++        int loud = level > bar;
+         if (!loud && out > 0.01f) {      /* learn the coupling only from blocks that aren't a real blow */
+-            float r = level / out; if (r > 4) r = 4;
+-            coup = coup_n < 50 ? (coup * coup_n + r) / (coup_n + 1) : coup * 0.99f + r * 0.01f; coup_n++;
++            float rr = level / out; if (rr > coup_max) rr = coup_max;
++            coup = coup_n < 50 ? (coup * coup_n + rr) / (coup_n + 1) : coup * 0.99f + rr * 0.01f; coup_n++;
++        }
++        long long tnow = mono_ns();
++        if (down && !loud && hold_ms > 0 && tnow - down_since < (long long)hold_ms * 1000000) loud = 1;   /* held on */
++        if (loud != down) {
++            down = loud; presses += down;
++            if (down) down_since = tnow;
++            if (use_button >= 0) dsflip_mic_button(use_button, down); else dsflip_mic_key(down);
++            if (debug) dsflip_log("[mic] %s: level %.4f floor %.4f out %.4f coup %.2f bar %.4f\n", down ? "PRESS" : "release", level, floor_, out, coup, bar);
+         }
+-        if (loud != down) { down = loud; dsflip_mic_key(down); presses += down; }
++        if (debug && (total & 7) == 0)
++            dsflip_log("[mic] level %.4f floor %.4f out %.4f coup %.2f bleed %.4f bar %.4f down %d\n", level, floor_, out, coup, bleed, bar, down);
+         if (level > peak) peak = level;
+         if (++blocks >= 431) {           /* ~10 s: levels for bug reports and tuning */
+             dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses\n", floor_, peak, coup, presses);
+diff --git a/src/dsflip.c b/src/dsflip.c
+index f623a28..9d41bba 100644
+--- a/src/dsflip.c
++++ b/src/dsflip.c
+@@ -845,6 +845,16 @@ void dsflip_mic_key(int down) {
+     e.k.state = down ? 1 : 0; e.k.scancode = 71; e.k.sym = 0x40000047;
+     push_ev(&e);
+ }
++/* the same through a joystick button (SDL_JOYBUTTONDOWN/UP, as resume.c presses DraStic's save/load controls): for a
++ * drastic.cfg whose keyboard set has no fake microphone but whose joystick set does (DSFLIP_MIC_KEY, audio.c) */
++int resume_joy_id(void);
++void dsflip_mic_button(int button, int down) {
++    sdl_ev e; memset(&e, 0, sizeof e);
++    uint32_t type = down ? 0x603 : 0x604, ts = SDL_GetTicks(); int32_t which = resume_joy_id();
++    memcpy(e.pad, &type, 4); memcpy(e.pad + 4, &ts, 4); memcpy(e.pad + 8, &which, 4);
++    e.pad[12] = (uint8_t)button; e.pad[13] = down ? 1 : 0;
++    push_ev(&e);
++}
+ /* DraStic ignores the absolute x/y of mouse events: it moves its stylus by the RELATIVE deltas (xrel/yrel),
+  * 1:1 in DS pixels, clamped to the bottom screen, starting from the centre (measured by logging where it
+  * draws its 32x32 cursor). So we track its stylus position and send exact deltas. On every touch-down we
+diff --git a/src/resume.c b/src/resume.c
+index 58af810..e576e0c 100644
+--- a/src/resume.c
++++ b/src/resume.c
+@@ -127,6 +127,17 @@ static int control_button_in(const char *set, const char *name) {
+     return b;
+ }
+ static int control_button(const char *name) { return control_button_in("a", name); }
++/* the raw code of controls_<set>[CONTROL_INDEX_<name>] (keyboard: 256 + key, joystick: 1024 + button, 65535 unbound),
++ * -1 when the config has no such line (audio.c: how the fake microphone is bound) */
++int resume_control_code(const char *set, const char *name) {
++    FILE *f = fopen("config/drastic.cfg", "r"); if (!f) return -1;
++    char key[96], line[256]; int v = -1;
++    snprintf(key, sizeof key, "controls_%s[CONTROL_INDEX_%s] = ", set, name);
++    while (fgets(line, sizeof line, f)) if (!strncmp(line, key, strlen(key))) { v = atoi(line + strlen(key)); break; }
++    fclose(f);
++    return v;
++}
++int resume_joy_id(void) { return joy_id >= 0 ? joy_id : 0; }   /* the joystick SDL opened first (dsflip.c's mic button) */
+ /* either set (ROCKNIX maps START and SELECT in controls_b) */
+ static int control_button_any(const char *name) { int b = control_button_in("a", name); return b >= 0 ? b : control_button_in("b", name); }
+ 
 -- 
 2.43.0
 

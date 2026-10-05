@@ -1,0 +1,128 @@
+es-rgds-emptylibrary: the Nintendo DS system stays listed with no games, with a "no games yet" library (ROCKNIXDS)
+
+On a freshly flashed card roms/nds is empty, and ES drops a game system with no files (SystemData.cpp: the
+constructor returns before the theme loads, loadSystem deletes it, isVisible hides it), so the "nds" the installer
+seeds as LastSystem does not exist: the menu lands on Music Player, Tools and two empty auto-collections, whose
+"<No Entries Found>" placeholder the Pixel engine dressed as a cartridge, and a tap on it or on START entered the
+ready screen and stayed on "Starting..." (the gamepad's A was filtered, the touch path was not). That was the "UI
+bug until there is a DS game" in the README up to 1.5.12.
+
+Now the systems named in RGDS_KEEP_SYSTEMS (default "nds") are loaded, themed and visible with zero games, so the
+shelf has the DS from the first boot; the engine's library shows "No games yet / Copy games to roms/nds" for ES's
+placeholder entry and refuses to start it. LoadEmptySystems keeps its meaning for every other system.
+
+diff --git a/es-app/src/SystemData.cpp b/es-app/src/SystemData.cpp
+index 4c09392d..2508f01b 100644
+--- a/es-app/src/SystemData.cpp
++++ b/es-app/src/SystemData.cpp
+@@ -38,6 +38,16 @@
+ 
+ using namespace Utils;
+ 
++// ROCKNIXDS (es-rgds-emptylibrary.patch): the Nintendo DS system stays loaded, themed and listed with no games, so a
++// freshly flashed card opens on the DS shelf with a "no games yet" library, instead of ES dropping the system and the
++// menu landing on Music Player, Tools and two empty collections (the Known issue up to 1.5.12). RGDS_KEEP_SYSTEMS is a
++// comma-separated list of system names (default "nds"); LoadEmptySystems keeps its meaning for every other system.
++static bool rgdsKeepEmpty(const std::string& name)
++{
++	static std::string keep = []() { const char* e = getenv("RGDS_KEEP_SYSTEMS"); return "," + std::string(e && *e ? e : "nds") + ","; }();
++	return keep.find("," + name + ",") != std::string::npos;
++}
++
+ static std::map<std::string, std::function<BindableProperty(SystemData*)>> properties =
+ {
+ 	{ "name",				[] (SystemData* sys) { return sys->getName(); } },
+@@ -106,7 +116,7 @@ SystemData::SystemData(const SystemMetadata& meta, SystemEnvironmentData* envDat
+ 
+ 			if (!UIModeController::LoadEmptySystems())
+ 			{
+-				if (mRootFolder->getChildren().size() == 0)
++				if (mRootFolder->getChildren().size() == 0 && !rgdsKeepEmpty(mMetadata.name))	// ROCKNIXDS: the DS stays
+ 					return;
+ 
+ 				if (mHidden && !Settings::HiddenSystemsShowGames())
+@@ -134,7 +144,7 @@ SystemData::SystemData(const SystemMetadata& meta, SystemEnvironmentData* envDat
+ 
+ 	mRootFolder->getMetadata().resetChangedFlag();
+ 
+-	if (withTheme && (!loadThemeOnlyIfElements || UIModeController::LoadEmptySystems() || mRootFolder->mChildren.size() > 0))
++	if (withTheme && (!loadThemeOnlyIfElements || UIModeController::LoadEmptySystems() || rgdsKeepEmpty(mMetadata.name) || mRootFolder->mChildren.size() > 0))
+ 	{
+ 		loadTheme();
+ 
+@@ -1194,7 +1204,7 @@ SystemData* SystemData::loadSystem(pugi::xml_node system, bool fullMode)
+ 		return nullptr;
+ 	}
+ 
+-	if (fullMode && !UIModeController::LoadEmptySystems() && !Utils::FileSystem::exists(path))
++	if (fullMode && !UIModeController::LoadEmptySystems() && !rgdsKeepEmpty(md.name) && !Utils::FileSystem::exists(path))
+ 	{
+ 		LOG(LogError) << "System \"" << md.name << "\" path does not exist !";
+ 		return nullptr;
+@@ -1273,7 +1283,7 @@ SystemData* SystemData::loadSystem(pugi::xml_node system, bool fullMode)
+ 	if (!fullMode)
+ 		return newSys;
+ 
+-	if (!UIModeController::LoadEmptySystems() && newSys->getRootFolder()->getChildren().size() == 0)
++	if (!UIModeController::LoadEmptySystems() && !rgdsKeepEmpty(md.name) && newSys->getRootFolder()->getChildren().size() == 0)
+ 	{
+ 		LOG(LogWarning) << "System \"" << md.name << "\" has no games! Ignoring it.";
+ 		delete newSys;
+@@ -1354,7 +1364,7 @@ bool SystemData::isVisible()
+ 	if (isGroupChildSystem())
+ 		return false;
+ 
+-	if (!mHidden && !mIsCollectionSystem && (UIModeController::LoadEmptySystems() || getGameCountInfo()->totalGames > 0))
++	if (!mHidden && !mIsCollectionSystem && (UIModeController::LoadEmptySystems() || rgdsKeepEmpty(mMetadata.name) || getGameCountInfo()->totalGames > 0))
+ 		return true;
+ 
+ 	return false;
+diff --git a/es-app/src/rnds/RndsEs.cpp b/es-app/src/rnds/RndsEs.cpp
+index 36a4ba6f..9450a6a5 100644
+--- a/es-app/src/rnds/RndsEs.cpp
++++ b/es-app/src/rnds/RndsEs.cpp
+@@ -657,6 +657,17 @@ namespace rnds
+ 				r.achLabel = "No achievements";
+ 				return r;
+ 			}
++			if (f->getType() == PLACEHOLDER)
++			{
++				// ROCKNIXDS (es-rgds-emptylibrary.patch): a system with no games (the DS on a fresh card): the library
++				// shows where the games go instead of ES's "<No Entries Found>" dressed as a cartridge
++				r.placeholder = true;
++				r.title = "No games yet";
++				std::string sysName = list->system() != nullptr ? list->system()->getName() : "";
++				r.sub = sysName.empty() ? "Copy games to roms" : "Copy games to roms/" + sysName;
++				r.achLabel = "";
++				return r;
++			}
+ 			if (f->getType() != GAME)
+ 			{
+ 				r.sub = "";
+diff --git a/es-app/src/rnds/RndsUI.cpp b/es-app/src/rnds/RndsUI.cpp
+index 114bd406..719fc1c5 100644
+--- a/es-app/src/rnds/RndsUI.cpp
++++ b/es-app/src/rnds/RndsUI.cpp
+@@ -747,6 +747,10 @@ namespace rnds
+ 			else if (ui->mView == LIBRARY)
+ 			{
+ 				if (src->gameCount() == 0) return;
++				// ROCKNIXDS (es-rgds-emptylibrary.patch): the "no games yet" entry starts nothing. The gamepad's A never
++				// got here (ES's list filters it), but a tap on START or on the cartridge did, and the ready screen then
++				// waited for a launch that never came ("Starting..." for good)
++				if (src->game(ui->mGame).placeholder) return;
+ 				ui->mView = LAUNCH;
+ 				launchFromHome = false;
+ 				startInsert();
+diff --git a/es-app/src/rnds/RndsUI.h b/es-app/src/rnds/RndsUI.h
+index 7c49d255..a701fd7a 100644
+--- a/es-app/src/rnds/RndsUI.h
++++ b/es-app/src/rnds/RndsUI.h
+@@ -47,6 +47,7 @@ namespace rnds
+ 		int achA = 0, achB = 0;	// unlocked / total
+ 		std::string achLabel;	// "28 / 50 achievements" (lower case; drawn upper)
+ 		bool fav = false;
++		bool placeholder = false;	// ES's "no entries" stand-in for a system with no games: a hint, never started
+ 	};
+ 
+ 	class Source
