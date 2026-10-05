@@ -2,7 +2,8 @@
 """Import performance sessions posted by ROCKNIXDS onto the device-logs branch.
 
 The handheld PUTs the jsonl to ntfy.sh (see dsflip/device/perf-session.py, QUEUE_TOPIC). This reads that
-queue and writes docs/data/device/<device-id>/<session>.jsonl. A workflow on main runs it; scheduled
+queue and writes docs/data/device/<device-id>/<session>.jsonl, and next to it <session>.jsonl.prof.txt when the
+handheld ran SuperDrastic's sampling profiler (a text report). A workflow on main runs it; scheduled
 workflows only run from the default branch. It does not run the log as code, and it only accepts an
 attachment hosted on ntfy.sh.
 """
@@ -10,8 +11,10 @@ import json, os, re, sys, urllib.request
 
 TOPIC = "rocknixds-perf-c4a91e7b2d08f653"  # keep in step with perf-session.py
 LOGNAME = re.compile(r"^[0-9]{8}-[0-9]{6}_[A-Za-z0-9._-]{1,80}\.jsonl$")
+PROFNAME = re.compile(r"^[0-9]{8}-[0-9]{6}_[A-Za-z0-9._-]{1,80}\.jsonl\.prof\.txt$")  # perf-session.py, keep in step
 DEVICE = re.compile(r"^[0-9a-f]{8,32}$")
 MAX = 8000000
+PROFMAX = 1000000
 
 
 def body_ok(text):
@@ -29,8 +32,13 @@ def body_ok(text):
     return bool(rows) and rows[-1].get("summary") is True
 
 
+def prof_ok(text):
+    """The profiler's report: text with its header line, nothing else is taken under that name."""
+    return bool(text) and len(text) <= PROFMAX and text.startswith("# SuperDrastic sampling profiler")
+
+
 def relpath(device, filename):
-    if not DEVICE.fullmatch(device or "") or not LOGNAME.fullmatch(filename or ""):
+    if not DEVICE.fullmatch(device or "") or not (LOGNAME.fullmatch(filename or "") or PROFNAME.fullmatch(filename or "")):
         return None
     return "docs/data/device/%s/%s" % (device, filename)
 
@@ -111,7 +119,7 @@ def import_messages(root, messages, fetch_url=fetch):
                 fresh.append(mid)
             print("skip %s: %s" % (mid, e), file=sys.stderr)
             continue
-        if not body_ok(text):
+        if not (prof_ok(text) if rel.endswith(".prof.txt") else body_ok(text)):
             fresh.append(mid)
             continue
         os.makedirs(os.path.dirname(dest), exist_ok=True)
@@ -132,10 +140,14 @@ def selftest():
     assert relpath("abc123def456", "20231114-221320_Heart_Gold.nds.jsonl")
     assert relpath("../etc", "20231114-221320_a.jsonl") is None
     assert relpath("abc123def456", "../x.jsonl") is None
+    assert relpath("abc123def456", "20231114-221320_a.nds.jsonl.prof.txt")
+    assert relpath("abc123def456", "20231114-221320_a.nds.prof.txt") is None
+    assert prof_ok("# SuperDrastic sampling profiler 0.3.0, pid 1: report 1 (exit)\n") and not prof_ok('{"summary": true}\n')
     import tempfile, shutil
     root = tempfile.mkdtemp()
     try:
-        files = {"https://ntfy.sh/file/ok.json": '{"t": 1, "game": {"rom": "a.nds"}}\n{"summary": true, "game": {"rom": "a.nds"}}\n'}
+        files = {"https://ntfy.sh/file/ok.json": '{"t": 1, "game": {"rom": "a.nds"}}\n{"summary": true, "game": {"rom": "a.nds"}}\n',
+                 "https://ntfy.sh/file/prof.txt": "# SuperDrastic sampling profiler 0.3.0, pid 1: report 1 (exit)\n"}
         def fake(url):
             if url not in files:
                 raise urllib.error.HTTPError(url, 404, "gone", None, None)
@@ -144,8 +156,12 @@ def selftest():
             {"id": "1", "title": "abc123def456", "attachment": {"name": "20231114-221320_a.nds.jsonl", "url": "https://ntfy.sh/file/ok.json"}},
             {"id": "2", "title": "abc123def456", "attachment": {"name": "not a name", "url": "https://evil.example/x"}},
             {"id": "3", "title": "nope", "attachment": {"name": "20231114-221320_a.nds.jsonl", "url": "https://ntfy.sh/file/ok.json"}},
+            {"id": "4", "title": "abc123def456", "attachment": {"name": "20231114-221320_a.nds.jsonl.prof.txt", "url": "https://ntfy.sh/file/prof.txt"}},
+            {"id": "5", "title": "abc123def456", "attachment": {"name": "20231114-221320_b.nds.jsonl.prof.txt", "url": "https://ntfy.sh/file/ok.json"}},
         ], fake)
-        assert n == 1, n
+        assert n == 2, n
+        assert open(os.path.join(root, "docs/data/device/abc123def456/20231114-221320_a.nds.jsonl.prof.txt")).read().startswith("# SuperDrastic")
+        assert not os.path.exists(os.path.join(root, "docs/data/device/abc123def456/20231114-221320_b.nds.jsonl.prof.txt"))
         got = open(os.path.join(root, "docs/data/device/abc123def456/20231114-221320_a.nds.jsonl")).read()
         assert '"summary": true' in got
         assert import_messages(root, [
