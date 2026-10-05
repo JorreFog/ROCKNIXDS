@@ -1,0 +1,128 @@
+es-rgds-launchonce: one game launch at a time; a launch request made while a game ran is dropped
+
+A launch only schedules the game (a transition, or for the rnds theme a 1 ms animation) and returns. A second
+ViewController::launch() before that animation finished replaced it, which ran the first game at once, and the second
+one started after it: two launch requests 0.15 s apart started the game twice (an RG DS Plus, 2026-10-05). Now a launch
+is ignored while another is starting or running (GuiComponent::isLaunchTransitionRunning), with a warning in ES's log,
+for 10 s at most: a view change can cancel the launch's animation and its callback (cancelAnimation), which would
+leave the flag set and every later launch ignored.
+
+The HTTP API's /launch is queued on the UI thread, which waits while a game runs: a request that came in meanwhile ran
+after the game, as a second start nobody asked for at that moment. It is dropped now when it was received before the
+last game handed back (ViewController::lastGameEndedAt).
+
+diff --git a/es-app/src/services/HttpServerThread.cpp b/es-app/src/services/HttpServerThread.cpp
+index ab8f9306..5b066a05 100644
+--- a/es-app/src/services/HttpServerThread.cpp
++++ b/es-app/src/services/HttpServerThread.cpp
+@@ -17,6 +17,7 @@
+ #include "guis/GuiMsgBox.h"
+ #include "utils/FileSystemUtil.h"
+ #include "HttpApi.h"
++#include <SDL_timer.h>
+ #include "Settings.h"
+ #include "ApiSystem.h"
+ 
+@@ -620,7 +621,16 @@ void HttpServerThread::run()
+ 				if (file->getFullPath() == path || file->getPath() == path)
+ 				{
+ 					Window* w = mWindow;
+-					mWindow->postToUiThread([w, file]() {
++					unsigned int receivedAt = SDL_GetTicks();
++					mWindow->postToUiThread([w, file, receivedAt]() {
++						// ROCKNIXDS: the UI thread waits for a running game; a request that came meanwhile is not
++						// for the menu that comes back (es-rgds-launchonce)
++						unsigned int ended = ViewController::lastGameEndedAt();
++						if (ended != 0 && !SDL_TICKS_PASSED(receivedAt, ended))
++						{
++							LOG(LogWarning) << "Launch request for " << file->getPath() << " ignored: it came while a game was running";
++							return;
++						}
+ 						w->cancelScreenSaver();
+ 						ViewController::get()->launch(file);
+ 					});
+diff --git a/es-app/src/views/ViewController.cpp b/es-app/src/views/ViewController.cpp
+index 58fbb055..6db33b42 100644
+--- a/es-app/src/views/ViewController.cpp
++++ b/es-app/src/views/ViewController.cpp
+@@ -37,6 +37,8 @@
+ #include "PowerSaver.h"
+ 
+ ViewController* ViewController::sInstance = nullptr;
++unsigned int ViewController::sLastGameEndedAt = 0;
++unsigned int ViewController::sLaunchStartedAt = 0;
+ 
+ ViewController* ViewController::get()
+ {
+@@ -471,11 +473,11 @@ bool ViewController::doLaunchGame(FileData* game, LaunchGameOptions options)
+ 	// Silence TTS when launching a game
+ 	TextToSpeech::getInstance()->say(" ");
+ 
+-	if (game->launchGame(mWindow, options))
+-		if (game->getSourceFileData()->getSystemName() == "windows_installers")
+-			return true;
+-
+-	return false;
++	bool reload = game->launchGame(mWindow, options) && game->getSourceFileData()->getSystemName() == "windows_installers";
++	sLastGameEndedAt = SDL_GetTicks();
++	if (sLastGameEndedAt == 0)
++		sLastGameEndedAt = 1;
++	return reload;
+ }
+ 
+ bool ViewController::checkLaunchOptions(FileData* game, LaunchGameOptions options, Vector3f center)
+@@ -523,6 +525,23 @@ bool ViewController::checkLaunchOptions(FileData* game, LaunchGameOptions option
+ 
+ void ViewController::launch(FileData* game, LaunchGameOptions options, Vector3f center, bool allowCheckLaunchOptions)
+ {
++	// ROCKNIXDS: one launch at a time. A launch only schedules the game (a transition, or for the rnds theme a 1 ms
++	// animation), and a second launch() replaced that animation, which ran the first one's game at once and then
++	// started the second: two launch requests 0.15 s apart started the game twice (2026-10-05). Until a launch has
++	// handed back (isLaunchTransitionRunning), another is ignored. Only for 10 s: a view change can cancel the launch's
++	// animation, callback and all (cancelAnimation), which leaves the flag set; the UI thread waits while a game runs,
++	// so 10 s covers any transition.
++	if (GuiComponent::isLaunchTransitionRunning)
++	{
++		if (SDL_GetTicks() - sLaunchStartedAt < 10000)
++		{
++			LOG(LogWarning) << "Launch of " << game->getPath() << " ignored: a game is already starting";
++			return;
++		}
++		LOG(LogWarning) << "The last launch never handed back (its transition was cancelled): launching " << game->getPath();
++		GuiComponent::isLaunchTransitionRunning = false;
++	}
++
+ 	if (allowCheckLaunchOptions && !checkLaunchOptions(game, options, center))
+ 		return;
+ 
+@@ -573,6 +592,7 @@ void ViewController::launch(FileData* game, LaunchGameOptions options, Vector3f
+ 	mLockInput = true;
+ 
+ 	GuiComponent::isLaunchTransitionRunning = true;
++	sLaunchStartedAt = SDL_GetTicks();
+ 		
+ 	// ROCKNIXDS: the rnds engine's ready screen stays up until the game takes over (no splash, no fade)
+ 	bool rndsLaunch = game->getSourceFileData()->getSystem() != nullptr && rnds::isRndsTheme(game->getSourceFileData()->getSystem()->getTheme());
+diff --git a/es-app/src/views/ViewController.h b/es-app/src/views/ViewController.h
+index a2f93c6a..c2a16e91 100644
+--- a/es-app/src/views/ViewController.h
++++ b/es-app/src/views/ViewController.h
+@@ -30,6 +30,9 @@ public:
+ 	static void deinit();
+ 
+ 	static bool hasInstance() { return sInstance != nullptr; }
++	// ROCKNIXDS: when the last game handed control back (SDL ticks, 0: none yet); a launch request received before that
++	// was made while the game ran (the HTTP API queues it on the UI thread) and is dropped (es-rgds-launchonce)
++	static unsigned int lastGameEndedAt() { return sLastGameEndedAt; }
+ 	
+ 	static void saveState();
+ 
+@@ -126,6 +129,8 @@ private:
+ 
+ 	ViewController(Window* window);
+ 	static ViewController* sInstance;
++	static unsigned int sLastGameEndedAt;
++	static unsigned int sLaunchStartedAt;
+ 
+ 	void playViewTransition(bool forceImmediate);
+ 	bool doLaunchGame(FileData* game, LaunchGameOptions options);
