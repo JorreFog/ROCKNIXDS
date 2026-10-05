@@ -422,7 +422,7 @@ if [ $THEME_ON = 1 ]; then
         cp "$SRC/dsflip/device/sway-touch-rocknixds.conf" /storage/.config/system.d/sway-touch.service.d/rocknixds.conf
         systemctl daemon-reload
         XDG_RUNTIME_DIR=/var/run/0-runtime-dir SWAYSOCK=$(ls /var/run/0-runtime-dir/sway-ipc.*.sock 2>/dev/null | head -n1) \
-            swaymsg input 1046:911:Goodix_Capacitive_TouchScreen map_to_output '*' >/dev/null 2>&1
+            swaymsg input 1046:911:Goodix_Capacitive_TouchScreen map_to_output '*' >/dev/null 2>&1 || true   # no sway yet at first boot
     fi
     # ES's power saver on "enhanced": an idle menu draws nothing instead of 25-60 frames a second (the patched ES
     # still wakes each minute for the clock). Only if it's on ES's default: a choice made in the menu stays.
