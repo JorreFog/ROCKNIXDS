@@ -102,6 +102,8 @@ One release for both handhelds; the full notes are [v1.6-plus.md](docs/releases/
   with a message. The exit hotkey always ends the game, and a game frozen solid is ended from outside. New threads
   start on every CPU (the RG DS Plus's CPU placement could leave one unable to run: the likely cause of a freeze
   after a resume load).
+- **The in-game menu for everyone** (beta testers have had it since 1.5.13 beta 1): L3 in a game opens Resume, Save
+  and Load with slot pictures and Undo, Quick settings, DraStic's menu and Quit, in ROCKNIXDS Pixel's look.
 - **Clean starts and quits:** plain black between the menu and the game, no terminal cursor, no leftover frame; the
   menu shows once it draws again.
 - **RetroAchievements without network** keeps the saved login and retries in the background.
@@ -446,8 +448,16 @@ It's installed as the default DraStic launcher: start any DS game from Emulation
   back on. Stock ES (the launcher's fallback when the patched one can't run) always takes this way.
 - If a game ends abnormally, ES says why once it's back: DraStic crashed, or libdsflip couldn't take over the
   screens (then the session stops at once instead of leaving them black).
-- To quit, use the ROCKNIX exit hotkey or *Exit DraStic* in DraStic's menu (MODE button). Stopping the unit
-  (`systemctl stop dsflip-game`) also works: the unit's stop hook always brings sway and ES back.
+- **The in-game menu** (SuperDrastic 0.5, the RG DS Plus since 1.5.13 beta 1, both handhelds since 1.6): L3, the
+  button DraStic's own menu is bound to, opens it instead of DraStic's, on both panels while the game waits: Resume,
+  Save and Load (eight slots with a picture each, *Undo last load* with Y), Quick settings (volume, brightness, the
+  microphone's live meter and *Blow*), DraStic's menu, Quit. The d-pad, the left stick and touch all work; A picks, B
+  goes back, L3 or START closes it. `systemctl set-environment DSFLIP_MENU=0` gives DraStic's own menu back.
+- To quit, use the ROCKNIX exit hotkey, *Quit game* in the in-game menu or *Exit DraStic* in DraStic's own menu.
+  With *resume on quit* the hotkey saves first; since 1.6 a second press, or a game that doesn't take the save
+  within 3 s, quits at once. A game that stops showing frames for 5 s gets a card saying so (the hotkey then quits
+  at once), and is closed after 20 s (`DSFLIP_STALL_QUIT`, 0: never). Stopping the unit (`systemctl stop
+  dsflip-game`) also works: the unit's stop hook always brings sway and ES back.
 - `dsflip.log` in `/storage/.config/drastic/dsflip/` covers the last session, and `.1` to `.3` the three before it;
   the first line is the libdsflip version.
 - To go back to the previous launcher: `touch /storage/.config/drastic/nodsflip`.
