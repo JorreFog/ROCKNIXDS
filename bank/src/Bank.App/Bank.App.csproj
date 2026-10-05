@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Rocknixds.Bank.App</RootNamespace>
+    <AssemblyName>rocknixds-bank</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+    <!-- no .NET event tracing: smaller, and no EventListener teardown at exit (it threw on the arm64 build) -->
+    <EventSourceSupport>false</EventSourceSupport>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- kept whole when the package is trimmed: PKHeX reaches parts of itself by reflection -->
+    <TrimmerRootAssembly Include="PKHeX.Core" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Bank.Core\Bank.Core.csproj" />
+    <!-- public domain / MIT ports of stb_truetype and stb_image: fonts and PNG sprites without native libraries -->
+    <PackageReference Include="StbTrueTypeSharp" Version="1.26.13" />
+    <PackageReference Include="StbImageSharp" Version="2.30.16" />
+  </ItemGroup>
+</Project>

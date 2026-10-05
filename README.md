@@ -105,6 +105,8 @@ Mali-G52); the RG DS Plus has two 1024×768 panels. ROCKNIXDS (formerly `rgds-ro
   own engine inside a patched EmulationStation. The DSi-style **`dii-ess-aye`** theme is still there too.
 - The **panel timing fix**, the older **vsync pacing shim**, and the measurement tools (including a DS
   stress-test ROM) behind all the numbers below.
+- **ROCKNIXDS Bank & Trade** (new, in `bank/`): a Pokémon bank, PKHeX legality checks and Wi-Fi trading between two
+  handhelds, on both screens. See [below](#bank-rocknixds-bank--trade).
 
 ### New in 1.5
 
@@ -703,6 +705,26 @@ dark-background and a light-background version, a stacked version for small squa
 
 ---
 
+## `bank/`: ROCKNIXDS Bank & Trade
+
+<p align="center"><img src="docs/img/bank-boxes.png" width="620" alt="ROCKNIXDS Bank: a Pokémon's details and legality on the top screen, a HeartGold box and a bank box on the bottom screen"></p>
+
+A Pokémon bank and trading app for both screens, built on [PKHeX.Core](https://github.com/kwsch/PKHeX): it finds the
+game saves on the card (DraStic's `.dsv`, `.sav`, `.srm`), keeps Pokémon in a bank of PKHeX files, moves them from one
+game to another (converting them up a generation as Pal Park and Poké Transfer did), checks every one with PKHeX's
+legality analysis, and trades between two handhelds over Wi-Fi: one shows its address and a code, the other joins with
+the code (SPAKE2, so the code can't be sniffed; encrypted; a dropped connection never loses a Pokémon). Trade
+evolutions happen on arrival. It's a separate install, from Ports once installed:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/bank/device/install-bank.sh | sh
+```
+
+[bank/README.md](bank/README.md) has the controls, where the bank and the save backups are, and how trading works. The
+app in `bank/` is GPL-3.0 (it links PKHeX.Core).
+
+---
+
 ## Known issues
 
 - **No DS games yet:** with an empty `roms/nds` (as on a freshly flashed card), the menu has a UI bug. It goes away
@@ -754,6 +776,7 @@ trademark of Nintendo.
 
 ## License
 
-[MIT](LICENSE): free for anyone to use, change and ship in their own projects, firmwares and forks. The parts that
+[MIT](LICENSE): free for anyone to use, change and ship in their own projects, firmwares and forks. `bank/` (ROCKNIXDS Bank &
+Trade) is the exception: it links PKHeX.Core and is GPL-3.0, as its own `bank/LICENSE` says. The parts that
 come from others keep their own terms (the upstream dii-ess-aye theme, rcheevos, stb, AMD FSR, the fonts); `LICENSE`
 lists them.

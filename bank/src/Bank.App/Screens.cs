@@ -1,0 +1,965 @@
+using System.Net;
+using PKHeX.Core;
+using Rocknixds.Bank.Trade;
+
+namespace Rocknixds.Bank.App;
+
+/// <summary>The first screen: opens the bank and looks for saves, then hands over to the boxes.</summary>
+public sealed class LoadingScreen(App app) : Screen(app)
+{
+    private bool _started;
+
+    public override void Enter()
+    {
+        if (_started)
+            return;
+        _started = true;
+        App.Run("Opening the bank...", () =>
+        {
+            App.Load();
+            return SaveScanner.Scan(App.Cfg, App.Log);
+        }, saves =>
+        {
+            App.SetSaves(saves);
+            App.Replace(new BoxScreen(App));
+            var last = saves.FirstOrDefault(s => s.Path == App.Cfg.LastSave);
+            if (last is not null)
+                App.OpenSave(last, () => App.Find<BoxScreen>()?.Refresh());
+        }, ex => App.Message("The bank can't open", ex.Message, () => App.QuitRequested = true));
+    }
+
+    public override void Handle(InputEvent e)
+    {
+        if (e.Kind == InputKind.Quit)
+            App.QuitRequested = true;
+    }
+
+    public override void DrawTop(Canvas c)
+    {
+        var p = c.P;
+        c.Fill(0, 0, Canvas.W, Canvas.H, p.Bg);
+        c.Fill(220, 170, 24, 24, p.Red);
+        c.Text("ROCKNIXDS", 256, 160, 40, p.Ink, bold: true);
+        c.Text("Bank & Trade", 256, 206, 24, p.Muted);
+        c.Text("Pokémon storage, legality checks and trading for the RG DS", 320, 300, 16, p.Muted, Align.Center);
+    }
+
+    public override void DrawBottom(Canvas c) { }
+}
+
+/// <summary>The list of game saves found on the card.</summary>
+public sealed class SavePickerScreen(App app) : Screen(app)
+{
+    private const float RowH = 66, ListY = 50;
+    private const int Visible = 5;
+    private int _sel, _scroll;
+    private float _touchY = -1;
+    private int _touchRow = -1;
+    private bool _swiped;
+    private readonly List<(RectF R, Action A)> _touch = [];
+
+    public override void Enter()
+    {
+        if (!App.SavesScanned)
+            App.ScanSaves();
+        var open = App.Mover?.Save?.Path;
+        var i = App.Saves.FindIndex(s => s.Path == open);
+        if (i >= 0)
+            _sel = i;
+    }
+
+    private void Open()
+    {
+        if (App.Saves.Count == 0)
+            return;
+        var e = App.Saves[_sel];
+        App.OpenSave(e, () =>
+        {
+            App.Pop();
+            App.Find<BoxScreen>()?.Refresh();
+            App.ShowToast($"{e.GameName} ({e.Trainer}) is open on the left.");
+        });
+    }
+
+    public override void Handle(InputEvent e)
+    {
+        int n = App.Saves.Count;
+        if (e.Kind == InputKind.TouchDown)
+        {
+            foreach (var (r, a) in _touch)
+            {
+                if (r.Contains(e.X, e.Y))
+                {
+                    a();
+                    return;
+                }
+            }
+            _touchY = e.Y;
+            _swiped = false;
+            _touchRow = e.Y >= ListY && e.Y < ListY + Visible * RowH ? _scroll + (int)((e.Y - ListY) / RowH) : -1;
+            return;
+        }
+        if (e.Kind == InputKind.TouchMove && _touchY >= 0)
+        {
+            float dy = e.Y - _touchY;
+            if (MathF.Abs(dy) > RowH * 0.6f)
+            {
+                _scroll = Math.Clamp(_scroll - Math.Sign(dy), 0, Math.Max(0, n - Visible));
+                _touchY = e.Y;
+                _swiped = true;
+            }
+            return;
+        }
+        if (e.Kind == InputKind.TouchUp)
+        {
+            if (!_swiped && _touchRow >= 0 && _touchRow < n)
+            {
+                int row = _scroll + (int)((e.Y - ListY) / RowH);
+                if (row == _touchRow)
+                {
+                    _sel = row;
+                    Open();
+                }
+            }
+            _touchY = -1;
+            return;
+        }
+        if (e.Is(Btn.Up) && n > 0) _sel = (_sel - 1 + n) % n;
+        else if (e.Is(Btn.Down) && n > 0) _sel = (_sel + 1) % n;
+        else if (e.Is(Btn.L)) _sel = Math.Max(0, _sel - Visible);
+        else if (e.Is(Btn.R)) _sel = Math.Min(Math.Max(0, n - 1), _sel + Visible);
+        else if (e.Pressed(Btn.A)) Open();
+        else if (e.Pressed(Btn.B) || e.Pressed(Btn.Select)) App.Pop();
+        else if (e.Pressed(Btn.X)) App.ScanSaves(() => _sel = 0);
+        else if (e.Kind == InputKind.Quit) App.QuitRequested = true;
+        if (_sel < _scroll) _scroll = _sel;
+        if (_sel >= _scroll + Visible) _scroll = _sel - Visible + 1;
+    }
+
+    public override void DrawTop(Canvas c)
+    {
+        Views.Header(c, App, "Game saves");
+        var p = c.P;
+        if (App.Saves.Count == 0)
+        {
+            c.Text(App.SavesScanned ? "No game saves found" : "Looking for game saves...", 320, 140, 26, p.Ink, Align.Center, bold: true);
+            c.Paragraph("Saves are looked for in " + string.Join(", ", App.Cfg.SaveFolders) +
+                        " and its folders: DraStic's .dsv next to the DS game, .sav from melonDS and the GBA emulators, " +
+                        ".srm from RetroArch. Play a game until it has saved once, then look again (X).", 70, 200, 500, 17, p.Muted);
+            return;
+        }
+        Views.SaveDetails(c, App, App.Saves[Math.Clamp(_sel, 0, App.Saves.Count - 1)], null);
+    }
+
+    public override void DrawBottom(Canvas c)
+    {
+        var p = c.P;
+        _touch.Clear();
+        c.Fill(0, 0, Canvas.W, 44, p.Band);
+        c.Text("Choose a game", 16, 11, 20, p.Ink, bold: true);
+        c.Text($"{App.Saves.Count} found", 624, 13, 16, p.Muted, Align.Right);
+        var open = App.Mover?.Save?.Path;
+        for (int i = 0; i < Visible && _scroll + i < App.Saves.Count; i++)
+        {
+            int idx = _scroll + i;
+            var e = App.Saves[idx];
+            float y = ListY + i * RowH;
+            bool sel = idx == _sel;
+            c.Box(8, y + 2, 600, RowH - 6, sel ? p.Band : p.Body, sel ? p.Edge : p.Rule, 2);
+            c.Fill(10, y + 4, 8, RowH - 10, Views.GameColor(e.Version));
+            c.Text(e.GameName, 30, y + 9, 19, p.Ink, bold: true, maxW: 300);
+            c.Text(string.Join(" · ", new[] { e.Trainer, e.PlayTime, $"{e.Pokemon} in boxes" }.Where(t => t.Length > 0)), 30, y + 35, 14, p.Muted, maxW: 330);
+            c.Text(e.FileTitle, 596, y + 11, 13, p.Muted, Align.Right, maxW: 250);
+            if (e.Path == open)
+                c.Tag("Open", 596 - c.Measure("Open", 12, true) - 10, y + 34, p.Good, 12);
+        }
+        // scroll bar
+        if (App.Saves.Count > Visible)
+        {
+            float h = Visible * RowH, th = h * Visible / App.Saves.Count;
+            float ty = ListY + (h - th) * _scroll / Math.Max(1, App.Saves.Count - Visible);
+            c.Fill(618, ListY, 8, h, p.Chip);
+            c.Fill(618, ty, 8, th, p.Line);
+        }
+        _touch.Add((c.Button("Look again", 8, 392, 196, 40, false, size: 16), () => App.ScanSaves(() => _sel = 0)));
+        _touch.Add((c.Button("Back", 214, 392, 120, 40, false, size: 16), App.Pop));
+        float x = 8;
+        x += c.Hint("A", "Open", x, 446);
+        x += c.Hint("B", "Back", x, 446);
+        c.Hint("X", "Look again", x, 446);
+    }
+}
+
+public static class MainMenu
+{
+    public static void Show(App app)
+    {
+        app.Menu("Menu",
+        [
+            new("Choose a game save", () => app.Push(new SavePickerScreen(app)), app.Trade is null),
+            new("Trade with another handheld", () => app.Push(new TradeMenuScreen(app)), app.Trade is null),
+            new("Import files from the import folder", () =>
+            {
+                var notes = app.Bank.ImportDropped();
+                app.Find<BoxScreen>()?.Refresh();
+                app.Message("Import", notes.Count == 0 ? $"Nothing to import. Put PKHeX files (.pk1 to .pk9) in {app.Cfg.ImportFolder}." : string.Join("\n", notes.Take(8)));
+            }),
+            new("Settings", () => app.Push(new SettingsScreen(app))),
+            new("About", () => app.Push(new AboutScreen(app))),
+            new("Quit", () => app.QuitRequested = true),
+            new("Close", () => { }),
+        ], cancelIndex: 6);
+    }
+}
+
+public sealed class SettingsScreen(App app) : Screen(app)
+{
+    private int _sel;
+    private readonly List<RectF> _rows = [];
+
+    private static readonly string[] Languages = ["en", "ja", "fr", "it", "de", "es", "ko", "zh-Hans", "zh-Hant"];
+
+    private (string Label, string Value, string Help, Action Change)[] Items
+    {
+        get
+        {
+            var c = App.Cfg;
+            return
+            [
+                ("Colours", c.Palette switch { "dark" => "Dark", "light" => "Light", _ => "Follow the menu" },
+                    "Follow the menu: light with ROCKNIXDS Pixel light, dark otherwise.",
+                    () =>
+                    {
+                        c.Palette = c.Palette switch { "auto" => "dark", "dark" => "light", _ => "auto" };
+                        App.ApplyPalette();
+                    }),
+                ("Trade evolutions", c.TradeEvolutions ? "On" : "Off",
+                    "Kadabra, Machoke, Graveler, Haunter, the held-item ones and Karrablast with Shelmet evolve when they arrive in a trade, as in the games. An Everstone stops it.",
+                    () => c.TradeEvolutions = !c.TradeEvolutions),
+                ("Pokémon that fail the check, into games", c.BlockIllegalIntoSaves ? "Never" : "Ask first",
+                    "Putting a Pokémon that fails PKHeX's legality check into a game: ask first, or never allow it. Taking Pokémon out of games is always allowed.",
+                    () => c.BlockIllegalIntoSaves = !c.BlockIllegalIntoSaves),
+                ("Trading for Pokémon that fail the check", c.BlockIllegalTrades ? "Never" : "Ask first",
+                    "Accepting a partner's Pokémon that fails the legality check: ask first, or never allow it.",
+                    () => c.BlockIllegalTrades = !c.BlockIllegalTrades),
+                ("Your name in trades", c.EffectiveTrainerName,
+                    "What trade partners see, in their room list and on their screen.",
+                    () => App.Push(new KeyboardScreen(App, "Your name in trades", KeyboardScreen.Kind.Text, c.EffectiveTrainerName, 16, name =>
+                    {
+                        c.TrainerName = name;
+                        App.TrySaveConfig();
+                    }))),
+                ("Names of species, moves and items", c.Language,
+                    "The language of PKHeX's names: en, ja, fr, it, de, es, ko, zh-Hans, zh-Hant.",
+                    () =>
+                    {
+                        var i = Array.IndexOf(Languages, c.Language);
+                        c.Language = Languages[(i + 1) % Languages.Length];
+                        Names.SetLanguage(c.Language);
+                    }),
+                ("Swap A and B", c.SwapAB ? "On" : "Off",
+                    "For pads labelled the other way round. Takes effect at the next start.",
+                    () => c.SwapAB = !c.SwapAB),
+            ];
+        }
+    }
+
+    public override void Handle(InputEvent e)
+    {
+        var items = Items;
+        if (e.Kind == InputKind.TouchUp)
+        {
+            for (int i = 0; i < _rows.Count; i++)
+            {
+                if (_rows[i].Contains(e.X, e.Y))
+                {
+                    _sel = i;
+                    Change(items[i]);
+                    return;
+                }
+            }
+            if (e.Y > 420)
+                App.Pop();
+            return;
+        }
+        if (e.Is(Btn.Up)) _sel = (_sel - 1 + items.Length) % items.Length;
+        else if (e.Is(Btn.Down)) _sel = (_sel + 1) % items.Length;
+        else if (e.Pressed(Btn.A) || e.Is(Btn.Right) || e.Is(Btn.Left)) Change(items[_sel]);
+        else if (e.Pressed(Btn.B)) App.Pop();
+        else if (e.Kind == InputKind.Quit) App.QuitRequested = true;
+    }
+
+    private void Change((string Label, string Value, string Help, Action Change) item)
+    {
+        item.Change();
+        App.TrySaveConfig();
+    }
+
+    public override void Leave() => App.TrySaveConfig();
+
+    public override void DrawTop(Canvas c)
+    {
+        Views.Header(c, App, "Settings");
+        var p = c.P;
+        var item = Items[_sel];
+        c.Text(item.Label, 32, 80, 24, p.Ink, bold: true, maxW: 576);
+        c.Text(item.Value, 32, 120, 20, p.Accent, maxW: 576);
+        c.Paragraph(item.Help, 32, 170, 576, 17, p.Muted);
+        c.Paragraph($"Settings file: {App.Cfg.ConfigPath}", 32, 400, 576, 14, p.Muted);
+    }
+
+    public override void DrawBottom(Canvas c)
+    {
+        var p = c.P;
+        _rows.Clear();
+        var items = Items;
+        for (int i = 0; i < items.Length; i++)
+        {
+            float y = 10 + i * 56;
+            bool sel = i == _sel;
+            c.Box(8, y, 624, 50, sel ? p.Band : p.Body, sel ? p.Edge : p.Rule, 2);
+            c.Text(items[i].Label, 22, y + 14, 17, p.Ink, bold: sel, maxW: 400);
+            c.Text(items[i].Value, 618, y + 14, 17, sel ? p.Accent : p.Muted, Align.Right, maxW: 190);
+            _rows.Add(new RectF(8, y, 624, 50));
+        }
+        float x = 8;
+        x += c.Hint("A", "Change", x, 446);
+        c.Hint("B", "Back", x, 446);
+    }
+}
+
+public sealed class AboutScreen(App app) : Screen(app)
+{
+    public override void Handle(InputEvent e)
+    {
+        if (e.Pressed(Btn.B) || e.Pressed(Btn.A) || e.Kind == InputKind.TouchUp)
+            App.Pop();
+        else if (e.Kind == InputKind.Quit)
+            App.QuitRequested = true;
+    }
+
+    public override void DrawTop(Canvas c)
+    {
+        Views.Header(c, App, "About");
+        var p = c.P;
+        c.Text("ROCKNIXDS Bank & Trade", 32, 64, 28, p.Ink, bold: true);
+        c.Text($"Version {typeof(App).Assembly.GetName().Version?.ToString(3)}", 32, 104, 18, p.Muted);
+        float y = 150;
+        Line("PKHeX.Core", typeof(PKM).Assembly.GetName().Version?.ToString(3) ?? "?");
+        Line("SDL", $"{Sdl.Version} ({Sdl.VideoDriver})");
+        Line("Pad", Program.PadDescription);
+        Line("Bank", $"{App.Bank.Count} Pokémon, {App.Bank.BoxCount} boxes");
+        Line("Data", App.Cfg.DataFolder);
+        Line("Network", string.Join(", ", Network.LocalAddresses().DefaultIfEmpty("not connected")));
+
+        void Line(string label, string value)
+        {
+            c.Text(label, 32, y, 16, p.Muted);
+            c.Text(value, 160, y, 16, p.Ink, maxW: 450);
+            y += 30;
+        }
+    }
+
+    public override void DrawBottom(Canvas c)
+    {
+        var p = c.P;
+        c.Paragraph(
+            "Save reading and writing, the conversions between generations and the legality checks are PKHeX.Core " +
+            "by Kaphotics and the PKHeX contributors (GPL-3.0), which makes this app GPL-3.0 too. The Pokémon box sprites " +
+            "come with PKHeX. Font: Pixelify Sans (SIL Open Font License).\n\n" +
+            "Pokémon and its names are trademarks of Nintendo, Creatures and GAME FREAK. This is a fan-made tool for your " +
+            "own saves, not affiliated with them.\n\n" +
+            "Saves are backed up the first time they change in a session (the backups folder in the data folder), and every " +
+            "move and trade is written to history.log there.",
+            24, 24, 592, 16, p.Ink);
+        c.Hint("B", "Back", 8, 446);
+    }
+}
+
+/// <summary>An on-screen keyboard on the bottom screen, the text on the top one.</summary>
+public sealed class KeyboardScreen : Screen
+{
+    public enum Kind { Code, Address, Text }
+
+    private readonly string _title;
+    private readonly Kind _kind;
+    private readonly int _max;
+    private readonly Action<string> _done;
+    private readonly Action? _cancel;
+    private string _text;
+    private int _row, _col;
+    private bool _lower;
+    private readonly List<(RectF R, string Key)> _hit = [];
+
+    public KeyboardScreen(App app, string title, Kind kind, string initial, int max, Action<string> done, Action? cancel = null) : base(app)
+    {
+        _title = title;
+        _kind = kind;
+        _text = initial;
+        _max = max;
+        _done = done;
+        _cancel = cancel;
+    }
+
+    private string[][] Rows => _kind switch
+    {
+        Kind.Code =>
+        [
+            // ShareCode.Alphabet: no 0/O, 1/I, and none of B, S, Z (G, 5, 2 in the pixel font)
+            ["A", "C", "D", "E", "F", "G", "H", "J"],
+            ["K", "L", "M", "N", "P", "Q", "R", "T"],
+            ["U", "V", "W", "X", "Y", "2", "3", "4"],
+            ["5", "6", "7", "8", "9"],
+            ["Del", "OK"],
+        ],
+        Kind.Address =>
+        [
+            ["1", "2", "3"],
+            ["4", "5", "6"],
+            ["7", "8", "9"],
+            [".", "0", ":"],
+            ["Del", "OK"],
+        ],
+        _ =>
+        [
+            ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+            (_lower ? "qwertyuiop" : "QWERTYUIOP").Select(ch => ch.ToString()).ToArray(),
+            (_lower ? "asdfghjkl'" : "ASDFGHJKL'").Select(ch => ch.ToString()).ToArray(),
+            (_lower ? "zxcvbnm-._" : "ZXCVBNM-._").Select(ch => ch.ToString()).ToArray(),
+            ["Shift", "Space", "Del", "OK"],
+        ],
+    };
+
+    private void Press(string key)
+    {
+        switch (key)
+        {
+            case "Del":
+                if (_text.Length > 0)
+                    _text = _text[..^1];
+                break;
+            case "OK":
+                Finish();
+                break;
+            case "Shift":
+                _lower = !_lower;
+                break;
+            case "Space":
+                Type(" ");
+                break;
+            default:
+                Type(key);
+                break;
+        }
+    }
+
+    private void Type(string s)
+    {
+        foreach (var ch in s)
+        {
+            if (_text.Length >= _max)
+                return;
+            var c = _kind == Kind.Code ? char.ToUpperInvariant(ch) : ch;
+            bool ok = _kind switch
+            {
+                Kind.Code => ShareCode.Alphabet.Contains(c),
+                Kind.Address => char.IsAsciiLetterOrDigit(c) || c is '.' or ':' or '-',
+                _ => !char.IsControl(c),
+            };
+            if (ok)
+                _text += c;
+        }
+    }
+
+    private void Finish()
+    {
+        var t = _text.Trim();
+        if (_kind == Kind.Code && !ShareCode.IsComplete(t))
+        {
+            App.ShowToast($"The code has {ShareCode.Length} characters.", true);
+            return;
+        }
+        if (t.Length == 0)
+            return;
+        App.Pop();
+        _done(t);
+    }
+
+    public override void Enter() => Sdl.StartTextInput();
+    public override void Leave() => Sdl.StopTextInput();
+
+    public override void Handle(InputEvent e)
+    {
+        var rows = Rows;
+        if (e.Kind == InputKind.Text)
+        {
+            Type(e.Text!);
+            return;
+        }
+        if (e.Kind == InputKind.TouchUp)
+        {
+            foreach (var (r, k) in _hit)
+            {
+                if (r.Contains(e.X, e.Y))
+                {
+                    Press(k);
+                    return;
+                }
+            }
+            return;
+        }
+        if (e.Is(Btn.Up)) _row = (_row - 1 + rows.Length) % rows.Length;
+        else if (e.Is(Btn.Down)) _row = (_row + 1) % rows.Length;
+        else if (e.Is(Btn.Left)) _col--;
+        else if (e.Is(Btn.Right)) _col++;
+        else if (e.Pressed(Btn.A)) Press(rows[_row][Math.Clamp(_col, 0, rows[_row].Length - 1)]);
+        else if (e.Is(Btn.B) || e.Is(Btn.Select))
+        {
+            if (_text.Length > 0)
+                _text = _text[..^1];
+            else if (e.Pressed(Btn.B))
+            {
+                App.Pop();
+                _cancel?.Invoke();
+            }
+        }
+        else if (e.Pressed(Btn.Start)) Finish();
+        else if (e.Pressed(Btn.Y) && _kind == Kind.Text) _lower = !_lower;
+        else if (e.Kind == InputKind.Quit) App.QuitRequested = true;
+        _col = (_col % rows[_row].Length + rows[_row].Length) % rows[_row].Length;
+    }
+
+    public override void DrawTop(Canvas c)
+    {
+        Views.Header(c, App, _title);
+        var p = c.P;
+        c.Box(40, 150, 560, 90, p.Chip, p.Edge, 2);
+        var shown = _kind == Kind.Code ? ShareCode.Pretty(_text) : _text;
+        float w = c.Text(shown, 320, 170, 44, p.Ink, Align.Center, bold: true, maxW: 520);
+        if ((App.Now / 450) % 2 == 0)
+            c.Fill(320 + w / 2 + 4, 170, 4, 48, p.Edge);
+        string hint = _kind switch
+        {
+            Kind.Code => "The code the host shows: 6 letters and digits.",
+            Kind.Address => "The host's address, like 192.168.1.23 (a port after a colon if it isn't the usual one).",
+            _ => $"Up to {_max} characters.",
+        };
+        c.Paragraph(hint, 60, 270, 520, 17, p.Muted);
+    }
+
+    public override bool Animating => true;
+
+    public override void DrawBottom(Canvas c)
+    {
+        var p = c.P;
+        _hit.Clear();
+        var rows = Rows;
+        float top = 14, h = 62, gap = 8;
+        for (int r = 0; r < rows.Length; r++)
+        {
+            var keys = rows[r];
+            float kw = (624 - (keys.Length - 1) * gap) / keys.Length;
+            for (int k = 0; k < keys.Length; k++)
+            {
+                float x = 8 + k * (kw + gap), y = top + r * (h + gap);
+                bool sel = r == _row && k == _col;
+                var key = keys[k];
+                c.Box(x, y, kw, h, sel ? p.Band : p.KeyBg, sel ? p.Edge : p.Rule, 2);
+                var label = key == "Shift" ? (_lower ? "ABC" : "abc") : key;
+                c.Text(label, x + kw / 2, y + h / 2 - 13, key.Length > 1 ? 20 : 26, key == "OK" ? p.Good : p.KeyInk, Align.Center, bold: true);
+                _hit.Add((new RectF(x, y, kw, h), key));
+            }
+        }
+        float hx = 8;
+        hx += c.Hint("A", "Type", hx, 446);
+        hx += c.Hint("B", "Delete", hx, 446);
+        c.Hint("START", "OK", hx, 446);
+    }
+}
+
+public sealed class TradeMenuScreen(App app) : Screen(app)
+{
+    private int _sel;
+    private readonly List<RectF> _hit = [];
+
+    private void Choose(int i)
+    {
+        switch (i)
+        {
+            case 0:
+                App.Push(new TradeHostScreen(App));
+                break;
+            case 1:
+                App.Push(new TradeJoinScreen(App));
+                break;
+            default:
+                App.Pop();
+                break;
+        }
+    }
+
+    public override void Handle(InputEvent e)
+    {
+        if (e.Kind == InputKind.TouchUp)
+        {
+            for (int i = 0; i < _hit.Count; i++)
+            {
+                if (_hit[i].Contains(e.X, e.Y))
+                    Choose(i);
+            }
+            return;
+        }
+        if (e.Is(Btn.Up)) _sel = (_sel + 2) % 3;
+        else if (e.Is(Btn.Down)) _sel = (_sel + 1) % 3;
+        else if (e.Pressed(Btn.A)) Choose(_sel);
+        else if (e.Pressed(Btn.B)) App.Pop();
+        else if (e.Kind == InputKind.Quit) App.QuitRequested = true;
+    }
+
+    public override void DrawTop(Canvas c)
+    {
+        Views.Header(c, App, "Trade");
+        var p = c.P;
+        c.Text("Trade with another handheld", 32, 64, 26, p.Ink, bold: true);
+        c.Paragraph("Both handhelds on the same Wi-Fi. One opens a trade room and shows its address and a code; the other " +
+                    "joins with the code. Each side offers a Pokémon from its bank or its open game, both are checked with " +
+                    "PKHeX, and the trade happens when both accept. What you receive goes into your bank.", 32, 110, 576, 17, p.Muted);
+        var ips = Network.LocalAddresses();
+        c.Text("This handheld", 32, 300, 16, p.Muted);
+        c.Text(App.Cfg.EffectiveTrainerName, 180, 300, 17, p.Ink, maxW: 420);
+        c.Text("Address", 32, 330, 16, p.Muted);
+        c.Text(ips.Count > 0 ? string.Join(", ", ips) : "No network. Connect to Wi-Fi first (ROCKNIX's network settings).", 180, 330, 17,
+            ips.Count > 0 ? p.Ink : p.Bad, maxW: 420);
+    }
+
+    public override void DrawBottom(Canvas c)
+    {
+        var p = c.P;
+        _hit.Clear();
+        string[] labels = ["Open a trade room", "Join a trade room", "Back"];
+        string[] sub = ["Show an address and a code for your partner", "Find a room on this network, or type its address", ""];
+        for (int i = 0; i < 3; i++)
+        {
+            float y = 30 + i * 110;
+            var r = c.Button("", 40, y, 560, i == 2 ? 60 : 92, i == _sel);
+            c.Text(labels[i], 320, y + (i == 2 ? 18 : 18), 22, p.Ink, Align.Center, bold: true);
+            if (sub[i].Length > 0)
+                c.Text(sub[i], 320, y + 54, 15, p.Muted, Align.Center);
+            _hit.Add(r);
+        }
+    }
+}
+
+public sealed class TradeHostScreen(App app) : Screen(app)
+{
+    private TradeHost? _host;
+    private readonly List<(RectF R, Action A)> _hit = [];
+
+    public override void Enter()
+    {
+        if (_host is null)
+            Start();
+    }
+
+    private void Start()
+    {
+        _host?.Dispose();
+        _host = new TradeHost(App.Cfg);
+        _host.Start();
+        // scripted runs (two instances trading for the screenshots): tell the joining script the code
+        if (Environment.GetEnvironmentVariable("ROCKNIXDS_BANK_CODE_FILE") is { Length: > 0 } codeFile)
+            File.WriteAllText(codeFile, _host.Code);
+    }
+
+    public override void Leave()
+    {
+        if (App.Trade is null || _host?.Channel is null)
+            _host?.Dispose();
+    }
+
+    public override void Update()
+    {
+        if (_host?.Channel is { } ch)
+        {
+            var session = new TradeSession(ch, App.Cfg, isHost: true);
+            App.Trade = new TradeController(App, session);
+            _host = null;
+            App.PopToRoot();
+            App.ShowToast("Connected. Pick a Pokémon to offer with A.");
+        }
+    }
+
+    public override void Handle(InputEvent e)
+    {
+        if (e.Kind == InputKind.TouchUp)
+        {
+            foreach (var (r, a) in _hit)
+            {
+                if (r.Contains(e.X, e.Y))
+                    a();
+            }
+            return;
+        }
+        if (e.Pressed(Btn.B)) App.Pop();
+        else if (e.Pressed(Btn.X)) Start();
+        else if (e.Kind == InputKind.Quit) App.QuitRequested = true;
+    }
+
+    public override bool Animating => true;
+
+    public override void DrawTop(Canvas c)
+    {
+        Views.Header(c, App, "Trade room open");
+        var p = c.P;
+        if (_host is null)
+            return;
+        c.Text("Code", 320, 62, 18, p.Muted, Align.Center);
+        c.Text(ShareCode.Pretty(_host.Code), 320, 86, 72, p.Ink, Align.Center, bold: true);
+        var ips = Network.LocalAddresses();
+        c.Text("Address", 320, 196, 18, p.Muted, Align.Center);
+        if (ips.Count == 0)
+        {
+            c.Text("No network: connect to Wi-Fi first", 320, 222, 24, p.Bad, Align.Center);
+        }
+        else
+        {
+            var port = _host.Port == 47900 ? "" : $":{_host.Port}";
+            for (int i = 0; i < Math.Min(2, ips.Count); i++)
+                c.Text(ips[i] + port, 320, 222 + i * 44, i == 0 ? 40 : 24, i == 0 ? p.Ink : p.Muted, Align.Center, bold: i == 0);
+        }
+        c.Text(App.Cfg.EffectiveTrainerName, 320, 330, 18, p.Muted, Align.Center);
+        var status = _host.Status;
+        c.Paragraph(status, 60, 380, 520, 17, _host.Failed ? p.Bad : p.Ink, 3);
+        if (!_host.Failed)
+        {
+            int dots = (int)(App.Now / 400 % 4);
+            for (int i = 0; i < 3; i++)
+                c.Fill(296 + i * 18, 450, 10, 10, i < dots ? p.Edge : p.Rule);
+        }
+    }
+
+    public override void DrawBottom(Canvas c)
+    {
+        var p = c.P;
+        _hit.Clear();
+        c.Paragraph("On the other handheld: Trade > Join a trade room. This room shows up in its list; pick it and type the code. " +
+                    "Not in the list (another network, a VPN)? Type the address instead.", 32, 32, 576, 18, p.Ink);
+        c.Paragraph("Only someone with the code can connect, and the code can't be worked out from the network traffic. " +
+                    $"After {TradeHost.MaxWrongCodes} wrong codes the room closes.", 32, 180, 576, 15, p.Muted);
+        _hit.Add((c.Button("New code", 32, 330, 270, 56, false), Start));
+        _hit.Add((c.Button("Close the room", 338, 330, 270, 56, false), App.Pop));
+        float x = 8;
+        x += c.Hint("X", "New code", x, 446);
+        c.Hint("B", "Close", x, 446);
+    }
+}
+
+public sealed class TradeJoinScreen(App app) : Screen(app)
+{
+    private readonly RoomFinder _finder = new();
+    private bool _started;
+    private int _sel;
+    private readonly List<RectF> _hit = [];
+    private string? _error;
+
+    public override void Enter()
+    {
+        if (_started)
+            return;
+        _started = true;
+        _finder.Start(App.Cfg.TradePort);
+    }
+
+    private List<FoundRoom> Rooms => _finder.Rooms;
+
+    private void Choose(int i)
+    {
+        var rooms = Rooms;
+        if (i < rooms.Count)
+        {
+            var r = rooms[i];
+            AskCode(r.Address, r.Port, r.Name);
+        }
+        else
+        {
+            App.Push(new KeyboardScreen(App, "Host address", KeyboardScreen.Kind.Address, App.Cfg.LastTradeAddress, 40, addr =>
+            {
+                var (host, port) = ParseAddress(addr, App.Cfg.TradePort);
+                App.Cfg.LastTradeAddress = addr;
+                App.TrySaveConfig();
+                AskCode(host, port, host);
+            }));
+        }
+    }
+
+    private static (string Host, int Port) ParseAddress(string addr, int defaultPort)
+    {
+        var a = addr.Trim();
+        int colon = a.LastIndexOf(':');
+        if (colon > 0 && a.IndexOf(':') == colon && int.TryParse(a[(colon + 1)..], out var port) && port is > 0 and < 65536)
+            return (a[..colon], port);
+        return (a, defaultPort);
+    }
+
+    private void AskCode(string host, int port, string name) =>
+        App.Push(new KeyboardScreen(App, $"Code for {name}", KeyboardScreen.Kind.Code, "", ShareCode.Length, code => Connect(host, port, code)));
+
+    private void Connect(string host, int port, string code)
+    {
+        _error = null;
+        App.Run($"Connecting to {host}...", () => TradeClient.ConnectAsync(host, port, code).GetAwaiter().GetResult(), ch =>
+        {
+            _finder.Dispose();
+            var session = new TradeSession(ch, App.Cfg, isHost: false);
+            App.Trade = new TradeController(App, session);
+            App.PopToRoot();
+            App.ShowToast("Connected. Pick a Pokémon to offer with A.");
+        }, ex =>
+        {
+            _error = ex switch
+            {
+                WrongCodeException => "Wrong code. Check it on the host's screen and try again.",
+                TradeRefusedException r => r.Message,
+                IOException io => io.Message,
+                OperationCanceledException => "The host didn't answer in time.",
+                _ => ex.Message,
+            };
+            App.Message("Couldn't join", _error);
+        });
+    }
+
+    public override void Handle(InputEvent e)
+    {
+        int n = Rooms.Count + 1;
+        if (e.Kind == InputKind.TouchUp)
+        {
+            for (int i = 0; i < _hit.Count; i++)
+            {
+                if (_hit[i].Contains(e.X, e.Y))
+                {
+                    if (i == _hit.Count - 1)
+                    {
+                        Close();
+                        return;
+                    }
+                    _sel = i;
+                    Choose(i);
+                    return;
+                }
+            }
+            return;
+        }
+        if (e.Is(Btn.Up)) _sel = (_sel - 1 + n) % n;
+        else if (e.Is(Btn.Down)) _sel = (_sel + 1) % n;
+        else if (e.Pressed(Btn.A)) Choose(Math.Min(_sel, n - 1));
+        else if (e.Pressed(Btn.B)) Close();
+        else if (e.Kind == InputKind.Quit) App.QuitRequested = true;
+    }
+
+    private void Close()
+    {
+        _finder.Dispose();
+        App.Pop();
+    }
+
+    public override bool Animating => true;
+
+    public override void DrawTop(Canvas c)
+    {
+        Views.Header(c, App, "Join a trade room");
+        var p = c.P;
+        c.Paragraph("Rooms opened on this network show up below. Pick one and type the code its screen shows. " +
+                    "Can't see it? Make sure both handhelds are on the same Wi-Fi, or type the host's address.", 32, 70, 576, 17, p.Muted);
+        if (_finder.Error is { } err)
+            c.Paragraph(err, 32, 200, 576, 16, p.Bad);
+        var ips = Network.LocalAddresses();
+        c.Text("This handheld: " + (ips.Count > 0 ? ips[0] : "no network"), 32, 420, 16, ips.Count > 0 ? p.Muted : p.Bad);
+    }
+
+    public override void DrawBottom(Canvas c)
+    {
+        var p = c.P;
+        _hit.Clear();
+        var rooms = Rooms;
+        c.Fill(0, 0, Canvas.W, 44, p.Band);
+        c.Text(rooms.Count == 0 ? "Looking for rooms..." : $"{rooms.Count} room{(rooms.Count == 1 ? "" : "s")} found", 16, 11, 19, p.Ink, bold: true);
+        int n = rooms.Count + 1;
+        _sel = Math.Min(_sel, n - 1);
+        for (int i = 0; i < Math.Min(n, 5); i++)
+        {
+            float y = 54 + i * 64;
+            bool sel = i == _sel;
+            c.Box(8, y, 624, 58, sel ? p.Band : p.Body, sel ? p.Edge : p.Rule, 2);
+            if (i < rooms.Count)
+            {
+                c.Text(rooms[i].Name, 24, y + 8, 19, p.Ink, bold: true, maxW: 400);
+                c.Text(rooms[i].Address + (rooms[i].Port == App.Cfg.TradePort ? "" : $":{rooms[i].Port}"), 24, y + 33, 14, p.Muted);
+            }
+            else
+            {
+                c.Text("Type an address...", 24, y + 18, 19, p.Ink);
+            }
+            _hit.Add(new RectF(8, y, 624, 58));
+        }
+        _hit.Add(c.Button("Back", 8, 384, 160, 44, false));
+        float x = 8;
+        x += c.Hint("A", "Join", x, 446);
+        c.Hint("B", "Back", x, 446);
+    }
+}
+
+/// <summary>A finished trade: what arrived (and what it evolved into), what left.</summary>
+public sealed class TradeDoneScreen(App app, TradeResult result) : Screen(app)
+{
+    private const uint EvolveAt = 1400, FlashFor = 500;
+    private readonly uint _start = app.Now;
+
+    private uint Age => App.Now - _start;
+
+    public override void Handle(InputEvent e)
+    {
+        if (Age < 600)
+            return;
+        if (e.Pressed(Btn.A) || e.Pressed(Btn.B) || e.Kind == InputKind.TouchUp)
+            App.Pop();
+    }
+
+    public override bool Animating => Age < EvolveAt + FlashFor + 1000;
+
+    public override void DrawTop(Canvas c)
+    {
+        var p = c.P;
+        Views.Header(c, App, "Trade complete");
+        float t = Math.Min(1, Age / 700f);
+        bool evolves = result.EvolvedInto is not null;
+        bool after = !evolves || Age >= EvolveAt + FlashFor / 2;
+        var shown = after ? result.Got : result.Arrived;
+        c.Text("You received", 320, 56, 18, p.Muted, Align.Center);
+        c.Mon(shown.Species, shown.Form, shown.Gender, shown.IsShiny, shown.IsEgg, 170, 80 + (1 - t) * 40, 300, 200, 3, (byte)(255 * t));
+        if (evolves && Age >= EvolveAt && Age < EvolveAt + FlashFor)
+        {
+            // the evolution's white flash
+            float k = 1 - MathF.Abs((Age - EvolveAt) / (float)FlashFor * 2 - 1);
+            c.Fill(0, 42, Canvas.W, 250, new Color(255, 255, 255, (byte)(230 * k)));
+        }
+        c.Text(shown.Title, 320, 290, 32, p.Ink, Align.Center, bold: true);
+        if (evolves && after)
+            c.Text($"{result.Arrived.Title} evolved into {result.EvolvedInto}!", 320, 334, 22, p.Good, Align.Center, bold: true);
+        else if (evolves)
+            c.Text($"What? {result.Arrived.Title} is evolving!", 320, 334, 22, p.Ink, Align.Center);
+        c.Text($"It's in the bank: {result.StoredWhere}", 320, 376, 17, p.Muted, Align.Center);
+        if (result.Problem is not null)
+            c.Paragraph(result.Problem, 40, 408, 560, 15, p.Bad, 3);
+    }
+
+    public override void DrawBottom(Canvas c)
+    {
+        var p = c.P;
+        var gave = result.Gave;
+        c.Text("You sent", 320, 40, 18, p.Muted, Align.Center);
+        c.Mon(gave.Species, gave.Form, gave.Gender, gave.IsShiny, gave.IsEgg, 220, 70, 200, 150, 2);
+        c.Text(gave.Title, 320, 232, 24, p.Ink, Align.Center, bold: true);
+        c.Button("OK", 220, 330, 200, 56, true);
+        c.Hint("A", "OK", 8, 446);
+    }
+}
