@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import os
+import random
 import shlex
 import subprocess
 import tempfile
@@ -45,6 +46,21 @@ def nds_rom(arm9, arm7, icon, header_patch=None, supercard=False):
     wrapper[0:4] = b"\x2e\x00\x00\xea"
     wrapper[0xb0:0xb4] = b"\x44\x46\x96\x00"
     return bytes(wrapper) + body
+
+
+def cart_rom(icon_first=False):
+    """An .nds laid out like a retail card: zeros up to the ARM9 at 0x4000, the ARM7 and the icon/title further on,
+    filler the hash skips in between. icon_first puts the icon/title before the ARM7, so a reader seeks back for it.
+    Returns the ROM and its rcheevos hash."""
+    rom = bytearray(random.Random(31).randbytes(0x40000))
+    rom[0x200:0x4000] = bytes(0x3E00)
+    arm9, arm9_size, arm7, arm7_size, icon = 0x4000, 0x1A000, 0x24000, 0x9000, 0x2E000
+    if icon_first:
+        arm7, icon = 0x30000, 0x24000
+    for off, val in ((0x20, arm9), (0x2C, arm9_size), (0x30, arm7), (0x3C, arm7_size), (0x68, icon)):
+        rom[off:off + 4] = val.to_bytes(4, "little")
+    want = hashlib.md5(rom[:0x160] + rom[arm9:arm9 + arm9_size] + rom[arm7:arm7 + arm7_size] + rom[icon:icon + 0xA00])
+    return bytes(rom), want.hexdigest()
 
 
 class MediaMatchTest(unittest.TestCase):
@@ -314,6 +330,69 @@ class MediaMatchTest(unittest.TestCase):
         want = hashlib.md5(raw[:0x160] + raw[u(0x20):u(0x20) + u(0x2c)] + raw[u(0x30):u(0x30) + u(0x3c)]
                            + raw[u(0x68):].ljust(0xA00, b"\0")).hexdigest()
         self.assertEqual(self._hashes([str(short)])[str(short)], want)
+
+    def test_ra_hash_reads_the_nds_inside_a_zip(self):
+        # issue 31: the zip's own bytes were hashed ("ARM9 + ARM7 code over 16 MB"). Now the .nds in it is, picked as
+        # SuperDrastic's in-game hash picks it: the first .nds, else the first file. A .7z is skipped, unopened.
+        rom, want = cart_rom()
+        back, back_want = cart_rom(icon_first=True)
+        plain = self.root / "Game (USA).nds"
+        plain.write_bytes(rom)
+
+        def zipped(name, members, method=zipfile.ZIP_DEFLATED):
+            path = self.root / name
+            with zipfile.ZipFile(path, "w", method) as z:
+                for member, data in members:
+                    z.writestr(member, data)
+            return str(path)
+
+        deflated = zipped("deflated.zip", [("readme.txt", b"read me"), ("docs/", b""), ("Game (USA).nds", rom)])
+        stored = zipped("STORED.ZIP", [("GAME.NDS", rom)], zipfile.ZIP_STORED)
+        first_nds = zipped("two.zip", [("notes.txt", b"x"), ("b.nds", back), ("a.nds", rom)])
+        no_nds = zipped("bin.zip", [("Game.bin", rom), ("notes.txt", b"x")])
+        empty = zipped("empty.zip", [("docs/", b"")])
+        not_zip = self.root / "renamed.zip"
+        not_zip.write_bytes(rom)
+        seven = self.root / "Game.7z"
+        got = self._hashes([str(plain), deflated, stored, first_nds, no_nds, empty, str(not_zip), str(seven)])
+        self.assertEqual(got[str(plain)], want)
+        for path in (deflated, stored, no_nds):
+            self.assertEqual(got[path], want, path)
+        self.assertEqual(got[first_nds], back_want)
+        self.assertTrue(got[empty].startswith("error:"))
+        self.assertTrue(got[str(not_zip)].startswith("error:"))
+        self.assertIn(".7z, skipped", got[str(seven)])
+        self.assertFalse(seven.exists())
+
+    def test_fill_cheevos_ids_looks_a_zipped_game_up_by_its_nds_and_logs_a_7z(self):
+        rom, want = cart_rom()
+        with zipfile.ZipFile(self.root / "Zipped.zip", "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("Zipped.nds", rom)
+        pushed, looked, messages = [], [], []
+
+        class Dev:
+            def run(self, cmd, data=None, binary=False):
+                return subprocess.run(shlex.split(cmd)[:3], input=data, capture_output=True, check=True).stdout.decode()
+
+            def push_meta(self, gid, meta):
+                pushed.append((gid, meta))
+                return "200"
+
+        def fake_http(url, timeout=40):
+            looked.append(url)
+            return json.dumps({"GameID": 7}).encode()
+
+        self.mod.http = fake_http
+        self.mod.log = lambda *a: messages.append(" ".join(str(x) for x in a))
+        zipped = {"id": "z", "name": "Zipped", "path": str(self.root / "Zipped.zip"), "cheevosId": 0}
+        packed = {"id": "s", "name": "Packed", "path": str(self.root / "Packed.7z"), "cheevosId": 0}
+        self.assertEqual(self.mod.fill_cheevos_ids(Dev(), [zipped, packed]), set())
+        self.assertEqual(pushed, [("z", {"cheevosHash": want.upper(), "cheevosId": "7"})])
+        self.assertEqual(len(looked), 1)
+        self.assertIn(want, looked[0])
+        skipped = "  Packed: no RetroAchievements hash (a .7z, skipped"
+        self.assertTrue(any(m.startswith(skipped) for m in messages), messages)
+        self.assertEqual(packed["cheevosId"], 0)
 
     def test_fill_cheevos_ids_keeps_no_id_es_refused(self):
         good = self.root / "good.nds"

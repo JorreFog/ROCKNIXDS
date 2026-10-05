@@ -246,13 +246,23 @@ def best_match(wanted, candidates, cutoff=0.82):
 # ES knows a game's RetroAchievements ID only once it has hashed the ROM (its "find all games with achievements"
 # job); a newly copied game has none, so ra-fetch.py skipped it. The RA hash is computed on the device the way
 # rcheevos does it for DS (the first 0x160 header bytes, the ARM9 and ARM7 code and 0xA00 bytes of icon/title, a
-# SuperCard header skipped), RA says which game it belongs to, and ES is given both.
+# SuperCard header skipped), RA says which game it belongs to, and ES is given both. A .zip is hashed by the .nds in
+# it, picked the way SuperDrastic's in-game hash picks it (src/ra.c zip_find: the first .nds, else the first file);
+# the zip's own bytes gave no hash or a wrong one (#31). zipfile unpacks the member as it is read and can seek in it.
+# A .7z is skipped: SuperDrastic can't hash one either.
 RA_HASH = r"""
-import hashlib, json, sys
+import hashlib, json, sys, zipfile
 out = {}
 for p in json.load(sys.stdin):
     try:
-        f = open(p, "rb"); h = f.read(512); off = 0
+        if p.lower().endswith(".7z"):
+            out[p] = "a .7z, skipped: RetroAchievements needs the .nds or a .zip"; continue
+        f = open(p, "rb")
+        if p.lower().endswith(".zip"):
+            z = zipfile.ZipFile(f); files = [i for i in z.infolist() if not i.is_dir()]
+            if not files: raise ValueError("no file in the .zip")
+            f = z.open(next((i for i in files if i.filename.lower().endswith(".nds")), files[0]))
+        h = f.read(512); off = 0
         if h[0:4] == b"\x2e\x00\x00\xea" and h[0xb0:0xb4] == b"\x44\x46\x96\x00":
             off = 512; f.seek(off); h = f.read(512)
         u = lambda o: int.from_bytes(h[o:o + 4], "little")
