@@ -14,7 +14,12 @@
 #   --uninstall     undo what this installer changed, leaving settings made since the install alone
 #   --restore-files with --uninstall: put back whole config files from the install-time backups instead
 #   --version       print the ROCKNIXDS version this installer belongs to
-# Env: RGDS_SRC=/path/to/checkout installs from a local copy instead of downloading.
+# Env: RGDS_SRC=/path/to/checkout installs from a local copy instead of downloading. With RGDS_REF as well, that's
+#      the release it records for the update check (the SD card image's first boot).
+#      RGDS_DEPS=/path/to/dir: the upstream themes from there (dii-ess-aye-<commit>.tar.gz, canvas-ds-<commit>.tar.gz,
+#      codeload's tarballs) instead of downloading them, for an install with no network.
+#      RGDS_FIRSTBOOT=1: run from ROCKNIX's autostart, before the menu starts (the SD card image): systemctl calls
+#      only queue their jobs, since autostart is one of the jobs they would wait for.
 #      RGDS_BRANCH: what to install. main (the default) is the newest release for this handheld: vX.Y on the
 #      RG DS, vX.Y-plus on the RG DS Plus. beta is this handheld's beta branch (beta, or plus-beta on the Plus).
 #      A tag (v1.5, v1.5-plus) is that release. The installer finds the exact tag or commit first, then runs that
@@ -79,6 +84,10 @@ case "$MODEL" in
 esac
 
 systemctl is-active -q dsflip-game.service 2>/dev/null && die "a DS game is running: quit it first"
+if [ "$RGDS_FIRSTBOOT" = 1 ]; then
+    # ES, sway and the rest start after ROCKNIX's autostart, which runs this: waiting for them would never end
+    systemctl() { command systemctl --no-block "$@"; }
+fi
 
 # ---- what to install: the exact release or commit for this handheld ------------------------------------
 # Releases come in pairs from 1.5 on (vX.Y for the RG DS, vX.Y-plus for the RG DS Plus; pre-releases are
@@ -331,7 +340,8 @@ say "Device: Anbernic $DEVICE"
 if [ $THEME_ON = 1 ]; then
     say "Installing the dii-ess-aye theme (upstream $THEME_UPSTREAM@$THEME_COMMIT + RG DS overlay)"
     mkdir -p $WORK/theme
-    curl -fsSL "https://codeload.github.com/$THEME_UPSTREAM/tar.gz/$THEME_COMMIT" | tar xz -C $WORK/theme --strip-components=1
+    if [ -n "$RGDS_DEPS" ]; then tar xzf "$RGDS_DEPS/dii-ess-aye-$THEME_COMMIT.tar.gz" -C $WORK/theme --strip-components=1
+    else curl -fsSL "https://codeload.github.com/$THEME_UPSTREAM/tar.gz/$THEME_COMMIT" | tar xz -C $WORK/theme --strip-components=1; fi
     [ -f $WORK/theme/theme.xml ] || die "theme download failed"
     if [ -d $THEME ] && [ ! -e $BACKUP/.theme-installed-by-us ] && [ ! -d $BACKUP/theme-previous ]; then
         cp -a $THEME $BACKUP/theme-previous     # someone's own dii-ess-aye: keep it
@@ -417,6 +427,9 @@ if [ $THEME_ON = 1 ]; then
     # ES's power saver on "enhanced": an idle menu draws nothing instead of 25-60 frames a second (the patched ES
     # still wakes each minute for the clock). Only if it's on ES's default: a choice made in the menu stays.
     case "$(es_get PowerSaverMode $ES_SETTINGS)" in ""|default) es_set PowerSaverMode enhanced ;; esac
+    # ES starts on the system it was last on; with none yet (a fresh SD card) it took the first in its list, Favorites,
+    # not the DS. The patched ES always lists the DS, even before there are games.
+    [ -n "$(es_get LastSystem $ES_SETTINGS)" ] || es_set LastSystem nds
     # 1.5: ROCKNIXDS Pixel Light is the theme, once (the first install of 1.5 or later; a choice made after that stays,
     # an uninstall forgets it). The 1.5 betas' rocknixds-dark/-light/-pixel are gone.
     if [ ! -e /storage/.config/rocknixds/.pixel-default ]; then
@@ -438,10 +451,15 @@ fi
 if [ $THEME_ON = 1 ] && [ $CANVAS_ON = 1 ]; then
     C=$ES_THEMES/canvas-ds
     if [ "$(cat $C/.rocknixds-commit 2>/dev/null)" != $CANVAS_COMMIT ]; then
-        say "Downloading the canvas-ds theme ($CANVAS_UPSTREAM@$CANVAS_COMMIT, ~180 MB, once)"
         rm -rf $WORK/canvas; mkdir -p $WORK/canvas
-        if curl -fsSL "https://codeload.github.com/$CANVAS_UPSTREAM/tar.gz/$CANVAS_COMMIT" |
-           tar xz -C $WORK/canvas --exclude='*/previews' --exclude='*/customization examples' --exclude='*/scripts'; then
+        if [ -n "$RGDS_DEPS" ]; then
+            say "Installing the canvas-ds theme ($CANVAS_UPSTREAM@$CANVAS_COMMIT)"
+            canvas_tgz() { cat "$RGDS_DEPS/canvas-ds-$CANVAS_COMMIT.tar.gz"; }
+        else
+            say "Downloading the canvas-ds theme ($CANVAS_UPSTREAM@$CANVAS_COMMIT, ~180 MB, once)"
+            canvas_tgz() { curl -fsSL "https://codeload.github.com/$CANVAS_UPSTREAM/tar.gz/$CANVAS_COMMIT"; }
+        fi
+        if canvas_tgz | tar xz -C $WORK/canvas --exclude='*/previews' --exclude='*/customization examples' --exclude='*/scripts'; then
             [ -d $C ] && [ ! -e $C/.rocknixds-commit ] && backup_once $C      # someone's own copy: keep it
             # the old copy goes only once the new one is in place next to it
             if mv $WORK/canvas/canvas-ds-* $C.new 2>/dev/null; then
@@ -591,8 +609,8 @@ mkdir -p /storage/.config/system.d/timers.target.wants
 ln -sf ../rocknixds-update-check.timer /storage/.config/system.d/timers.target.wants/rocknixds-update-check.timer
 systemctl daemon-reload; systemctl start rocknixds-update-check.timer 2>/dev/null
 # what's installed, for the update check: the release tag or the commit that was downloaded
-if [ -n "$RGDS_SRC" ]; then ID=local
-elif [ -n "$RGDS_REF" ]; then ID=$RGDS_REF
+if [ -n "$RGDS_REF" ]; then ID=$RGDS_REF
+elif [ -n "$RGDS_SRC" ]; then ID=local
 elif [ "$BRANCH" = main ]; then
     ID=$(curl -fsSL --max-time 15 https://api.github.com/repos/$REPO/releases/latest 2>/dev/null | sed -n 's/^ *"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)
 else

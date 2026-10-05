@@ -201,6 +201,25 @@ RG DS Plus.
 
 ## Install
 
+### A new SD card: flash the image
+
+The easiest start. Each release from 1.5.10 has a ready-to-flash image for its handheld:
+`rocknixds-v1.5.10-rocknix-20261001.img.gz` on the [RG DS release](https://github.com/JorreFog/ROCKNIXDS/releases/latest),
+`rocknixds-v1.5.10-plus-rocknix-20261001.img.gz` on the
+[RG DS Plus release](https://github.com/JorreFog/ROCKNIXDS/releases?q=plus&expanded=true). It is ROCKNIX's own
+image (ROCKNIX 20261001), already set to boot your handheld, with ROCKNIXDS on it.
+
+1. Flash the `.img.gz` to a microSD card with [balenaEtcher](https://etcher.balena.io/),
+   [Raspberry Pi Imager](https://www.raspberrypi.com/software/) (*Use custom*) or `gzip -dc <image> | sudo dd of=/dev/sdX bs=4M`.
+   This erases the card.
+2. Put the card in the handheld and switch it on. ROCKNIX first grows the card to its full size and restarts, then
+   ROCKNIXDS installs itself (about a minute, no network needed), and the menu comes up.
+
+The install log is `/storage/.config/rocknixds-firstboot.log`. After that, *Updates & downloads > ROCKNIXDS* keeps
+it up to date, the same as an install over ssh.
+
+### ROCKNIX already installed: install over ssh
+
 On an Anbernic RG DS Plus or RG DS running ROCKNIX, ssh in as `root` (default password
 `rocknix`) and run:
 
