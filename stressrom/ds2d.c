@@ -1,17 +1,24 @@
 // ds2d ARM9: engine A 2D feature scenes, for testing a DS 2D renderer against DraStic's and for profiling it.
 //
-// Determinism. Every displayed frame is a function of the frame counter (vblanks since boot) and nothing else: no
-// input, no timers, no dependence on CPU speed beyond "the vblank work fits in vblank" (a build with DS2D_CHECK
-// defined halts with a white screen if it ever does not). All state for the next frame (registers, OAM, palettes,
-// VRAM contents and mappings, HBlank-DMA tables) is written in vblank, so the renderer sees one consistent state per
-// frame. The deliberate mid-frame changes use the DS's own per-line mechanism, an HBlank DMA (one table entry per
+// Determinism. Every displayed frame is a function of the frame counter (the vblanks counted by the main loop, which
+// starts once the library is built) and nothing else: no input, no timers, no dependence on CPU speed beyond "the
+// vblank work fits in vblank" (a build with DS2D_CHECK defined halts with a white screen if it ever does not). All
+// state for the next frame (registers, OAM, palettes, VRAM contents and mappings, HBlank-DMA tables) is written in
+// vblank, so the renderer sees one consistent state per frame.
+// The deliberate mid-frame changes use the DS's own per-line mechanism, an HBlank DMA (one table entry per
 // line, written at the hblank before the line), or, for the OAM multiplexing of T4, a CPU rewrite between lines that
 // no sprite of either set touches, so the result does not depend on the exact line of the write. DraStic logs
 // register, palette and OAM writes with their line and replays them per line; an HBlank DMA into VRAM (T3), VRAM
 // display mode (T3, T9) and main-memory display mode (T3) make it render line by line at each hblank ("catch-up").
-// No state crosses a quarter boundary: each quarter starts from reset 2D registers, palettes and OAM, rewrites every
-// page of the VRAM it uses, and (T9) submits its own 3D geometry while the display is off. So the frame at (scene,
-// quarter, t) is the same in the cycle ROM and in the scene's own ROM, whatever ran before (checked frame by frame).
+// Each quarter starts from reset 2D registers, palettes and OAM, rewrites every page of the VRAM it uses, and (T9)
+// submits its own 3D geometry while the display is off, so the frame at (scene, quarter, t) is the same in the cycle
+// ROM (both rounds) and in the scene's own ROM (checked frame by frame). One piece of state does cross a quarter
+// boundary: the windows' vertical in-window flags. DraStic keeps them from frame to frame and toggles them at WINxV's
+// Y1/Y2 only on lines it renders with a window on (render_scanline_generate_window_masks; at line 0 also when Y1 or
+// Y2 > 191). The hardware updates them on every line, windows on or off (melonDS), so on a DS the white copy frames
+// (WINxV = 0: Y2 = 0 closes both at line 0) would reset them; DraStic passes them on. So T6 q3's first frame starts
+// with WIN1 open from q2 (WIN1V 150..192 never closes it) and shows WIN1 on lines 0..149. With the quarters run in
+// reverse order, the first frames of T6 q1 and q2 change the same way; no other frame does.
 //
 // Content. Tiles, maps, bitmaps, sprite sheets and extended palettes are built once at boot into a library in main
 // RAM (LIB, 1.7 MB, ready at frame 36); each scene quarter declares the VRAM bank mapping and which library pages each bank holds
@@ -72,8 +79,10 @@
 //                    display capture every frame: a feedback loop through a 16-bit bitmap BG at identity (banks C/D
 //                    alternate as capture target and BG; DraStic's hi-res capture path), then a captured frame shown
 //                    as the full-screen OBJ bitmap (the screen, then the 3D layer alone); q3 VRAM display mode of
-//                    bank D with a blended capture (3D, then the whole screen with VRAM read offset 32K, over the
-//                    previous frame): motion trails, every other 8 frames of the second half the VRAM source alone.
+//                    bank D with a blended capture into D (3D, then the whole screen 256x128, over the previous
+//                    frame): motion trails, every other 8 frames of the second half the VRAM source alone. The
+//                    second half's VRAM read offset (32K) has no effect: the hardware ignores it in VRAM display
+//                    mode (melonDS adds it only when DISPCNT[17:16] != 2) and DraStic never reads DISPCAPCNT[27:26].
 // Engine A is on the top LCD; engine B is off (white).
 // What DraStic r2.5.2.2 does with these (the oracle, so a replacement must do the same): OBJ-OBJ order is priority
 // first, then OAM index; no per-line OBJ limit (all 90 crowd sprites are drawn); no OBJ mosaic; DISPCNT.7 is
@@ -82,7 +91,12 @@
 // screen image (they come back in the "broken" frames) and show as silhouettes in the 3D clear colour after the
 // capture of the 3D layer alone (T9 q2 from tq 46; the OBJ palette plays no part); an affine OBJ can draw one extra
 // pixel at its edge whose texel is fetched up to 64K past the sprite's data (so all OBJ VRAM pages are planned); a
-// capture of the VRAM source alone (T9 q3) leaves its destination unchanged (the VRAM display does not scroll).
+// capture of source B alone is not done at all (start_frame leaves the source-A kind at 0, so render_scanline never
+// captures) and the VRAM read offset is never applied. T9 q3 cannot show either: in VRAM display mode the hardware
+// also reads bank D from offset 0, so its B-only capture copies D onto itself and leaves it unchanged, as DraStic
+// does. (Showing them takes display mode 1 with a source-B capture and a read offset; no scene does that.) In frames
+// without a running capture (those B-only ones) DraStic shows the VRAM display at 1x: the 2x data of earlier captures
+// is used only while a capture runs, so T9 q3's 2x detail drops out every other 8 frames of its second half.
 #include "tables.h"
 
 typedef unsigned int u32; typedef unsigned short u16; typedef unsigned char u8; typedef int s32; typedef short s16;
@@ -1208,7 +1222,7 @@ static void s_sprites(u32 t, int q, u32 tq) {
     oam_title(g_dc);
     oam_commit();
     if (q == 2) {                                     /* multiplexing: OAM 0-11 show the 8bpp row from line 96 on */
-        sprite_row(t, 0, 1, 112);                     /* the 4bpp row ends by line 85, the 8bpp row starts at 108 */
+        sprite_row(t, 0, 1, 112);                     /* the 4bpp row ends by line 87, the 8bpp row starts at 108 */
 #ifdef DS2D_CHECK
         if (VCOUNT < 192) { DISPCNT = 0; for (;;) {} }
 #endif
@@ -1333,7 +1347,7 @@ static void s_windows(u32 t, int q, u32 tq) {
         g_dc |= DC_WIN1;
         WININ = (u16)((W_BG(3) | W_OBJ) | (W_BG(2) | W_BG(0) | W_FX) << 8);
         WINOUT = (u16)(W_BG(0) | W_BG(1) | W_OBJ);
-        WIN1H = winh(0, 255); WIN1V = winh(150, 192);                 /* full width (X2 = 255), to line 191 */
+        WIN1H = winh(0, 255); WIN1V = winh(150, 192);                 /* x 0..254 (X2 = right + 1), to line 191 */
         if (k == 0) { WIN0H = winh(200, 56); WIN0V = winh(20, 120); }          /* X1 > X2: wraps around */
         else if (k == 1) { WIN0H = winh(40, 216); WIN0V = winh(140, 40); }     /* Y1 > Y2 */
         else if (k == 2) { WIN0H = winh(60, 60); WIN0V = winh(10, 220); WIN1V = winh(100, 230); }   /* X1 = X2, Y2 > 192 */
@@ -1545,7 +1559,9 @@ static void s_3d(u32 t, int q, u32 tq) {
         g_dc = DC_VRAMDISP(3) | DC_3D | DC_BG(0) | DC_BG(1) | DC_BG(3) | DC_OBJ | objmap;
         if (!half) DISPCAPCNT = 8u | 8u << 8 | 3u << 16 | 3u << 20 | 1u << 24 | 2u << 29 | 1u << 31;   /* 3D + VRAM */
         else DISPCAPCNT = 4u | 12u << 8 | 3u << 16 | 2u << 20 | 1u << 26 | ((tq >> 3) & 1 ? 1u : 2u) << 29 | 1u << 31;
-                                                      /* screen + VRAM +32K, 256x128; every other 8 frames VRAM +32K alone */
+                                                      /* screen + VRAM, 256x128; every other 8 frames VRAM alone (no
+                                                         capture in DraStic, D onto itself on hardware); the read
+                                                         offset 32K is ignored in VRAM display mode (see the top) */
         break;
     }
     for (int n = 0; n < 6; n++) spr(i++, 2, n & 1, 10 + n * 40, 140 + (sn(t * 2 + n * 40) >> 7), 0, 0, (u32)(n & 3), (u32)n + 4);
