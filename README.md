@@ -92,6 +92,26 @@ Mali-G52); the RG DS Plus has two 1024×768 panels. ROCKNIXDS (formerly `rgds-ro
 - The **panel timing fix**, the older **vsync pacing shim**, and the measurement tools (including a DS
   stress-test ROM) behind all the numbers below.
 
+### New in 1.6 (draft, not released)
+
+One release for both handhelds; the full notes are [v1.6-plus.md](docs/releases/v1.6-plus.md), the device checks
+[`docs/handoff-local.md`](docs/handoff-local.md).
+
+- **A stuck game never needs a restart.** 5 s without a picture (outside DraStic's menu and the in-game menu): a card
+  says so, the exit hotkey quits at once and the log records what every thread was doing. 20 s: the game is closed
+  with a message. The exit hotkey always ends the game, and a game frozen solid is ended from outside. New threads
+  start on every CPU (the RG DS Plus's CPU placement could leave one unable to run: the likely cause of a freeze
+  after a resume load).
+- **Clean starts and quits:** plain black between the menu and the game, no terminal cursor, no leftover frame; the
+  menu shows once it draws again.
+- **RetroAchievements without network** keeps the saved login and retries in the background.
+- **The menu's memory** is logged (`es-mem.log`) and capped: freed image memory goes back to the system, and the menu
+  restarts by itself before it could take the handheld's memory. Two quick launches start the game once.
+- **From the reports:** the options file is checked before it is replaced (#36, #37); zipped games get their
+  RetroAchievements id (#31); the in-game menu's *Blow* follows `drastic.cfg`'s binding (#26); the pixel font's 5, 2,
+  Z and B (#34).
+- **Online play is parked:** the 1.5.13 test builds' *wfc dns* option is gone until it works.
+
 ### New in 1.5
 
 1.5 comes as two releases: **v1.5-plus** for the RG DS Plus (this one) and **v1.5** for the RG DS. The installer
@@ -184,7 +204,8 @@ RG DS Plus.
 - **The recommended settings are the defaults** (1.5.13). *3D renderer* on *Auto* is Gengis Engine (a player who
   picked *DraStic* keeps it), and the installer switches threaded 3D on where it was never set, as the Plus line did
   since 1.5. The README's "set the best settings" step is gone: a fresh install plays with them.
-- **Wi-Fi online play, experimental and untested** (1.5.13). A *wfc dns* option (off by default) points a game at a
+- **Wi-Fi online play, experimental and untested** (1.5.13 test builds; parked in 1.6, where the option is gone and only
+  the `DSFLIP_WFC` test switch turns it on). A *wfc dns* option (off by default) points a game at a
   community replacement for Nintendo Wi-Fi Connection (Kaeru WFC into Wiimmfi, WiiLink's DNS, AltWFC): the engine
   answers the game as an open access point and carries its traffic over the handheld's network. Not yet run on a
   handheld; see *Using it* and `docs/handoff-local.md`.
@@ -449,16 +470,16 @@ presses in testing, with music playing). If a blow does nothing (reported once, 
 mic) and the other `DSFLIP_MIC_*` switches (`systemctl set-environment`) narrow it down without a rebuild. The
 launcher binds the control (Scroll Lock) where an old `drastic.cfg` left it unbound.
 
-**Wi-Fi online play (1.5.13, experimental, not yet tried on a handheld).** DraStic itself has no Wi-Fi: its wifi
-registers are stubs. With ES's DraStic *wfc dns* option set (under the Nintendo DS system's or a game's options; off
-by default), libdsflip answers the game as an open access point named `rocknixds`, hands it over DHCP the DNS server
-of a community replacement for Nintendo Wi-Fi Connection, and carries the game's traffic over the handheld's own
-network: **Kaeru WFC** (178.62.43.212, into Wiimmfi's 300+ DS games; the one to try first), **WiiLink's DNS**
+**Wi-Fi online play (parked in 1.6; the 1.5.13 test builds had it as an option, never tried on a handheld).** DraStic
+itself has no Wi-Fi: its wifi registers are stubs. 1.6 offers no *wfc dns* option; for a test,
+`systemctl set-environment DSFLIP_WFC=kaeru` (over ssh) turns it on: libdsflip answers the game as an open access
+point named `rocknixds`, hands it over DHCP the DNS server of a community replacement for Nintendo Wi-Fi Connection,
+and carries the game's traffic over the handheld's own network: **Kaeru WFC** (178.62.43.212, into Wiimmfi's 300+ DS games; the one to try first), **WiiLink's DNS**
 (167.235.229.36, also Wiimmfi) or **AltWFC** (172.104.88.237, unmaintained); no patched ROM and no account. In the
 game: *Nintendo WFC Setup > Connection 1 > Search for an Access Point*, pick `rocknixds`, keep *Auto-obtain IP* and
 *Auto-obtain DNS*, *Test Connection*. Logins, lobbies and the GTS are what this build can reach; races and battles
 between players need a full-cone NAT it does not have yet. The Wi-Fi code hooks DraStic's register handlers at fixed
-offsets for the r2.5.2.2 build; with the option off nothing is hooked. What to check on the handheld and how is in
+offsets for the r2.5.2.2 build; without the switch nothing is hooked. What to check on the handheld and how is in
 [`docs/handoff-local.md`](docs/handoff-local.md).
 
 Not in this mode yet: gptokeyb keyboard hotkeys. Everything DraStic maps to buttons itself works.
@@ -746,13 +767,17 @@ dark-background and a light-background version, a stacked version for small squa
 
 ## Known issues
 
-- **No DS games yet** (fixed in 1.5.13, not yet seen on a handheld): with an empty `roms/nds` ES dropped the DS
-  system, so a fresh card opened on Music Player and two empty collections whose placeholder was drawn as a cartridge
-  (and a tap on it hung the ready screen). The patched ES keeps the DS listed and shows "No games yet".
+- **No DS games yet** (fixed in 1.5.13, seen working on an RG DS Plus; not yet on an RG DS): with an empty `roms/nds`
+  ES dropped the DS system, so a fresh card opened on Music Player and two empty collections whose placeholder was
+  drawn as a cartridge (and a tap on it hung the ready screen). The patched ES keeps the DS listed and shows "No games
+  yet".
 - **A real blow did nothing on an RG DS Plus** (issue 26; a button bound to DraStic's *Fake Microphone* works).
   1.5.13 ships the engine's microphone with logs and switches to find the cause on the handheld (`docs/handoff-local.md`,
   section 3); the shipped defaults are unchanged until a device run settles them. The uploaded logs point at the
-  echo gate: the speaker reaches the mic as loud as a blow.
+  echo gate: the speaker reaches the mic as loud as a blow. The in-game menu's *Blow* (Quick settings > Microphone)
+  presses the fake microphone meanwhile.
+- **Front-end music** (*Sound settings*) plays only music you add: copy `.mp3` or `.ogg` files to `roms` > `music`.
+  ROCKNIX turns it on but ships none (issue #43).
 - **RetroAchievements:** softcore only.
 - **Heavy stretches at 2× can still drop frames** (up to ~10/s in one run). There, DraStic's own frame
   times vary so much that its frames arrive spread over the whole refresh cycle, and no latch position can

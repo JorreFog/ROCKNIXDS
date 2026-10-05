@@ -1,18 +1,274 @@
-# Hand-off: finishing 1.5.13 on the handheld
+# Hand-off: 1.6 on the handheld
 
 What was prepared without a handheld, and exactly what a person (or an AI) with an RG DS or RG DS Plus on the desk
 runs to finish each item. ssh in as `root` (password `rocknix`); the device paths below are the installed ones.
 Each item ends with its acceptance test. Update this file as items close.
 
-Install the branch under test on the device first:
+1.6 is one release for both handhelds, on two branches kept in step (the night of 2026-10-05/06, from the 1.6-prep
+hand-off in `docs/1.6-prep/HANDOFF.md`):
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh | RGDS_BRANCH=claude/tender-volta-a9nkpk sh
-```
+| Handheld | Branch | Install it |
+|---|---|---|
+| RG DS Plus | `claude/1-6-prep-work-kwq9lc-plus` (from `1.6-prep`, 357ca9d) | `curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh \| RGDS_BRANCH=claude/1-6-prep-work-kwq9lc-plus sh` |
+| RG DS | `claude/1-6-prep-work-kwq9lc` (from the RG DS 1.5.13 branch `claude/tender-volta-a9nkpk`) | `curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh \| RGDS_BRANCH=claude/1-6-prep-work-kwq9lc sh` |
 
-(or `RGDS_SRC=/path/to/checkout sh install.sh` from a copy on the device). Logs that matter:
-`/storage/.config/drastic/dsflip/dsflip.log` (the engine's log of the last game), `last-session.log` (the launcher's),
-`/var/log/es_log.txt` (EmulationStation).
+Both ship SuperDrastic `0.5.0-beta.1-rocknixds.5` (SuperDrastic branch `claude/1-6-prep-work-kwq9lc`, without
+`1.6-prep`'s parked Wi-Fi commit) and the same EmulationStation build. Neither bumps VERSION: that stays the owner's
+call, like a release, a tag or a push to `main` / `plus-beta`. `RGDS_SRC=/path/to/checkout sh install.sh` installs from
+a copy on the device. Logs that matter: `/storage/.config/drastic/dsflip/dsflip.log` (the engine's log of the last
+game, `.1`-`.3` the ones before), `last-session.log` (the launcher's), `/var/log/es_log.txt` (EmulationStation), and
+new in 1.6 `/storage/.config/emulationstation/es-mem.log`.
+
+Sections A-G are 1.6's; 1-4 below them are 1.5.13's, still to finish on a handheld.
+
+## A. The freeze after a resume load (1.6 task 1)
+
+**What happened** (Black 2, RG DS Plus, 2026-10-05 18:07; the 1.5.13 test build): the game loaded its resume state,
+both RetroAchievements logins failed with an empty error, the login-failed pop-up showed, and two seconds later
+DraStic stopped presenting frames for good. libdsflip's presenter, touch and audio threads kept running. The handheld
+needed a hard reset.
+
+**Why nothing could end it** (certain, from the code):
+- With resume on quit, the exit hotkey sends SIGUSR1 (`/tmp/.process-kill-data` = `-USR1 drastic`).
+- libdsflip's handler only set a flag (`resume.c` `on_usr1` → `want_save`). DraStic's main thread acts on that flag at
+  its next frame (`resume_frame`, called from `SDL_RenderPresent`), and that frame never came.
+- A second press did not escalate either: it only escalated while `saving`, which is set on that same thread.
+- `session.sh`'s safety check (`kill_pending`) only fires when a SIGKILL is pending but undeliverable (state D).
+  Nobody had sent a SIGKILL, so it never fired.
+
+**Why DraStic's main thread stopped** (likely, not proven: no backtrace exists from that run):
+- **Not the RetroAchievements failure by itself.**
+  - rcheevos calls our login callbacks without its state mutex held.
+  - The pop-up is drawn on libdsflip's own thread, with one lock order (ui's `mx`, then `mu`).
+  - HeartGold with RetroAchievements unreachable showed the same pop-up at 60 fps.
+  - The empty error text has a plain cause: when curl got no answer, `http_thread` handed rcheevos an empty body, and
+    rcheevos uses that body as the message. The token login then deleted the saved token and tried the password,
+    which failed the same way.
+  - The other session with the same `[rc] Login failed:` (Platinum, 2026-10-03, in the uploaded logs) ran on after
+    its password login worked.
+- **The signature matches the DraStic deadlock that 68dfccd documented on the Plus line.** There, DraStic's main
+  thread and its 3D helpers waited on each other's condition variables forever, with the helpers at zero CPU time.
+  It happened when the main thread was confined to one CPU while its thread pool made its first hand-offs.
+  - The CPU placement (`session.sh`, `DSFLIP_PIN=1`, Plus only) starts 3 s after two helpers have run and repeats
+    every second for ~10 s. It confines the main thread to CPU 3.
+  - Any thread DraStic creates after that inherits CPU 3 alone, until the next placement pass. Checked on the host
+    under qemu: a thread created from a thread confined to CPU 3 is allowed CPU 3 only.
+  - A resume load (frame 120, ~2 s in) lands in that window. DraStic redoes its video set-up around a state load
+    (new screen textures right after it in the uploaded logs), which is when it would make new helpers.
+  - On the RG DS (no placement), this cannot happen.
+
+**What changed** (SuperDrastic `0.5.0-beta.1-rocknixds.4`/`.5`, both lines; `session.sh`, both lines):
+1. **The stall watch** (`dsflip.c` `stall_watch`, `stall_report`, on the presenter thread). It counts only time
+   outside DraStic's own menu (which presents only when it changes), the in-game menu (which holds DraStic on
+   purpose) and the quit's save.
+   - **5 s without a frame:** every thread's name, state, CPU time, allowed CPUs, syscall, wait channel and kernel
+     stack go to `dsflip.log` (fsync'd), and a red card says *The game stopped responding*. The exit hotkey then
+     quits at once.
+   - **20 s without a frame** (`DSFLIP_STALL_QUIT`, 0 = never): the game is ended. The menu then shows *The game
+     stopped responding (no picture for 20 seconds) and was closed*.
+2. **The exit hotkey always ends the game** (`resume.c` `on_usr1`, `quit_watch`). It quits at once, without the
+   resume state, in three cases:
+   - a second press a second or more after the first;
+   - a stalled game;
+   - DraStic not taking the save within 3 s (5 s while the in-game menu, which closes itself for it, is up).
+   A key repeat within a second still saves.
+3. **New threads start on every CPU** (`dsflip.c` `pthread_create`): no thread inherits the main thread's
+   confinement. `DSFLIP_SPREAD_THREADS=0` gives the old behaviour.
+4. **RetroAchievements** (`ra.c`):
+   - curl's error and the HTTP status are logged with the API name: `[ra] login2: no connection to
+     RetroAchievements (Could not resolve host: ...) (curl 6)`, then `[ra] token login: ... trying again in 15 s`.
+   - A login with no answer, a 429 or a 5xx keeps the token. It is tried again at 15 s, 30 s and 60 s, then every
+     2 minutes, with one pop-up: *RetroAchievements: no connection*.
+   - No empty pop-up lines.
+5. **`session.sh` watches libdsflip from outside.** The presenter thread wakes 20+ times a second whatever the game
+   does. If its CPU time (`/proc/<pid>/task/<tid>/schedstat`) stands still for 15 s, the whole process is wedged:
+   DraStic is killed and the menu comes back with a notice. The loop doesn't count time while the handheld sleeps.
+   Host check: a stand-in process was killed at 17 s with its presenter blocked, and left alone for 22 s while it ran.
+
+**Reproduce it** (over ssh; RG DS Plus first):
+- `sh docs/1.6-prep/freeze-repro.sh "black version 2" 10 old`, then the same with `new`. Each run:
+  1. plays 25 s and quits with the hotkey's SIGUSR1 (a resume state is saved);
+  2. starts the game again with RetroAchievements unreachable;
+  3. watches 40 s.
+- A run that stalls writes libdsflip's `[stall]` thread dump and gdb backtraces of every thread to
+  `/storage/freeze-repro-<date>.txt`.
+- Expected if the explanation is right:
+  - `old` stalls now and then;
+  - in the dump, a `drastic` thread has `allowed 3` and no CPU time, and the main thread waits too;
+  - `new` never stalls.
+- If `new` stalls too, the dump and backtraces are the next step: send them over.
+- Any game works, but Black 2 is the one that froze.
+
+**On the device:**
+1. Install the branch:
+   - RG DS Plus: `RGDS_BRANCH=claude/1-6-prep-work-kwq9lc-plus`.
+   - RG DS: `RGDS_BRANCH=claude/1-6-prep-work-kwq9lc`.
+   - `grep -a 'stall watch' /storage/.config/drastic/dsflip/dsflip.log` after a game shows `[dsflip] stall watch: a
+     card after 5 s without a frame, the game ended after 20 s; new threads start on 4 CPUs`.
+2. **The stall watch.** Run `systemctl set-environment DSFLIP_STALL_TEST=20`, start any game and wait.
+   - At ~25 s the top panel shows the red card *The game stopped responding*.
+   - `dsflip.log` has `[stall] no frame from DraStic for 5.0 s`, then one `[stall] thread ...` line per thread.
+   - At ~40 s the game ends by itself. The menu comes back and shows the notice *The game stopped responding (no
+     picture for 20 seconds) and was closed*.
+3. **The exit hotkey on a stuck game.** Same switch, game started again, resume on quit on.
+   - After the card, press the exit hotkey once: the menu is back at once.
+   - Repeat, pressing it *before* the card (between 20 and 25 s): the menu is back ~3 s later.
+     `dsflip.log` says `[resume] quit requested, but DraStic didn't take it within 3000 ms`.
+   - Then run `systemctl unset-environment DSFLIP_STALL_TEST`.
+4. **Normal quits still save.** Play a game 30 s, press the exit hotkey once, then start the game again: it resumes
+   (`[resume] resumed`).
+   - Press the hotkey twice quickly (within a second, e.g. a held key): it still saves.
+   - In DraStic's own menu (from the in-game menu's *DraStic menu*), press the hotkey: the game ends within ~3 s
+     (no resume state, as before; the log says why).
+5. **Wedged process, from outside.** Start a game, then over ssh run `kill -STOP $(pidof drastic)`.
+   - Within ~16 s `last-session.log` says `libdsflip's presenter hasn't run for 15 s: DraStic is wedged, killing it`.
+   - The menu comes back with *The game stopped responding and was closed*.
+6. **RetroAchievements without network**, done with the RA routes blocked as in `ra-offline-repro.sh`:
+   - `dsflip.log` has `[ra] login2: no connection to RetroAchievements (...) (curl 6)` (or 7, or 28) and
+     `[ra] token login: ... trying again in 15 s`.
+   - The pop-up says *RetroAchievements: no connection / Trying again in the background*.
+   - `ra.token` still exists afterwards.
+   - Unblock the routes: within 2 minutes `[ra] logged in with token as ...`, and achievements work.
+7. **The freeze run itself**, as in "Reproduce it" above.
+
+**Acceptance:**
+- Steps 2-6 behave as described on the Plus (and on the RG DS, which has no CPU placement).
+- `freeze-repro.sh ... 10 new` shows no stall. A stall there comes with its dump, which then tells the real cause.
+- Black 2's resume plus a failed login has never again needed a reset.
+
+## B. Starting and quitting a game (1.6 task 2)
+
+**What changed** (both lines; the RG DS line got the Plus line's two fixes from 1.6-prep, 357ca9d):
+- **Black, not "an empty terminal".** `session.sh` clears tty12 and hides its cursor before the switch. The moments
+  the kernel console has the panels (before libdsflip takes them, and after the game) are plain black.
+- **The menu shows only once ES draws again.**
+  - `restore.sh --vt-back` (transient unit `dsflip-vtback`) switches the panels back to sway once ES's main thread is
+    back in its loop: `/proc/<pid>/syscall` 115, 101, 73 or 22, not wait4 (260). It waits 3 s at most.
+  - The second `restore.sh` run (ExecStopPost) leaves at once.
+  - On the RG DS the window placement is the Plus line's code, which keeps 1920x480 for a 640-wide panel.
+- **New tonight, both lines:** a start that comes while the last game's switch back is still waiting (two launch
+  requests in a row) stops that switch, and keeps the VT that game recorded as sway's. Before, the pending switch
+  could hand the panels back to sway under the new game, or tty12 could be recorded as sway's VT.
+
+**On the device** (the RG DS has never run any of this):
+1. `tools/switchtime.sh` (HeartGold, 4 cycles) on each handheld. `last-session.log` per quit:
+   `restore: the panels go back to sway when ES draws again`, then `restore: ES is drawing again: the panels back to
+   sway` and `restore: menu shown`. The Plus measured the menu ~1.7 s after the quit; note the RG DS's numbers.
+2. By eye, a game started from the menu: after the start animation the panels are black, no cursor and no text, until
+   the game's first frame. Quit with the exit hotkey: black, then the menu. The start animation's last frame must
+   not reappear.
+3. `grep -c "did not come back in 3 s" last-session.log` over a dozen quits. Each such line means the fallback ran; note
+   what ES was doing (a big library reloading?).
+4. Two launches in a row: `ROM=/storage/roms/nds/<game>.nds; curl -s -X POST --data-binary "$ROM"
+   localhost:1234/launch; sleep 0.15; curl -s -X POST --data-binary "$ROM" localhost:1234/launch`.
+   - One game starts. `/var/log/es_log.txt` has `Launch of ... ignored: a game is already starting`.
+   - Quit it: the menu comes back, and the game does not start a second time.
+5. Start a game over the API while the last one is quitting: `killall -USR1 drastic; sleep 0.3; curl -s -X POST
+   --data-binary "$ROM" localhost:1234/launch`. Either it waits (ES still in the launch command, as before), or
+   `last-session.log` says `the last game's switch back was still pending: sway stays on ttyN`. In both cases the
+   menu comes back after this game.
+
+**Acceptance:** steps 1-5 on both handhelds; no stale frame, no cursor, no double start.
+
+## C. The menu's memory, and the double launch (1.6 task 3)
+
+**What was found.**
+- The lead in the hand-off (`reloadAllGames` after every game) doesn't apply. `ViewController::doLaunchGame` returns
+  true only for `windows_installers`, so DS games never trigger that reload.
+- The rnds engine's texture cache was bounded by count per group (400/200/120/90/8), not by bytes.
+- Images are decoded at full size on several threads. glibc keeps what they free in per-thread arenas and raises its
+  mmap threshold after the first big free, so the process only grows.
+- The double start: `/launch` posts `ViewController::launch()` to the UI thread, and a launch only schedules the game
+  (for the rnds theme, a 1 ms animation). A second `launch()` replaced that animation; the replaced animation's
+  finish callback started the first game at once, and the second game started after it.
+
+**What changed** (one ES binary for both lines):
+- `es-rgds-launchonce.patch`: while one launch is starting or running, another is ignored, with a warning in the
+  log. A `/launch` request received while a game ran is dropped (`ViewController::lastGameEndedAt`).
+- `es-rgds-memory.patch`: two malloc arenas and a fixed 256 KB mmap threshold, so big buffers return to the system
+  when freed (`MALLOC_ARENA_MAX` / `MALLOC_MMAP_THRESHOLD_` in the environment still win). `malloc_trim(0)` runs
+  right before each game.
+- `es-rgds-rnds.patch`: the texture cache also has a byte budget (see the patch header for the numbers).
+- `es-memwatch.sh` (started by `start_es_rgds.sh`, ends with ES's unit):
+  - Every 30 s it reads ES's memory. It writes `/storage/.config/emulationstation/es-mem.log` on a change of 16 MB or
+    more, and at least once an hour: heap, mapped files, shared/GPU memory, and what the system has available.
+  - Over half the RAM (487 MB on the Plus; `ROCKNIXDS_ES_MEMLIMIT_MB`, 0 = never) with no game running, it writes
+    ES's status line and restarts ES.
+
+**On the device:**
+1. After boot and a few minutes of browsing, `cat /storage/.config/emulationstation/es-mem.log` has a line like
+   `pid N rss 180 MB (heap ..., files ..., shared/GPU ...)`.
+2. **Browse hard:**
+   - Hold right in the largest library for a minute, flip systems, open the game options a few times.
+   - Run 10 games (start/quit), then leave the menu idle for 10 minutes.
+   - Note es-mem.log's lines. Expected: growth that levels off, under ~300 MB on the Plus.
+   - If it keeps climbing, the split (heap vs shared/GPU) says where. Send es-mem.log and `grep -i rnds
+     /var/log/es_log.txt`.
+3. **The valve:**
+   - `systemctl set-environment ROCKNIXDS_ES_MEMLIMIT_MB=120; systemctl restart essway.service`.
+   - Within a minute ES restarts by itself, and es-mem.log says `over 120 MB with no game running: restarting it`
+     with the status line.
+   - It must not happen during a game: start one before the minute is up, and the restart waits until after the
+     game.
+   - Then `systemctl unset-environment ROCKNIXDS_ES_MEMLIMIT_MB; systemctl restart essway.service`.
+4. The double launch: section B, step 4.
+
+**Acceptance:** es-mem.log is written; step 2 levels off; the valve restarts ES only outside games.
+
+## D. The open issues (1.6 task 4)
+
+Closed on 2026-10-06 with a short note each, as the owner asked: #24, #25, #28 (the RG DS reporter asked to reopen if
+needed), #33 (the RG DS untested) and #37 (fixed in 1.5.7; 1.6 adds the parse check below).
+
+| # | What changed | Lines | Device check |
+|---|---|---|---|
+| 26 | The in-game menu's *Blow* presses the fake microphone through whatever `drastic.cfg` binds it to (the key, or the joystick button when only that set has it). The real-mic tuning still needs a person: section 3 | both (library) | Section 3 steps 1-4. Then *Quick settings > Microphone > Blow* by the first candle in Phantom Hourglass, with the keyboard binding removed from `drastic.cfg` (`controls_a[CONTROL_INDEX_FAKE_MICROPHONE] = 65535`) and a joystick button bound in `controls_b`: the candle goes out |
+| 27 | Item 7 (touch): ISSUE27_TODO | both (ES) | ISSUE27_CHECK |
+| 30 | Fixed in 1.5.2 (`es-rgds-help.patch`); the reporter never answered | both | ES's on-screen keyboard (any text field): the help line fits the bottom panel on both handhelds |
+| 31 | `rocknixds-media.py`'s background RetroAchievements id hashes the first `.nds` in a `.zip` (else its first file) the way rcheevos does; `.7z` is skipped with a log line. Checked on the host: a synthetic ROM, plain and zipped (deflated and stored), gives rcheevos' own hash | both | A zipped DS game with achievements: after the menu's background job (or `rocknixds-media.py --local --auto`), its gamelist entry has a `cheevosId` and the Pixel library shows its achievement count |
+| 32, 34, 35 | ES_DIALOGS_TODO | both (ES) | ES_DIALOGS_CHECK |
+| 36, 37 | `es-features.sh`: a new `es_features.cfg` replaces the old one only if it parses with `<features>` as its root; otherwise the old one stays, or both go and ES reads ROCKNIX's copy. The RG DS line's depth-aware repair and its test are on the Plus line now; an option written on one line is no longer dropped. Tests: 74 (RG DS) and 73 (Plus) pass | both | `grep es-features /storage/.config/drastic/dsflip/install.log` (or the installer's output) after an update; the DS's per-system and per-game advanced settings list every DraStic option; Tools and Music Player are not in the per-system list |
+| 42, 44 | Not done: plans in section G | | |
+| 43 | Not a bug: ROCKNIX turns front-end music on but ships no music. The README and the release notes now say to copy `.mp3`/`.ogg` files to `roms/music` | both (docs) | Copy one `.ogg` to `/storage/roms/music`, restart ES: it plays in the menu |
+
+## E. Online play parked (1.6 task 5)
+
+Nintendo WFC doesn't get past the game's own Wi-Fi setup yet, so 1.6 neither shows nor runs it.
+- ES no longer offers *wfc dns*.
+- `session.sh` doesn't export it.
+- libdsflip ignores `nds.wfc_dns` (only the `DSFLIP_WFC` test switch turns the hook on; `DSFLIP_WFC_CONFIG=1` reads
+  the setting again).
+- The work in progress is SuperDrastic `1.6-prep`'s last commit (01269ed), outside the 1.6 package. Section 4 below is
+  the plan for when it returns.
+
+**On the device:**
+- *Nintendo DS* advanced settings (system and per game) have no *wfc dns*.
+- `last-session.log` says `wifi: off`, and `dsflip.log` has no `[wfc]` line, even with `nds.wfc_dns=kaeru` left in
+  `system.cfg` from 1.5.13.
+- `systemctl set-environment DSFLIP_WFC=kaeru` still gives `[wfc] online via Kaeru WFC` (then `unset-environment`).
+
+## F. The in-game menu on the RG DS
+
+Not on this line's list: the Plus has had it since 1.5.13 beta 1. The RG DS line now ships the same library, and its
+hand-off (`claude/1-6-prep-work-kwq9lc`, section F) has the checks for 640x480.
+
+## G. Not done tonight: two suggestions, with a plan
+
+- **#42, in-game saves in a folder of their own.**
+  - ROCKNIX's `start_drastic.sh` runs `rm -rf /storage/.config/drastic/backup; ln -sf /storage/roms/nds ...` on every
+    launch, so the `.dsv` files live beside the ROMs.
+  - Plan: in `drastic-wrapper.sh`, which runs after that, point `backup` (as a symlink: a real directory would be
+    deleted by that `rm -rf`) at `roms/saves/nds`, and move the existing `.dsv` files once, never overwriting.
+    Point `session.sh`'s `DSV` (the resume state's staleness check) there, and make uninstall move them back.
+  - It moves the players' save files, so it should be an opt-in ES switch, and the owner's call. Not started.
+- **#44, the ROM's own icon instead of the box art on the bottom screen.**
+  - The 32x32 icon is in the ROM: the header's 0x68 gives the banner, with 512 bytes of 4bpp tiles at +0x20 and a
+    BGR555 palette at +0x220.
+  - Plan:
+    - extract it in `rocknixds-media.py` (which reads the header already, for the RetroAchievements hash);
+    - push it to ES as an unused media field;
+    - add a Pixel setting ("Cartridge art: label / ROM icon") read by `artOf()` in `RndsUI.cpp`.
+  - Medium-sized (scripts, the rnds engine and a GuiMenu switch). Left for after 1.6's fixes.
 
 ## Results on an RG DS Plus, 2026-10-05
 
@@ -171,8 +427,8 @@ for its whole 2.5 minutes, and two where the peak sat at `0.0000` for 100 s mid-
 delivers silence at times (a suspended PipeWire source? the pause menu?), which the `capture is silent` line now
 names at start and which step 2 can catch mid-game.
 
-**Done on the host** (SuperDrastic `0.4.0-beta.2-rocknixds.3`, commit *Microphone: tunables and logs for the
-handheld* in `dsflip/superdrastic-0.4.0-beta.2-rocknixds.3.patch`; nothing needs a rebuild to test):
+**Done on the host** (SuperDrastic commit *Microphone: tunables and logs for the handheld*, d8291e0, in every
+package since `0.4.0-beta.2-rocknixds.3`; 1.6 ships `0.5.0-beta.1-rocknixds.5`; nothing needs a rebuild to test):
 
 - `dsflip.log` says at start how the control is bound: `[mic] fake microphone: drastic.cfg controls_a 327 (Scroll
   Lock), controls_b N: pressing the key`, or `... pressing joystick button N` when the keyboard set is unbound but
@@ -242,11 +498,11 @@ thread, so it separates DraStic's side from ours when both lines are on the desk
    `src/audio.c`, 0.035 = 250 Hz, 0.014 = 100 Hz) or real echo cancellation, and that is the finding to report.
 4. **H5, flicker.** `DSFLIP_MIC_HOLD_MS=150` (then 300): the `PRESS` count per blow drops to 1-2 and the candle goes
    out. The fix is that value as `envf("DSFLIP_MIC_HOLD_MS", ...)`'s default.
-5. **Rebuild** once the defaults are known: in a SuperDrastic checkout on branch `rocknixds-wfc` (or
-   `git am dsflip/superdrastic-0.4.0-beta.2-rocknixds.3.patch` on tag `v0.4.0-beta.2`), bump `VERSION` to
-   `0.4.0-beta.2-rocknixds.4`, `sh build.sh <arm64 sysroot>` and `sh package.sh` (the `SUPERDRASTIC` file's comment
+5. **Rebuild** once the defaults are known: in a SuperDrastic checkout of branch `claude/1-6-prep-work-kwq9lc` (or
+   `git am dsflip/superdrastic-0.5.0-beta.1-rocknixds.5.patch` on tag `v0.5.0-beta.1`), bump `VERSION` to
+   `0.5.0-beta.1-rocknixds.6`, `sh build.sh <arm64 sysroot>` and `sh package.sh` (the `SUPERDRASTIC` file's comment
    names the toolchain), ship the tarball in `dsflip/`, regenerate the patch (`git format-patch --stdout
-   v0.4.0-beta.2..rocknixds-wfc`), pin version and sha256 in `SUPERDRASTIC`, and test it with `RGDS_SRC=<checkout>
+   v0.5.0-beta.1..HEAD`), pin version and sha256 in `SUPERDRASTIC`, and test it with `RGDS_SRC=<checkout>
    sh install.sh` on the device (the installer takes `dsflip/superdrastic-<ver>-aarch64.tar.gz` from the checkout by
    itself; without `RGDS_SRC` it fetches the latest release and compares the tarball against that release's pin, and
    dies; `RGDS_SUPERDRASTIC=<tarball>` is only for a package that is not in `dsflip/`). Then `systemctl
@@ -263,9 +519,14 @@ excerpt, and add the found defaults to the release notes' microphone section.
 
 ## 4. Wi-Fi online play (Nintendo WFC)
 
+**Parked for 1.6** (section E): ES no longer offers *wfc dns*, `session.sh` doesn't export it, and libdsflip turns the
+hook on only with the `DSFLIP_WFC` test switch (`DSFLIP_WFC_CONFIG=1` reads `nds.wfc_dns` again). The steps below
+still apply with `systemctl set-environment DSFLIP_WFC=kaeru`; where they say "the ES option *wfc dns*", use that.
+The work in progress since then is SuperDrastic `1.6-prep`'s last commit (01269ed, outside the 1.6 package).
+
 **Nothing in this section has run on a handheld.** DraStic has no Wi-Fi emulation: its wifi register handlers are
-stubs. The SuperDrastic package this branch ships (`0.4.0-beta.2-rocknixds.3`, source in
-`dsflip/superdrastic-0.4.0-beta.2-rocknixds.3.patch`, SuperDrastic branch `rocknixds-wfc`) carries the port of
+stubs. The SuperDrastic package (since `0.4.0-beta.2-rocknixds.3`; in 1.6 `0.5.0-beta.1-rocknixds.5`, source in
+`dsflip/superdrastic-0.5.0-beta.1-rocknixds.5.patch`) carries the port of
 ROCKNIXDS's unmerged `origin/cursor/drastic-wfc-dns-24ad` (b1a4564): `src/wifi.c` replaces DraStic r2.5.2.2's wifi
 load/store handler tables (at fixed offsets, for build id `7a5e0e5fc6e52e6e8f5499c3d4d667ef51db0748` only), answers
 the game as an open access point named `rocknixds`, hands it the chosen DNS server over DHCP and carries the game's
