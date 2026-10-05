@@ -1,12 +1,12 @@
 # The SuperDrastic release install.sh installs (https://github.com/JorreFog/SuperDrastic): version and the sha256 of
 # superdrastic-<version>-aarch64.tar.gz. Bump both together. This release ships the package in dsflip/.
-# 0.5.0-beta.1-rocknixds.4 is SuperDrastic v0.5.0-beta.1 (the in-game menu) plus
-# dsflip/superdrastic-0.5.0-beta.1-rocknixds.4.patch (SuperDrastic branch claude/1-6-prep-work-kwq9lc): 1.5.13's four
+# 0.5.0-beta.1-rocknixds.5 is SuperDrastic v0.5.0-beta.1 (the in-game menu) plus
+# dsflip/superdrastic-0.5.0-beta.1-rocknixds.5.patch (SuperDrastic branch claude/1-6-prep-work-kwq9lc): 1.5.13's four
 # commits (shader output sizes with ds-fsr at 3x on the RG DS Plus; the Wi-Fi / Nintendo WFC path; its pre-device
 # fixes; the microphone's tunables, logs and joystick-button fallback) and 1.6's (the stall watch and a quit that works
 # on a stuck game; new threads on every CPU; RetroAchievements logins that survive no network; online play only with
-# DSFLIP_WFC; the menu's Blow on the fake microphone's real binding). The same package on the RG DS and the RG DS Plus.
+# DSFLIP_WFC; the menu's Blow on the fake microphone's real binding; DSFLIP_STALL_TEST). The same package on the RG DS and the RG DS Plus.
 # Built with build.sh (Ubuntu clang 18 + lld, an Ubuntu noble arm64 sysroot: libc6 2.39, libdrm 2.4.125) and
 # package.sh; it needs glibc 2.38 like the release. Once the patch is in a SuperDrastic release, pin that release here
 # instead and drop the patch.
-0.5.0-beta.1-rocknixds.4 a59b3b8a903f9d39ef79d27ee5b576e186c9a41ac016ac0d34e52452a4f253ec
+0.5.0-beta.1-rocknixds.5 bfd02d430ed3e2014cc35b68576ba5482aa116eda3577092a3ae1bc5b617940e
