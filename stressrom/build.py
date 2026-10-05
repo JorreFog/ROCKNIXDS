@@ -2,7 +2,8 @@
 """Build dsstress .nds ROMs: a tunable 3D stress load for DraStic (see main9.c).
 
     build.py                      -> out/dsstress-ramp.nds, out/dsstress-L1..L10.nds, out/dsswap.nds,
-                                     out/dsscenes-cycle.nds, out/dsscenes-S0..S9.nds (scenes9.c)
+                                     out/dsscenes-cycle.nds, out/dsscenes-S0..S9.nds (scenes9.c),
+                                     out/ds2d-cycle.nds, out/ds2d-T0..T9.nds (ds2d.c: engine A 2D scenes)
 Needs clang + ld.lld (targets armv5te for the ARM9; the ARM7 is a 4-byte halt stub).
 Header layout mirrors the minimal ROM DraStic is known to boot: ARM9 at 0x8000, no logo.
 """
@@ -55,6 +56,7 @@ def build_arm9(src, tag):
 run(["clang", *T, "-c", "crt9.s", "-o", "out/crt9.o"])
 arm9 = build_arm9("main9.c", "arm9")
 scenes9 = build_arm9("scenes9.c", "scenes9")
+ds2d = build_arm9("ds2d.c", "ds2d")
 # ARM7 stub: HALTCNT <- 0x80 in a loop (ldr/strb/b with the address in a literal)
 arm7 = struct.pack("<5I", 0xE59F0008, 0xE3A01080, 0xE5C01001, 0xEAFFFFFB, 0x04000300)
 
@@ -89,4 +91,6 @@ names += [rom(f"dsstress-L{l}.nds", 0, l) for l in range(1, 11)]
 names += [rom("dsswap.nds", 2, 1, ramp=120)]            # screen swap (POWCNT1 bit 15) every 2 s, like DQ4's battles
 names += [rom("dsscenes-cycle.nds", 1, 0, ramp=240, code=scenes9, title=b"DSSCENES")]   # 3D feature scenes, 4 s each
 names += [rom(f"dsscenes-S{i}.nds", 0, i, ramp=240, code=scenes9, title=b"DSSCENES") for i in range(10)]
+names += [rom("ds2d-cycle.nds", 1, 0, ramp=240, code=ds2d, title=b"DS2D")]             # 2D feature scenes, 4 s each
+names += [rom(f"ds2d-T{i}.nds", 0, i, ramp=240, code=ds2d, title=b"DS2D") for i in range(10)]
 print("arm9 %d bytes ->" % len(arm9), " ".join(names))
