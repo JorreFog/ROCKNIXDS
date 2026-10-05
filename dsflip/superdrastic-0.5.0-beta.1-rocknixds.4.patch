@@ -1,7 +1,7 @@
 From 02b181f40a019b94299b02b8dc5f334ca74781c4 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 15:21:56 +0000
-Subject: [PATCH 1/4] Shaders can draw a smaller buffer than the panel; ds-fsr
+Subject: [PATCH 1/8] Shaders can draw a smaller buffer than the panel; ds-fsr
  draws 3x on the RG DS Plus
 
 A shader's source may say "// dsflip-output: Nx" (N times the DS screen's 256x192) or "dsflip-output: WxH": its
@@ -306,13 +306,13 @@ index 1939acf..e7dd4a9 100644
      for (int y = 0; y < sh; y++) for (int x = 0; x < sw; x++) {      /* colour bars + 1px checker + gradient */
          uint32_t v;
 -- 
-2.56.0
+2.43.0
 
 
 From 3de78751408ed7350c4f6d726775267571fcfd5a Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 17:39:05 +0000
-Subject: [PATCH 2/4] Port the Wi-Fi (Nintendo WFC) path from ROCKNIXDS
+Subject: [PATCH 2/8] Port the Wi-Fi (Nintendo WFC) path from ROCKNIXDS
  cursor/drastic-wfc-dns into SuperDrastic
 
 Ported, unchanged in logic, from ROCKNIXDS commit b1a4564 (branch origin/cursor/drastic-wfc-dns-24ad,
@@ -2190,13 +2190,13 @@ index 0000000..535fe1c
 +    return 0;
 +}
 -- 
-2.56.0
+2.43.0
 
 
 From 0861654f97441d280960ff3a1757773aa49064be Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 17:56:24 +0000
-Subject: [PATCH 3/4] Wi-Fi: ARP only for the gateway, RX records with their
+Subject: [PATCH 3/8] Wi-Fi: ARP only for the gateway, RX records with their
  FCS and W_RXLEN_CROP, a probe of DraStic's W_IF store;
  0.4.0-beta.2-rocknixds.2
 
@@ -2407,13 +2407,13 @@ index 535fe1c..a90f87d 100644
      c.n = 0;
      uint8_t echo[16]; memset(echo, 0, sizeof echo);
 -- 
-2.56.0
+2.43.0
 
 
 From d8291e0d67a1a77942bc6ea7dabb2cd5b90e5a9c Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 18:07:03 +0000
-Subject: [PATCH 4/4] Microphone: tunables and logs for the handheld, a
+Subject: [PATCH 4/8] Microphone: tunables and logs for the handheld, a
  joystick-button fallback for the fake microphone; 0.4.0-beta.2-rocknixds.3
 
 A real blow does nothing on the RG DS (ROCKNIXDS issue 26). The mic thread can now be tuned and watched without a
@@ -2627,5 +2627,701 @@ index 9892be8..f397894 100644
  static int control_button_any(const char *name) { int b = control_button_in("a", name); return b >= 0 ? b : control_button_in("b", name); }
  
 -- 
-2.56.0
+2.43.0
+
+
+From fe2c56f1a6a455a5c776ac5dbdf15c6c92678f81 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 5 Oct 2026 22:54:27 +0000
+Subject: [PATCH 5/8] Stall watch, a quit that works on a stuck game,
+ RetroAchievements logins that survive no network
+
+2026-10-05, an RG DS Plus: Black 2 started with its resume state, DraStic stopped presenting frames a few seconds
+later and the handheld needed a hard reset. Nothing could end that game: the exit hotkey (resume on quit) only
+asks DraStic's main thread to save at its next frame, which never came, and a second press did not escalate;
+session.sh's check covers only a SIGKILL the kernel can't deliver.
+
+- dsflip.c: the presenter watches for frames. 5 s without one, outside DraStic's own menu, the in-game menu and
+  the quit's save: every thread's state, CPU time, allowed CPUs, syscall, wait channel and kernel stack go to the
+  log (fsync'd), a card says the game stopped responding, and the exit hotkey quits at once. 20 s
+  (DSFLIP_STALL_QUIT; 0: never): the game is ended, with a line for the launcher's notice (DSFLIP_NOTICE).
+- dsflip.c: new threads start on every CPU instead of inheriting their creator's. The RG DS Plus's CPU placement
+  confines DraStic's main thread to CPU 3, and threads created from it after that (a state load, the 3D pool)
+  shared that one CPU: the deadlock 68dfccd (ROCKNIXDS) saw at start, helpers that never ran and a main thread
+  waiting for them. DSFLIP_SPREAD_THREADS=0: inherit as before.
+- resume.c: a second exit hotkey press a second or more after the first, a stalled game, or a request DraStic
+  doesn't take within 3 s (5 s with the in-game menu up) quits at once, without the resume state.
+- ra.c: a request that got no answer passes curl's error to rcheevos (the log and the pop-up said "Login failed: "
+  with nothing after it) and logs it with the API name; other HTTP statuses are logged. A login with no answer, a
+  429 or a 5xx keeps the saved token and is tried again at 15 s, 30 s, 60 s, then every 2 minutes (it deleted the
+  token and tried the password at once, which failed the same way). No empty pop-up lines.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01TipFb6VWRr6YwuU4pm2dbw
+---
+ docs/INTEGRATION.md |   3 ++
+ src/dsflip.c        | 119 ++++++++++++++++++++++++++++++++++++++++++++
+ src/menu.c          |   3 ++
+ src/ra.c            |  92 ++++++++++++++++++++++++++++++----
+ src/resume.c        |  38 ++++++++++++--
+ 5 files changed, 241 insertions(+), 14 deletions(-)
+
+diff --git a/docs/INTEGRATION.md b/docs/INTEGRATION.md
+index 330859e..4779000 100644
+--- a/docs/INTEGRATION.md
++++ b/docs/INTEGRATION.md
+@@ -157,6 +157,9 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
+ | `DSFLIP_QUEUE_WAIT` | 0 (off) | Milliseconds DraStic is held when the queue is full, instead of dropping a frame (20 works; for capped clocks) |
+ | `DSFLIP_LATCH_MARGIN` | 1300 | The shortest time (µs) before a vblank that a frame is committed at (diagnostics) |
+ | `DSFLIP_RESUME_FILE`, `DSFLIP_RESUME_LOAD` | | See *Quitting with a save* |
++| `DSFLIP_STALL_QUIT` | 20 | Seconds without a frame from DraStic (outside its menu and the in-game menu) before the game is ended; 0 = never. After 5 s the log lists every thread's state and a card says so, and the exit hotkey quits at once |
++| `DSFLIP_NOTICE` | `/tmp/dsflip-notice` | Where that ending leaves a line for the launcher to show |
++| `DSFLIP_SPREAD_THREADS` | 1 | 0 = new threads inherit their creator's CPUs (with DraStic's main thread confined to one CPU, its new helper threads then share that CPU only) |
+ | `DSFLIP_GPU_CLOCKS`, `DSFLIP_AUDIO_RATE` | 1, 1 | The launcher's GPU clock and PipeWire rate handling |
+ | `DSFLIP_WFC` | off | Nintendo WFC online play (untested on hardware): `kaeru`, `altwfc`, `wiilink` or a dotted DNS address. SuperDrastic answers the DS as an open access point named `rocknixds` and hands it that DNS server over DHCP; the game's traffic goes through the host's own sockets (UDP, client TCP). Needs the DraStic build r2.5.2.2 (it checks the build id). Without the variable, `nds.wfc_dns` in ROCKNIX's `system.cfg` is read. `DSFLIP_WFC_DEBUG=1` logs every frame |
+ | `DSFLIP_AUDIO_PUMP` | 1 | 0 = DraStic's own SDL audio |
+diff --git a/src/dsflip.c b/src/dsflip.c
+index c547b1e..b7be2fd 100644
+--- a/src/dsflip.c
++++ b/src/dsflip.c
+@@ -697,6 +697,7 @@ static void *shader_worker(void *a) {
+     return 0;
+ }
+ 
++static void stall_watch(long long t);
+ static void *presenter(void *a) {
+     (void)a;
+     /* the presenter reacts to vblank events and the latch timer; its work per wake-up is tiny, but a late wake-up
+@@ -750,6 +751,7 @@ static void *presenter(void *a) {
+         if (toast_dirty && !pending_mask && !P[0].ready && !P[1].ready) {   /* an overlay change with no frame coming */
+             lock(&mu); commit_src = 'T'; try_commit(); unlock(&mu);
+         }
++        stall_watch(now_us());                                            /* DraStic still presenting? */
+         if (want_dump) { want_dump = 0; lock(&mu); dump_scan(); unlock(&mu); }
+         if (tdump_n < touch_dumps && tdump_x >= 0) { lock(&mu); dump_touch(); unlock(&mu); tdump_n++; tdump_x = -1; }
+         long long t = now_us();
+@@ -818,6 +820,114 @@ static void *presenter(void *a) {
+     return 0;
+ }
+ 
++/* ---------- stall watch ----------
++ * DraStic's main thread presents the frames, and it is also what saves the resume state and quits on the exit hotkey
++ * (resume.c). When it stops, the panels keep the last frame, the hotkey does nothing and nothing else ends the game:
++ * on 2026-10-05 an RG DS Plus needed a hard reset (Black 2, just after its resume load). The presenter runs on
++ * regardless, so it watches. No frame for STALL_WARN_S while the game should be running (DraStic's own menu presents
++ * only when it changes, and the in-game menu holds DraStic on purpose: neither counts; nor does the quit's save)
++ * logs what every thread is doing, shows a card, and makes the exit hotkey quit at once (resume.c). After
++ * DSFLIP_STALL_QUIT seconds (20; 0: never) the game is ended here, with a notice for the menu (session.sh shows
++ * DSFLIP_NOTICE, default /tmp/dsflip-notice). */
++#define STALL_WARN_S 5
++volatile int dsflip_stalled;            /* no frame for STALL_WARN_S: resume.c's SIGUSR1 then quits at once */
++static int stall_quit_s = 20;
++static long long stall_t0;              /* since when no frame came (only while one is expected) */
++static char log_path[512];
++int menu_is_open(void);                 /* menu.c */
++int resume_saving(void);                /* resume.c: the quit's save is being written (DraStic's thread is busy) */
++static void stall_dump(FILE *f) {       /* every thread: name, state, CPU time, allowed CPUs, wait channel, kernel stack */
++    glob_t g;
++    if (glob("/proc/self/task/[0-9]*", 0, 0, &g)) return;
++    for (size_t i = 0; i < g.gl_pathc; i++) {
++        char p[300], comm[32] = "?", st[1024] = "", wchan[64] = "", cpus[64] = "?", sc[64] = "", line[256];
++        const char *tid = strrchr(g.gl_pathv[i], '/') + 1;
++        FILE *x;
++        snprintf(p, sizeof p, "%s/comm", g.gl_pathv[i]);
++        if ((x = fopen(p, "r"))) { if (fgets(comm, sizeof comm, x)) comm[strcspn(comm, "\n")] = 0; fclose(x); }
++        snprintf(p, sizeof p, "%s/stat", g.gl_pathv[i]);
++        if ((x = fopen(p, "r"))) { if (!fgets(st, sizeof st, x)) st[0] = 0; fclose(x); }
++        char state = '?'; unsigned long ut = 0, stt = 0; int cpu = -1;
++        { char *r = strrchr(st, ')');           /* after "(comm)": state, then field 14/15 utime/stime, 39 processor */
++          if (r && sscanf(r + 2, "%c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %*d %*d %*u %*u %*d %*u %*u %*u %*u %*u %*u %*u %*u %*u %*u %*u %*u %*u %*d %d",
++                             &state, &ut, &stt, &cpu) < 3) state = '?'; }
++        snprintf(p, sizeof p, "%s/wchan", g.gl_pathv[i]);
++        if ((x = fopen(p, "r"))) { if (!fgets(wchan, sizeof wchan, x)) wchan[0] = 0; fclose(x); }
++        snprintf(p, sizeof p, "%s/syscall", g.gl_pathv[i]);
++        if ((x = fopen(p, "r"))) { if (fgets(sc, sizeof sc, x)) sc[strcspn(sc, " \n")] = 0; fclose(x); }
++        snprintf(p, sizeof p, "%s/status", g.gl_pathv[i]);
++        if ((x = fopen(p, "r"))) {
++            while (fgets(line, sizeof line, x)) if (!strncmp(line, "Cpus_allowed_list:", 18)) { snprintf(cpus, sizeof cpus, "%s", line + 18 + strspn(line + 18, " \t")); cpus[strcspn(cpus, "\n")] = 0; }
++            fclose(x);
++        }
++        fprintf(f, "[stall] thread %s %-15s %c cpu-time %lu ms, on CPU %d, allowed %s, syscall %s, waiting in %s\n", tid, comm,
++                state, (ut + stt) * 10, cpu, cpus, sc[0] ? sc : "-", wchan[0] && strcmp(wchan, "0") ? wchan : "-");
++        snprintf(p, sizeof p, "%s/stack", g.gl_pathv[i]);
++        if ((x = fopen(p, "r"))) {                 /* the kernel side (root only): the first frames say enough */
++            for (int k = 0; k < 4 && fgets(line, sizeof line, x); k++) fprintf(f, "[stall]     %s", line);
++            fclose(x);
++        }
++    }
++    globfree(&g);
++}
++static void *stall_report(void *a) {    /* its own thread: the presenter never waits on files or the overlay */
++    long long idle = (long long)(intptr_t)a;
++    if (lg) { flockfile(lg); fprintf(lg, "[stall] no frame from DraStic for %.1f s (not in a menu): its threads\n", idle / 1e6); stall_dump(lg); funlockfile(lg); fflush(lg); fsync(fileno(lg)); }
++    dsflip_toast("The game stopped responding", stall_quit_s > 0 ? "Exit hotkey: back to the menu now (or wait)" : "Exit hotkey: back to the menu", 0xe04040, 600000);
++    return 0;
++}
++static void stall_watch(long long t) {  /* the presenter, every wake-up (at least every 50 ms), mu not held */
++    static int seen;
++    int p = dsflip_presents;
++    if (p != seen || !p || menu_touch || menu_is_open() || resume_saving()) {
++        if (dsflip_stalled) LOG("[stall] DraStic shows frames again after %.1f s\n", (t - stall_t0) / 1e6);
++        dsflip_stalled = 0; seen = p; stall_t0 = t;
++        return;
++    }
++    long long idle = t - stall_t0;
++    if (!dsflip_stalled && idle >= STALL_WARN_S * 1000000LL) {
++        dsflip_stalled = 1;
++        pthread_t th; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
++        if (!pthread_create(&th, &at, stall_report, (void *)(intptr_t)idle)) pthread_setname_np(th, "dsf-stall");
++        pthread_attr_destroy(&at);
++    }
++    if (dsflip_stalled && stall_quit_s > 0 && idle >= stall_quit_s * 1000000LL) {
++        const char *np = getenv("DSFLIP_NOTICE"); if (!np || !*np) np = "/tmp/dsflip-notice";
++        FILE *f = fopen(np, "w");
++        if (f) { fprintf(f, "The game stopped responding (no picture for %d seconds) and was closed. Log: %s\n", stall_quit_s, log_path); fclose(f); }
++        LOG("[stall] still no frame after %d s: ending the game (DSFLIP_STALL_QUIT=0 keeps it)\n", stall_quit_s);
++        if (lg) { fflush(lg); fsync(fileno(lg)); }
++        kill(getpid(), SIGKILL);
++    }
++}
++
++/* Threads start on every CPU, not just their creator's. session.sh's CPU placement (the RG DS Plus) confines DraStic's
++ * main thread to CPU 3, and a thread created from a confined thread inherits that one CPU: DraStic's 3D helpers made
++ * that way never ran, missed their first hand-off and DraStic's main thread and the helpers waited on each other for
++ * good (68dfccd in ROCKNIXDS: 8 of 9 starts froze when the placement came too early). The placement only waits for the
++ * helpers that exist when it starts; whatever DraStic (or SDL, PipeWire, Mali, libcurl, libdsflip) creates later --
++ * after a state load, say -- started on CPU 3 alone until the next placement pass. glibc applies an attribute's CPU
++ * set before the new thread first runs. DSFLIP_SPREAD_THREADS=0: inherit as before. */
++static cpu_set_t all_cpus; static int spread_threads = -1;
++int pthread_create(pthread_t *th, const pthread_attr_t *attr, void *(*fn)(void *), void *arg) {
++    static int (*real)(pthread_t *, const pthread_attr_t *, void *(*)(void *), void *);
++    if (!real) real = (int (*)(pthread_t *, const pthread_attr_t *, void *(*)(void *), void *))dlsym(RTLD_NEXT, "pthread_create");
++    if (spread_threads <= 0) return real(th, attr, fn, arg);
++    cpu_set_t cur;
++    if (sched_getaffinity(0, sizeof cur, &cur) || CPU_EQUAL(&cur, &all_cpus)) return real(th, attr, fn, arg);   /* creator not confined */
++    if (attr) {
++        cpu_set_t want;                 /* an attribute that names CPUs itself is left alone (unset reads as all bits) */
++        if (pthread_attr_getaffinity_np(attr, sizeof want, &want) == 0 && CPU_COUNT(&want) != CPU_SETSIZE) return real(th, attr, fn, arg);
++        pthread_attr_setaffinity_np((pthread_attr_t *)attr, sizeof all_cpus, &all_cpus);
++        return real(th, attr, fn, arg);
++    }
++    pthread_attr_t a; pthread_attr_init(&a);
++    pthread_attr_setaffinity_np(&a, sizeof all_cpus, &all_cpus);
++    int r = real(th, &a, fn, arg);
++    pthread_attr_destroy(&a);
++    return r;
++}
++
+ /* ---------- the in-game menu's screens (menu.c) ---------- */
+ /* two panel-sized XRGB8888 buffers per panel; the menu draws into one that isn't on screen or on its way there and
+  * puts it up in place of whatever frames were waiting. DraStic's next frame after the menu replaces them. */
+@@ -1127,6 +1237,10 @@ __attribute__((constructor)) static void init(void) {
+        to become DRM master for 3 s, writing "passthrough" over the session's verdict. */
+     if (getenv("DSFLIP_IN_GAME")) return;
+     setenv("DSFLIP_IN_GAME", "1", 1);
++    {   /* the CPUs new threads start on (the pthread_create above): the whole set, before anything is confined */
++        const char *sp = getenv("DSFLIP_SPREAD_THREADS");
++        spread_threads = !(sp && *sp == '0') && sched_getaffinity(0, sizeof all_cpus, &all_cpus) == 0 && CPU_COUNT(&all_cpus) > 1;
++    }
+     const char *lp = getenv("DSFLIP_LOG"); if (!lp) lp = "/storage/dsflip/logs/dsflip.log";
+     {   /* keep the previous three sessions' logs (.1 = the last one): testers lost evidence to the overwrite */
+         char a[512], b[512];
+@@ -1136,6 +1250,7 @@ __attribute__((constructor)) static void init(void) {
+             rename(a, b);
+         }
+     }
++    snprintf(log_path, sizeof log_path, "%s", lp);
+     lg = fopen(lp, "w");
+     if (lg) setvbuf(lg, 0, _IOLBF, 0);
+     LOG("[dsflip] libdsflip %s\n", DSFLIP_VERSION);
+@@ -1251,6 +1366,10 @@ __attribute__((constructor)) static void init(void) {
+     LOG("[dsflip] toast plane: %u (%dx%d)\n", tp_plane, TOAST_W, TOAST_H);
+     if (tp_plane) volume_start();           /* the volume keys' indicator (volume.c): mako is down with sway */
+     signal(SIGUSR2, on_usr2);
++    { const char *sq = getenv("DSFLIP_STALL_QUIT"); if (sq && *sq) stall_quit_s = atoi(sq) > 0 ? atoi(sq) : 0; }
++    { LOG("[dsflip] stall watch: a card after %d s without a frame, the game ended after %d s%s; new threads start on %d CPUs%s\n",
++          STALL_WARN_S, stall_quit_s, stall_quit_s ? "" : " (never: DSFLIP_STALL_QUIT=0)", spread_threads > 0 ? CPU_COUNT(&all_cpus) : 0,
++          spread_threads > 0 ? "" : " (inherited: DSFLIP_SPREAD_THREADS=0)"); }
+     { const char *q = getenv("DSFLIP_QUEUE"); if (q && *q) { queue_depth = atoi(q); if (queue_depth < 0) queue_depth = 0; if (queue_depth > QMAX) queue_depth = QMAX; } }
+     const char *pm = getenv("DSFLIP_PACING");
+     if (pm && !strcmp(pm, "immediate")) pacing_latch = 0;
+diff --git a/src/menu.c b/src/menu.c
+index 1275655..fd02359 100644
+--- a/src/menu.c
++++ b/src/menu.c
+@@ -1136,6 +1136,9 @@ int menu_event(void *ev) {
+     return 0;
+ }
+ 
++/* dsflip.c's stall watch: DraStic waits inside SDL_PollEvent while the menu is up, on purpose */
++int menu_is_open(void) { return open_; }
++
+ /* every present (dsflip.c) */
+ void menu_frame(void) {
+     static int test = -1; static int frames;
+diff --git a/src/ra.c b/src/ra.c
+index 677a237..784d6eb 100644
+--- a/src/ra.c
++++ b/src/ra.c
+@@ -24,6 +24,7 @@
+ #include <sys/mman.h>
+ #include <sys/stat.h>
+ #include <unistd.h>
++#include <time.h>
+ #include "rc_client.h"
+ #include "rc_consoles.h"
+ #include "rc_hash.h"
+@@ -83,9 +84,11 @@ static void *curl_lib;
+ static void *(*c_init)(void); static int (*c_setopt)(void *, int, ...); static int (*c_perform)(void *);
+ static int (*c_getinfo)(void *, int, ...); static void (*c_cleanup)(void *);
+ static void *(*c_slist_append)(void *, const char *); static void (*c_slist_free)(void *);
++static const char *(*c_strerror)(int);
+ enum { CURLOPT_WRITEDATA = 10001, CURLOPT_URL = 10002, CURLOPT_POSTFIELDS = 10015, CURLOPT_USERAGENT = 10018,
+        CURLOPT_HTTPHEADER = 10023, CURLOPT_WRITEFUNCTION = 20011, CURLOPT_TIMEOUT = 13, CURLOPT_NOSIGNAL = 99,
+-       CURLOPT_FOLLOWLOCATION = 52, CURLINFO_RESPONSE_CODE = 0x200002 };
++       CURLOPT_FOLLOWLOCATION = 52, CURLOPT_ERRORBUFFER = 10010, CURLOPT_CONNECTTIMEOUT = 78,
++       CURLINFO_RESPONSE_CODE = 0x200002 };
+ 
+ static int curl_load(void) {
+     if (curl_lib) return 1;
+@@ -95,6 +98,7 @@ static int curl_load(void) {
+     c_perform = dlsym(curl_lib, "curl_easy_perform"); c_getinfo = dlsym(curl_lib, "curl_easy_getinfo");
+     c_cleanup = dlsym(curl_lib, "curl_easy_cleanup"); c_slist_append = dlsym(curl_lib, "curl_slist_append");
+     c_slist_free = dlsym(curl_lib, "curl_slist_free_all");
++    c_strerror = dlsym(curl_lib, "curl_easy_strerror");
+     return c_init && c_setopt && c_perform && c_getinfo && c_cleanup && c_slist_append && c_slist_free;
+ }
+ 
+@@ -108,18 +112,35 @@ static size_t on_body(char *p, size_t sz, size_t n, void *u) {
+ 
+ typedef struct { char *url, *post, *ctype; rc_client_server_callback_t cb; void *cbdata; } http_req;
+ static char user_agent[256];
++/* the HTTP status of the request whose callback runs on this thread (0: no answer at all): the login callbacks tell a
++ * network failure, which must not cost the saved token, from a real refusal */
++static __thread long http_status;
++
++/* the API a request is for ("r=login2"), for the log: never the post data itself, it holds the password or token */
++static void api_name(const http_req *r, char *out, size_t n) {
++    const char *q = r->post ? r->post : strchr(r->url, '?');
++    const char *p = q ? strstr(q, "r=") : 0;
++    while (p && p != q && p[-1] != '&' && p[-1] != '?') p = strstr(p + 1, "r=");
++    if (!p) { snprintf(out, n, "?"); return; }
++    p += 2; size_t k = strcspn(p, "&"); if (k >= n) k = n - 1;
++    memcpy(out, p, k); out[k] = 0;
++}
+ 
+ static void *http_thread(void *a) {
+     http_req *r = a;
+     membuf body = { 0, 0 }; long status = 0;
++    char err[256] = "";
+     void *h = c_init();
+     void *hdrs = 0;
++    int code = -1;
+     if (h) {
+         c_setopt(h, CURLOPT_URL, r->url);
+         c_setopt(h, CURLOPT_USERAGENT, user_agent);
+         c_setopt(h, CURLOPT_NOSIGNAL, 1L);
+         c_setopt(h, CURLOPT_TIMEOUT, 30L);
++        c_setopt(h, CURLOPT_CONNECTTIMEOUT, 10L);
+         c_setopt(h, CURLOPT_FOLLOWLOCATION, 1L);
++        c_setopt(h, CURLOPT_ERRORBUFFER, err);
+         c_setopt(h, CURLOPT_WRITEFUNCTION, on_body);
+         c_setopt(h, CURLOPT_WRITEDATA, &body);
+         if (r->post) {
+@@ -129,13 +150,28 @@ static void *http_thread(void *a) {
+                 hdrs = c_slist_append(0, ct); c_setopt(h, CURLOPT_HTTPHEADER, hdrs);
+             }
+         }
+-        if (c_perform(h) == 0) c_getinfo(h, CURLINFO_RESPONSE_CODE, &status);
++        if ((code = c_perform(h)) == 0) c_getinfo(h, CURLINFO_RESPONSE_CODE, &status);
+         c_cleanup(h);
+         if (hdrs) c_slist_free(hdrs);
+     }
+     rc_api_server_response_t resp;
+-    resp.body = body.data ? body.data : ""; resp.body_length = body.len;
+-    resp.http_status_code = status ? (int)status : RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR;
++    char api[32]; api_name(r, api, sizeof api);
++    char msg[320];
++    if (!status) {
++        /* no answer: rcheevos takes the body of a client error as the error text. It used to be empty, so the log and
++         * the pop-up said "Login failed: " with nothing after it (2026-10-05) */
++        snprintf(msg, sizeof msg, "no connection to RetroAchievements (%s)",
++                 err[0] ? err : !h ? "libcurl failed to start" : c_strerror ? c_strerror(code) : "network error");
++        dsflip_log("[ra] %s: %s (curl %d)\n", api, msg, code);
++        free(body.data); body.data = 0;
++        resp.body = msg; resp.body_length = strlen(msg);
++        resp.http_status_code = RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR;
++    } else {
++        if (status != 200) dsflip_log("[ra] %s: HTTP %ld (%zu bytes)\n", api, status, body.len);
++        resp.body = body.data ? body.data : ""; resp.body_length = body.len;
++        resp.http_status_code = (int)status;
++    }
++    http_status = status;
+     r->cb(&resp, r->cbdata);
+     free(body.data); free(r->url); free(r->post); free(r->ctype); free(r);
+     return 0;
+@@ -144,7 +180,9 @@ static void *http_thread(void *a) {
+ static void server_call(const rc_api_request_t *req, rc_client_server_callback_t cb, void *cbdata, rc_client_t *c) {
+     (void)c;
+     if (!curl_load()) {
+-        rc_api_server_response_t resp = { "", 0, RC_API_SERVER_RESPONSE_CLIENT_ERROR };
++        static const char nolib[] = "libcurl.so.4 not found";
++        rc_api_server_response_t resp = { nolib, sizeof nolib - 1, RC_API_SERVER_RESPONSE_CLIENT_ERROR };
++        http_status = -1;
+         cb(&resp, cbdata); return;
+     }
+     http_req *r = calloc(1, sizeof *r);
+@@ -385,23 +423,46 @@ static void on_login_password(int result, const char *err, rc_client_t *c, void
+ static void start_load(void) {
+     rc_client_begin_identify_and_load_game(rc, RC_CONSOLE_NINTENDO_DS, rom_path, 0, 0, on_load, 0);
+ }
++/* A login that got no answer (no network yet, DNS, a timeout) or a busy server's (429, 5xx) is tried again later with
++ * the same credentials: it says nothing about them. Before, a failed token login deleted the token and tried the
++ * password at once, which failed the same way: the player lost the saved login to a moment without network.
++ * Retries at 15 s, 30 s, 60 s, then every 2 minutes; one pop-up for the first. ra_frame starts them. */
++static char tok_user[128], tok_token[256];       /* the token login's credentials, for its retries */
++static volatile long long retry_at; static volatile int retry_n, retry_with_token;
++static long long mono_ms(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000LL + t.tv_nsec / 1000000; }
++static int transient(int result) {
++    long st = http_status;
++    return result == RC_NO_RESPONSE || st <= 0 || st == 429 || st >= 500;
++}
++static void retry_later(int with_token, const char *err) {
++    static const int wait_s[] = { 15, 30, 60, 120 };
++    int k = retry_n < 4 ? retry_n : 3;
++    dsflip_log("[ra] %s login: %s (HTTP %ld): trying again in %d s\n", with_token ? "token" : "password", err && *err ? err : "no answer",
++               http_status, wait_s[k]);
++    if (!retry_n) dsflip_toast("RetroAchievements: no connection", "Trying again in the background", 0xff7a4a, 4000);
++    retry_with_token = with_token; retry_n++;
++    retry_at = mono_ms() + wait_s[k] * 1000LL;
++}
+ static void on_login_token(int result, const char *err, rc_client_t *c, void *u) {
+     (void)c; (void)u;
+-    if (result == RC_OK) { dsflip_log("[ra] logged in with token as %s\n", user); logged_in = 1; return; }
+-    dsflip_log("[ra] token login failed (%s)%s\n", err ? err : "?", *pass ? ", trying the password" : "");
++    if (result == RC_OK) { dsflip_log("[ra] logged in with token as %s\n", user); retry_n = 0; logged_in = 1; return; }
++    if (transient(result)) { retry_later(1, err); return; }      /* the token is kept */
++    dsflip_log("[ra] token login refused (%s, HTTP %ld)%s\n", err && *err ? err : "no reason given", http_status, *pass ? ", trying the password" : "");
+     unlink(TOKEN_FILE);
+     if (*pass) rc_client_begin_login_with_password(rc, user, pass, on_login_password, 0);
+-    else dsflip_toast("RetroAchievements", "login expired: re-enter your password in ES", 0xff7a4a, 5000);
++    else dsflip_toast("RetroAchievements", "Login expired: re-enter your password in ES", 0xff7a4a, 5000);
+ }
+ static void on_login_password(int result, const char *err, rc_client_t *c, void *u) {
+     (void)c; (void)u;
+     if (result != RC_OK) {
+-        dsflip_log("[ra] login failed: %s\n", err ? err : "?");
+-        dsflip_toast("RetroAchievements login failed", err ? err : "check user/password in ES", 0xff7a4a, 5000);
++        if (transient(result)) { retry_later(0, err); return; }
++        dsflip_log("[ra] login failed: %s (HTTP %ld)\n", err && *err ? err : "no reason given", http_status);
++        dsflip_toast("RetroAchievements login failed", err && *err ? err : "Check the user and password in ES", 0xff7a4a, 5000);
+         return;
+     }
+     dsflip_log("[ra] logged in as %s\n", user);
+     save_token();
++    retry_n = 0;
+     logged_in = 1;
+ }
+ 
+@@ -622,7 +683,10 @@ static void ra_start(void) {
+         if (fgets(tu, sizeof tu, tf) && fgets(tok, sizeof tok, tf)) { tu[strcspn(tu, "\r\n")] = 0; tok[strcspn(tok, "\r\n")] = 0; }
+         fclose(tf);
+     }
+-    if (*tok && !strcasecmp(tu, user)) rc_client_begin_login_with_token(rc, user, tok, on_login_token, 0);
++    if (*tok && !strcasecmp(tu, user)) {
++        snprintf(tok_user, sizeof tok_user, "%s", user); snprintf(tok_token, sizeof tok_token, "%s", tok);
++        rc_client_begin_login_with_token(rc, user, tok, on_login_token, 0);
++    }
+     else if (*pass) rc_client_begin_login_with_password(rc, user, pass, on_login_password, 0);
+     else dsflip_toast("RetroAchievements", "no password set in ES", 0xff7a4a, 4000);
+ }
+@@ -710,6 +774,12 @@ void ra_frame(void) {
+     frames++;
+     if (frames == 1) ra_start();
+     if (!rc) return;
++    if (retry_at && !logged_in && mono_ms() >= retry_at) {     /* a login that got no answer: again (see retry_later) */
++        retry_at = 0;
++        dsflip_log("[ra] login: trying again (%d)\n", retry_n);
++        if (retry_with_token && *tok_token) rc_client_begin_login_with_token(rc, tok_user, tok_token, on_login_token, 0);
++        else if (*pass) rc_client_begin_login_with_password(rc, user, pass, on_login_password, 0);
++    }
+     /* the cart header is copied into RAM at boot: look once the game is running, retry every ~2 s */
+     if (!ram && !scanning && frames >= 90 && frames % 120 == 90) {
+         scanning = 1;
+diff --git a/src/resume.c b/src/resume.c
+index f397894..1e31a47 100644
+--- a/src/resume.c
++++ b/src/resume.c
+@@ -11,13 +11,15 @@
+ // older in-game save).
+ //
+ // DSFLIP_RESUME_FILE: where the resume state goes (unset: SIGUSR1 just quits). DSFLIP_RESUME_LOAD=1: load it at start.
+-// A second SIGUSR1 while saving, or no file within 5 s, quits at once. DSFLIP_RESUME_TRACE=1 logs DraStic's savestate
+-// file calls.
++// A second SIGUSR1 (the hotkey pressed again), no file within 5 s, or DraStic not taking the request within 3 s (its
++// main thread stuck: dsflip.c's stall watch) quits at once, without a resume state. DSFLIP_RESUME_TRACE=1 logs
++// DraStic's savestate file calls.
+ #define _GNU_SOURCE
+ #include <dlfcn.h>
+ #include <errno.h>
+ #include <fcntl.h>
+ #include <pthread.h>
++#include <semaphore.h>
+ #include <signal.h>
+ #include <stdarg.h>
+ #include <stdint.h>
+@@ -34,6 +36,8 @@ void cpugov_boost(int ms);
+ void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
+ void audio_mute(int on);
+ extern volatile int dsflip_hold;
++extern volatile int dsflip_stalled;      /* dsflip.c: DraStic hasn't shown a frame for a while (not in a menu) */
++int menu_is_open(void);
+ 
+ static char resume_path[512];
+ static int trace;
+@@ -218,11 +222,35 @@ static void *save_thread(void *a) {
+     kill(getpid(), SIGKILL);
+     return 0;
+ }
++/* The save runs on DraStic's main thread, at its next frame (resume_frame). Nothing else can make it: if that thread
++ * is stuck, a request that only waited for it was the hotkey doing nothing at all, the game frozen on screen and a
++ * hard reset the way out (2026-10-05). So a second press, a stalled game, or a request not taken within 3 s (5 s
++ * while the in-game menu, which closes itself for it, is up) quits at once, without the resume state. */
++static sem_t quit_sem; static int quit_watch_on;
++static void *quit_watch(void *a) {
++    (void)a;
++    for (;;) {
++        while (sem_wait(&quit_sem) && errno == EINTR) {}
++        long long t0 = now_ms();
++        while (!saving && now_ms() - t0 < (menu_is_open() ? 5000 : 3000)) usleep(20000);
++        if (saving) continue;
++        dsflip_log("[resume] quit requested, but DraStic didn't take it within %lld ms (it isn't running frames): quitting without a resume state\n", now_ms() - t0);
++        kill(getpid(), SIGKILL);
++    }
++    return 0;
++}
++static volatile long long usr1_t;                      /* when the request that is still waiting came */
+ static void on_usr1(int sig) {
+     (void)sig;
+-    if (saving || !resume_path[0] || btn_save < 0) kill(getpid(), SIGKILL);   /* again, or nothing to save with */
++    long long t = now_ms();                              /* clock_gettime: async-signal-safe */
++    /* again (while saving, or a second after a request DraStic hasn't taken: not a key repeat), stalled, or nothing
++     * to save with: now */
++    if (saving || dsflip_stalled || !resume_path[0] || btn_save < 0 || (want_save && t - usr1_t >= 1000)) kill(getpid(), SIGKILL);
++    if (!want_save) usr1_t = t;
+     want_save = 1;
++    if (quit_watch_on) sem_post(&quit_sem);              /* async-signal-safe */
+ }
++int resume_saving(void) { return saving; }              /* dsflip.c's stall watch: the quit's save is DraStic's work now */
+ 
+ /* every present (dsflip.c): starts a pending save or load on DraStic's own thread */
+ void resume_frame(void) {
+@@ -325,6 +353,10 @@ void resume_start(void) {
+     const char *p = getenv("DSFLIP_RESUME_FILE");
+     if (!p || !*p) return;
+     snprintf(resume_path, sizeof resume_path, "%s", p);
++    if (sem_init(&quit_sem, 0, 0) == 0) {
++        pthread_t qt;
++        if (pthread_create(&qt, 0, quit_watch, 0) == 0) { pthread_detach(qt); pthread_setname_np(qt, "dsf-quitwatch"); quit_watch_on = 1; }
++    }
+     struct sigaction sa; memset(&sa, 0, sizeof sa); sa.sa_handler = on_usr1; sigaction(SIGUSR1, &sa, 0);
+     const char *l = getenv("DSFLIP_RESUME_LOAD");
+     int have = access(resume_path, R_OK) == 0;
+-- 
+2.43.0
+
+
+From bb4f885cfbd1e7f5fa0b0818a62567a81e67292b Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 5 Oct 2026 22:54:27 +0000
+Subject: [PATCH 6/8] Online play parked for ROCKNIXDS 1.6: only DSFLIP_WFC
+ turns the Wi-Fi hook on
+
+nds.wfc_dns from system.cfg (ES's "wfc dns", offered by the 1.5.13 test builds) is read only with
+DSFLIP_WFC_CONFIG=1, so a value left behind can't switch the hook on once ES no longer shows the option. The
+work in progress on the hook (store handlers, slot sends) stays on 1.6-prep's last commit, 01269ed.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01TipFb6VWRr6YwuU4pm2dbw
+---
+ docs/INTEGRATION.md |  2 +-
+ src/wifi.c          | 12 ++++++++----
+ 2 files changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/docs/INTEGRATION.md b/docs/INTEGRATION.md
+index 4779000..e5b356a 100644
+--- a/docs/INTEGRATION.md
++++ b/docs/INTEGRATION.md
+@@ -161,7 +161,7 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
+ | `DSFLIP_NOTICE` | `/tmp/dsflip-notice` | Where that ending leaves a line for the launcher to show |
+ | `DSFLIP_SPREAD_THREADS` | 1 | 0 = new threads inherit their creator's CPUs (with DraStic's main thread confined to one CPU, its new helper threads then share that CPU only) |
+ | `DSFLIP_GPU_CLOCKS`, `DSFLIP_AUDIO_RATE` | 1, 1 | The launcher's GPU clock and PipeWire rate handling |
+-| `DSFLIP_WFC` | off | Nintendo WFC online play (untested on hardware): `kaeru`, `altwfc`, `wiilink` or a dotted DNS address. SuperDrastic answers the DS as an open access point named `rocknixds` and hands it that DNS server over DHCP; the game's traffic goes through the host's own sockets (UDP, client TCP). Needs the DraStic build r2.5.2.2 (it checks the build id). Without the variable, `nds.wfc_dns` in ROCKNIX's `system.cfg` is read. `DSFLIP_WFC_DEBUG=1` logs every frame |
++| `DSFLIP_WFC` | off | Nintendo WFC online play (parked: it does not get past the game's Wi-Fi setup yet): `kaeru`, `altwfc`, `wiilink` or a dotted DNS address. SuperDrastic answers the DS as an open access point named `rocknixds` and hands it that DNS server over DHCP; the game's traffic goes through the host's own sockets (UDP, client TCP). Needs the DraStic build r2.5.2.2 (it checks the build id). `nds.wfc_dns` in ROCKNIX's `system.cfg` is read only with `DSFLIP_WFC_CONFIG=1`. `DSFLIP_WFC_DEBUG=1` logs every frame |
+ | `DSFLIP_AUDIO_PUMP` | 1 | 0 = DraStic's own SDL audio |
+ | `DSFLIP_SHADER_COPY` | 0 | 1 = upload DraStic's frames to the GPU instead of importing them |
+ | `DSFLIP_FALLBACK` | 1 | 0 = don't run DraStic without SuperDrastic when it can't take the display |
+diff --git a/src/wifi.c b/src/wifi.c
+index 7ba0b7a..888b56a 100644
+--- a/src/wifi.c
++++ b/src/wifi.c
+@@ -12,11 +12,11 @@
+  *
+  * Offsets below are for BuildID 7a5e0e5fc6e52e6e8f5499c3d4d667ef51db0748. `add Xd, Xn, #imm,
+  * lsl #12` adds imm<<12. The hook checks that id and the register/RAM layout, and does nothing
+- * if this is a different DraStic. The feature stays off until ES's "wfc dns" (nds.wfc_dns) or
+- * DSFLIP_WFC says otherwise, so an unmodified config behaves exactly as stock DraStic.
++ * if this is a different DraStic. The feature stays off unless DSFLIP_WFC says otherwise (and, with
++ * DSFLIP_WFC_CONFIG=1, ES's "wfc dns" / nds.wfc_dns), so an unmodified config behaves exactly as stock DraStic.
+  *
+  * Setting: DSFLIP_WFC = off | kaeru | altwfc | wiilink | <dotted ip> wins (superdrastic-run users);
+- * otherwise nds.wfc_dns from the per-ROM config, then /storage/.config/system/configs/system.cfg.
++ * with DSFLIP_WFC_CONFIG=1 also nds.wfc_dns from the per-ROM config, then system.cfg (parked for 1.6).
+  * DSFLIP_WFC_DEBUG=1 logs every frame. Beacons, the TSF compare and the NAT sockets are driven by
+  * the "dsf-wfc" service thread (10 ms), not by the display path, so dsflip.c needs no per-frame hook.
+  */
+@@ -564,10 +564,14 @@ static int known_server(const char *s, uint32_t *ip, char *name, size_t nn) {
+     if (parse_ip(s, ip)) { snprintf(name, nn, "%s", s); return 1; }
+     return 0;
+ }
++/* Online play is parked for ROCKNIXDS 1.6 (it does not get past the game's own Wi-Fi setup yet): only the test
++ * switch DSFLIP_WFC turns it on. ES's "wfc dns" (nds.wfc_dns), which 1.5.13 test builds offered, is ignored unless
++ * DSFLIP_WFC_CONFIG=1, so a value left in system.cfg can't switch the hook on behind a hidden option. */
+ static int setting_on(void) {
+     char v[64]; v[0] = 0;
+-    const char *e = getenv("DSFLIP_WFC");
++    const char *e = getenv("DSFLIP_WFC"), *cf = getenv("DSFLIP_WFC_CONFIG");
+     if (e && e[0]) snprintf(v, sizeof v, "%s", e);
++    else if (!(cf && *cf == '1')) return 0;
+     else {
+         char rom[256], path[512];
+         int have_rom = rom_base(rom, sizeof rom);
+-- 
+2.43.0
+
+
+From b874a209b2e70875fd1716ceea146deec4494795 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 5 Oct 2026 23:09:32 +0000
+Subject: [PATCH 7/8] In-game menu's Blow presses DraStic's fake microphone the
+ way its binding asks (ROCKNIXDS issue 26)
+
+The Microphone page's Blow held the keyboard control (Scroll Lock, 327) only. A drastic.cfg whose keyboard set has no
+fake microphone but whose joystick set does never saw it; the real-mic thread already pressed the joystick button in
+that case. Both now use the same choice (mic_button: DSFLIP_MIC_KEY, then the key when either set maps 327, else the
+joystick button controls_b maps).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01TipFb6VWRr6YwuU4pm2dbw
+---
+ src/audio.c | 27 ++++++++++++++++++++-------
+ src/menu.c  |  6 +++---
+ 2 files changed, 23 insertions(+), 10 deletions(-)
+
+diff --git a/src/audio.c b/src/audio.c
+index 920711f..e768d3d 100644
+--- a/src/audio.c
++++ b/src/audio.c
+@@ -362,6 +362,25 @@ int resume_control_code(const char *set, const char *name);   /* resume.c: a dra
+  *                             else the button when controls_b has one, else the key with a warning (ROCKNIX's
+  *                             drastic.cfg for the RG DS maps 327 in both sets since 2026-02-04; older copies 65535) */
+ static float envf(const char *name, float dflt) { const char *e = getenv(name); return e && *e ? (float)strtod(e, 0) : dflt; }
++/* how DraStic's fake microphone is pressed: DraStic reads keyboard controls as 256 + the key's code (Scroll Lock = 327)
++ * and joystick buttons as 1024 + the button; the setting it has decides which of ours can reach it. The joystick button
++ * (>= 0), or -1 for the key. *code_a / *code_b: the two control sets' codes, for the log. */
++static int mic_button(int *code_a, int *code_b) {
++    const char *how = getenv("DSFLIP_MIC_KEY"); if (!how || !*how) how = "auto";
++    int a = resume_control_code("a", "FAKE_MICROPHONE"), b = resume_control_code("b", "FAKE_MICROPHONE");
++    if (code_a) *code_a = a;
++    if (code_b) *code_b = b;
++    if (!strcmp(how, "button")) return b >= 1024 && b < 1024 + 64 ? b - 1024 : (a >= 1024 && a < 1024 + 64 ? a - 1024 : -1);
++    if (strcmp(how, "key") && a != 327 && b != 327 && b >= 1024 && b < 1024 + 64) return b - 1024;
++    return -1;
++}
++/* the in-game menu's Blow (menu.c): DraStic's fake microphone held, the way the mic thread presses it (it pressed only
++ * the key, which a drastic.cfg with the joystick binding alone never sees: ROCKNIXDS issue 26) */
++void audio_mic_hold(int down) {
++    static int btn = -2;
++    if (btn == -2) btn = mic_button(0, 0);
++    if (btn >= 0) dsflip_mic_button(btn, down); else dsflip_mic_key(down);
++}
+ static void *mic_thread(void *a) {
+     float thresh = *(float *)a;
+     void *cap = 0;
+@@ -373,13 +392,7 @@ static void *mic_thread(void *a) {
+     if (coup_max < 0.1f) coup_max = 0.1f;
+     if (hold_ms < 0) hold_ms = 0;
+     if (lf_k < 0) lf_k = 0;
+-    /* how the fake microphone is pressed: DraStic reads keyboard controls as 256 + the key's code (Scroll Lock = 327)
+-     * and joystick buttons as 1024 + the button; the setting it has decides which of ours can reach it */
+-    const char *how = getenv("DSFLIP_MIC_KEY"); if (!how || !*how) how = "auto";
+-    int code_a = resume_control_code("a", "FAKE_MICROPHONE"), code_b = resume_control_code("b", "FAKE_MICROPHONE");
+-    int use_button = -1;
+-    if (!strcmp(how, "button")) use_button = code_b >= 1024 && code_b < 1024 + 64 ? code_b - 1024 : (code_a >= 1024 && code_a < 1024 + 64 ? code_a - 1024 : -1);
+-    else if (strcmp(how, "key") && code_a != 327 && code_b != 327 && code_b >= 1024 && code_b < 1024 + 64) use_button = code_b - 1024;
++    int code_a, code_b, use_button = mic_button(&code_a, &code_b);
+     if (alsa_pcm(&cap, 1 /* SND_PCM_STREAM_CAPTURE */, 1, 44100, 100000, "mic") < 0) {
+         dsflip_log("[mic] no capture device\n");
+         mic_state = -1; if (thresh <= 0) monitor_running = 0;
+diff --git a/src/menu.c b/src/menu.c
+index fd02359..b3be979 100644
+--- a/src/menu.c
++++ b/src/menu.c
+@@ -46,7 +46,7 @@ int dsflip_menu_grab_top(uint32_t *dst, int pitch, int w, int h);
+ int dsflip_battery(int *charging);
+ int dsflip_drastic_menu(void);
+ extern volatile int dsflip_hold;
+-void dsflip_mic_key(int down);
++void audio_mic_hold(int down);                  /* audio.c: DraStic's fake microphone, key or button */
+ void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
+ void dsflip_log(const char *fmt, ...);
+ void cpugov_boost(int ms);
+@@ -1094,7 +1094,7 @@ static void menu_run(int start) {
+         usleep(8000);
+     }
+     if (bri_changed) want(-1, bri);
+-    if (mic_until) dsflip_mic_key(1);
++    if (mic_until) audio_mic_hold(1);
+     SDL_PauseAudio(0);
+     audio_mic_quiet(0);
+     dsflip_log("[menu] closed\n");
+@@ -1144,7 +1144,7 @@ void menu_frame(void) {
+     static int test = -1; static int frames;
+     if (test < 0) { const char *t = getenv("DSFLIP_MENU_TEST"); test = t ? atoi(t) + 1 : 0; }
+     if (!frames++) session_t0 = now_ms();
+-    if (mic_until && now_ms() >= mic_until) { mic_until = 0; dsflip_mic_key(0); }
++    if (mic_until && now_ms() >= mic_until) { mic_until = 0; audio_mic_hold(0); }
+ 
+     if (test && frames == 180) {
+         if (enabled < 0) menu_event(0);
+-- 
+2.43.0
+
+
+From 09c5054a6c56610ad0c4a34ee49242df0138147d Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 5 Oct 2026 23:10:02 +0000
+Subject: [PATCH 8/8] 0.5.0-beta.1-rocknixds.4: the ROCKNIXDS 1.6 test build
+ (both handhelds)
+
+v0.5.0-beta.1 plus the 1.5.13 commits (ds-fsr 3x, the parked Wi-Fi path off by default, microphone tunables) and
+1.6's: the stall watch and a quit that works on a stuck game, threads that don't inherit a confined CPU,
+RetroAchievements logins that survive no network, online play only with DSFLIP_WFC, and the menu's Blow pressing
+the fake microphone's actual binding. Not a SuperDrastic release; ROCKNIXDS ships the package in dsflip/.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01TipFb6VWRr6YwuU4pm2dbw
+---
+ VERSION | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/VERSION b/VERSION
+index 08c0d0c..b560c44 100644
+--- a/VERSION
++++ b/VERSION
+@@ -1 +1 @@
+-0.5.0-beta.1-rocknixds.3
++0.5.0-beta.1-rocknixds.4
+-- 
+2.43.0
 
