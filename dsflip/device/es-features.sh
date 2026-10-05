@@ -108,6 +108,31 @@ add_ours() {
         END { if (!added) exit 3 }'
 }
 
+# es_features.cfg has to parse, with <features> as its root, or CustomFeatures::loadEsFeaturesFile gives up without
+# trying ROCKNIX's copy and every system's options disappear (#36, #37). python3's ElementTree checks it. It is
+# stricter than ES's pugixml ("--" inside a comment, a bare &), so when ROCKNIX's own file fails it as well it can't
+# tell, and lets the file through, as it does without python3.
+parses() {
+    command -v python3 > /dev/null || return 0
+    python3 -c '
+import sys, xml.etree.ElementTree as ET
+def ok(p):
+    try: return ET.parse(p).getroot().tag == "features"
+    except Exception: return False
+sys.exit(0 if ok(sys.argv[1]) or not ok(sys.argv[2]) else 1)' "$1" "$SYS"
+}
+
+# $ESF.new replaces $ESF only if it parses. If it doesn't, the old file stays if that one parses; if neither does,
+# the old one goes as well and ES reads ROCKNIX's copy: none of our options, but every system's own. 1: not replaced.
+replace_esf() {  # replace_esf <what to log once replaced>
+    if parses "$ESF.new"; then mv "$ESF.new" "$ESF"; echo "es-features: $1"; return 0; fi
+    rm -f "$ESF.new"
+    if [ ! -f "$ESF" ]; then echo "es-features: the new $ESF would not parse, not written: ES reads ROCKNIX's copy"
+    elif parses "$ESF"; then echo "es-features: the new $ESF would not parse, the old one is kept"
+    else rm -f "$ESF"; echo "es-features: $ESF does not parse, nor would the new one: removed, ES reads ROCKNIX's copy"; fi
+    return 1
+}
+
 # 1.5.6 wrote nds.resolution3d=3x (and the same per game). EmulationStation would keep showing that value
 # after the choice is gone. Drop those lines; 2x stays. Auto is an empty value, which ES already lists.
 drop_unreleased_3x() {
@@ -128,7 +153,7 @@ if [ "$1" = --strip-options ]; then
     [ -f "$ESF" ] || exit 0
     strip_ours < "$ESF" > "$ESF.new"
     if cmp -s "$ESF.new" "$ESF"; then rm -f "$ESF.new"
-    else mv "$ESF.new" "$ESF"; echo "es-features: ROCKNIXDS options removed from $ESF"; fi
+    else replace_esf "ROCKNIXDS options removed from $ESF"; fi
     exit 0
 fi
 
@@ -169,9 +194,15 @@ if [ -e "$STATE/.esf-created" ]; then
 fi
 [ -f "$SRC" ] || exit 0
 if ! add_ours "$SRC" > "$ESF.new"; then
-    echo "es-features: no drastic-sa shader option in $SRC, left unchanged"; rm -f "$ESF.new"; exit 0
+    rm -f "$ESF.new"
+    if [ -f "$ESF" ] && ! parses "$ESF"; then        # an empty or cut-short copy has no shader option either
+        rm -f "$ESF"; echo "es-features: no drastic-sa shader option in $SRC, and $ESF does not parse: removed, ES reads ROCKNIX's copy"
+    else echo "es-features: no drastic-sa shader option in $SRC, left unchanged"; fi
+    exit 0
 fi
 if [ -f "$ESF" ] && cmp -s "$ESF.new" "$ESF"; then rm -f "$ESF.new"
-else mv "$ESF.new" "$ESF"; echo "es-features: $ESF updated$([ "$SRC" = "$SYS" ] && echo " from ROCKNIX's copy")"; fi
+elif ! replace_esf "$ESF updated$([ "$SRC" = "$SYS" ] && echo " from ROCKNIX's copy")"; then
+    exit 0                              # ROCKNIX's checksum isn't recorded: the next boot tries again
+fi
 [ "$SRC" = "$SYS" ] && md5sum < "$SYS" | cut -d' ' -f1 > "$STATE/.esf-system-md5"
 exit 0

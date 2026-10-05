@@ -150,7 +150,7 @@ class EsFeaturesTest(unittest.TestCase):
             "ESS_SYSTEM": str(self.root / "missing-systems.cfg"),
             "SYSCFG": str(self.root / "syscfg"),
         })
-        subprocess.run(["sh", str(SCRIPT), *args], check=True, env=env)
+        return subprocess.run(["sh", str(SCRIPT), *args], check=True, env=env, capture_output=True, text=True).stdout
 
     def assert_siblings(self, text):
         feats = core_features(text, "drastic-sa")
@@ -296,6 +296,70 @@ class EsFeaturesTest(unittest.TestCase):
         text = self.user.read_text()
         self.assertEqual(list(core_features(text, "drastic-sa")), ["shader", "microphone sensitivity"])
         self.assertEqual(core_features(text, "nestopia")["nested-parent"]["kids"][0][1], "nested-child")
+
+    def test_a_write_that_would_not_parse_never_replaces_a_good_copy(self):
+        # ROCKNIX's file changes and has the DraStic shader option on one line: the line-based insert can't put our
+        # choices in it, and the copy it makes doesn't parse
+        (self.state / ".esf-created").touch()
+        self.system.write_text(BASE)
+        self.run_script()
+        good = self.user.read_text()
+        self.assert_siblings(good)
+        digest = (self.state / ".esf-system-md5").read_text()
+        mic = '          <feature name="microphone sensitivity"'
+        one_line = BASE.replace(
+            '          <feature name="shader" value="shader">\n            <choice name="none" value="none" />\n'
+            '          </feature>\n' + mic,
+            '          <feature name="shader" value="shader"><choice name="none" value="none" /></feature>\n' + mic, 1)
+        self.assertNotEqual(one_line, BASE)
+        ET.fromstring(one_line)
+        self.system.write_text(one_line)
+        out = self.run_script()
+        self.assertIn("would not parse, the old one is kept", out)
+        self.assertEqual(self.user.read_text(), good)
+        self.assertFalse(self.user.with_name("es_features.cfg.new").exists())
+        self.assertEqual((self.state / ".esf-system-md5").read_text(), digest)   # the next boot tries again
+        # with no copy yet, none is written: ES reads ROCKNIX's file
+        self.user.unlink()
+        out = self.run_script()
+        self.assertIn("not written", out)
+        self.assertFalse(self.user.exists())
+
+    def test_a_copy_that_cannot_be_repaired_goes_so_es_reads_rocknix(self):
+        # cut short or emptied (a full card, a crash while something else wrote it): nothing the strip can mend, and
+        # ES would read neither the old copy nor a new one. The copy goes and ES reads ROCKNIX's file.
+        mic = '          <feature name="microphone sensitivity"'
+        self.user.write_text(BASE[:BASE.index(mic)])        # a user's own copy: ours go in, and it still doesn't parse
+        out = self.run_script()
+        self.assertIn("nor would the new one: removed, ES reads ROCKNIX's copy", out)
+        self.assertFalse(self.user.exists())
+        self.run_script()
+        self.assertFalse(self.user.exists())
+        # the installer's copy, emptied or cut inside the shader option (none to add ours to), is rebuilt next boot
+        (self.state / ".esf-created").touch()
+        self.system.write_text(BASE)
+        self.run_script()
+        good = self.user.read_text()
+        for broken in ("", good[:good.index("ds-crisp")]):
+            self.user.write_text(broken)
+            out = self.run_script()
+            self.assertIn("does not parse: removed, ES reads ROCKNIX's copy", out)
+            self.assertFalse(self.user.exists())
+            self.run_script()
+            self.assertEqual(self.user.read_text(), good)
+
+    def test_a_rocknix_file_elementtree_cannot_read_is_not_held_against_ours(self):
+        # ElementTree is stricter than ES's pugixml, which reads a "--" inside a comment. ROCKNIX's own file failing
+        # the check means it can't tell, and the copy is written as before the check
+        quirky = BASE.replace("<features>\n", "<features>\n  <!-- ROCKNIX -- DraStic -->\n", 1)
+        with self.assertRaises(ET.ParseError):
+            ET.fromstring(quirky)
+        self.system.write_text(quirky)
+        (self.state / ".esf-created").touch()
+        self.run_script()
+        text = self.user.read_text()
+        self.assertIn("<!-- ROCKNIX -- DraStic -->", text)
+        self.assert_siblings(text.replace("<!-- ROCKNIX -- DraStic -->", ""))
 
     def test_missing_shader_option_is_left_unchanged(self):
         original = "<features><core name=\"other\"></core></features>\n"
