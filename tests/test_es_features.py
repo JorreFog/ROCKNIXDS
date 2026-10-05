@@ -161,10 +161,8 @@ class EsFeaturesTest(unittest.TestCase):
         self.assertIn("resume on quit", feats)
         self.assertIn("power profile", feats)
         self.assertIn("microphone sensitivity", feats)
-        self.assertIn("wfc dns", feats)
-        self.assertEqual(feats["wfc dns"]["value"], "wfc_dns")
-        self.assertEqual([value for tag, _, value in feats["wfc dns"]["kids"]], ["off", "kaeru", "wiilink", "altwfc"])
-        for name in ("share performance logs", "3D renderer", "3D resolution", "3D texture filter", "microphone sensitivity", "wfc dns"):
+        self.assertNotIn("wfc dns", feats)                  # online play is parked for 1.6
+        for name in ("share performance logs", "3D renderer", "3D resolution", "3D texture filter", "microphone sensitivity"):
             self.assertFalse(any(tag == "feature" for tag, _, _ in feats[name]["kids"]), name)
         self.assertEqual(feats["3D renderer"]["value"], "renderer")
         self.assertEqual(
@@ -360,6 +358,22 @@ class EsFeaturesTest(unittest.TestCase):
         text = self.user.read_text()
         self.assertIn("<!-- ROCKNIX -- DraStic -->", text)
         self.assert_siblings(text.replace("<!-- ROCKNIX -- DraStic -->", ""))
+
+    def test_the_wfc_dns_option_of_1_5_13_is_taken_out(self):
+        # online play is parked for 1.6; a value saved in system.cfg stays where it is
+        wfc = ('          <feature name="wfc dns" value="wfc_dns">\n'
+               '            <choice name="off" value="off" />\n'
+               '            <choice name="Kaeru WFC (Wiimmfi)" value="kaeru" />\n'
+               '          </feature>\n')
+        mic = '          <feature name="microphone sensitivity"'
+        cfg = self.root / "syscfg"
+        cfg.write_text('nds.wfc_dns=kaeru\nnds["Mario Kart DS (USA).nds"].wfc_dns=wiilink\n')
+        self.user.write_text(BASE.replace(mic, wfc + mic, 1))
+        self.run_script()
+        text = self.user.read_text()
+        self.assert_siblings(text)
+        self.assertNotIn("wfc", text.lower())
+        self.assertEqual(cfg.read_text(), 'nds.wfc_dns=kaeru\nnds["Mario Kart DS (USA).nds"].wfc_dns=wiilink\n')
 
     def test_missing_shader_option_is_left_unchanged(self):
         original = "<features><core name=\"other\"></core></features>\n"
