@@ -45,8 +45,8 @@ The easiest way: put ROCKNIXDS on a fresh microSD card. No ssh, no commands.
 erased**), and a computer with an SD card reader.
 
 1. **Download the image for your handheld.** Don't unzip it.
-   - RG DS Plus: [rocknixds-v1.5.11-plus-rocknix-20261001.img.gz](https://github.com/JorreFog/ROCKNIXDS/releases/download/v1.5.11-plus/rocknixds-v1.5.11-plus-rocknix-20261001.img.gz)
-   - RG DS: [rocknixds-v1.5.11-rocknix-20261001.img.gz](https://github.com/JorreFog/ROCKNIXDS/releases/download/v1.5.11/rocknixds-v1.5.11-rocknix-20261001.img.gz)
+   - RG DS Plus: [rocknixds-v1.5.12-plus-rocknix-20261001.img.gz](https://github.com/JorreFog/ROCKNIXDS/releases/download/v1.5.12-plus/rocknixds-v1.5.12-plus-rocknix-20261001.img.gz)
+   - RG DS: [rocknixds-v1.5.12-rocknix-20261001.img.gz](https://github.com/JorreFog/ROCKNIXDS/releases/download/v1.5.12/rocknixds-v1.5.12-rocknix-20261001.img.gz)
 2. **Install [balenaEtcher](https://etcher.balena.io/)** on your computer (free, for Windows, macOS and Linux).
 3. **Write the image to the card.** Put the microSD card in your computer and open balenaEtcher.
    Click *Flash from file* and pick the file you downloaded. Click *Select target* and pick the microSD card.
@@ -248,8 +248,8 @@ RG DS Plus.
 ### A new SD card: flash the image
 
 The easiest start. Each release from 1.5.11 has a ready-to-flash image for its handheld:
-`rocknixds-v1.5.11-rocknix-20261001.img.gz` on the [RG DS release](https://github.com/JorreFog/ROCKNIXDS/releases/latest),
-`rocknixds-v1.5.11-plus-rocknix-20261001.img.gz` on the
+`rocknixds-v1.5.12-rocknix-20261001.img.gz` on the [RG DS release](https://github.com/JorreFog/ROCKNIXDS/releases/latest),
+`rocknixds-v1.5.12-plus-rocknix-20261001.img.gz` on the
 [RG DS Plus release](https://github.com/JorreFog/ROCKNIXDS/releases?q=plus&expanded=true). It is ROCKNIX's own
 image (ROCKNIX 20261001), already set to boot your handheld, with ROCKNIXDS on it.
 

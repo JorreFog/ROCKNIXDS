@@ -1251,7 +1251,7 @@ new file mode 100644
 index 00000000..66798d28
 --- /dev/null
 +++ b/es-app/src/rnds/RndsRaster.cpp
-@@ -0,0 +1,867 @@
+@@ -0,0 +1,873 @@
 +#include "RndsRaster.h"
 +
 +#include <ft2build.h>
@@ -2055,7 +2055,13 @@ index 00000000..66798d28
 +		}
 +		if (ay0 < 0) ay0 = y0 + ch * 18 / 100;		// where the art sits on a DS card's label when the scan doesn't say
 +		if (ay1 < 0 || ay1 - ay0 < ch * 30 / 100) ay1 = y0 + ch * 82 / 100;
-+		return trimPlain(crop(scan, lx0, ay0, lx1 - lx0 + 1, ay1 - ay0 + 1));
++		// all of the label's width: its sides are art too, and a white or checkered background (Mario Kart DS) read as
++		// a plain margin, so trimming them zoomed in on the middle. The cartridge's label window (92x86) is narrower
++		// than the art band: a quarter of the difference comes from the label above and below the band, so the logo
++		// keeps its width, and the rest is cropped from the sides.
++		int lw = lx1 - lx0 + 1, ext = std::max(0, (lw * 86 / 92 - (ay1 - ay0 + 1)) / 4);
++		ay0 = std::max(y0, ay0 - ext); ay1 = std::min(y1, ay1 + ext);
++		return crop(scan, lx0, ay0, lw, ay1 - ay0 + 1);
 +	}
 +
 +	Bitmap coverWithoutStrip(const Bitmap& box)
