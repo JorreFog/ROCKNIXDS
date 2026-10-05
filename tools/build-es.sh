@@ -14,7 +14,7 @@ HERE=$(cd "$(dirname "$0")/.." && pwd)
 WORK=${1:-$HERE/build/es}
 ES_REPO=https://github.com/ROCKNIX/emulationstation-next.git
 ES_COMMIT=bccd7157
-PATCHES="uiwidth bindings-clock carousel-repeat devkeys powersaver firstview lockdown rnds apirefresh ninepatch help keepwindow emptylibrary launchonce"
+PATCHES="uiwidth bindings-clock carousel-repeat devkeys powersaver firstview lockdown rnds apirefresh ninepatch help keepwindow emptylibrary launchonce memory"
 UBUNTU=noble
 PKGS="libc6 libc6-dev linux-libc-dev libgcc-13-dev libgcc-s1 libstdc++-13-dev libstdc++6 libsdl2-dev libsdl2-2.0-0
       libsdl2-mixer-dev libsdl2-mixer-2.0-0 libfreetype-dev libfreetype6 libfreeimage-dev libfreeimage3
