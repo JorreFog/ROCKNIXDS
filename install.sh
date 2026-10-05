@@ -257,6 +257,7 @@ if [ $UNINSTALL = 1 ]; then
           /storage/.config/emulationstation/scripts/game-start /storage/.config/emulationstation/scripts/start \
           /storage/.config/emulationstation/scripts 2>/dev/null
     rm -f $VERSION_FILE /storage/.config/rocknixds-es-notice /storage/.config/rocknixds-stock-es /storage/.config/rocknixds-any-rocknix
+    rm -f /storage/.config/emulationstation/es-mem.log /storage/.config/emulationstation/es-mem.log.1
     if [ -e $BACKUP/.had-no-launcher-wrapper ] && [ -e $DRASTIC/drastic.real ]; then
         rm -f $DRASTIC/drastic $DRASTIC/drastic.dvsync; mv $DRASTIC/drastic.real $DRASTIC/drastic   # stock layout again
     elif grep -q dsflip $DRASTIC/drastic 2>/dev/null; then
