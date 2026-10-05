@@ -74,10 +74,10 @@ index 90df9a9b..75714e3d 100644
  			else if (complete || SDL_GetTicks() - firstFrame > 3000)
 diff --git a/es-app/src/rnds/RndsEs.cpp b/es-app/src/rnds/RndsEs.cpp
 new file mode 100644
-index 00000000..36a4ba6f
+index 00000000..140407d8
 --- /dev/null
 +++ b/es-app/src/rnds/RndsEs.cpp
-@@ -0,0 +1,1099 @@
+@@ -0,0 +1,1143 @@
 +#include "rnds/RndsEs.h"
 +#include "rnds/RndsUI.h"
 +
@@ -720,7 +720,51 @@ index 00000000..36a4ba6f
 +			return r;
 +		}
 +
-+		int gameCount() override { return list ? (int)list->entries().size() : 0; }
++		// ES's "<No Entries Found>" placeholder (RndsGameListView::populateList) is not a game: 0, and the engine draws
++		// its empty state instead of a blank cartridge with that name
++		int gameCount() override
++		{
++			if (!list) return 0;
++			auto& es = list->entries();
++			return es.size() == 1 && es[0]->getType() == PLACEHOLDER ? 0 : (int)es.size();
++		}
++
++		// the empty library's text: the list's system, or the shelf's current one
++		SystemData* librarySystem()
++		{
++			if (list) return list->system();
++			int i = ui ? ui->systemIndex() : 0;
++			return i >= 0 && i < (int)systems.size() ? systems[i] : nullptr;
++		}
++
++		// a list with games that a filter (the game list options) hides shows the same placeholder: say so
++		static bool filtered(SystemData* s) { return s->getFilterIndex() != nullptr && s->getFilterIndex()->isFiltered(); }
++
++		std::string emptyTitle() override
++		{
++			SystemData* s = librarySystem();
++			if (s && filtered(s)) return "Nothing matches";
++			return s && s->isCollection() ? "Nothing here yet" : "No games yet";
++		}
++
++		std::string emptyHint() override
++		{
++			SystemData* s = librarySystem();
++			if (!s) return "";
++			if (filtered(s)) return "Clear the filter in the game list options";
++			if (s->isCollection())
++			{
++				if (s->getName() == "favorites") return "Y on a game adds it here";
++				if (s->getName() == "recent") return "Games you play show up here";
++				return "";
++			}
++			// the system's own kind of file (".nds"), not an archive; its roms folder
++			std::string ext;
++			for (auto& e : s->getExtensions())
++				if (e != ".zip" && e != ".7z") { ext = e; break; }
++			std::string folder = Utils::FileSystem::getFileName(s->getStartPath());
++			return "Copy " + (ext.empty() ? std::string("games") : ext + " files") + " to roms/" + folder;
++		}
 +
 +		GameInfo game(int i) override
 +		{
@@ -1248,7 +1292,7 @@ index 00000000..85770a09
 +}
 diff --git a/es-app/src/rnds/RndsRaster.cpp b/es-app/src/rnds/RndsRaster.cpp
 new file mode 100644
-index 00000000..66798d28
+index 00000000..8286fdcc
 --- /dev/null
 +++ b/es-app/src/rnds/RndsRaster.cpp
 @@ -0,0 +1,873 @@
@@ -2308,10 +2352,10 @@ index 00000000..026769b4
 +}
 diff --git a/es-app/src/rnds/RndsUI.cpp b/es-app/src/rnds/RndsUI.cpp
 new file mode 100644
-index 00000000..114bd406
+index 00000000..6d9b7b70
 --- /dev/null
 +++ b/es-app/src/rnds/RndsUI.cpp
-@@ -0,0 +1,1775 @@
+@@ -0,0 +1,1805 @@
 +#include "RndsUI.h"
 +
 +#include <algorithm>
@@ -2871,6 +2915,8 @@ index 00000000..114bd406
 +		int sysCount() { sys(0); return (int)sysCache.size(); }
 +		const GameInfo& game(int i)
 +		{
++			static const GameInfo none;
++			if (i < 0 || i >= src->gameCount()) return none;	// an empty library asks the Source for nothing
 +			auto it = gameCache.find(i);
 +			if (it == gameCache.end())
 +				it = gameCache.emplace(i, src->game(i)).first;
@@ -3052,6 +3098,7 @@ index 00000000..114bd406
 +		{
 +			if (ui->mView == HOME)
 +			{
++				if (sysCount() == 0) return;
 +				int g = src->openLibrary(ui->mSys);
 +				gameCache.clear();
 +				ui->mGame = g < 0 ? 0 : g;
@@ -3107,6 +3154,7 @@ index 00000000..114bd406
 +
 +		void toggleFav()
 +		{
++			if (ui->mView == LIBRARY && src->gameCount() == 0) return;	// nothing to favourite
 +			if (ui->mView != LAUNCH) src->cue("fav");
 +			if (ui->mView == HOME) { src->toggleSystemFav(ui->mSys); sysCache.clear(); }
 +			else if (ui->mView == LIBRARY) { src->toggleGameFav(ui->mGame); gameCache.clear(); }
@@ -3153,6 +3201,7 @@ index 00000000..114bd406
 +			View v = ui->mView;
 +			std::string title, sub;
 +			if (v == HOME) { auto& sy = sys(ui->mSys); title = sy.name; sub = sy.maker; }
++			else if (v == LIBRARY && count() == 0) { title = src->emptyTitle(); sub = src->emptyHint(); }
 +			else
 +			{
 +				auto& gm = game(ui->mGame);
@@ -3172,7 +3221,7 @@ index 00000000..114bd406
 +			int n = v == LAUNCH ? 1 : count();
 +			int at = v == LAUNCH ? 0 : center();
 +			char a[16], b[16];
-+			snprintf(a, sizeof a, "%02d", at + 1);
++			snprintf(a, sizeof a, "%02d", n == 0 ? 0 : at + 1);
 +			snprintf(b, sizeof b, "%02d", n);
 +			g.countW = line(a, ts(true, 18)).width + line(" / ", ts(false, 18)).width + line(b, ts(false, 18)).width;
 +
@@ -3184,7 +3233,8 @@ index 00000000..114bd406
 +			else if (v == LIBRARY)
 +			{
 +				g.left = Face{ "B", "Back", 0, ACT_BACK };
-+				g.right = Face{ "Y", "Fav", (src->gameCount() > 0 && game(ui->mGame).fav) ? 1 : 0, ACT_FAV };
++				if (src->gameCount() == 0) g.right = Face{ "", "No games", 2, ACT_NONE };	// nothing to favourite
++				else g.right = Face{ "Y", "Fav", game(ui->mGame).fav ? 1 : 0, ACT_FAV };
 +			}
 +			else
 +			{
@@ -3531,6 +3581,22 @@ index 00000000..114bd406
 +			}
 +		}
 +
++		// the game list's top screen with no games: the title and where the games go, in the info column (the frame on
++		// the left holds the system's icon, as drawCover draws it without a cover)
++		void drawEmpty(float ry)
++		{
++			const float L = 300, W = 296;
++			TStyle tt = ts(true, 26, 0.52f), th = ts(false, 20);
++			std::vector<TextLine> tl = layoutWrap(utf8to32(src->emptyTitle()), tstyle(tt), (int)W, 2), hl;
++			std::string hint = src->emptyHint();
++			if (!hint.empty()) hl = layoutWrap(utf8to32(hint), tstyle(th), (int)W, 3);
++			float block = tl.size() * 32.5f + (hl.empty() ? 0 : 8 + hl.size() * 24);
++			float y = std::round(263 - block / 2) + ry;
++			for (size_t i = 0; i < tl.size(); i++) drawLine(tl[i], tt, L, y + 32.5f * i, 32.5f, INK);
++			y += tl.size() * 32.5f + 8;
++			for (size_t i = 0; i < hl.size(); i++) drawLine(hl[i], th, L, y + 24 * i, 24, MUTED);
++		}
++
 +		static constexpr double GLINT_PERIOD = 5000, GLINT_SWEEP = 560;
 +
 +		void drawTop()
@@ -3599,6 +3665,11 @@ index 00000000..114bd406
 +					box(b, chipWidth(ny), 74);
 +					cart(CartArt{ ny.resumeCart, ny.resumeLabel, ny.resumeBox }, 54, 56);
 +				}
++			}
++			else if (ui->mView == LIBRARY && count() == 0)
++			{
++				drawCover(GameInfo(), sy, ry);	// the frame with the system's icon
++				drawEmpty(ry);
 +			}
 +			else
 +			{
@@ -3674,7 +3745,7 @@ index 00000000..114bd406
 +			be->pushClip(std::round(X(10)), std::round(X(ry)), std::round(X(620)), std::round(X(g.reelH)));
 +			if (v != LAUNCH && n > 0)
 +				drawBox(trackBox(), 26, ry + 34, 588, 80);
-+			if (v != LAUNCH)
++			if (v != LAUNCH && n > 0)	// no plate (and no START) over an empty library
 +				drawBox(plateBox(), 258, ry + 4, 124, 162);
 +
 +			if (v == LAUNCH)
@@ -3720,9 +3791,12 @@ index 00000000..114bd406
 +						drawSprite(c, 273.846f, ry + 16, &xf);
 +					}
 +				}
-+				TStyle tsr = ts(true, 20, 2.4f);
-+				TextLine lsr = line("START", tsr);
-+				drawLine(lsr, tsr, 320 - lsr.width / 2, ry + 124, 24, NAVY);
++				if (n > 0)
++				{
++					TStyle tsr = ts(true, 20, 2.4f);
++					TextLine lsr = line("START", tsr);
++					drawLine(lsr, tsr, 320 - lsr.width / 2, ry + 124, 24, NAVY);
++				}
 +			}
 +			be->popClip();
 +
@@ -3742,7 +3816,7 @@ index 00000000..114bd406
 +			}
 +			drawBox(thumbBox(), 20 + thumbValue(), 394, 42, 14);
 +			char a[16], b[16];
-+			snprintf(a, sizeof a, "%02d", at + 1);
++			snprintf(a, sizeof a, "%02d", total == 0 ? 0 : at + 1);
 +			snprintf(b, sizeof b, "%02d", total);
 +			float cx = 622 - g.countW;
 +			TextLine la = line(a, ts(true, 18)), lsl = line(" / ", ts(false, 18)), lb = line(b, ts(false, 18));
@@ -4089,10 +4163,10 @@ index 00000000..114bd406
 +}
 diff --git a/es-app/src/rnds/RndsUI.h b/es-app/src/rnds/RndsUI.h
 new file mode 100644
-index 00000000..7c49d255
+index 00000000..7eb4f9f5
 --- /dev/null
 +++ b/es-app/src/rnds/RndsUI.h
-@@ -0,0 +1,161 @@
+@@ -0,0 +1,165 @@
 +#pragma once
 +// ROCKNIXDS rnds engine: the ROCKNIXDS menu mockup (mockup/index.html) as a native two-screen UI. Three views: home
 +// (the system shelf), library (a system's games as cartridges) and the ready screen. Layout, colours, fonts and
@@ -4169,6 +4243,10 @@ index 00000000..7c49d255
 +		virtual void toggleGameFav(int game) = 0;
 +		virtual int resumeGame(int sys) = 0;	// library index of the system's resume game, opening that list; -1 none
 +		virtual void cue(const std::string& name) {}	// a theme sound for a moment of an animation ("insert")
++		// the library with no games: what the bubble says ("No games yet") and the hint under it ("Copy .nds files to
++		// roms/nds"); the host knows where the games go
++		virtual std::string emptyTitle() { return "No games yet"; }
++		virtual std::string emptyHint() { return ""; }
 +	};
 +
 +	// ---- drawing ------------------------------------------------------------------------------------------------------

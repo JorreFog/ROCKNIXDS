@@ -41,15 +41,17 @@ wait_outputs() {                # up to 3 s
     i=0; while [ $i -lt 60 ]; do sway_has_outputs && return 0; sleep 0.05; i=$((i + 1)); done; return 1
 }
 # VT mode (session.sh switched the console away from sway): switch back, sway takes the display again and ES,
-# which kept running, carries on (it makes a new window after a game; its launcher places it).
+# which kept running and kept its window (es-rgds-keepwindow.patch), carries on; its window is placed again in case
+# sway resized it while the console was away.
 if [ -f /tmp/dsflip-vt ]; then
     VT=$(cat /tmp/dsflip-vt); rm -f /tmp/dsflip-vt
     chvt "${VT:-1}"
     if wait_outputs; then
         S=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
         # RG DS: the window is resized to the 1920 canvas (sway allows it past the 1280 desktop).
-        # Plus: a resize to 3072 is clamped to the 2048 desktop and the theme scales, so only un-fullscreen
-        # and pin at 0,0. The launcher's --resolution already made the window 3072x768.
+        # Plus: ES's --resolution made the window 3072x768, and it comes back from the VT switch one panel wide
+        # (1024x768, the bottom panel black: seen on an RG DS Plus, 1.5.13). A plain resize to 3072 is clamped to the
+        # 2048 desktop and the theme scales, so sway's floating size limit is lifted for the resize and put back.
         THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
         case "$THEME_SET" in
             ""|dii-ess-aye|canvas-ds|rocknixds-pixel-dark|rocknixds-pixel-light)
@@ -57,7 +59,12 @@ if [ -f /tmp/dsflip-vt ]; then
                 case "$PANEL" in [0-9]*x[0-9]*) ;; *) PANEL=640x480 ;; esac
                 PW=${PANEL%%x*}
                 if [ "$PW" -gt 640 ]; then
-                    [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" '[app_id="emulationstation"] floating enable, fullscreen disable, move absolute position 0 0' >/dev/null 2>&1
+                    PH=${PANEL#*x}
+                    if [ -n "$S" ]; then
+                        XDG_RUNTIME_DIR=$RT swaymsg -s "$S" -- floating_maximum_size -1 x -1 >/dev/null 2>&1
+                        XDG_RUNTIME_DIR=$RT swaymsg -s "$S" -- "[app_id=\"emulationstation\"] floating enable, fullscreen disable, resize set $((PW * 3)) $PH, move absolute position 0 0" >/dev/null 2>&1
+                        XDG_RUNTIME_DIR=$RT swaymsg -s "$S" -- floating_maximum_size 0 x 0 >/dev/null 2>&1
+                    fi
                 else
                     [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" '[app_id="emulationstation"] floating enable, fullscreen disable, resize set 1920 480, move absolute position 0 0' >/dev/null 2>&1
                 fi

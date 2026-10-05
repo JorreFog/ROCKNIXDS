@@ -2,9 +2,11 @@
 # es-features.sh: puts ROCKNIXDS's ds-* shaders into EmulationStation's DraStic "shader" option, and adds its
 # "resume on quit" option (nds.resume_on_quit, read by session.sh; unset = on) and its "power profile" option
 # (nds.power_profile: balanced, performance or battery; unset = balanced; session.sh) and its "3D renderer" option
-# (nds.renderer: superdrastic = Gengis Engine, SuperDrastic's own hi-res rasterizer, DSFLIP_RAST=1 in session.sh; unset
-# or drastic = DraStic's) with a "3D texture filter" (nds.texture_filter: nearest, bilinear, sharp; DSFLIP_RAST_TEXFILTER)
-# that only applies to Gengis Engine. Their value attributes are the system.cfg keys: without one ES derives the key
+# (nds.renderer: superdrastic = Gengis Engine, SuperDrastic's own hi-res rasterizer, DSFLIP_RAST=1 in session.sh;
+# drastic = DraStic's; unset, the menu's Auto, is Gengis Engine since 1.5.13) with a "3D texture filter"
+# (nds.texture_filter: nearest, bilinear, sharp; DSFLIP_RAST_TEXFILTER) that only applies to Gengis Engine, and its
+# "wfc dns" (nds.wfc_dns: off, kaeru, wiilink, altwfc; DSFLIP_WFC in session.sh: Wi-Fi online play through a Nintendo
+# WFC replacement server, 1.5.13). Their value attributes are the system.cfg keys: without one ES derives the key
 # from the name (nds.3D_renderer), which session.sh doesn't read. It also keeps the DS system on
 # ROCKNIXDS's DraStic: es_systems.cfg's nds entry offers only drastic/drastic-sa (ROCKNIX also lists RetroArch cores
 # and standalone melonDS, which don't use libdsflip). --unlock-nds puts ROCKNIX's list back (uninstall).
@@ -26,7 +28,7 @@ STATE=${ESF_STATE:-/storage/rgds-rocknix-backup}     # the installer's backup di
 # any earlier copy of them is dropped first, so this is idempotent. The resume option follows the shader option.
 add_ours() {
     grep -vE 'value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"' "$1" | awk '
-        /<feature name="resume on quit"/ || /<feature name="power profile"/ || /<feature name="3D renderer"/ || /<feature name="3D texture filter"/ || /<feature name="3D resolution"/ { skip = 1 }
+        /<feature name="resume on quit"/ || /<feature name="power profile"/ || /<feature name="3D renderer"/ || /<feature name="3D texture filter"/ || /<feature name="3D resolution"/ || /<feature name="wfc dns"/ { skip = 1 }
         skip { if (/<\/feature>/) skip = 0; next }
         /<core name="drastic-sa"/ { core = 1 }
         core && /<\/core>/ { core = 0 }
@@ -59,6 +61,12 @@ add_ours() {
             print ind "<choice name=\"nearest (DS)\" value=\"nearest\" />"
             print ind "<choice name=\"bilinear\" value=\"bilinear\" />"
             print ind "<choice name=\"sharp bilinear\" value=\"sharp\" />"
+            print fi "</feature>"
+            print fi "<feature name=\"wfc dns\" value=\"wfc_dns\">"
+            print ind "<choice name=\"off\" value=\"off\" />"
+            print ind "<choice name=\"Kaeru WFC (Wiimmfi)\" value=\"kaeru\" />"
+            print ind "<choice name=\"WiiLink DNS (Wiimmfi)\" value=\"wiilink\" />"
+            print ind "<choice name=\"AltWFC (unmaintained)\" value=\"altwfc\" />"
             print fi "</feature>"
             next
         }

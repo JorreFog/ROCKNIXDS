@@ -59,24 +59,22 @@ erased**), and a computer with an SD card reader.
    IP) in File Explorer's address bar; on a Mac use *Go > Connect to Server* with `smb://192.168.1.23`. User `root`,
    password `rocknix`. Copy your DS games (`.nds` or `.zip`) into `roms` > `nds`, then restart the handheld.
 
-6. **Set the best settings.** Every setting starts on *Auto*. For the best performance, open *Start > Game settings >
-   Per system advanced configuration > Nintendo DS* and set:
+6. **Play.** The best settings are the defaults since 1.5.13: every Nintendo DS setting on *Auto* means Gengis
+   Engine (the same picture as DraStic's renderer with about 12% less CPU work), the DS's own nearest texture filter,
+   2× resolution with threaded 3D (the installer switches both on), the balanced power profile and ROCKNIX's bilinear
+   scaling (no GPU work). They are under *Start > Game settings > Per system advanced configuration > Nintendo DS*
+   if you want something else:
 
-   | Setting | Set to | Why |
+   | Setting | Auto means | Other choices |
    |---|---|---|
-   | 3D renderer | **Gengis Engine** | The same picture as DraStic's renderer, with about 12% less CPU work |
+   | 3D renderer | **Gengis Engine** | *DraStic*: DraStic's own renderer, the same picture at more CPU work |
    | 3D texture filter | **nearest (DS)** | Bilinear smooths textures but doubles the 3D work |
-   | Shader | **default (bilinear)** for the best performance and battery, or **ds-crisp** for a sharp picture | default needs no GPU work; ds-crisp is the light sharp choice. Avoid ds-fsr, the heaviest |
-   | Power profile | **balanced** | Full speed with the lowest input lag. *performance* only if a game slows down |
-   | Hires 3D | **on** | 2× resolution. The installer already switches it on |
-   | Threaded 3D | **on** | Spreads the 3D work over the cores |
+   | Shader | **default (bilinear)**, no GPU work | **ds-crisp** for a sharp picture; ds-fsr (smooth edges) is the heaviest and runs the GPU at full clock |
+   | Power profile | **balanced**: full speed with the lowest input lag | *performance* only if a game slows down; *battery saver* |
+   | Hires 3D, Threaded 3D | **on** (the installer sets them) | off: 1× resolution; the 3D on the emulation thread |
 
    The same settings can be changed for a single game: highlight it, press **X** for its options and choose the
    game's advanced settings.
-
-> [!NOTE]
-> Known issue: until there is at least one DS game in `roms` > `nds`, the menu has a UI bug. It is harmless and goes
-> away once you add a DS game and restart.
 
 Updates come through the menu: *Updates & downloads > ROCKNIXDS*. Already running ROCKNIX?
 See [Install](#install) for the one-line install over ssh.
@@ -178,6 +176,34 @@ RG DS Plus.
 - **A faster Gengis Engine** (1.5.9, SuperDrastic 0.4.0-beta.2). A leaner rasterizer and a NEON compositor for the 3D
   layer: Pokémon HeartGold takes ~5% less CPU than with 1.5.5's Gengis Engine and ~12% less than with DraStic's renderer,
   and runs closer to full speed at 816 MHz (53 fps instead of 51.6). Still pixel for pixel the same picture as DraStic.
+- **A fresh card opens on the DS** (1.5.13). ES drops a system with no games, so until the first DS game was copied
+  the menu landed on Music Player, Tools and two empty collections, their "no entries" placeholder dressed as a
+  cartridge that hung the ready screen when tapped. The patched ES keeps the DS listed and themed with no games
+  (`es-rgds-emptylibrary.patch`), and its library draws an empty state instead of a card: "No games yet / Copy .nds
+  files to roms/nds" (a collection: "Nothing here yet").
+- **The recommended settings are the defaults** (1.5.13). *3D renderer* on *Auto* is Gengis Engine (a player who
+  picked *DraStic* keeps it), and the installer switches threaded 3D on where it was never set, as the Plus line did
+  since 1.5. The README's "set the best settings" step is gone: a fresh install plays with them.
+- **Wi-Fi online play, experimental and untested** (1.5.13). A *wfc dns* option (off by default) points a game at a
+  community replacement for Nintendo Wi-Fi Connection (Kaeru WFC into Wiimmfi, WiiLink's DNS, AltWFC): the engine
+  answers the game as an open access point and carries its traffic over the handheld's network. Not yet run on a
+  handheld; see *Using it* and `docs/handoff-local.md`.
+- **The microphone, ready for its test on the handheld** (1.5.13, SuperDrastic 0.4.0-beta.2-rocknixds.3). A real
+  blow did nothing on an RG DS Plus (issue 26) while a bound button did. The engine now logs how DraStic's fake
+  microphone is bound and presses the bound joystick button when the key is unbound, the launcher repairs an unbound
+  key, a silent capture is reported, and the echo gate, a minimum hold, a low-frequency test for a speaker as loud as
+  a blow at the mic, and the debug trace are switches that need no rebuild (`DSFLIP_MIC_*`; `docs/handoff-local.md`).
+  The uploaded handheld logs already say the capture works and the gate held the bar above any blow.
+- **The menu stays up during DS games** (1.5.13). Fast switching, opt-in since 1.4, is on for everyone: the game runs on
+  another console (VT) while ES and sway wait, so after a quit the menu is back about a second later, however many
+  games the library holds. Before, ES was stopped and started again for every game, and its start grew with every
+  game it had to load. The patched ES keeps its window for exactly those launches (`es-rgds-keepwindow.patch`), so
+  other emulators keep ROCKNIX's behaviour; `fast-switch off` goes back to stopping ES.
+- **ds-fsr upscales 2× to 3× on the RG DS Plus** (1.5.13, SuperDrastic 0.4.0-beta.2-rocknixds.1). On the Plus's
+  1024×768 panels the FSR pass drew every panel pixel, 2.6× the RG DS's work and more than a frame of GPU time.
+  It now draws 3× the DS screen (768×576; a 2× game is upscaled 1.5×, FSR's *Quality* ratio) and the display
+  controller scales the rest, at 56% of the GPU time. A shader can ask for its output size with a
+  `dsflip-output:` line. Not yet measured on a Plus; the RG DS is unchanged.
 
 ### New in 1.4
 
@@ -192,7 +218,7 @@ RG DS Plus.
   achievements that read the DS's DTCM memory work; the unlock sound chosen in ES plays; ES's RetroAchievements
   menu opens again (it said "Unauthenticated").
 - **Play stats for DS games:** last played, play count and time played are recorded.
-- **fast-switch** (experimental, opt-in): ES and sway stay up during DS games, and the menu is back in ~1.7 s.
+- **fast-switch** (experimental, opt-in; the default since 1.5.13): ES and sway stay up during DS games, and the menu is back in ~1.7 s.
 - **Other themes** get stock ROCKNIX's layout, and the patched ES runs on any ROCKNIX release where it links.
 - **Media tool:** RetroAchievements counts leave out RA's hidden warning achievement, and errors are shown
   instead of silently keeping old strips.
@@ -279,7 +305,8 @@ the menu keeps it up to date.
 It installs the ROCKNIXDS Pixel themes (light, the default, and dark), the dii-ess-aye theme (downloaded from
 [upstream](https://github.com/beebono/dii-ess-aye) at the pinned commit, then this repo's overlay), the patched
 EmulationStation, `libdsflip` as the default DraStic launcher, and
-switches on 2× resolution for DS. It also adds the ds-* shaders to ES's shader menu, and keeps them there when a
+switches on 2× resolution for DS and fast switching (ES stays up during DS games; `dsflip/fast-switch off` undoes
+that part). It also adds the ds-* shaders to ES's shader menu, and keeps them there when a
 ROCKNIX update changes that menu. Everything it replaces is backed up first under `/storage/rgds-rocknix-backup/`
 (the folder keeps its old name so earlier installs can still be undone).
 Running it again upgrades an earlier version in place.
@@ -381,15 +408,21 @@ its measure-first phases are in [`docs/drastic-2x-plan.md`](docs/drastic-2x-plan
 
 It's installed as the default DraStic launcher: start any DS game from EmulationStation as usual.
 
-- The game runs in a detached systemd unit (`dsflip-game`). The unit stops ES and sway, which gives
-  DraStic DRM master, and brings them back when you quit. The game's first frame comes about 3.5 s after you
-  start it (2.3 s of that is ROCKNIX's own launch scripts), and the menu is back about 4.3 s after you quit
-  (`tools/switchtime.sh <device-ip>` measures each step).
-- **Fast switching (experimental, since 1.4):** `/storage/.config/drastic/dsflip/fast-switch on` keeps ES and sway
-  running during DS games: the game switches the console to another VT so seatd hands it the display, and back
-  afterwards. The menu is back ~1.7 s after you quit instead of ~4.3 s. It turns off ES's *HideWindow* setting,
-  which applies to every system, so other emulators may show ES's loading screen on their unused screen.
-  `fast-switch off` undoes it; uninstalling does too.
+- The game runs in a detached systemd unit (`dsflip-game`), and ES and sway stay up while it runs (**fast switching**,
+  opt-in since 1.4, the default since 1.5.13): the session switches the console to another VT, so seatd hands DraStic
+  the display (DRM master), and back afterwards; ES, which was waiting for the game, carries on. The game's first
+  frame comes about 3.5 s after you start it (2.3 s of that is ROCKNIX's own launch scripts), and the menu is back
+  about a second after you quit (1.4 measured 1.2 s to ES answering, 1.6–1.8 s visible), however many games the
+  library holds: nothing restarts and nothing is reloaded (`tools/switchtime.sh <device-ip>` measures each step).
+  For that the patched ES keeps its window and renderer during the game (`es-rgds-keepwindow.patch`: with them torn
+  down, ES's GL re-init after the VT round trip failed), for exactly these launches: a DS game run by DraStic while
+  `dsflip/vt-switch` exists. It tells the launcher so (`RGDS_ES_KEEPS_WINDOW`), which takes the VT path only then.
+  Other emulators follow ES's *HideWindow* setting as before (up to 1.5.12 fast switching turned it off for every
+  system, which could put ES's loading screen on the panel another emulator didn't use: that is why it was opt-in).
+- **`/storage/.config/drastic/dsflip/fast-switch off`** goes back to the stop/start way: the unit stops ES and sway
+  for the game and starts them again afterwards, and the menu is back ~4.3 s after you quit with a handful of
+  games, longer with every game ES has to load again. The choice is kept across updates; `fast-switch on` turns it
+  back on. Stock ES (the launcher's fallback when the patched one can't run) always takes this way.
 - If a game ends abnormally, ES says why once it's back: DraStic crashed, or libdsflip couldn't take over the
   screens (then the session stops at once instead of leaving them black).
 - To quit, use the ROCKNIX exit hotkey or *Exit DraStic* in DraStic's menu (MODE button). Stopping the unit
@@ -408,8 +441,25 @@ Install from a checkout: `RGDS_SRC=<checkout> sh install.sh` on the device, with
 **Microphone.** libdsflip captures the mic over ALSA and holds DraStic's own "fake mic" control while you blow or
 speak, like ROCKNIX's `libdrastouch` does: an RMS level per block against an adaptive noise floor, with ES's DraStic
 *microphone sensitivity* setting as the threshold. **That setting is off by default:** set it (medium is a good
-start) under the Nintendo DS system's or the game's options, or the mic stays off, as on stock ROCKNIX. The mic also hears the speaker, so an echo gate fed by the audio
-pump's output level keeps game music from pressing it (0 false presses in testing, with music playing).
+start) under the Nintendo DS system's or the game's options, or the mic stays off, as on stock ROCKNIX. The mic also
+hears the speaker, so an echo gate fed by the audio pump's output level keeps game music from pressing it (0 false
+presses in testing, with music playing). If a blow does nothing (reported once, on an RG DS Plus), `dsflip.log`'s
+`[mic]` lines say what the engine captured, how DraStic's fake microphone is bound and what pressed it; `DSFLIP_MIC_DEBUG=1`,
+`DSFLIP_MIC_GATE=0` (gate off), `DSFLIP_MIC_LF` (a blow's low-frequency share, for a speaker as loud as a blow at the
+mic) and the other `DSFLIP_MIC_*` switches (`systemctl set-environment`) narrow it down without a rebuild. The
+launcher binds the control (Scroll Lock) where an old `drastic.cfg` left it unbound.
+
+**Wi-Fi online play (1.5.13, experimental, not yet tried on a handheld).** DraStic itself has no Wi-Fi: its wifi
+registers are stubs. With ES's DraStic *wfc dns* option set (under the Nintendo DS system's or a game's options; off
+by default), libdsflip answers the game as an open access point named `rocknixds`, hands it over DHCP the DNS server
+of a community replacement for Nintendo Wi-Fi Connection, and carries the game's traffic over the handheld's own
+network: **Kaeru WFC** (178.62.43.212, into Wiimmfi's 300+ DS games; the one to try first), **WiiLink's DNS**
+(167.235.229.36, also Wiimmfi) or **AltWFC** (172.104.88.237, unmaintained); no patched ROM and no account. In the
+game: *Nintendo WFC Setup > Connection 1 > Search for an Access Point*, pick `rocknixds`, keep *Auto-obtain IP* and
+*Auto-obtain DNS*, *Test Connection*. Logins, lobbies and the GTS are what this build can reach; races and battles
+between players need a full-cone NAT it does not have yet. The Wi-Fi code hooks DraStic's register handlers at fixed
+offsets for the r2.5.2.2 build; with the option off nothing is hooked. What to check on the handheld and how is in
+[`docs/handoff-local.md`](docs/handoff-local.md).
 
 Not in this mode yet: gptokeyb keyboard hotkeys. Everything DraStic maps to buttons itself works.
 
@@ -431,7 +481,7 @@ stock path uses:
   | ds-grid | sharp, with an LCD pixel grid on the real DS pixels |
   | ds-grid + NDS color | ds-grid with the DS color profile |
   | ds-grid-2x | pixel-perfect at 2×, with an even DS-pixel grid |
-  | ds-fsr | AMD FSR 1.0 (EASU): smooth, edge-aware upscaling instead of sharp pixels. Heavier: it runs the GPU at 800 MHz |
+  | ds-fsr | AMD FSR 1.0 (EASU): smooth, edge-aware upscaling instead of sharp pixels. Heavier: it runs the GPU at 800 MHz. On the RG DS Plus it upscales to 3× (768×576) and the display controller does the last step, see *Cost* |
   | ds-integer | pixel-perfect: each screen at exactly 2× (512×384), centred in a dark bezel. Touch follows the smaller screen |
 
   The NDS color profile is the one ROCKNIX's lcd1x+nds-color uses, except that very saturated blues are clamped
@@ -461,6 +511,14 @@ stock path uses:
   16.7 ms frame for both), so it pins the GPU at 800 MHz; a straight port of FSR took 9.7 ms per screen and
   dropped every other frame (see the shader's header for how it was made twice as fast). HeartGold at 2× with lcd3x: 4 dropped frames in
   60 s of walking, SoC ~60 °C.
+- **ds-fsr on the RG DS Plus** (1.5.13): its panels are 1024×768, 2.56× the RG DS's pixels, so a panel-sized FSR pass
+  would take ~12 ms per screen, ~25 ms per frame for both: more than the refresh, every other frame dropped. The
+  shader now asks for a 3× buffer (`// dsflip-output: 3x` in its source, SuperDrastic 0.4.0-beta.2-rocknixds.1):
+  it draws 768×576 per screen, upscaling a 2× game 2× → 3× (1.5×, the ratio FSR calls *Quality*), and the display
+  controller scales that to the panel like it scales DraStic's own frames without a shader. 56% of the pixels:
+  ~7 ms per screen, ~14 ms per frame, which fits. On the RG DS (640×480) 3× doesn't fit, so nothing changes there.
+  Not yet measured on a Plus: `tools/shaders.sh` in SuperDrastic with `OUT=1024x768` times it as the library runs
+  it. `DSFLIP_SHADER_OUTPUT=4x` (or `panel`, `WxH`) tries other sizes without editing the shader.
 - At 2× (hires) the source is 512×384, so shaders written for integer scales ≥2× (sharp-bilinear, lcd3x) scale
   unevenly (1.25×). ds-crisp is the sharp choice there.
 
@@ -688,14 +746,19 @@ dark-background and a light-background version, a stacked version for small squa
 
 ## Known issues
 
-- **No DS games yet:** with an empty `roms/nds` (as on a freshly flashed card), the menu has a UI bug. It goes away
-  once a DS game is added and the menu restarts.
+- **No DS games yet** (fixed in 1.5.13, not yet seen on a handheld): with an empty `roms/nds` ES dropped the DS
+  system, so a fresh card opened on Music Player and two empty collections whose placeholder was drawn as a cartridge
+  (and a tap on it hung the ready screen). The patched ES keeps the DS listed and shows "No games yet".
+- **A real blow did nothing on an RG DS Plus** (issue 26; a button bound to DraStic's *Fake Microphone* works).
+  1.5.13 ships the engine's microphone with logs and switches to find the cause on the handheld (`docs/handoff-local.md`,
+  section 3); the shipped defaults are unchanged until a device run settles them. The uploaded logs point at the
+  echo gate: the speaker reaches the mic as loud as a blow.
 - **RetroAchievements:** softcore only.
 - **Heavy stretches at 2× can still drop frames** (up to ~10/s in one run). There, DraStic's own frame
   times vary so much that its frames arrive spread over the whole refresh cycle, and no latch position can
   separate them. Calm stretches drop about one frame every 8 s.
-- `libdsflip` stops ES while a game runs, so switching takes ~3.5 s in and ~4.3 s out. Keeping ES running
-  across a game is possible (see the plan).
+- Starting a DS game takes ~3.5 s, 2.3 s of them in ROCKNIX's own launch scripts. (Quitting used to restart ES, ~4.3 s
+  plus every game it had to load again; since 1.5.13 ES stays up and the menu is back about a second after a quit.)
 
 ## Credits
 

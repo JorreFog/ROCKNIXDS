@@ -1,3 +1,10 @@
 # The SuperDrastic release install.sh installs (https://github.com/JorreFog/SuperDrastic): version and the sha256 of
 # superdrastic-<version>-aarch64.tar.gz. Bump both together. This release ships the package in dsflip/.
-0.5.0-beta.1 68ce35730734ed12a2e6de052a332021e3cc639ff34d9858886f702bdb8fffa9
+# 0.5.0-beta.1-rocknixds.3 is SuperDrastic v0.5.0-beta.1 (the in-game menu) plus
+# dsflip/superdrastic-0.5.0-beta.1-rocknixds.3.patch (four commits: shader output sizes with ds-fsr at 3x on the RG DS
+# Plus; the Wi-Fi / Nintendo WFC path, off unless "wfc dns" is set; its pre-device fixes; the microphone's tunables,
+# logs and joystick-button fallback; the last one merged by hand with the menu's microphone meter), built on a PC, not
+# by SuperDrastic's CI: build.sh (clang 23 + lld, the Ubuntu noble arm64 sysroot tools/build-es.sh makes) and
+# package.sh; it needs glibc 2.38 like the release. Once the patch is in a SuperDrastic release, pin that release here
+# instead and drop the patch.
+0.5.0-beta.1-rocknixds.3 3b606c7c9cee6749bc972e318eb68a0f6bffe67fc05f3132c611faa700b64fb3

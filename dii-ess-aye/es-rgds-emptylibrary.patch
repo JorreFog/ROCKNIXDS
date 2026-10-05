@@ -1,0 +1,90 @@
+es-rgds-emptylibrary: the Nintendo DS system stays listed with no games, with a "no games yet" library (ROCKNIXDS)
+
+On a freshly flashed card roms/nds is empty, and ES drops a game system with no files (SystemData.cpp: the
+constructor returns before the theme loads, loadSystem deletes it, isVisible hides it), so the "nds" the installer
+seeds as LastSystem does not exist: the menu lands on Music Player, Tools and two empty auto-collections, whose
+"<No Entries Found>" placeholder the Pixel engine dressed as a cartridge, and a tap on it or on START entered the
+ready screen and stayed on "Starting..." (the gamepad's A was filtered, the touch path was not). That was the "UI
+bug until there is a DS game" in the README up to 1.5.12.
+
+Now the systems named in RGDS_KEEP_SYSTEMS (default "nds") are loaded, themed and visible with zero games, so the
+shelf has the DS from the first boot. LoadEmptySystems keeps its meaning for every other system. The engine's side
+(an empty state for a library with no games: "No games yet / Copy .nds files to roms/nds"; a list a filter empties:
+"Nothing matches") is in es-rgds-rnds.patch. RGDS_KEEP_SYSTEMS is comma-separated, spaces allowed.
+
+diff --git a/es-app/src/SystemData.cpp b/es-app/src/SystemData.cpp
+index 4c09392..e6634df 100644
+--- a/es-app/src/SystemData.cpp
++++ b/es-app/src/SystemData.cpp
+@@ -38,6 +38,26 @@
+ 
+ using namespace Utils;
+ 
++// ROCKNIXDS (es-rgds-emptylibrary.patch): the Nintendo DS system stays loaded, themed and listed with no games, so a
++// freshly flashed card opens on the DS shelf with a "no games yet" library, instead of ES dropping the system and the
++// menu landing on Music Player, Tools and two empty collections (the Known issue up to 1.5.12). RGDS_KEEP_SYSTEMS is a
++// comma-separated list of system names (default "nds"); LoadEmptySystems keeps its meaning for every other system.
++static bool rgdsKeepEmpty(const std::string& name)
++{
++	// the systems in RGDS_KEEP_SYSTEMS (comma-separated, spaces allowed; unset or empty: "nds")
++	static std::vector<std::string> keep = []() {
++		const char* e = getenv("RGDS_KEEP_SYSTEMS");
++		std::vector<std::string> v;
++		for (auto& t : Utils::String::split(e && *e ? e : "nds", ',', true))
++		{
++			std::string s = Utils::String::trim(t);
++			if (!s.empty()) v.push_back(s);
++		}
++		return v;
++	}();
++	return std::find(keep.begin(), keep.end(), name) != keep.end();
++}
++
+ static std::map<std::string, std::function<BindableProperty(SystemData*)>> properties =
+ {
+ 	{ "name",				[] (SystemData* sys) { return sys->getName(); } },
+@@ -106,7 +126,7 @@ SystemData::SystemData(const SystemMetadata& meta, SystemEnvironmentData* envDat
+ 
+ 			if (!UIModeController::LoadEmptySystems())
+ 			{
+-				if (mRootFolder->getChildren().size() == 0)
++				if (mRootFolder->getChildren().size() == 0 && !rgdsKeepEmpty(mMetadata.name))	// ROCKNIXDS: the DS stays
+ 					return;
+ 
+ 				if (mHidden && !Settings::HiddenSystemsShowGames())
+@@ -134,7 +154,7 @@ SystemData::SystemData(const SystemMetadata& meta, SystemEnvironmentData* envDat
+ 
+ 	mRootFolder->getMetadata().resetChangedFlag();
+ 
+-	if (withTheme && (!loadThemeOnlyIfElements || UIModeController::LoadEmptySystems() || mRootFolder->mChildren.size() > 0))
++	if (withTheme && (!loadThemeOnlyIfElements || UIModeController::LoadEmptySystems() || rgdsKeepEmpty(mMetadata.name) || mRootFolder->mChildren.size() > 0))
+ 	{
+ 		loadTheme();
+ 
+@@ -1194,7 +1214,7 @@ SystemData* SystemData::loadSystem(pugi::xml_node system, bool fullMode)
+ 		return nullptr;
+ 	}
+ 
+-	if (fullMode && !UIModeController::LoadEmptySystems() && !Utils::FileSystem::exists(path))
++	if (fullMode && !UIModeController::LoadEmptySystems() && !rgdsKeepEmpty(md.name) && !Utils::FileSystem::exists(path))
+ 	{
+ 		LOG(LogError) << "System \"" << md.name << "\" path does not exist !";
+ 		return nullptr;
+@@ -1273,7 +1293,7 @@ SystemData* SystemData::loadSystem(pugi::xml_node system, bool fullMode)
+ 	if (!fullMode)
+ 		return newSys;
+ 
+-	if (!UIModeController::LoadEmptySystems() && newSys->getRootFolder()->getChildren().size() == 0)
++	if (!UIModeController::LoadEmptySystems() && !rgdsKeepEmpty(md.name) && newSys->getRootFolder()->getChildren().size() == 0)
+ 	{
+ 		LOG(LogWarning) << "System \"" << md.name << "\" has no games! Ignoring it.";
+ 		delete newSys;
+@@ -1354,7 +1374,7 @@ bool SystemData::isVisible()
+ 	if (isGroupChildSystem())
+ 		return false;
+ 
+-	if (!mHidden && !mIsCollectionSystem && (UIModeController::LoadEmptySystems() || getGameCountInfo()->totalGames > 0))
++	if (!mHidden && !mIsCollectionSystem && (UIModeController::LoadEmptySystems() || rgdsKeepEmpty(mMetadata.name) || getGameCountInfo()->totalGames > 0))
+ 		return true;
+ 
+ 	return false;

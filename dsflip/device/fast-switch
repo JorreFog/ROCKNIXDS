@@ -1,26 +1,33 @@
 #!/bin/sh
-# fast-switch on|off|status -- near-instant return from DS games (experimental).
+# fast-switch on|off|status -- near-instant return from DS games (on by default since 1.5.13; opt-in from 1.4 to 1.5.12).
 #
-# Off (default): a DS game stops ES and sway, which gives libdsflip the display; quitting starts them again
-# (~4.3 s back to the menu). On: ES and sway keep running. The game switches the console to another VT (tty12), so
-# seatd takes the display from sway (~0.3 s), and back afterwards; ES, which was waiting for the game, carries on
-# (~0.9 s back to the menu). ES must keep its window during games for that (its HideWindow setting off): with the
-# window torn down, ES's GL re-init after the VT switch fails and it crashes. HideWindow applies to every system,
-# so with this on, other emulators may show ES's loading screen on the screen they don't use.
+# On: ES and sway keep running during a DS game. The game switches the console to another VT (tty12), so seatd takes
+# the display from sway (~0.3 s), and back afterwards; ES, which was waiting for the game, carries on: the menu is
+# back about a second after you quit, however many games the library holds (nothing restarts, nothing is reloaded).
+# The patched ES keeps its window and renderer for such a launch (es-rgds-keepwindow.patch: with them torn down, its
+# GL re-init after the VT switch fails) and tells the launcher so (RGDS_ES_KEEPS_WINDOW); every other launch follows
+# ES's HideWindow setting as before. Stock ES (the launcher's fallback) never fast-switches: the game then stops ES
+# and sway as with "off".
+# Off: a DS game stops ES and sway, which gives libdsflip the display; quitting starts them again: ~4.3 s back to the
+# menu with a few games, longer with every game ES has to load again. An "off" is kept across updates
+# (fast-switch-off); the installer turns fast switching on otherwise.
+# Up to 1.5.12 "on" also turned ES's HideWindow setting off, for every system (other emulators could show ES's loading
+# screen on the panel they don't use). ES decides per launch now, so that override is dropped by "on" and "off" alike.
 D=/storage/.config/drastic/dsflip
 ES=/storage/.config/emulationstation/es_settings.cfg
 
-hidewindow() {        # hidewindow false: keep ES's window during games; hidewindow default: ROCKNIX's default
-    systemctl stop essway.service
+drop_override() {   # the HideWindow override an earlier fast-switch wrote: ROCKNIX's default again (ES reads it at start)
+    grep -q '<bool name="HideWindow" value="false" />' $ES 2>/dev/null || return 0
+    running=; systemctl is-active -q essway.service && running=1
+    [ -n "$running" ] && systemctl stop essway.service
     sed -i '/<bool name="HideWindow" /d' $ES
-    [ "$1" = false ] && sed -i 's|</config>|\t<bool name="HideWindow" value="false" />\n</config>|' $ES
-    systemctl start essway.service
+    [ -n "$running" ] && systemctl start essway.service
 }
 
 case "$1" in
 on)     [ -f $D/libdsflip.so ] || { echo "libdsflip isn't installed"; exit 1; }
-        touch $D/vt-switch; hidewindow false; echo "fast switching on" ;;
-off)    rm -f $D/vt-switch; hidewindow default; echo "fast switching off" ;;
+        touch $D/vt-switch; rm -f $D/fast-switch-off; drop_override; echo "fast switching on" ;;
+off)    rm -f $D/vt-switch; touch $D/fast-switch-off; drop_override; echo "fast switching off" ;;
 status) [ -e $D/vt-switch ] && echo on || echo off ;;
 *)      echo "usage: fast-switch on|off|status"; exit 2 ;;
 esac

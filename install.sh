@@ -209,6 +209,7 @@ if [ $UNINSTALL = 1 ]; then
             old=$(sed -n 's/^nds\.hires_3d=//p' $B/.config/system/configs/system.cfg | head -n1)
             if [ -n "$old" ]; then set_cfg nds.hires_3d "$old"; else sed -i '/^nds\.hires_3d=/d' $SYSCFG; fi
         fi
+        [ -e $BACKUP/.threaded-3d-set ] && { sed -i '/^nds\.threaded_3d=/d' $SYSCFG 2>/dev/null; rm -f $BACKUP/.threaded-3d-set; }   # the threaded 3D the installer set
         if [ -f $B/.config/emulationstation/es_settings.cfg ] && [ -f $ES_SETTINGS ]; then   # the theme's keys only
             for k in ThemeSet FullScreenMenu GameTransitionStyle PowerSaverMode; do
                 old=$(es_get $k $B/.config/emulationstation/es_settings.cfg)
@@ -263,7 +264,7 @@ if [ $UNINSTALL = 1 ]; then
         if [ -e $DRASTIC/drastic.dvsync ]; then cp -p $DRASTIC/drastic.dvsync $DRASTIC/drastic
         else printf '#!/bin/sh\nexec /storage/.config/drastic/drastic.real "$@"\n' > $DRASTIC/drastic; chmod +x $DRASTIC/drastic; fi
     fi
-    [ -e $DRASTIC/dsflip/vt-switch ] && es_del HideWindow      # fast-switch on set it; ROCKNIX's default again
+    sed -i '/<bool name="HideWindow" /d' $ES_SETTINGS 2>/dev/null      # fast-switch on (up to 1.5.12) set it; ROCKNIX's default again
     # ROCKNIX's DS emulators again (lockdown), while es-features.sh is still there
     [ -f $DRASTIC/dsflip/es-features.sh ] && sh $DRASTIC/dsflip/es-features.sh --unlock-nds
     rm -rf $DRASTIC/dsflip
@@ -430,6 +431,14 @@ if [ $THEME_ON = 1 ]; then
     # ES starts on the system it was last on; with none yet (a fresh SD card) it took the first in its list, Favorites,
     # not the DS. The patched ES always lists the DS, even before there are games.
     [ -n "$(es_get LastSystem $ES_SETTINGS)" ] || es_set LastSystem nds
+    # a card that once started without DS games: ES then saved the system it fell back to (the menu starts on
+    # LastSystem), and up to 1.5.12 the DS wasn't listed until a game was there. The patched ES now lists it even
+    # empty (es-rgds-emptylibrary.patch): back to the DS from those fallbacks (ES names the collections favorites,
+    # recent and all; music and tools are ROCKNIX's systems), once per install. A player who left the menu on Tools
+    # on purpose is sent to the DS this once; a DS game is never left for another emulator's system.
+    case "$(es_get LastSystem $ES_SETTINGS)" in
+        favorites|recent|all|music|tools) es_set LastSystem nds ;;
+    esac
     # 1.5: ROCKNIXDS Pixel Light is the theme, once (the first install of 1.5 or later; a choice made after that stays,
     # an uninstall forgets it). The 1.5 betas' rocknixds-dark/-light/-pixel are gone.
     if [ ! -e /storage/.config/rocknixds/.pixel-default ]; then
@@ -495,6 +504,12 @@ if [ $DSFLIP_ON = 1 ]; then
        "$SRC/dsflip/device/battery-led-status" "$SRC/dsflip/device/powerstate" "$SRC/dsflip/device/media-auto.sh" \
        "$SRC/dsflip/device/drastic-launch" $WORK/dsflip/
     sh $WORK/dsflip/install.sh
+    # fast switching (dsflip/fast-switch): ES and sway stay up during a DS game, which runs on another VT, so the menu
+    # is back about a second after a quit whatever the size of the library (nothing restarts). On unless the player
+    # turned it off (fast-switch off leaves fast-switch-off). ES is stopped here, so no restart: it reads the switch at
+    # every launch and the HideWindow override an older fast-switch wrote is gone by the time it starts.
+    if [ -e $DRASTIC/dsflip/fast-switch-off ]; then say "Fast switching stays off (fast-switch off)"
+    else say "Fast switching on: the menu stays up during DS games"; sh $DRASTIC/dsflip/fast-switch on; fi
 
     # DS-pixel-aware shaders for DraStic (sharp and LCD-grid looks that work at 1x and 2x) + their ES entries
     mkdir -p $DRASTIC/shaders
@@ -573,6 +588,17 @@ if [ $HIRES_ON = 1 ] && [ -f $SYSCFG ]; then
     say "Switching on hires 3D (2x internal resolution) for Nintendo DS"
     backup_once $SYSCFG
     set_cfg nds.hires_3d 1
+fi
+# DraStic's threaded 3D (ES: Nintendo DS > threaded 3d) is off until the player sets it; on, the 3D work leaves the
+# main (emulation) thread, which is what sets the clock a game needs (the RG DS measurements behind the power profiles
+# were made with it on; a fresh RG DS Plus install had it off and Mario Kart ran at 58.8 fps at 1104 MHz). Set it on
+# once where it has never been set (the Plus line since 1.5-plus; both handhelds since 1.5.13), with or without hires;
+# uninstall removes it again. The other recommended settings need no key: an unset 3D renderer is Gengis Engine
+# (session.sh), an unset texture filter is nearest, an unset power profile is balanced, an unset shader is ROCKNIX's
+# bilinear (no GPU work).
+if [ $DSFLIP_ON = 1 ] && [ -f $SYSCFG ] && ! grep -q '^nds\.threaded_3d=' $SYSCFG 2>/dev/null; then
+    backup_once $SYSCFG
+    set_cfg nds.threaded_3d 1; touch $BACKUP/.threaded-3d-set
 fi
 
 # ---- 60 Hz panels (opt-in) -----------------------------------------------------------------------------

@@ -1,7 +1,9 @@
 #!/bin/sh
 # libdsflip game session (runs as systemd unit dsflip-game, outside ES's process tree).
-# Stops ES + sway, runs DraStic with libdsflip on the bare panels, then brings sway + ES back. If this script is
-# killed with the unit (systemctl stop dsflip-game), the unit's ExecStopPost (restore.sh) does that instead.
+# Fast switching (DSFLIP_VT=1, the default): switches the console to another VT so seatd hands the panels to DraStic
+# while ES and sway wait, and back afterwards. Otherwise stops ES + sway, runs DraStic with libdsflip on the bare
+# panels, then brings sway + ES back. If this script is killed with the unit (systemctl stop dsflip-game), the unit's
+# ExecStopPost (restore.sh) does that instead.
 # The exit hotkey (killall -9 drastic) works because DraStic runs through a symlink named "drastic".
 D=/storage/.config/drastic
 LOG=$D/dsflip/last-session.log
@@ -43,8 +45,9 @@ stuck_report() {
   # own), so kill it outright, as start_drastic.sh itself does after a game. One stop for both units: systemd
   # orders it (ES first) without a second round trip.
   kill -9 $(pidof gptokeyb) 2>/dev/null
-  if [ -e $D/dsflip/vt-switch ] && systemctl is-active -q sway.service; then
-    # VT mode: sway and ES stay up. Switching the console away from sway's VT makes seatd disable sway's session,
+  if [ "$DSFLIP_VT" = 1 ] && systemctl is-active -q sway.service; then
+    # VT mode (drastic-wrapper.sh sets DSFLIP_VT=1 when ES kept its window for this launch: fast switching, the
+    # default): sway and ES stay up. Switching the console away from sway's VT makes seatd disable sway's session,
     # which releases the display (DRM master) in ~80 ms; restore.sh switches back. tty12 is unused; graphics mode
     # keeps the kernel console from drawing on it in between.
     VT=1
@@ -77,8 +80,10 @@ stuck_report() {
   BIG=; [ "${PANEL%%x*}" -gt 640 ] 2>/dev/null && BIG=1
   case "${DSHOOK_SHADER:-none}" in
     none|bilinear) GOV=powersave; MIN= ;;
-    # ds-fsr (FSR 1.0) needs ~9.5 ms of GPU per frame: under simple_ondemand it sat at 800 MHz 97% of the time
-    # and dropped frames while ramping up from the floor at the start, so it gets the full clock from the start
+    # ds-fsr (FSR 1.0) needs ~9.5 ms of GPU per frame on the RG DS (~14 ms on the Plus, where it draws 3x the DS
+    # screen, 768x576, and the display controller scales the rest; SuperDrastic's shaders/ds-fsr.frag): under
+    # simple_ondemand it sat at 800 MHz 97% of the time and dropped frames while ramping up from the floor at the
+    # start, so it gets the full clock from the start
     ds-fsr) GOV=${DSFLIP_SHADER_GOV:-performance}; MIN=$DSFLIP_SHADER_GPU_MIN ;;
     *) if [ -n "$BIG" ]; then GOV=${DSFLIP_SHADER_GOV:-performance}; MIN=$DSFLIP_SHADER_GPU_MIN
        else GOV=${DSFLIP_SHADER_GOV:-simple_ondemand}; MIN=${DSFLIP_SHADER_GPU_MIN:-400000000}; fi ;;
@@ -170,15 +175,40 @@ stuck_report() {
   [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX} DSFLIP_CPU_MAX_SOFT=${DSFLIP_CPU_MAX_SOFT:-1}
   echo "power profile: $PROF (queue $DSFLIP_QUEUE, wait ${DSFLIP_QUEUE_WAIT} ms, CPU max ${DSFLIP_CPU_MAX:-hardware})"
   # 3D renderer (ES: the game's or DS system's "3D renderer"): superdrastic = Gengis Engine, SuperDrastic's own
-  # rasterizer for DraStic's hi-res 3D (DSFLIP_RAST=1), anything else DraStic's own; and its "3D texture filter"
-  # (SuperDrastic ignores it with DraStic's renderer). 1.5.5 offers no 3x: nds.resolution3d is not read.
+  # rasterizer for DraStic's hi-res 3D (DSFLIP_RAST=1), drastic = DraStic's own. Auto (unset, the menu's default) is
+  # Gengis Engine since 1.5.13: the same picture as DraStic's renderer pixel for pixel with ~12% less CPU (1.5.9), and
+  # the README asked every new player to switch it on by hand. A player who chose DraStic keeps it. "3D texture filter"
+  # applies to Gengis Engine; DraStic's renderer ignores it. The Plus line offers no 3x: nds.resolution3d is not read.
+  # DSFLIP_RAST=0 in the environment (tests, systemctl set-environment) forces DraStic's renderer whatever the setting.
   RND=$(grep -F "nds[\"$GAME\"].renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$RND" ] || RND=$(grep "^nds.renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  [ "$RND" = superdrastic ] && export DSFLIP_RAST=${DSFLIP_RAST:-1}
+  case "$RND" in drastic) ;; superdrastic|""|auto) export DSFLIP_RAST=${DSFLIP_RAST:-1} ;; esac
+  [ "$DSFLIP_RAST" = 0 ] && unset DSFLIP_RAST
   TF=$(grep -F "nds[\"$GAME\"].texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$TF" ] || TF=$(grep "^nds.texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   case "$TF" in bilinear) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-1} ;; sharp) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-2} ;; esac
-  if [ -n "$DSFLIP_RAST" ]; then echo "3D renderer: Gengis Engine (texture filter ${DSFLIP_RAST_TEXFILTER:-0})"; else echo "3D renderer: DraStic"; fi
+  if [ -n "$DSFLIP_RAST" ]; then echo "3D renderer: Gengis Engine (${RND:-Auto}; texture filter ${DSFLIP_RAST_TEXFILTER:-0})"; else echo "3D renderer: DraStic"; fi
+  # Wi-Fi online play (ES: the game's or DS system's "wfc dns"; unset or off = stock DraStic, which has no Wi-Fi).
+  # libdsflip then answers the game as an open access point named rocknixds and hands it that DNS server (Kaeru WFC,
+  # WiiLink's DNS, AltWFC: kaeru, wiilink, altwfc, or a dotted address) over DHCP, and the game's traffic goes out over
+  # the handheld's own network. Untested on a handheld: docs/handoff-local.md, section 4. DSFLIP_WFC already in the
+  # environment (systemctl set-environment DSFLIP_WFC=kaeru DSFLIP_WFC_DEBUG=1 for a test) wins over the setting.
+  WFC=$(grep -F "nds[\"$GAME\"].wfc_dns=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ -n "$WFC" ] || WFC=$(grep "^nds.wfc_dns=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  case "$WFC" in ""|off|auto|none) WFC= ;; esac
+  [ -n "$WFC" ] && export DSFLIP_WFC=${DSFLIP_WFC:-$WFC}
+  echo "wifi: ${DSFLIP_WFC:-off}"
+  # The real microphone presses DraStic's "fake microphone" control (Scroll Lock, code 327 in the keyboard set).
+  # ROCKNIX's drastic.cfg for the RG DS binds it in both control sets since 2026-02-04, but a config/drastic.cfg that
+  # dates from an earlier nightly has it unbound (65535), and ROCKNIX copies its template only once: then blowing
+  # into the mic reached nothing (issue 26's second suspect). With the mic on, bind it. DraStic saves this file on
+  # exit, so a later rebinding by the player in DraStic's menu stays. libdsflip logs what it found ("[mic] fake
+  # microphone: ..." in dsflip.log); DSFLIP_MIC_DEBUG=1, DSFLIP_MIC_GATE, DSFLIP_MIC_COUPLING_MAX, DSFLIP_MIC_HOLD_MS
+  # and DSFLIP_MIC_KEY (systemctl set-environment) are its test switches: docs/handoff-local.md, section 3.
+  if [ "${DSHOOK_MIC_THRESH:-0}" != 0 ] && grep -q '^controls_a\[CONTROL_INDEX_FAKE_MICROPHONE\] = 65535' $D/config/drastic.cfg 2>/dev/null; then
+    sed -i 's/^controls_a\[CONTROL_INDEX_FAKE_MICROPHONE\] = 65535/controls_a[CONTROL_INDEX_FAKE_MICROPHONE] = 327/' $D/config/drastic.cfg
+    echo "microphone: bound DraStic's fake microphone to Scroll Lock (327) in config/drastic.cfg (it was unbound)"
+  fi
   cd $D
   # no wait for the display: libdsflip retries DRM master itself while seatd lets go of it (~0.4 s after sway)
   SDL_VIDEODRIVER=dummy XDG_RUNTIME_DIR=/var/run/0-runtime-dir DSFLIP_LOG=$D/dsflip/dsflip.log \

@@ -1,0 +1,2631 @@
+From 02b181f40a019b94299b02b8dc5f334ca74781c4 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 5 Oct 2026 15:21:56 +0000
+Subject: [PATCH 1/4] Shaders can draw a smaller buffer than the panel; ds-fsr
+ draws 3x on the RG DS Plus
+
+A shader's source may say "// dsflip-output: Nx" (N times the DS screen's 256x192) or "dsflip-output: WxH": its
+output buffers are made that size, never larger than the panel, and the display controller (VOP2, bilinear, free)
+scales them to the panel, as it scales DraStic's own buffers without a shader. DSFLIP_SHADER_OUTPUT (the same syntax,
+or "panel") overrides it. The output buffers are now made by the shader worker once the shader is compiled (under mu:
+the buffer generation counter is shared with SDL_CreateTexture). A viewport rectangle (dsflip-viewport) is in the
+buffer's pixels and is mapped to the panel.
+
+ds-fsr declares 3x. On the RG DS Plus (1024x768 panels, 4x the DS screen) a panel-sized EASU pass is 2.56x the
+RG DS's pixels: at the RG DS's measured 4.8 ms per panel that is ~25 ms per frame for both panels, more than the
+16.7 ms refresh. At 768x576 (a 2x game upscaled 2x -> 3x by EASU, FSR's "Quality" ratio, the last 1.33x by the
+scaler) it is 56% of that, ~14 ms per frame. On the RG DS (640x480) 3x doesn't fit and nothing changes.
+
+shtest takes OUT=WxH (the panel; a shader's smaller buffer is honoured, as in the library), shbench.sh and shaders.sh
+pass OUT through, so the Plus figures can be measured with OUT=1024x768.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01EHHmyacNZtyRhmxZoUYRa8
+---
+ docs/INTEGRATION.md | 10 +++++++--
+ shaders/ds-fsr.frag | 10 +++++++++
+ src/dsflip.c        | 32 ++++++++++++++++++++------
+ src/shader.c        | 55 ++++++++++++++++++++++++++++++++++++++-------
+ tools/shaders.sh    |  2 +-
+ tools/shbench.sh    |  6 +++--
+ tools/shtest.c      |  9 +++++++-
+ 7 files changed, 103 insertions(+), 21 deletions(-)
+
+diff --git a/docs/INTEGRATION.md b/docs/INTEGRATION.md
+index e2fcd98..90ac57b 100644
+--- a/docs/INTEGRATION.md
++++ b/docs/INTEGRATION.md
+@@ -138,6 +138,7 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
+ | `DSFLIP_DRASTIC_DIR` | DraStic's own folder | Where DraStic runs (and reads its configuration) |
+ | `DSFLIP_SHADER` | none | A shader by name, e.g. `ds-crisp`; none = DraStic's frames go straight to the panels |
+ | `DSFLIP_SHADER_DIR` | | Another folder of `.frag` shaders (checked first) |
++| `DSFLIP_SHADER_OUTPUT` | the shader's own line | The size of the buffer the shader draws into: `3x` (the DS screen times 3, 768x576), `WxH`, or `panel`; see *Shaders* |
+ | `DSFLIP_CARD` | the first `/dev/dri/card*` with two connected DSI panels | The display device |
+ | `DSFLIP_TOP` | `DSI-2` | The connector that shows the DS top screen |
+ | `DSFLIP_TOUCH` | `fe5e0000.i2c` | A fragment of the bottom touchscreen's device path |
+@@ -163,8 +164,13 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
+ 
+ **Shaders** are GLSL ES 1.0 fragment shaders with the inputs DraStic's stock shaders use (`u_texture`,
+ `u_texture_size`, `u_output_size`, `v_texcoord`; see the top of `src/shader.c`). A shader that draws the DS screen
+-into part of the panel declares where (`// dsflip-viewport: x y w h`), and touch follows it. On ROCKNIX, its
+-built-in DraStic shaders (lcd3x, sharp-bilinear and the rest) are found in its `libdrastouch.so` by name.
++into part of the panel declares where (`// dsflip-viewport: x y w h`), and touch follows it. A shader may draw into
++a buffer smaller than the panel and leave the rest of the scaling to the display controller (`// dsflip-output: 3x`:
++three times the DS screen's 256x192, or `WxH`; never larger than the panel, and the panel itself where that doesn't
++fit): `ds-fsr` does, so on 1024x768 panels it upscales a 2x game to 3x and the scaler does the last step, at about
++half the GPU time of a panel-sized pass. `DSFLIP_SHADER_OUTPUT` (the same syntax, or `panel`) overrides the
++shader's line. On ROCKNIX, its built-in DraStic shaders (lcd3x, sharp-bilinear and the rest) are found in its
++`libdrastouch.so` by name.
+ 
+ ## Examples
+ 
+diff --git a/shaders/ds-fsr.frag b/shaders/ds-fsr.frag
+index a65ea22..91db67a 100644
+--- a/shaders/ds-fsr.frag
++++ b/shaders/ds-fsr.frag
+@@ -5,6 +5,16 @@
+ // then clamps to the 2x2 texels around the sample (no ringing) and adds a light sharpen. Smooth rather than
+ // pixel-sharp: for pixel-exact sharpness use ds-crisp.
+ //
++// Output size: 3x the DS screen (768x576) where the panel is larger, the panel itself where it isn't (next line).
++// dsflip-output: 3x
++// On the RG DS Plus (1024x768 panels, 4x) the pass draws 768x576 and the display controller scales that to the
++// panel (bilinear, free), so a 2x game is upscaled 2x -> 3x by EASU, the ratio FSR calls "Quality" (1.5x), with
++// the last 1.33x left to the scaler. A panel-sized pass there is 2.56x the RG DS's pixels (1024x768 x 2 panels):
++// at the RG DS's measured 4.8 ms per 640x480 panel that is ~12 ms per panel, ~25 ms per frame, more than the
++// 16.7 ms refresh, so every other frame dropped. 768x576 is 56% of that: ~7 ms per panel, ~14 ms per frame, which
++// fits (to be measured on a Plus: tools/shaders.sh with OUT=1024x768). On the RG DS (640x480) 3x doesn't fit and
++// nothing changes: 2x -> 2.5x straight into the panel, as before.
++//
+ // Same algorithm as the fsr.frag port (the RetroArch/melonDS EASU), made ~2x cheaper on this Mali-G52 without
+ // changing the result (measured with dsflip/shtest, pipelined GPU time per 640x480 panel at 800 MHz):
+ //   fsr.frag  9.7 ms  (19.3 ms per frame for both panels: every other frame dropped)
+diff --git a/src/dsflip.c b/src/dsflip.c
+index e431677..b76f401 100644
+--- a/src/dsflip.c
++++ b/src/dsflip.c
+@@ -88,7 +88,8 @@ typedef struct {                        /* one panel */
+     dbuf *src;                          /* shader mode: DraStic's newest finished buffer, not yet shaded */
+     long long src_t;                    /* ...and when DraStic presented it */
+     int src_held;                       /* ...after a hold on a full queue (DSFLIP_QUEUE_WAIT): not a phase sample */
+-    dbuf out[NOUT];                     /* shader mode: panel-sized buffers the shader draws into */
++    dbuf out[NOUT];                     /* shader mode: the buffers the shader draws into (the panel's size, or less:
++                                           shader_output_size; the display controller scales them to the panel) */
+     dbuf *q[QMAX]; int nq;              /* frame queue: the frames after `ready`, oldest first (see enqueue) */
+ } panel;
+ 
+@@ -135,6 +136,7 @@ static int menu_touch;                                     /* DraStic's menu is
+ static int vp_x, vp_y, vp_w, vp_h;                         /* where a shader draws the DS screen on the panel (0x0: all of it) */
+ static int touch_outside;                                  /* the current touch began outside that rectangle: ignore it */
+ int shader_viewport(int *v, int pw, int ph);
++int shader_output_size(int *w, int *h, int pw, int ph);
+ static void *window;
+ static int cursor_log;                  /* DSFLIP_CURSOR_LOG=1: log where DraStic draws its 32x32 stylus cursor */
+ /* stats */
+@@ -661,8 +663,28 @@ static void shade_pending(void) {
+ static int wfd = -1;
+ static void *shader_worker(void *a) {
+     (void)a;
+-    shader_on = shader_init(fd, shader_nm);        /* GL lives on this thread; init() waits for the verdict */
++    int on = shader_init(fd, shader_nm);           /* GL lives on this thread; init() waits for the verdict */
++    if (on) {
++        /* the buffers it draws into, at the size the shader asked for (shader_output_size: the panel's unless its
++         * source says "dsflip-output: Nx"; a smaller buffer is scaled to the panel by the display controller, as
++         * DraStic's own buffers are without a shader). Under mu: mkbuf's generation counter is shared with
++         * SDL_CreateTexture on DraStic's thread. */
++        lock(&mu);
++        for (int i = 0; i < 2 && on; i++) {
++            int ow, oh, pw = P[i].mode.hdisplay, ph = P[i].mode.vdisplay;
++            int scaled = shader_output_size(&ow, &oh, pw, ph);
++            for (int k = 0; k < NOUT && on; k++)
++                if (mkbuf(&P[i].out[k], ow, oh, DRM_FORMAT_XRGB8888, 32)) { LOG("[dsflip] shader output buffers %dx%d: alloc failed\n", ow, oh); on = 0; }
++            if (on && (i == 0 || pw != P[0].mode.hdisplay || ph != P[0].mode.vdisplay)) {
++                if (scaled) LOG("[dsflip] shader output: %dx%d per panel, scaled to %dx%d by the display controller\n", ow, oh, pw, ph);
++                else LOG("[dsflip] shader output: %dx%d per panel\n", ow, oh);
++            }
++        }
++        unlock(&mu);
++    }
++    shader_on = on;
+     if (!shader_on) LOG("[dsflip] shader \"%s\" unavailable: zero-copy\n", shader_nm);
++    __sync_synchronize();                          /* the output sizes and shader_on, before shader_done is seen */
+     shader_done = 1;
+     if (!shader_on) return 0;
+     struct pollfd pw = { .fd = wfd, .events = POLLIN };
+@@ -1233,11 +1255,7 @@ __attribute__((constructor)) static void init(void) {
+     tdump_x = -1; if (getenv("DSFLIP_TOUCH_DUMP")) touch_dumps = atoi(getenv("DSFLIP_TOUCH_DUMP"));
+     efd = eventfd(0, EFD_CLOEXEC); wfd = eventfd(0, EFD_CLOEXEC);
+     st_t0 = now_us();
+-    if ((shader_nm = shader_name()))
+-        for (int i = 0; i < 2 && shader_nm; i++) for (int k = 0; k < NOUT; k++)
+-            if (mkbuf(&P[i].out[k], P[i].mode.hdisplay, P[i].mode.vdisplay, DRM_FORMAT_XRGB8888, 32)) {
+-                LOG("[dsflip] shader output buffers: alloc failed\n"); shader_nm = 0; break;
+-            }
++    shader_nm = shader_name();          /* its output buffers are made by the shader worker, once it knows their size */
+     /* shader input: DraStic's buffers imported as dma-bufs (default), or DSFLIP_SHADER_COPY=1: uploaded from memory.
+      * Measured 2026-09-28: the upload was most of every shader's cost (ds-crisp 1.96 -> 0.75 ms per panel at 2x) and
+      * 17% of a core on the shader thread (-> 5.5%); HeartGold 2x drops the same (0.04/s) either way. */
+diff --git a/src/shader.c b/src/shader.c
+index 29b163b..ad152ef 100644
+--- a/src/shader.c
++++ b/src/shader.c
+@@ -3,9 +3,10 @@
+ // ES passes the choice as DSHOOK_SHADER (what ROCKNIX's libdrastouch reads). "bilinear"/"none"/unset keeps
+ // libdsflip's zero-copy path. Anything else: each DS screen buffer DraStic finished is drawn with that
+ // fragment shader into a panel-sized (640x480) dumb buffer, which is then scanned out 1:1 instead of the
+-// DraStic buffer. Same inputs as stock: u_texture (GL_LINEAR), u_texture_size = DS buffer size,
+-// u_output_size = panel size, v_texcoord, SWIZ(); gl_FragCoord.y is flipped to count from the bottom,
+-// as it does in stock's window, so pixel masks keep stock's phase.
++// DraStic buffer (or, for a shader that asks for a smaller buffer with a "dsflip-output:" line, see below, scaled up
++// to the panel by the display controller). Same inputs as stock: u_texture (GL_LINEAR), u_texture_size = DS buffer
++// size, u_output_size = the buffer's size (the panel's, unless the shader asked for less), v_texcoord, SWIZ();
++// gl_FragCoord.y is flipped to count from the bottom, as it does in stock's window, so pixel masks keep stock's phase.
+ //
+ // Shader sources: ROCKNIX's built-ins are read out of /usr/lib/libdrastouch.so at runtime (they are not
+ // copied into this repo), recognised by their content. Other names load <name>.frag from DSFLIP_SHADER_DIR,
+@@ -115,14 +116,45 @@ static GLuint prog; static GLint u_tex, u_tsize, u_osize, u_fch;
+  * means the largest whole multiple of 256x192 that fits the panel, centred: 512x384 at 64,48 on the RG DS's 640x480,
+  * all of it on the RG DS Plus's 1024x768 (4x) */
+ static int vp[4], vp_integer;
++/* a shader may draw into a buffer smaller than the panel and leave the rest of the scaling to the display controller
++ * (the VOP2 scales any plane, bilinear, for free: DraStic's own 512x384 buffers reach the panel that way), with a line
++ * "dsflip-output: Nx" (N times the DS screen's 256x192) or "dsflip-output: WxH" in its source. The buffer is never
++ * larger than the panel. ds-fsr says 3x: on the RG DS Plus (1024x768, 4x) it draws 768x576, 56% of the panel's
++ * pixels, where a panel-sized pass would take ~2.6x the RG DS's GPU time (both panels: more than a frame); on the
++ * RG DS (640x480) 3x doesn't fit and the panel size stays. DSFLIP_SHADER_OUTPUT (the same syntax, or "panel")
++ * overrides the shader's line, for trying other sizes on a device. */
++static int out_num, out_req_w, out_req_h;       /* the shader's line: N, or an explicit WxH */
++static int out_w, out_h;                        /* the output buffer in use (shader_output_size) */
++static int parse_output(const char *s, int *n, int *w, int *h) {
++    int a, b; char c;
++    if (!strncmp(s, "panel", 5)) { *n = 0; *w = *h = 0; return 1; }
++    if (sscanf(s, "%dx%d", &a, &b) == 2 && a > 0 && b > 0) { *n = 0; *w = a; *h = b; return 1; }
++    if (sscanf(s, "%d%c", &a, &c) == 2 && c == 'x' && a > 0) { *n = a; *w = *h = 0; return 1; }
++    return 0;
++}
++/* the size of the buffers the shader draws into, for a pw x ph panel; 1 if smaller than the panel (scaled by the
++ * display controller). After shader_init; the viewport mapping below uses it too */
++int shader_output_size(int *w, int *h, int pw, int ph) {
++    int n = out_num, ow = out_req_w, oh = out_req_h;
++    const char *e = getenv("DSFLIP_SHADER_OUTPUT");
++    if (e && *e && !parse_output(e, &n, &ow, &oh)) SLOG("[shader] DSFLIP_SHADER_OUTPUT \"%s\" not understood (Nx, WxH or panel): ignored\n", e);
++    if (n > 0) { ow = 256 * n; oh = 192 * n; }
++    if (ow <= 0 || oh <= 0 || ow > pw || oh > ph) { ow = pw; oh = ph; }   /* no fit: the panel itself */
++    out_w = ow; out_h = oh;
++    *w = ow; *h = oh;
++    return ow != pw || oh != ph;
++}
+ int shader_viewport(int *v, int pw, int ph) {
++    int ow = out_w > 0 ? out_w : pw, oh = out_h > 0 ? out_h : ph;   /* the shader's rectangle is in its buffer's pixels */
++    int r[4] = { vp[0], vp[1], vp[2], vp[3] };
+     if (vp_integer) {
+-        int k = pw / 256 < ph / 192 ? pw / 256 : ph / 192; if (k < 1) k = 1;
+-        vp[2] = 256 * k; vp[3] = 192 * k; vp[0] = (pw - vp[2]) / 2; vp[1] = (ph - vp[3]) / 2;
+-        if (vp[2] == pw && vp[3] == ph) return 0;       /* fills the panel: nothing to map */
++        int k = ow / 256 < oh / 192 ? ow / 256 : oh / 192; if (k < 1) k = 1;
++        r[2] = 256 * k; r[3] = 192 * k; r[0] = (ow - r[2]) / 2; r[1] = (oh - r[3]) / 2;
++        if (r[2] == ow && r[3] == oh) return 0;         /* fills the buffer, so the panel: nothing to map */
+     }
+-    if (vp[2] <= 0 || vp[3] <= 0) return 0;
+-    for (int i = 0; i < 4; i++) v[i] = vp[i];
++    if (r[2] <= 0 || r[3] <= 0) return 0;
++    /* in panel pixels (a buffer smaller than the panel is scaled up to it) */
++    v[0] = r[0] * pw / ow; v[1] = r[1] * ph / oh; v[2] = r[2] * pw / ow; v[3] = r[3] * ph / oh;
+     return 1;
+ }
+ static int drm_fd;
+@@ -310,6 +342,13 @@ int shader_init(int fd, const char *name) {
+       else if (m && sscanf(m + 16, "%15s", word) == 1 && !strcmp(word, "integer")) {
+           vp_integer = 1; SLOG("[shader] draws the DS screen at a whole-number scale, centred (touch follows)\n");
+       } else vp[2] = vp[3] = 0; }
++    { const char *m = strstr(fs, "dsflip-output:"); char word[32];
++      out_num = out_req_w = out_req_h = 0;
++      if (m && sscanf(m + 14, "%31s", word) == 1) {
++          if (!parse_output(word, &out_num, &out_req_w, &out_req_h)) SLOG("[shader] dsflip-output \"%s\" not understood (Nx or WxH): the panel size\n", word);
++          else if (out_num > 0) SLOG("[shader] draws %dx the DS screen (%dx%d) where the panel is larger; the display controller scales the rest\n", out_num, 256 * out_num, 192 * out_num);
++          else if (out_req_w > 0) SLOG("[shader] draws %dx%d where the panel is larger; the display controller scales the rest\n", out_req_w, out_req_h);
++      } }
+     char *ffs = flip_fragcoord(fs);
+     const char *pre = up_fmt == 0x1908 && shader_copy_mode ? "#define SWIZ(c) (c).bgra\nuniform highp float dsf_fch;\n"
+                       "#define dsf_FragCoord() vec4(gl_FragCoord.x, dsf_fch - gl_FragCoord.y, gl_FragCoord.zw)\n"
+diff --git a/tools/shaders.sh b/tools/shaders.sh
+index 6753626..4ef9c96 100755
+--- a/tools/shaders.sh
++++ b/tools/shaders.sh
+@@ -20,4 +20,4 @@ FRAG
+ if [ -n "$FRAMES" ]; then
+     for f in top2x top1x bot2x bot1x; do $SSH "cat > $B/frames/$f.raw" < "$FRAMES/$f.raw"; done
+ fi
+-$SSH "CLOCK=${CLOCK:-} REPS=${REPS:-} ${COPY:+COPY=1} $B/shbench.sh $*"    # shtest: COPY set at all = upload mode
++$SSH "CLOCK=${CLOCK:-} REPS=${REPS:-} OUT=${OUT:-} ${COPY:+COPY=1} $B/shbench.sh $*"    # shtest: COPY set at all = upload mode; OUT=1024x768: the Plus's panels
+diff --git a/tools/shbench.sh b/tools/shbench.sh
+index 858ae80..b6a2a55 100755
+--- a/tools/shbench.sh
++++ b/tools/shbench.sh
+@@ -6,6 +6,8 @@
+ # frames/top2x.raw + bot2x.raw (512x384) and top1x.raw + bot1x.raw (256x192); ms = the mean of both screens.
+ # "null" is a pass-through (one bilinear fetch): the floor every shader pays for the upload and writing the panel.
+ # GPU clock: CLOCK=<Hz> (default 800000000), pinned for the run and restored after. REPS (default 300).
++# OUT=WxH: the panel (default 640x480, the RG DS; the RG DS Plus: OUT=1024x768). A shader that draws a smaller buffer
++# ("dsflip-output: 3x", ds-fsr) is timed at that size, as libdsflip runs it.
+ # Shaders: shaders/*.frag pushed to shaders/ here, ROCKNIX's built-ins by name (read from libdrastouch).
+ cd "$(dirname "$0")"
+ [ -n "$COPY" ] || unset COPY               # shtest takes COPY being set at all as upload mode
+@@ -16,14 +18,14 @@ echo performance > $G/governor; echo 200000000 > $G/min_freq; echo $CLK > $G/max
+ sleep 1
+ [ $# -gt 0 ] || set -- null ds-crisp ds-crisp-color ds-grid ds-grid-color ds-grid-2x ds-integer ds-fsr \
+                        sharp-bilinear lcd1x-nds-color lcd3x scanlines sharp-shimmerless quilez
+-printf '%-18s %8s %8s   (GPU at %d MHz, ms per panel)\n' shader 2x 1x $((CLK / 1000000))
++printf '%-18s %8s %8s   (GPU at %d MHz, ms per %s panel)\n' shader 2x 1x $((CLK / 1000000)) ${OUT:-640x480}
+ for sh in "$@"; do
+     line=$(printf '%-18s' $sh)
+     for res in 2x 1x; do
+         [ $res = 2x ] && W=512 H=384 || W=256 H=192
+         tot=0; ok=1
+         for scr in top bot; do
+-            ms=$(env ${COPY:+COPY=1} PIPE=1 REPS=${REPS:-300} SRC=frames/$scr$res.raw DSFLIP_SHADER_DIR=$PWD/shaders ./shtest $sh $W $H /tmp/shbench.ppm 2>&1 |
++            ms=$(env ${COPY:+COPY=1} ${OUT:+OUT=$OUT} PIPE=1 REPS=${REPS:-300} SRC=frames/$scr$res.raw DSFLIP_SHADER_DIR=$PWD/shaders ./shtest $sh $W $H /tmp/shbench.ppm 2>&1 |
+                  sed -n 's/avg \(.*\) ms per draw/\1/p')
+             [ -n "$ms" ] || { ok=0; break; }
+             tot=$(echo "$tot $ms" | awk '{print $1 + $2}')
+diff --git a/tools/shtest.c b/tools/shtest.c
+index 1939acf..e7dd4a9 100644
+--- a/tools/shtest.c
++++ b/tools/shtest.c
+@@ -1,5 +1,7 @@
+ // shtest.c: runs shader.c outside DraStic (no DRM master needed): a test image through a shader into a
+ // panel-sized dumb buffer, written as PPM. shtest <shader> <srcw> <srch> <out.ppm>
++// OUT=WxH: the panel's size (default 640x480, the RG DS's; the RG DS Plus is 1024x768). A shader that asks for a
++// smaller buffer ("dsflip-output: 3x", ds-fsr) gets it, as in libdsflip: the PPM is then that size.
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <stdint.h>
+@@ -12,6 +14,7 @@
+ #include <xf86drm.h>
+ #include <xf86drmMode.h>
+ int shader_init(int fd, const char *name);
++int shader_output_size(int *w, int *h, int pw, int ph);
+ int shader_draw(uint32_t sh, int sw, int shh, int sp, uint64_t sgen, uint32_t dh, int dw, int dhh, int dp, uint64_t dgen, int finish);
+ extern int shader_copy_mode;
+ int shader_fence(void);
+@@ -28,11 +31,15 @@ static buf mk(int w, int h) {
+ }
+ int main(int argc, char **argv) {
+     if (argc < 5) return 2;
+-    int sw = atoi(argv[2]), sh = atoi(argv[3]), dw = 640, dh = 480;
++    int sw = atoi(argv[2]), sh = atoi(argv[3]), pw = 640, ph = 480, dw, dh;
++    const char *out = getenv("OUT");
++    if (out && (sscanf(out, "%dx%d", &pw, &ph) != 2 || pw <= 0 || ph <= 0)) { fprintf(stderr, "bad OUT %s (WxH)\n", out); return 2; }
+     fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
+     fprintf(stderr, "init...\n");
+     shader_copy_mode = getenv("COPY") != 0;
+     if (!shader_init(fd, argv[1])) { fprintf(stderr, "shader_init failed\n"); return 1; }
++    if (shader_output_size(&dw, &dh, pw, ph)) fprintf(stderr, "output %dx%d (the display controller would scale it to the %dx%d panel)\n", dw, dh, pw, ph);
++    else fprintf(stderr, "output %dx%d\n", dw, dh);
+     buf s = mk(sw, sh), d = mk(dw, dh);
+     for (int y = 0; y < sh; y++) for (int x = 0; x < sw; x++) {      /* colour bars + 1px checker + gradient */
+         uint32_t v;
+-- 
+2.56.0
+
+
+From 3de78751408ed7350c4f6d726775267571fcfd5a Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 5 Oct 2026 17:39:05 +0000
+Subject: [PATCH 2/4] Port the Wi-Fi (Nintendo WFC) path from ROCKNIXDS
+ cursor/drastic-wfc-dns into SuperDrastic
+
+Ported, unchanged in logic, from ROCKNIXDS commit b1a4564 (branch origin/cursor/drastic-wfc-dns-24ad,
+written against the old in-repo dsflip/ tree):
+- src/wifi.c: replaces DraStic r2.5.2.2's wifi load/store handler tables (BuildID
+  7a5e0e5fc6e52e6e8f5499c3d4d667ef51db0748) from a constructor(102), emulates an open access point
+  ("rocknixds"), queues 802.11 frames into DraStic's wifi RAM and raises the ARM7 wifi IRQ.
+  A "dsf-wfc" service thread (10 ms) drives beacons, the TSF compare and the NAT sockets.
+- src/wififrame.c/.h: beacon, probe/auth/assoc responses, from-DS data frames, the RX ring.
+- src/wfcnet.c/.h: userspace NAT (DHCP with the chosen DNS, ARP, ICMP echo, UDP NAT, client TCP NAT).
+- tools/wfc_test.c: host test for wififrame/wfcnet (`sh build.sh wfc_test`).
+
+Adaptations:
+- build.sh: the three sources in SRCS; a `build.sh wfc_test` target (gcc on the build machine).
+- wifi.c: constructor(102) runs after dsflip.c's init_locks (101) and before its init() (no
+  priority), so it returns early when DSFLIP_IN_GAME is already set (DraStic's `sh -c pactl`
+  children inherit the preload, as init() handles).
+- wifi.c setting lookup: DSFLIP_WFC (off | kaeru | altwfc | wiilink | <dotted ip>) wins; then
+  ROCKNIX's per-game key nds["<rom>.nds"].wfc_dns in system.cfg (the branch looked for a
+  configs/nds/<rom>.cfg file that ROCKNIX does not write); then nds.wfc_dns there.
+- dsflip_log and dsflip_toast(l1, l2, accent, ms) exist in src/dsflip.c with the same
+  signatures the branch used, so no wrapper was needed.
+- docs/INTEGRATION.md, tools/README.md: the setting and the test.
+
+Verified: host test passes (wfc_test ok); aarch64 cross-build of libsuperdrastic.so succeeds
+with no warnings from the new files (-Wall -Wextra).
+
+Untested: everything on a handheld. The DraStic offsets (handler tables, register and RAM
+bases, the ARM7 state block and its IO/IRQ fields), the IRQ delivery from another thread,
+and whether DraStic's stock store handler for W_IF is a plain store (the hook assumes it is)
+have never been exercised. No DS game has connected through this.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01EHHmyacNZtyRhmxZoUYRa8
+---
+ build.sh            |  10 +-
+ docs/INTEGRATION.md |   1 +
+ src/wfcnet.c        | 481 +++++++++++++++++++++++++++++++
+ src/wfcnet.h        |  31 ++
+ src/wifi.c          | 688 ++++++++++++++++++++++++++++++++++++++++++++
+ src/wififrame.c     | 158 ++++++++++
+ src/wififrame.h     |  24 ++
+ tools/README.md     |   1 +
+ tools/wfc_test.c    | 352 +++++++++++++++++++++++
+ 9 files changed, 1744 insertions(+), 2 deletions(-)
+ create mode 100644 src/wfcnet.c
+ create mode 100644 src/wfcnet.h
+ create mode 100644 src/wifi.c
+ create mode 100644 src/wififrame.c
+ create mode 100644 src/wififrame.h
+ create mode 100644 tools/wfc_test.c
+
+diff --git a/build.sh b/build.sh
+index 214c7c3..6e12d89 100755
+--- a/build.sh
++++ b/build.sh
+@@ -1,17 +1,23 @@
+ #!/bin/sh
+ # build.sh <sysroot> [shtest]   builds build/libsuperdrastic.so (and with "shtest", build/shtest) for aarch64 Linux.
++# build.sh wfc_test             builds and runs the host test for the Wi-Fi NAT/frame code (gcc, no sysroot).
+ #
+ # <sysroot>: an aarch64 glibc >= 2.38 sysroot with libdrm's headers and libdrm.so. One way to make it (what CI does,
+ # see .github/workflows/build.yml): extract the Debian trixie arm64 packages libc6, libc6-dev, linux-libc-dev,
+ # libdrm-dev, libdrm2, libgcc-14-dev and libgcc-s1 into one directory, then `ln -s usr/lib <sysroot>/lib`.
+ # Needs clang, lld and llvm-strip on the build machine (any architecture).
+ set -e
+-SR=${1:?usage: build.sh <aarch64-sysroot> [shtest]}
++SR=${1:?usage: build.sh <aarch64-sysroot> [shtest] | build.sh wfc_test}
+ cd "$(dirname "$0")"
+ mkdir -p build
++if [ "$1" = wfc_test ]; then      # src/wifi.c's frame builder and userspace NAT, tested on the build machine (tools/wfc_test.c)
++    gcc -O2 -Wall -Wextra -pthread -Isrc -o build/wfc_test src/wfcnet.c src/wififrame.c tools/wfc_test.c && ./build/wfc_test
++    exit $?
++fi
+ RC=src/third_party/rcheevos
+ # src/rast: our 3D rasterizer for DraStic's hi-res mode (off unless DSFLIP_RAST=1; see src/rast/README.md)
+-SRCS="src/dsflip.c src/shader.c src/audio.c src/ra.c src/ui.c src/volume.c src/cpugov.c src/resume.c src/menu.c $(ls $RC/src/rc_client.c $RC/src/rc_compat.c \
++# src/wifi.c + wififrame.c + wfcnet.c: Nintendo WFC over an emulated open AP (off unless DSFLIP_WFC / nds.wfc_dns is set)
++SRCS="src/dsflip.c src/shader.c src/audio.c src/ra.c src/ui.c src/volume.c src/cpugov.c src/resume.c src/menu.c src/wifi.c src/wififrame.c src/wfcnet.c $(ls $RC/src/rc_client.c $RC/src/rc_compat.c \
+       $RC/src/rc_util.c $RC/src/rc_version.c $RC/src/rcheevos/*.c $RC/src/rapi/*.c $RC/src/rhash/*.c) \
+       src/rast/rast.c src/rast/b0.c src/rast/fused.c src/rast/fused_neon.c src/rast/fused_asm.c src/rast/defer.c src/rast/hr.c src/rast/comp.c src/rast/rast_kern.S $(ls src/rast/spec/*.c)"
+ python3 src/rast/kerngen.py src/rast/rast_kern.S
+diff --git a/docs/INTEGRATION.md b/docs/INTEGRATION.md
+index 90ac57b..330859e 100644
+--- a/docs/INTEGRATION.md
++++ b/docs/INTEGRATION.md
+@@ -158,6 +158,7 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
+ | `DSFLIP_LATCH_MARGIN` | 1300 | The shortest time (µs) before a vblank that a frame is committed at (diagnostics) |
+ | `DSFLIP_RESUME_FILE`, `DSFLIP_RESUME_LOAD` | | See *Quitting with a save* |
+ | `DSFLIP_GPU_CLOCKS`, `DSFLIP_AUDIO_RATE` | 1, 1 | The launcher's GPU clock and PipeWire rate handling |
++| `DSFLIP_WFC` | off | Nintendo WFC online play (untested on hardware): `kaeru`, `altwfc`, `wiilink` or a dotted DNS address. SuperDrastic answers the DS as an open access point named `rocknixds` and hands it that DNS server over DHCP; the game's traffic goes through the host's own sockets (UDP, client TCP). Needs the DraStic build r2.5.2.2 (it checks the build id). Without the variable, `nds.wfc_dns` in ROCKNIX's `system.cfg` is read. `DSFLIP_WFC_DEBUG=1` logs every frame |
+ | `DSFLIP_AUDIO_PUMP` | 1 | 0 = DraStic's own SDL audio |
+ | `DSFLIP_SHADER_COPY` | 0 | 1 = upload DraStic's frames to the GPU instead of importing them |
+ | `DSFLIP_FALLBACK` | 1 | 0 = don't run DraStic without SuperDrastic when it can't take the display |
+diff --git a/src/wfcnet.c b/src/wfcnet.c
+new file mode 100644
+index 0000000..85fda59
+--- /dev/null
++++ b/src/wfcnet.c
+@@ -0,0 +1,481 @@
++/* DHCP, ARP, ICMP echo, UDP NAT and a client-only TCP NAT.
++ * One outstanding TCP segment per connection: the DS retransmits, and so do we.
++ * Replies to the DS are injected as Ethernet frames; the caller wraps them in 802.11. */
++#define _GNU_SOURCE
++#include "wfcnet.h"
++#include <arpa/inet.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <netinet/in.h>
++#include <poll.h>
++#include <stdarg.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/socket.h>
++#include <time.h>
++#include <unistd.h>
++
++#define UDP_N 32
++#define TCP_N 16
++#define MSS 1360
++#define HOLD 8192
++#define RETX_MS 250
++#define RETX_MAX 20
++
++struct udp_flow {
++    int fd;
++    uint32_t rip;
++    uint16_t rport, dport;
++    uint64_t last;
++};
++struct tcp_flow {
++    int fd, st;                         /* 1 connecting, 2 open, 3 our FIN sent */
++    uint32_t rip;
++    uint16_t rport, dport;
++    uint32_t snd_una, snd_nxt, rcv_nxt, iss;
++    uint8_t hold[HOLD];
++    int hold_len;
++    uint8_t seg[MSS];
++    int seg_len, seg_syn, seg_fin, seg_live, seg_tries, fin_pend, fin_sent, ds_fin;
++    uint32_t seg_seq;
++    uint64_t seg_ms, last;
++};
++struct wfcnet {
++    wfcnet_cfg cfg;
++    uint8_t ds_mac[6];
++    int have_mac;
++    uint16_t ipid;
++    struct udp_flow udp[UDP_N];
++    struct tcp_flow tcp[TCP_N];
++    int dhcp_logged;
++};
++
++static uint64_t now_ms(void) {
++    struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t);
++    return (uint64_t)t.tv_sec * 1000ull + t.tv_nsec / 1000000ull;
++}
++static void nlog(wfcnet *n, const char *fmt, ...) {
++    if (!n->cfg.log) return;
++    char b[240];
++    va_list ap; va_start(ap, fmt); vsnprintf(b, sizeof b, fmt, ap); va_end(ap);
++    n->cfg.log(n->cfg.ud, b);
++}
++static void dbg(wfcnet *n, const char *fmt, ...) {
++    if (!n->cfg.debug || !n->cfg.log) return;
++    char b[240];
++    va_list ap; va_start(ap, fmt); vsnprintf(b, sizeof b, fmt, ap); va_end(ap);
++    n->cfg.log(n->cfg.ud, b);
++}
++static uint32_t rnd32(void) {
++    static uint32_t s = 0x6d2b79f5u;
++    s = s * 1664525u + 1013904223u + (uint32_t)now_ms();
++    return s ? s : 1;
++}
++static int seq_ge(uint32_t a, uint32_t b) { return (int32_t)(a - b) >= 0; }
++
++static uint32_t csum_add(uint32_t s, const uint8_t *p, int n) {
++    while (n > 1) { s += (p[0] << 8) | p[1]; p += 2; n -= 2; }
++    if (n) s += p[0] << 8;
++    return s;
++}
++static uint16_t csum_fold(uint32_t s) {
++    while (s >> 16) s = (s & 0xffff) + (s >> 16);
++    return (uint16_t)~s;
++}
++static uint16_t ip_csum(const uint8_t *h, int n) { return csum_fold(csum_add(0, h, n)); }
++static uint16_t l4_csum(uint32_t src, uint32_t dst, int proto, const uint8_t *l4, int len) {
++    uint8_t ph[12];
++    memcpy(ph, &src, 4); memcpy(ph + 4, &dst, 4);
++    ph[8] = 0; ph[9] = proto; ph[10] = len >> 8; ph[11] = len & 0xff;
++    uint16_t c = csum_fold(csum_add(csum_add(0, ph, 12), l4, len));
++    if (proto == 17 && c == 0) c = 0xffff;        /* UDP: 0 means "no checksum" */
++    return c;
++}
++
++static void inject(wfcnet *n, const uint8_t dst[6], uint16_t etype, const uint8_t *payload, int len) {
++    if (n->cfg.inject) n->cfg.inject(n->cfg.ud, dst, n->cfg.gw_mac, etype, payload, len);
++}
++static const uint8_t bcast[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
++
++static void emit_ip(wfcnet *n, uint32_t src, uint32_t dst, int proto, const uint8_t *l4, int l4len, int broadcast) {
++    if (l4len < 0 || l4len > 1600) return;
++    uint8_t pkt[20 + 1600];
++    int tot = 20 + l4len;
++    uint16_t id = ++n->ipid;
++    memset(pkt, 0, 20);
++    pkt[0] = 0x45; pkt[2] = tot >> 8; pkt[3] = tot & 0xff;
++    pkt[4] = id >> 8; pkt[5] = id & 0xff;
++    pkt[6] = 0x40; pkt[8] = 64; pkt[9] = proto;
++    memcpy(pkt + 12, &src, 4);
++    uint32_t dip = broadcast ? htonl(0xffffffffu) : dst;
++    memcpy(pkt + 16, &dip, 4);
++    uint16_t c = ip_csum(pkt, 20);
++    pkt[10] = c >> 8; pkt[11] = c & 0xff;
++    memcpy(pkt + 20, l4, l4len);
++    const uint8_t *da = (broadcast || !n->have_mac) ? bcast : n->ds_mac;
++    inject(n, da, 0x0800, pkt, tot);
++}
++
++static void put16(uint8_t *p, unsigned v) { p[0] = v >> 8; p[1] = v & 0xff; }
++static void put32(uint8_t *p, uint32_t v) { p[0] = v >> 24; p[1] = v >> 16; p[2] = v >> 8; p[3] = v; }
++static unsigned rd16(const uint8_t *p) { return (p[0] << 8) | p[1]; }
++static uint32_t rd32(const uint8_t *p) { return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3]; }
++
++static void set_nb(int fd) {
++    int fl = fcntl(fd, F_GETFL, 0);
++    if (fl >= 0) fcntl(fd, F_SETFL, fl | O_NONBLOCK);
++}
++
++/* ---------- TCP ---------- */
++static void tcp_free(struct tcp_flow *t) {
++    if (t->fd >= 0) close(t->fd);
++    memset(t, 0, sizeof *t);
++    t->fd = -1;
++}
++static void tcp_rst(wfcnet *n, struct tcp_flow *t) {
++    uint8_t seg[20];
++    memset(seg, 0, sizeof seg);
++    put16(seg, t->dport); put16(seg + 2, t->rport);
++    put32(seg + 4, t->snd_nxt); put32(seg + 8, t->rcv_nxt);
++    seg[12] = 5 << 4; seg[13] = 0x14;             /* RST|ACK */
++    uint16_t c = l4_csum(t->rip, n->cfg.ds_ip, 6, seg, 20);
++    seg[16] = c >> 8; seg[17] = c & 0xff;
++    emit_ip(n, t->rip, n->cfg.ds_ip, 6, seg, 20, 0);
++    dbg(n, "tcp rst :%u -> %u.%u.%u.%u:%u", t->dport,
++        ((uint8_t *)&t->rip)[0], ((uint8_t *)&t->rip)[1], ((uint8_t *)&t->rip)[2], ((uint8_t *)&t->rip)[3], t->rport);
++    tcp_free(t);
++}
++static void tcp_send(wfcnet *n, struct tcp_flow *t, unsigned flags, const uint8_t *data, int len, uint32_t seq, int track) {
++    uint8_t seg[24 + MSS];
++    int hlen = (flags & 0x02) ? 24 : 20;
++    if (len < 0 || len > MSS || hlen + len > (int)sizeof seg) return;
++    memset(seg, 0, hlen);
++    put16(seg, t->dport); put16(seg + 2, t->rport);
++    put32(seg + 4, seq); put32(seg + 8, t->rcv_nxt);
++    seg[12] = (hlen / 4) << 4; seg[13] = flags;
++    unsigned win = (t->hold_len + MSS < HOLD) ? MSS : 0;
++    put16(seg + 14, win);
++    if (flags & 0x02) { seg[20] = 2; seg[21] = 4; put16(seg + 22, MSS); }
++    if (len) memcpy(seg + hlen, data, len);
++    int total = hlen + len;
++    uint16_t c = l4_csum(t->rip, n->cfg.ds_ip, 6, seg, total);
++    seg[16] = c >> 8; seg[17] = c & 0xff;
++    emit_ip(n, t->rip, n->cfg.ds_ip, 6, seg, total, 0);
++    if (!track) return;
++    t->seg_live = 1; t->seg_seq = seq; t->seg_len = len;
++    t->seg_syn = (flags & 0x02) ? 1 : 0; t->seg_fin = (flags & 0x01) ? 1 : 0;
++    if (len) memcpy(t->seg, data, len);
++    t->seg_ms = now_ms(); t->seg_tries = 0;
++}
++static void tcp_rexmit(wfcnet *n, struct tcp_flow *t) {
++    unsigned flags = 0x10;
++    if (t->seg_syn) flags |= 0x02;
++    if (t->seg_fin) flags |= 0x01;
++    if (t->seg_len) flags |= 0x08;
++    int tries = t->seg_tries + 1;
++    tcp_send(n, t, flags, t->seg_len ? t->seg : 0, t->seg_len, t->seg_seq, 1);
++    t->seg_tries = tries;
++}
++static struct tcp_flow *tcp_find(wfcnet *n, uint16_t dport, uint32_t rip, uint16_t rport) {
++    for (int i = 0; i < TCP_N; i++)
++        if (n->tcp[i].fd >= 0 && n->tcp[i].dport == dport && n->tcp[i].rip == rip && n->tcp[i].rport == rport)
++            return &n->tcp[i];
++    return 0;
++}
++static struct tcp_flow *tcp_slot(wfcnet *n) {
++    for (int i = 0; i < TCP_N; i++) if (n->tcp[i].fd < 0) return &n->tcp[i];
++    return 0;
++}
++static void tcp_flush(wfcnet *n, struct tcp_flow *t) {
++    while (t->st >= 2 && t->hold_len && t->fd >= 0) {
++        int w = send(t->fd, t->hold, t->hold_len, MSG_NOSIGNAL);
++        if (w < 0) {
++            if (errno == EAGAIN || errno == EWOULDBLOCK) return;
++            tcp_rst(n, t); return;
++        }
++        if (!w) return;
++        memmove(t->hold, t->hold + w, t->hold_len - w);
++        t->hold_len -= w;
++    }
++}
++static int tcp_connect(struct tcp_flow *t) {
++    int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
++    if (fd < 0) return -1;
++    set_nb(fd);
++    struct sockaddr_in a; memset(&a, 0, sizeof a);
++    a.sin_family = AF_INET; a.sin_port = htons(t->rport); a.sin_addr.s_addr = t->rip;
++    int rc = connect(fd, (struct sockaddr *)&a, sizeof a);
++    if (rc < 0 && errno != EINPROGRESS) { close(fd); return -1; }
++    t->fd = fd;
++    t->st = rc == 0 ? 2 : 1;
++    return 0;
++}
++static void tcp_input(wfcnet *n, uint32_t rip, const uint8_t *tcp, int len) {
++    if (len < 20) return;
++    int hlen = (tcp[12] >> 4) * 4;
++    if (hlen < 20 || hlen > len) return;
++    uint16_t dport = rd16(tcp), rport = rd16(tcp + 2);
++    uint32_t seq = rd32(tcp + 4), ack = rd32(tcp + 8);
++    unsigned flags = tcp[13];
++    const uint8_t *data = tcp + hlen;
++    int dlen = len - hlen;
++    struct tcp_flow *t = tcp_find(n, dport, rip, rport);
++    if (!t) {
++        if ((flags & 0x02) && !(flags & 0x10)) {      /* SYN */
++            t = tcp_slot(n);
++            if (!t) return;
++            memset(t, 0, sizeof *t); t->fd = -1;
++            t->rip = rip; t->rport = rport; t->dport = dport;
++            t->iss = rnd32(); t->snd_una = t->iss; t->snd_nxt = t->iss + 1;
++            t->rcv_nxt = seq + 1; t->last = now_ms();
++            if (tcp_connect(t)) { t->fd = -1; return; }
++            tcp_send(n, t, 0x12, 0, 0, t->iss, 1);    /* SYN|ACK immediately; the host connect finishes in poll */
++            uint8_t *ipb = (uint8_t *)&rip;
++            nlog(n, "tcp %u.%u.%u.%u:%u from :%u", ipb[0], ipb[1], ipb[2], ipb[3], rport, dport);
++        }
++        return;
++    }
++    t->last = now_ms();
++    if (flags & 0x04) { tcp_free(t); return; }        /* RST */
++    if (flags & 0x10) {
++        if (seq_ge(ack, t->snd_una) && seq_ge(t->snd_nxt, ack)) {
++            if (t->seg_live && seq_ge(ack, t->seg_seq + (uint32_t)t->seg_len + t->seg_syn + t->seg_fin))
++                t->seg_live = 0;
++            t->snd_una = ack;
++        }
++    }
++    if ((flags & 0x02) && !(flags & 0x10)) {          /* retransmitted SYN */
++        if (!t->seg_live || t->seg_syn) tcp_rexmit(n, t);
++        return;
++    }
++    if (dlen && seq != t->rcv_nxt) {
++        if (!seq_ge(seq, t->rcv_nxt)) {               /* duplicate: ACK what we have */
++            int skip = (int)(t->rcv_nxt - seq);
++            if (skip >= dlen) dlen = 0;
++            else { data += skip; dlen -= skip; seq += skip; }
++        } else dlen = 0;                              /* a hole: wait for the retransmission */
++    }
++    int took = 0;
++    if (dlen && seq == t->rcv_nxt) {
++        if (t->hold_len + dlen <= HOLD) {
++            memcpy(t->hold + t->hold_len, data, dlen);
++            t->hold_len += dlen; t->rcv_nxt += dlen; took = 1;
++        }
++    }
++    if ((flags & 0x01) && !t->ds_fin && (dlen == 0 || took) &&
++        seq + (took ? (uint32_t)dlen : 0) == t->rcv_nxt) {
++        t->rcv_nxt += 1; t->ds_fin = 1; took = 1;
++        if (t->fd >= 0) shutdown(t->fd, SHUT_WR);
++    }
++    if (took) tcp_send(n, t, 0x10, 0, 0, t->snd_nxt, 0);
++    tcp_flush(n, t);
++}
++static void tcp_poll(wfcnet *n, struct tcp_flow *t) {
++    if (t->fd < 0) return;
++    if (t->st == 1) {
++        struct pollfd p = { .fd = t->fd, .events = POLLOUT };
++        if (poll(&p, 1, 0) > 0) {
++            int err = 0; socklen_t sl = sizeof err;
++            getsockopt(t->fd, SOL_SOCKET, SO_ERROR, &err, &sl);
++            if (err) { tcp_rst(n, t); return; }
++            t->st = 2;
++        }
++    }
++    tcp_flush(n, t);
++    if (t->fd < 0) return;
++    if (t->st >= 2 && !t->seg_live && !t->fin_sent) {
++        uint8_t buf[MSS];
++        int r = recv(t->fd, buf, sizeof buf, 0);
++        if (r > 0) {
++            tcp_send(n, t, 0x18, buf, r, t->snd_nxt, 1); /* PSH|ACK */
++            t->snd_nxt += r;
++        } else if (r == 0) t->fin_pend = 1;
++        else if (errno != EAGAIN && errno != EWOULDBLOCK) { tcp_rst(n, t); return; }
++    }
++    if (t->fin_pend && !t->seg_live && !t->fin_sent && t->fd >= 0) {
++        tcp_send(n, t, 0x11, 0, 0, t->snd_nxt, 1);    /* FIN|ACK */
++        t->snd_nxt += 1; t->fin_sent = 1; t->st = 3;
++    }
++    if (t->seg_live && now_ms() - t->seg_ms >= RETX_MS) {
++        if (t->seg_tries >= RETX_MAX) { tcp_rst(n, t); return; }
++        tcp_rexmit(n, t);
++    }
++    if (t->fin_sent && !t->seg_live && t->ds_fin) tcp_free(t);
++}
++
++/* ---------- UDP ---------- */
++static void udp_close(struct udp_flow *u) { if (u->fd >= 0) close(u->fd); memset(u, 0, sizeof *u); u->fd = -1; }
++static struct udp_flow *udp_find(wfcnet *n, uint16_t dport, uint32_t rip, uint16_t rport, int alloc) {
++    struct udp_flow *free_slot = 0;
++    for (int i = 0; i < UDP_N; i++) {
++        if (n->udp[i].fd < 0) { if (!free_slot) free_slot = &n->udp[i]; continue; }
++        if (n->udp[i].dport == dport && n->udp[i].rip == rip && n->udp[i].rport == rport) return &n->udp[i];
++    }
++    if (!alloc || !free_slot) return 0;
++    int fd = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
++    if (fd < 0) return 0;
++    set_nb(fd);
++    struct sockaddr_in a; memset(&a, 0, sizeof a);
++    a.sin_family = AF_INET; a.sin_port = htons(rport); a.sin_addr.s_addr = rip;
++    if (connect(fd, (struct sockaddr *)&a, sizeof a)) { close(fd); return 0; }
++    memset(free_slot, 0, sizeof *free_slot);
++    free_slot->fd = fd; free_slot->rip = rip; free_slot->rport = rport; free_slot->dport = dport;
++    return free_slot;
++}
++static void udp_input(wfcnet *n, uint32_t rip, const uint8_t *udp, int len) {
++    if (len < 8) return;
++    uint16_t dport = rd16(udp), rport = rd16(udp + 2);
++    int ulen = rd16(udp + 4);
++    if (ulen < 8 || ulen > len) ulen = len;
++    struct udp_flow *u = udp_find(n, dport, rip, rport, 1);
++    if (!u) return;
++    u->last = now_ms();
++    if (ulen > 8) send(u->fd, udp + 8, ulen - 8, MSG_NOSIGNAL);
++    if (n->cfg.debug && rport == 53)
++        dbg(n, "dns query %u bytes", ulen - 8);
++}
++static void udp_poll(wfcnet *n, struct udp_flow *u) {
++    if (u->fd < 0) return;
++    if (u->last && now_ms() - u->last > 60000) { udp_close(u); return; }
++    uint8_t buf[1600];
++    int r = recv(u->fd, buf, sizeof buf, 0);
++    if (r < 0) return;
++    uint8_t uh[8 + 1600];
++    int ulen = 8 + r;
++    put16(uh, u->rport); put16(uh + 2, u->dport); put16(uh + 4, ulen); uh[6] = uh[7] = 0;
++    memcpy(uh + 8, buf, r);
++    uint16_t c = l4_csum(u->rip, n->cfg.ds_ip, 17, uh, ulen);
++    uh[6] = c >> 8; uh[7] = c & 0xff;
++    emit_ip(n, u->rip, n->cfg.ds_ip, 17, uh, ulen, 0);
++    if (n->cfg.debug && u->rport == 53) dbg(n, "dns reply %d bytes", r);
++}
++
++/* ---------- DHCP / ARP / ICMP ---------- */
++static int dhcp_msg(const uint8_t *opt, int n) {
++    for (int i = 0; i < n; ) {
++        int t = opt[i];
++        if (t == 255) break;
++        if (t == 0) { i++; continue; }
++        if (i + 1 >= n) break;
++        int l = opt[i + 1];
++        if (i + 2 + l > n) break;
++        if (t == 53 && l >= 1) return opt[i + 2];
++        i += 2 + l;
++    }
++    return -1;
++}
++static void dhcp_reply(wfcnet *n, const uint8_t *bootp, int mtype) {
++    uint8_t pkt[548];
++    memset(pkt, 0, sizeof pkt);
++    pkt[0] = 2; pkt[1] = 1; pkt[2] = 6;             /* reply, ethernet, hlen */
++    memcpy(pkt + 4, bootp + 4, 4);                  /* xid */
++    memcpy(pkt + 8, bootp + 8, 2);
++    put16(pkt + 10, 0x8000);                        /* broadcast flag: the DS has no address yet */
++    memcpy(pkt + 16, &n->cfg.ds_ip, 4);             /* yiaddr */
++    memcpy(pkt + 20, &n->cfg.gw_ip, 4);             /* siaddr */
++    memcpy(pkt + 28, bootp + 28, 16);               /* chaddr */
++    pkt[236] = 0x63; pkt[237] = 0x82; pkt[238] = 0x53; pkt[239] = 0x63;
++    uint8_t *o = pkt + 240;
++    o[0] = 53; o[1] = 1; o[2] = mtype; o += 3;
++    o[0] = 54; o[1] = 4; memcpy(o + 2, &n->cfg.gw_ip, 4); o += 6;
++    o[0] = 51; o[1] = 4; put32(o + 2, 86400); o += 6;
++    o[0] = 1; o[1] = 4; o[2] = 255; o[3] = 255; o[4] = 255; o[5] = 0; o += 6;
++    o[0] = 3; o[1] = 4; memcpy(o + 2, &n->cfg.gw_ip, 4); o += 6;
++    o[0] = 6; o[1] = 4; memcpy(o + 2, &n->cfg.dns_ip, 4); o += 6; /* the melonDS-style DNS */
++    o[0] = 255;
++    int blen = (int)(o + 1 - pkt);
++    uint8_t udp[8 + 548];
++    put16(udp, 67); put16(udp + 2, 68); put16(udp + 4, 8 + blen); udp[6] = udp[7] = 0;
++    memcpy(udp + 8, pkt, blen);
++    uint32_t bcast_ip = htonl(0xffffffffu);
++    uint16_t c = l4_csum(n->cfg.gw_ip, bcast_ip, 17, udp, 8 + blen);
++    udp[6] = c >> 8; udp[7] = c & 0xff;
++    emit_ip(n, n->cfg.gw_ip, bcast_ip, 17, udp, 8 + blen, 1);
++    if (!n->dhcp_logged) {
++        uint8_t *d = (uint8_t *)&n->cfg.dns_ip;
++        nlog(n, "dhcp %s, dns %u.%u.%u.%u", mtype == 2 ? "offer" : "ack", d[0], d[1], d[2], d[3]);
++        n->dhcp_logged = 1;
++    }
++}
++static void dhcp_input(wfcnet *n, const uint8_t *udp, int len) {
++    if (len < 8 + 240) return;
++    const uint8_t *b = udp + 8;
++    int blen = len - 8;
++    if (b[0] != 1 || b[236] != 0x63 || b[237] != 0x82 || b[238] != 0x53 || b[239] != 0x63) return;
++    int msg = dhcp_msg(b + 240, blen - 240);
++    if (msg == 1) dhcp_reply(n, b, 2);
++    else if (msg == 3 || msg == 8) dhcp_reply(n, b, 5);
++    if (!n->have_mac && b[2] == 6) { memcpy(n->ds_mac, b + 28, 6); n->have_mac = 1; }
++}
++static void arp_input(wfcnet *n, const uint8_t src[6], const uint8_t *p, int len) {
++    if (len < 28 || rd16(p) != 1 || rd16(p + 2) != 0x0800 || p[4] != 6 || p[5] != 4) return;
++    if (rd16(p + 6) != 1) return;
++    uint8_t reply[28];
++    memset(reply, 0, sizeof reply);
++    put16(reply, 1); put16(reply + 2, 0x0800); reply[4] = 6; reply[5] = 4; put16(reply + 6, 2);
++    memcpy(reply + 8, n->cfg.gw_mac, 6);
++    memcpy(reply + 14, p + 24, 4);                /* the address they asked for, on our MAC */
++    memcpy(reply + 18, src, 6);
++    memcpy(reply + 24, p + 14, 4);
++    inject(n, src, 0x0806, reply, 28);
++}
++static void icmp_input(wfcnet *n, uint32_t src, uint32_t dst, const uint8_t *p, int len) {
++    if (dst != n->cfg.gw_ip || len < 8 || p[0] != 8) return;
++    uint8_t *r = malloc(len); if (!r) return;
++    memcpy(r, p, len); r[0] = 0; r[2] = r[3] = 0;
++    uint16_t c = ip_csum(r, len);
++    r[2] = c >> 8; r[3] = c & 0xff;
++    emit_ip(n, n->cfg.gw_ip, src ? src : n->cfg.ds_ip, 1, r, len, 0);
++    free(r);
++}
++
++static void ipv4_input(wfcnet *n, const uint8_t *p, int len) {
++    if (len < 20 || (p[0] >> 4) != 4) return;
++    int ihl = (p[0] & 0xf) * 4;
++    if (ihl < 20 || ihl > len) return;
++    if (((p[6] & 0x1f) << 8) | p[7]) return;      /* a fragment */
++    int tot = (p[2] << 8) | p[3];
++    if (tot < ihl || tot > len) tot = len;
++    uint32_t src, dst; memcpy(&src, p + 12, 4); memcpy(&dst, p + 16, 4);
++    int proto = p[9];
++    const uint8_t *l4 = p + ihl;
++    int l4len = tot - ihl;
++    if (proto == 17 && l4len >= 4 && rd16(l4 + 2) == 67) { dhcp_input(n, l4, l4len); return; }
++    if (proto == 1) { icmp_input(n, src, dst, l4, l4len); return; }
++    if (proto == 17) udp_input(n, dst, l4, l4len);
++    else if (proto == 6) tcp_input(n, dst, l4, l4len);
++}
++
++wfcnet *wfcnet_create(const wfcnet_cfg *cfg) {
++    wfcnet *n = calloc(1, sizeof *n);
++    if (!n) return 0;
++    n->cfg = *cfg;
++    for (int i = 0; i < UDP_N; i++) n->udp[i].fd = -1;
++    for (int i = 0; i < TCP_N; i++) n->tcp[i].fd = -1;
++    return n;
++}
++void wfcnet_reset(wfcnet *n) {
++    if (!n) return;
++    for (int i = 0; i < UDP_N; i++) udp_close(&n->udp[i]);
++    for (int i = 0; i < TCP_N; i++) if (n->tcp[i].fd >= 0) tcp_free(&n->tcp[i]);
++    n->dhcp_logged = 0;
++}
++void wfcnet_destroy(wfcnet *n) { if (!n) return; wfcnet_reset(n); free(n); }
++void wfcnet_note_mac(wfcnet *n, const uint8_t mac[6]) {
++    if (!mac) return;
++    memcpy(n->ds_mac, mac, 6); n->have_mac = 1;
++}
++void wfcnet_input(wfcnet *n, const uint8_t dst[6], const uint8_t src[6], uint16_t ethertype,
++                  const uint8_t *payload, int len) {
++    (void)dst;
++    if (!n || !payload || len < 0) return;
++    if (!n->have_mac && memcmp(src, bcast, 6)) wfcnet_note_mac(n, src);
++    if (ethertype == 0x0806) arp_input(n, src, payload, len);
++    else if (ethertype == 0x0800) ipv4_input(n, payload, len);
++}
++void wfcnet_poll(wfcnet *n) {
++    if (!n) return;
++    for (int i = 0; i < UDP_N; i++) if (n->udp[i].fd >= 0) udp_poll(n, &n->udp[i]);
++    for (int i = 0; i < TCP_N; i++) if (n->tcp[i].fd >= 0) tcp_poll(n, &n->tcp[i]);
++}
+diff --git a/src/wfcnet.h b/src/wfcnet.h
+new file mode 100644
+index 0000000..f6b9ebd
+--- /dev/null
++++ b/src/wfcnet.h
+@@ -0,0 +1,31 @@
++/* Userspace NAT in front of one emulated DS. Speaks Ethernet (no 802.11).
++ * The DS is 10.13.37.20; the gateway is 10.13.37.1. DHCP option 6 is the DNS server
++ * the caller picked, which is what a melonDS "DNS override" changes in the firmware. */
++#ifndef WFCNET_H
++#define WFCNET_H
++#include <stdint.h>
++
++typedef void (*wfcnet_inject_fn)(void *ud, const uint8_t dst[6], const uint8_t src[6],
++                                 uint16_t ethertype, const uint8_t *payload, int len);
++typedef void (*wfcnet_log_fn)(void *ud, const char *line);
++
++typedef struct wfcnet wfcnet;
++
++typedef struct {
++    uint32_t ds_ip, gw_ip, dns_ip;      /* network order */
++    uint8_t gw_mac[6];
++    wfcnet_inject_fn inject;
++    wfcnet_log_fn log;
++    void *ud;
++    int debug;
++} wfcnet_cfg;
++
++wfcnet *wfcnet_create(const wfcnet_cfg *cfg);
++void wfcnet_destroy(wfcnet *n);
++void wfcnet_reset(wfcnet *n);
++void wfcnet_note_mac(wfcnet *n, const uint8_t mac[6]);
++/* One Ethernet frame from the DS. ethertype is host order. payload follows the type field. */
++void wfcnet_input(wfcnet *n, const uint8_t dst[6], const uint8_t src[6], uint16_t ethertype,
++                  const uint8_t *payload, int len);
++void wfcnet_poll(wfcnet *n);
++#endif
+diff --git a/src/wifi.c b/src/wifi.c
+new file mode 100644
+index 0000000..d8bc6c1
+--- /dev/null
++++ b/src/wifi.c
+@@ -0,0 +1,688 @@
++/* Online play for DraStic, the way melonDS does it: the DS joins an open access point and
++ * DHCP tells it which DNS server to use (Kaeru, AltWFC, WiiLink, or an address of your own).
++ *
++ * DraStic r2.5.2.2 already has wifi RAM and a baseband serial engine, but the 8/32-bit handlers
++ * are stubs, a few registers are hardcoded, and nothing ever queues a frame or raises the ARM7
++ * wifi IRQ. The handlers are not in the dynamic symbol table, so LD_PRELOAD cannot interpose
++ * them. They are reached through two function tables in .data.rel.ro (ext_function_wifi_load /
++ * ext_function_wifi_store). initialize_memory_map_arm7 copies those tables into the ARM7 map,
++ * and a type-2 region reloads the pointer on every access, so replacing the tables in a
++ * constructor (before main) is enough. The original handlers stay in .text and are called for
++ * ordinary register and RAM traffic.
++ *
++ * Offsets below are for BuildID 7a5e0e5fc6e52e6e8f5499c3d4d667ef51db0748. `add Xd, Xn, #imm,
++ * lsl #12` adds imm<<12. The hook checks that id and the register/RAM layout, and does nothing
++ * if this is a different DraStic. The feature stays off until ES's "wfc dns" (nds.wfc_dns) or
++ * DSFLIP_WFC says otherwise, so an unmodified config behaves exactly as stock DraStic.
++ *
++ * Setting: DSFLIP_WFC = off | kaeru | altwfc | wiilink | <dotted ip> wins (superdrastic-run users);
++ * otherwise nds.wfc_dns from the per-ROM config, then /storage/.config/system/configs/system.cfg.
++ * DSFLIP_WFC_DEBUG=1 logs every frame. Beacons, the TSF compare and the NAT sockets are driven by
++ * the "dsf-wfc" service thread (10 ms), not by the display path, so dsflip.c needs no per-frame hook.
++ */
++#define _GNU_SOURCE
++#include "wififrame.h"
++#include "wfcnet.h"
++#include <arpa/inet.h>
++#include <dlfcn.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <pthread.h>
++#include <strings.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/mman.h>
++#include <sys/stat.h>
++#include <time.h>
++#include <unistd.h>
++
++void dsflip_log(const char *fmt, ...);
++void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
++
++/* load_wifi_16 / store_wifi_16, initialize_memory, store_io_register_arm7_*. */
++enum {
++    WIFI_LOAD_TBL = 0x15d3a0, WIFI_STORE_TBL = 0x15d3b8,
++    OFF_LD8 = 0x10450, OFF_LD16 = 0x12590, OFF_LD32 = 0x10460,
++    OFF_ST8 = 0x10430, OFF_ST16 = 0x12670, OFF_ST32 = 0x10440,
++    REG_BASE = 0x0fb5b8,    /* halfword at mem + REG_BASE + (addr & 0x3fff) */
++    RAM_BASE = 0x017070,    /* byte at mem + RAM_BASE + (addr & 0x3fff); 0x4000..0x7fff is RAM */
++    STATE_AT = 0x0fba68,    /* *(void **) = the cpu-state block */
++    ARM7_OFF = 0x25ce340,   /* ARM7 cpu inside that block (ARM9 is 0x15c7d50, io at 0x1b070) */
++    ARM7_IO = 8320,         /* *(void **)(arm7 + ARM7_IO) == mem + IO_BASE */
++    IO_BASE = 0x023070,
++    IO_IME = 0x208, IO_IE = 0x210, IO_IF = 0x214,
++    ARM7_PEND = 8456, ARM7_HALT = 8464, ARM7_ALERT = 8872
++};
++static const uint8_t BUILD_ID[20] = {
++    0x7a, 0x5e, 0x0e, 0x5f, 0xc6, 0xe5, 0x2e, 0x6e, 0x8f, 0x54,
++    0x99, 0xc3, 0xd4, 0xd6, 0x67, 0xef, 0x51, 0xdb, 0x07, 0x48
++};
++static const uint8_t BSSID[6] = { 0x02, 0x09, 0xbf, 0x11, 0x22, 0x33 };
++#define SYSCFG "/storage/.config/system/configs/system.cfg"
++
++typedef uint32_t (*wld_fn)(void *, uint32_t);
++typedef void (*wst_fn)(void *, uint32_t, uint32_t);
++static wld_fn orig_ld8, orig_ld16, orig_ld32;
++static wst_fn orig_st8, orig_st16, orig_st32;
++
++static pthread_mutex_t wmu;
++static int wmu_ok, hooked, layout_ok, layout_tried, active, debug;
++static const char *fail_reason;
++static void *g_mem;
++static wfcnet *net;
++static char srv_name[32], srv_ip[20];
++static uint32_t dns_ip;
++
++static uint16_t rnd = 1;
++static uint64_t us_base_mono, us_base_val;
++static int us_inited;
++static int rx_on, rx_latched, bc_armed, bc_left;
++static uint64_t bc_stamp, cmp_fired;
++static uint16_t rx_begin = 0x4000, rx_end = 0x4800;
++static uint16_t seqno;
++static int assoc, want_toast, toasted, irq_logged, layout_logged;
++static char joined_ssid[33];
++
++static uint32_t hook_load16(void *mem, uint32_t addr);
++static void hook_store16(void *mem, uint32_t addr, uint32_t val);
++
++static void wlock(void) { if (wmu_ok) pthread_mutex_lock(&wmu); }
++static void wunlock(void) { if (wmu_ok) pthread_mutex_unlock(&wmu); }
++
++static uint64_t mono_us(void) {
++    struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t);
++    return (uint64_t)t.tv_sec * 1000000ull + t.tv_nsec / 1000ull;
++}
++static uint64_t us_now(void) {
++    uint64_t m = mono_us();
++    if (!us_inited) { us_base_mono = m; us_base_val = 0; us_inited = 1; }
++    return us_base_val + (m - us_base_mono);
++}
++static void us_set(uint64_t v) { us_base_mono = mono_us(); us_base_val = v; us_inited = 1; }
++
++static int is_ram(uint32_t addr) {
++    uint32_t d = (addr & 0xffffu) - 0x4000u;
++    return d <= 0x3fffu;
++}
++/* DraStic keeps 0x6000..0x7fff as a second 8 KiB, not a mirror of the MAC. Fold it back. */
++static uint32_t fold_ram(uint32_t addr) {
++    uint32_t a = addr & 0xffffu;
++    if (a >= 0x6000u) a = 0x4000u + (a & 0x1fffu);
++    return (addr & ~0xffffu) | a;
++}
++static uint16_t regoff(uint32_t addr) { return (uint16_t)(addr & 0x3fffu); }
++
++static uint16_t raw16(void *mem, uint16_t off) {
++    return *(volatile uint16_t *)((uint8_t *)mem + REG_BASE + off);
++}
++static uint8_t *mac_base(void *mem) { return (uint8_t *)mem + RAM_BASE; }
++
++static void arm7_irq(void *mem) {
++    uintptr_t state = *(uintptr_t *)((uint8_t *)mem + STATE_AT);
++    if (state < 0x10000) {
++        if (!irq_logged) { dsflip_log("[wfc] no ARM7 state at mem+%#x\n", STATE_AT); irq_logged = 1; }
++        return;
++    }
++    uint8_t *arm7 = (uint8_t *)state + ARM7_OFF;
++    uint8_t *io = *(uint8_t **)(arm7 + ARM7_IO);
++    if (io != (uint8_t *)mem + IO_BASE) {
++        if (!irq_logged) {
++            dsflip_log("[wfc] ARM7 io %p, expected mem+%#x (state %p)\n", io, IO_BASE, (void *)state);
++            irq_logged = 1;
++        }
++        return;
++    }
++    uint32_t iff = *(uint32_t *)(io + IO_IF) | (1u << 24);
++    *(uint32_t *)(io + IO_IF) = iff;
++    uint32_t halt = *(uint32_t *)(arm7 + ARM7_HALT);
++    uint32_t pend = *(uint32_t *)(arm7 + ARM7_PEND);
++    if ((halt & 6) == 0) {
++        uint32_t ime = *(uint32_t *)(io + IO_IME);
++        uint32_t ie = *(uint32_t *)(io + IO_IE);
++        pend = (uint32_t)(-(int32_t)ime) & iff & ie;
++        *(uint32_t *)(arm7 + ARM7_PEND) = pend;
++    }
++    if (pend) *(uint32_t *)(arm7 + ARM7_ALERT) |= 2;
++}
++
++static void wifi_if(void *mem, uint16_t bits) {
++    uint16_t now = raw16(mem, 0x10) | bits;
++    orig_st16(mem, 0x0010, now);
++    if (now & raw16(mem, 0x12)) arm7_irq(mem);
++}
++
++static int layout_check(void *mem) {
++    uint16_t old = orig_ld16(mem, 0x0012);
++    orig_st16(mem, 0x0012, 0x5a5a);
++    int reg_ok = raw16(mem, 0x0012) == 0x5a5a;
++    orig_st16(mem, 0x0012, old);
++    uint16_t rold = orig_ld16(mem, 0x4000);
++    orig_st16(mem, 0x4000, 0xbeef);
++    /* load_wifi_16 indexes RAM with addr & 0x3fff, so 0x4000 lands at the base */
++    uint16_t got = *(volatile uint16_t *)(mac_base(mem) + (0x4000u & 0x3fffu));
++    orig_st16(mem, 0x4000, rold);
++    if (!layout_logged) {
++        dsflip_log("[wfc] layout %s (reg %s, mac %s)\n", reg_ok && got == 0xbeef ? "ok" : "mismatch",
++                   reg_ok ? "ok" : "no", got == 0xbeef ? "ok" : "no");
++        layout_logged = 1;
++    }
++    return reg_ok && got == 0xbeef;
++}
++
++static int bssid_match(void *mem, const uint8_t *frm, int len) {
++    if (len < 16) return 0;
++    for (int i = 0; i < 3; i++) {
++        uint16_t h = raw16(mem, (uint16_t)(0x20 + i * 2));
++        if (frm[10 + i * 2] != (uint8_t)h || frm[11 + i * 2] != (uint8_t)(h >> 8)) return 0;
++    }
++    return 1;
++}
++
++static void rx_queue(void *mem, const uint8_t *frm, int len) {
++    if (!rx_on || !rx_latched || len <= 4) return;
++    len -= 4;                                         /* the RX header length excludes the FCS, and the FCS is not stored */
++    uint16_t wr = raw16(mem, 0x54), rd = raw16(mem, 0x5a);
++    if (!wififrame_rx_push(mac_base(mem), &wr, rd, rx_begin, rx_end, frm, len, bssid_match(mem, frm, len))) {
++        if (debug) dsflip_log("[wfc] rx drop, %d bytes\n", len);
++        return;
++    }
++    orig_st16(mem, 0x0054, wr);
++    wifi_if(mem, 1);                                  /* RX complete */
++}
++
++static void inject_eth(void *ud, const uint8_t dst[6], const uint8_t src[6], uint16_t ethertype,
++                       const uint8_t *payload, int len) {
++    (void)ud;
++    void *mem = g_mem;
++    if (!mem || !active) return;
++    uint8_t frm[2048];
++    const uint8_t *da = dst;
++    int n = wififrame_fromds(frm, sizeof frm, da, BSSID, src, seqno++, ethertype, payload, len);
++    if (n > 0) rx_queue(mem, frm, n);
++}
++static void net_log(void *ud, const char *line) { (void)ud; dsflip_log("[wfc] %s\n", line); }
++
++static void latch_rx(void *mem) {
++    uint16_t b = raw16(mem, 0x50), e = raw16(mem, 0x52), w = raw16(mem, 0x56);
++    if (b < 0x4000 || e > 0x6000 || e <= b) { b = 0x4000; e = 0x4800; }
++    rx_begin = b & ~1; rx_end = e & ~1;
++    orig_st16(mem, 0x0054, w);
++    rx_latched = 1;
++}
++
++static void note_mac(const uint8_t *mac) {
++    if (!mac || (mac[0] == 0xff && mac[1] == 0xff)) return;
++    if (net) wfcnet_note_mac(net, mac);
++}
++
++static uint64_t tsf_now(void) { return us_now(); }
++
++static void reply_mgmt(void *mem, const uint8_t *da, int kind, const char *ssid) {
++    uint8_t frm[320];
++    int n = -1;
++    if (kind == 0) n = wififrame_probe_resp(frm, sizeof frm, BSSID, da, ssid, 1, seqno++, tsf_now());
++    else if (kind == 1) n = wififrame_auth(frm, sizeof frm, BSSID, da, seqno++);
++    else n = wififrame_assoc_resp(frm, sizeof frm, BSSID, da, ssid, seqno++);
++    if (n > 0) rx_queue(mem, frm, n);
++}
++
++static void on_assoc(const char *ssid) {
++    if (ssid && ssid[0]) snprintf(joined_ssid, sizeof joined_ssid, "%s", ssid);
++    if (assoc) return;
++    assoc = 1; want_toast = 1;
++    dsflip_log("[wfc] associated%s%s, dns %s\n", joined_ssid[0] ? " to " : "", joined_ssid, srv_ip);
++}
++
++static void handle_frame(void *mem, const uint8_t *frm, int len) {
++    if (len < 24) return;
++    unsigned fc = frm[0] | (frm[1] << 8);
++    int type = (fc >> 2) & 3, subtype = (fc >> 4) & 0xf;
++    const uint8_t *sa = frm + 10;
++    note_mac(sa);
++    if (debug) dsflip_log("[wfc] tx fc %04x len %d\n", fc, len);
++    if (type == 0) {
++        char ssid[33]; ssid[0] = 0;
++        if (subtype == 4) {                           /* probe request */
++            int sl = len >= 24 ? wififrame_ie_ssid(frm + 24, len - 24, ssid, sizeof ssid) : -1;
++            reply_mgmt(mem, sa, 0, sl > 0 ? ssid : "rocknixds");
++        } else if (subtype == 11) reply_mgmt(mem, sa, 1, 0);          /* auth */
++        else if (subtype == 0 || subtype == 2) {                      /* assoc / reassoc: cap, listen, then IEs */
++            if (len >= 28) wififrame_ie_ssid(frm + 28, len - 28, ssid, sizeof ssid);
++            reply_mgmt(mem, sa, 2, ssid[0] ? ssid : "rocknixds");
++            on_assoc(ssid[0] ? ssid : "rocknixds");
++        }
++        return;
++    }
++    if (type != 2 || fc & 0x0040) return;             /* not data, or WEP: local multiplayer stays local */
++    int qos = subtype >= 8;
++    int hdr = 24 + (qos ? 2 : 0);
++    if (len < hdr + 8) return;
++    const uint8_t *llc = frm + hdr;
++    if (llc[0] != 0xaa || llc[1] != 0xaa || llc[2] != 0x03) return;
++    unsigned et = (llc[6] << 8) | llc[7];
++    const uint8_t *da = frm + 16;
++    if (net) wfcnet_input(net, da, sa, et, llc + 8, len - hdr - 8);
++}
++
++static void do_tx(void *mem, uint16_t mask) {
++    static const uint16_t locreg[4] = { 0x00a0, 0x0090, 0x00a4, 0x00a8 }; /* LOC1, CMD, LOC2, LOC3 */
++    int any = 0;
++    for (int i = 0; i < 4; i++) {
++        if (!(mask & (1u << i))) continue;
++        uint16_t loc = raw16(mem, locreg[i]);
++        if (!(loc & 0x8000)) continue;
++        unsigned byte = 0x4000u + (unsigned)(loc & 0x0fff) * 2u;
++        uint8_t *p = mac_base(mem) + (byte & 0x3fff);
++        unsigned rate = p[8] | (p[9] << 8);
++        unsigned flen = p[10] | (p[11] << 8);         /* includes the 4-byte FCS the hardware would add */
++        (void)rate;
++        if (flen >= 4 && flen < 2400) handle_frame(mem, p + 12, (int)flen - 4);
++        orig_st16(mem, locreg[i], loc & (uint16_t)~0x8000);
++        any = 1;
++    }
++    if (!any) return;
++    orig_st16(mem, 0x00b8, 0x0001);                   /* transmitted, not failed */
++    orig_st16(mem, 0x00b6, 0);
++    wifi_if(mem, (1u << 1) | (1u << 7));              /* TX end and TX start */
++}
++
++static void beacon(void *mem) {
++    uint8_t frm[256];
++    int n = wififrame_beacon(frm, sizeof frm, BSSID, "rocknixds", 1, seqno++, tsf_now());
++    if (n > 0) rx_queue(mem, frm, n);
++    wifi_if(mem, 1u << 14);
++}
++
++static uint16_t us_half(unsigned off) {
++    unsigned sh = (off - 0xf8) * 8;
++    return (us_now() >> sh) & 0xffff;
++}
++static void us_store_half(unsigned off, uint16_t v) {
++    unsigned sh = (off - 0xf8) * 8;
++    uint64_t cur = us_now();
++    cur = (cur & ~(0xffffull << sh)) | ((uint64_t)v << sh);
++    us_set(cur);
++}
++static uint64_t cmp_now(void *mem) {
++    uint64_t v = 0;
++    for (int i = 0; i < 4; i++) v |= (uint64_t)raw16(mem, 0xf0 + i * 2) << (16 * i);
++    return v;
++}
++
++static int ensure(void *mem) {
++    g_mem = mem;
++    if (layout_ok) return 1;
++    if (layout_tried) return 0;
++    layout_tried = 1;
++    if (layout_check(mem)) { layout_ok = 1; return 1; }
++    fail_reason = "register layout";
++    active = 0;
++    return 0;
++}
++
++static uint32_t hook_load8(void *mem, uint32_t addr) {
++    uint32_t h = hook_load16(mem, addr & ~1u);
++    return (addr & 1) ? (h >> 8) & 0xff : h & 0xff;
++}
++static uint32_t hook_load32(void *mem, uint32_t addr) {
++    uint16_t o = regoff(addr);
++    if (!is_ram(addr) && (o == 0xf8 || o == 0xfc)) {
++        wlock();
++        unsigned sh = (o - 0xf8) * 8;
++        uint32_t v = (uint32_t)(us_now() >> sh);
++        wunlock();
++        return v;
++    }
++    return hook_load16(mem, addr) | (hook_load16(mem, addr + 2) << 16);
++}
++static void hook_store8(void *mem, uint32_t addr, uint32_t val) {
++    uint16_t o = regoff(addr);
++    if (!is_ram(addr) && (o == 0x10 || o == 0x11)) {
++        wlock();
++        if (ensure(mem)) {
++            uint16_t old = raw16(mem, 0x10);
++            uint16_t mask = (addr & 1) ? ((val & 0xff) << 8) : (val & 0xff);
++            orig_st16(mem, 0x0010, old & ~mask);
++        }
++        wunlock();
++        return;
++    }
++    uint32_t h = hook_load16(mem, addr & ~1u);
++    if (addr & 1) h = (h & 0x00ff) | ((val & 0xff) << 8);
++    else h = (h & 0xff00) | (val & 0xff);
++    hook_store16(mem, addr & ~1u, h);
++}
++static void hook_store32(void *mem, uint32_t addr, uint32_t val) {
++    uint16_t o = regoff(addr);
++    if (!is_ram(addr) && (o == 0xf8 || o == 0xfc)) {
++        wlock();
++        if (ensure(mem)) {
++            unsigned sh = (o - 0xf8) * 8;
++            uint64_t cur = us_now();
++            cur = (cur & ~(0xffffffffull << sh)) | ((uint64_t)(val) << sh);
++            us_set(cur);
++        }
++        wunlock();
++        return;
++    }
++    hook_store16(mem, addr, val & 0xffff);
++    hook_store16(mem, addr + 2, val >> 16);
++}
++
++static uint32_t hook_load16(void *mem, uint32_t addr) {
++    if (!hooked) return orig_ld16(mem, addr);
++    if (is_ram(addr)) { wlock(); ensure(mem); uint32_t r = orig_ld16(mem, fold_ram(addr)); wunlock(); return r; }
++    uint16_t o = regoff(addr);
++    wlock();
++    uint32_t r;
++    if (!ensure(mem)) { r = orig_ld16(mem, addr); wunlock(); return r; }
++    switch (o) {
++    case 0x000: r = 0x1440; break;                    /* W_ID */
++    case 0x004: r = raw16(mem, 0x004) & (uint16_t)~0x8000; break;
++    case 0x03c: r = (raw16(mem, 0x03c) & (uint16_t)~0x0200) | 0x0200; break;
++    case 0x044: {                                     /* 11-bit LFSR, never 0 */
++        uint16_t x = rnd & 0x7ff; if (!x) x = 1;
++        uint16_t rol = ((x << 1) | (x >> 10)) & 0x7ff;
++        rnd = ((x & 1) ^ rol) & 0x7ff; if (!rnd) rnd = 1;
++        r = x; break;
++    }
++    case 0x060: {                                     /* circular-buffer read port */
++        uint16_t adr = raw16(mem, 0x58) & 0x1ffe;
++        uint8_t *p = mac_base(mem) + ((0x4000u + adr) & 0x3fff);
++        r = p[0] | (p[1] << 8);
++        unsigned nxt = (adr + 2) & 0x1ffe;
++        unsigned end = (rx_end - 0x4000) & 0x1ffe, begin = (rx_begin - 0x4000) & 0x1ffe;
++        if (nxt == end) nxt = begin;
++        orig_st16(mem, 0x0058, (uint16_t)nxt);
++        break;
++    }
++    case 0x0b6: r = 0; break;                         /* TX busy */
++    case 0x0f8: case 0x0fa: case 0x0fc: case 0x0fe: r = us_half(o); break;
++    case 0x11c: {
++        if (!bc_armed) { r = raw16(mem, 0x11c); break; }
++        int left = bc_left - (int)((us_now() - bc_stamp) / 1000);
++        r = left > 0 ? left : 0; break;
++    }
++    case 0x15e: case 0x180: r = 0; break;             /* BB / RF busy */
++    default: r = orig_ld16(mem, addr); break;
++    }
++    wunlock();
++    return r;
++}
++
++static void hook_store16(void *mem, uint32_t addr, uint32_t val) {
++    if (!hooked) { orig_st16(mem, addr, val); return; }
++    if (is_ram(addr)) { wlock(); ensure(mem); orig_st16(mem, fold_ram(addr), val); wunlock(); return; }
++    uint16_t o = regoff(addr), v = (uint16_t)val;
++    wlock();
++    if (!ensure(mem)) { orig_st16(mem, addr, val); wunlock(); return; }
++    switch (o) {
++    case 0x004:
++        orig_st16(mem, addr, v & (uint16_t)~0x8000);
++        if (v & 0x8000 && net) wfcnet_reset(net);
++        break;
++    case 0x010:                                       /* write-1-to-clear */
++        orig_st16(mem, 0x0010, raw16(mem, 0x10) & ~v);
++        break;
++    case 0x030:
++        orig_st16(mem, addr, v);
++        if (v & 1) latch_rx(mem);
++        rx_on = (v & 0x8000) != 0;
++        if (rx_on && !bc_armed) { bc_armed = 1; bc_left = 100; bc_stamp = us_now(); }
++        break;
++    case 0x0ae:
++        orig_st16(mem, addr, v);
++        do_tx(mem, v);
++        break;
++    case 0x0f8: case 0x0fa: case 0x0fc: case 0x0fe:
++        us_store_half(o, v);
++        break;
++    case 0x11c:
++        bc_left = v; bc_stamp = us_now(); bc_armed = 1;
++        orig_st16(mem, addr, v);
++        break;
++    case 0x21c:                                       /* IF set */
++        orig_st16(mem, addr, v);
++        wifi_if(mem, v);
++        break;
++    default:
++        if (o == 0x012) {
++            uint16_t iff = raw16(mem, 0x10), oldie = raw16(mem, 0x12);
++            orig_st16(mem, addr, v);
++            if ((iff & oldie) == 0 && (iff & v)) arm7_irq(mem);
++        } else orig_st16(mem, addr, v);
++        break;
++    }
++    wunlock();
++}
++
++static void svc_tick(void) {
++    void *mem = g_mem;
++    if (!mem || !layout_ok) return;
++    if (rx_on && rx_latched && bc_armed) {
++        int left = bc_left - (int)((us_now() - bc_stamp) / 1000);
++        int irq14 = 0;
++        if (left <= 0) {
++            int period = raw16(mem, 0x8c);
++            if (period <= 0) period = 100;
++            bc_left = period; bc_stamp = us_now();
++            orig_st16(mem, 0x011c, (uint16_t)period);
++            beacon(mem);
++            irq14 = 1;
++        }
++        if (raw16(mem, 0xea) & 1) {
++            uint64_t cmp = cmp_now(mem), now = us_now();
++            if (cmp && now >= cmp && cmp_fired != cmp) { cmp_fired = cmp; irq14 = 1; }
++        }
++        if (irq14 && left > 0) wifi_if(mem, 1u << 14); /* beacon() already raised it when the countdown elapsed */
++    }
++    if (net) wfcnet_poll(net);
++    if (want_toast && !toasted) {
++        dsflip_toast("Wi-Fi", srv_name, 0x6ab0ff, 4000);
++        toasted = 1;
++    }
++}
++
++static void *svc(void *p) {
++    (void)p;
++    usleep(300000);                                   /* dsflip_log's file is opened by a later constructor */
++    if (!active) { dsflip_log("[wfc] online left off: %s\n", fail_reason ? fail_reason : "not hooked"); return 0; }
++    dsflip_log("[wfc] online via %s (%s)\n", srv_name, srv_ip);
++    while (active) {
++        usleep(10000);
++        wlock();
++        svc_tick();
++        wunlock();
++    }
++    return 0;
++}
++
++/* ---------- settings ---------- */
++static int cfg_get(const char *path, const char *key, char *out, size_t n) {
++    FILE *f = fopen(path, "r"); if (!f) return 0;
++    char line[512]; size_t kl = strlen(key); int found = 0;
++    while (fgets(line, sizeof line, f))
++        if (!strncmp(line, key, kl) && line[kl] == '=') {
++            char *v = line + kl + 1;
++            while (*v == ' ' || *v == '\t' || *v == '"') v++;
++            v[strcspn(v, "\r\n")] = 0;
++            size_t L = strlen(v);
++            while (L && (v[L - 1] == ' ' || v[L - 1] == '"')) v[--L] = 0;
++            snprintf(out, n, "%s", v); found = 1;
++        }
++    fclose(f);
++    return found && out[0];
++}
++static int rom_base(char *out, size_t n) {
++    int fd = open("/proc/self/cmdline", O_RDONLY); if (fd < 0) return 0;
++    char buf[4096]; int len = read(fd, buf, sizeof buf - 1); close(fd);
++    if (len <= 0) return 0;
++    buf[len] = 0;
++    for (int i = 0; i < len; ) {
++        char *a = buf + i; int al = strlen(a); i += al + 1;
++        if (al > 4 && !strcasecmp(a + al - 4, ".nds")) {
++            const char *b = strrchr(a, '/'); b = b ? b + 1 : a;
++            snprintf(out, n, "%s", b); return 1;
++        }
++    }
++    return 0;
++}
++static int parse_ip(const char *s, uint32_t *ip) {
++    unsigned a, b, c, d; char tail;
++    if (sscanf(s, "%u.%u.%u.%u%c", &a, &b, &c, &d, &tail) != 4) return 0;
++    if (a > 255 || b > 255 || c > 255 || d > 255) return 0;
++    *ip = htonl((a << 24) | (b << 16) | (c << 8) | d);
++    return 1;
++}
++static int known_server(const char *s, uint32_t *ip, char *name, size_t nn) {
++    if (!s || !s[0] || !strcasecmp(s, "off") || !strcmp(s, "0") || !strcasecmp(s, "none") || !strcasecmp(s, "disable"))
++        return 0;
++    if (!strcasecmp(s, "kaeru")) { *ip = htonl(0xb23e2bd4u); snprintf(name, nn, "Kaeru WFC"); return 1; }          /* 178.62.43.212 */
++    if (!strcasecmp(s, "altwfc")) { *ip = htonl(0xac6858edu); snprintf(name, nn, "AltWFC"); return 1; }           /* 172.104.88.237 */
++    if (!strcasecmp(s, "wiilink") || !strcasecmp(s, "riiconnect24")) {
++        *ip = htonl(0xa7ebe524u); snprintf(name, nn, "WiiLink"); return 1;                                       /* 167.235.229.36 */
++    }
++    if (parse_ip(s, ip)) { snprintf(name, nn, "%s", s); return 1; }
++    return 0;
++}
++static int setting_on(void) {
++    char v[64]; v[0] = 0;
++    const char *e = getenv("DSFLIP_WFC");
++    if (e && e[0]) snprintf(v, sizeof v, "%s", e);
++    else {
++        char rom[256], path[512];
++        int have_rom = rom_base(rom, sizeof rom);
++        if (have_rom) {
++            /* ROCKNIX keeps per-game settings in system.cfg as nds["<rom>.nds"].<key>= (see session.sh) */
++            snprintf(path, sizeof path, "nds[\"%s\"].wfc_dns", rom);
++            cfg_get(SYSCFG, path, v, sizeof v);
++        }
++        if (!v[0] && have_rom) {
++            snprintf(path, sizeof path, "/storage/.config/system/configs/nds/%s.cfg", rom);
++            if (!cfg_get(path, "nds.wfc_dns", v, sizeof v) && !cfg_get(path, "nds.wfc", v, sizeof v) &&
++                !cfg_get(path, "wfc_dns", v, sizeof v)) {
++                char *dot = strrchr(rom, '.'); if (dot) *dot = 0;
++                snprintf(path, sizeof path, "/storage/.config/system/configs/nds/%s.cfg", rom);
++                if (!cfg_get(path, "nds.wfc_dns", v, sizeof v)) cfg_get(path, "wfc_dns", v, sizeof v);
++            }
++        }
++        if (!v[0] && !cfg_get(SYSCFG, "nds.wfc_dns", v, sizeof v)) cfg_get(SYSCFG, "nds.wfc", v, sizeof v);
++    }
++    if (!known_server(v, &dns_ip, srv_name, sizeof srv_name)) return 0;
++    uint8_t *d = (uint8_t *)&dns_ip;
++    snprintf(srv_ip, sizeof srv_ip, "%u.%u.%u.%u", d[0], d[1], d[2], d[3]);
++    return 1;
++}
++
++static int build_ok(void) {
++    int fd = open("/proc/self/exe", O_RDONLY | O_CLOEXEC);
++    if (fd < 0) return 0;
++    unsigned char eh[64];
++    if (read(fd, eh, 64) != 64 || memcmp(eh, "\177ELF", 4) || eh[4] != 2 || eh[5] != 1) { close(fd); return 0; }
++    uint64_t phoff; uint16_t phsz, phn;
++    memcpy(&phoff, eh + 32, 8); memcpy(&phsz, eh + 54, 2); memcpy(&phn, eh + 56, 2);
++    if (phsz < 56 || phn > 64) { close(fd); return 0; }
++    int match = 0, found = 0;
++    for (uint16_t i = 0; i < phn && !found; i++) {
++        unsigned char ph[56];
++        if (pread(fd, ph, 56, (off_t)(phoff + (uint64_t)i * phsz)) != 56) break;
++        uint32_t ptype; uint64_t off, sz;
++        memcpy(&ptype, ph, 4); memcpy(&off, ph + 8, 8); memcpy(&sz, ph + 32, 8);
++        if (ptype != 4 || sz < 12 || sz > (1u << 20)) continue;
++        unsigned char *buf = malloc(sz);
++        if (!buf || pread(fd, buf, sz, (off_t)off) != (ssize_t)sz) { free(buf); continue; }
++        uint64_t p = 0;
++        while (p + 12 <= sz) {
++            uint32_t ns, ds, ty;
++            memcpy(&ns, buf + p, 4); memcpy(&ds, buf + p + 4, 4); memcpy(&ty, buf + p + 8, 4);
++            p += 12;
++            if (ns > sz || p + ns > sz) break;
++            const unsigned char *name = buf + p;
++            p += (ns + 3u) & ~3u;
++            if (ds > sz || p + ds > sz) break;
++            if (ty == 3 && ns >= 4 && !memcmp(name, "GNU", 4) && ds == 20) {
++                found = 1; match = !memcmp(buf + p, BUILD_ID, 20);
++            }
++            p += (ds + 3u) & ~3u;
++        }
++        free(buf);
++    }
++    close(fd);
++    return match;
++}
++
++static uintptr_t load_bias(void) {
++    char exe[4096];
++    ssize_t n = readlink("/proc/self/exe", exe, sizeof exe - 1);
++    if (n <= 0) return 0;
++    exe[n] = 0;
++    struct stat se; if (stat(exe, &se)) return 0;
++    FILE *f = fopen("/proc/self/maps", "r"); if (!f) return 0;
++    char line[768]; uintptr_t bias = 0;
++    while (fgets(line, sizeof line, f)) {
++        unsigned long lo, off; char perms[8]; int poff = 0;
++        if (sscanf(line, "%lx-%*x %7s %lx %*s %*s %n", &lo, perms, &off, &poff) < 3) continue;
++        if (perms[0] != 'r' || perms[2] != 'x') continue;
++        char *path = line + poff; path[strcspn(path, "\n")] = 0;
++        struct stat sm;
++        if (path[0] == '/' && !stat(path, &sm) && sm.st_ino == se.st_ino && sm.st_dev == se.st_dev) {
++            bias = lo - off; break;                   /* first LOAD: p_vaddr == p_offset == 0 */
++        }
++    }
++    fclose(f);
++    return bias;
++}
++
++static int protect(void *page, size_t n, int prot) {
++    if (mprotect(page, n, prot)) return 0;
++    return 1;
++}
++static int patch_tables(uintptr_t base) {
++    uint64_t *ld = (uint64_t *)(base + WIFI_LOAD_TBL);
++    uint64_t *st = (uint64_t *)(base + WIFI_STORE_TBL);
++    if (ld[0] != base + OFF_LD8 || ld[1] != base + OFF_LD16 || ld[2] != base + OFF_LD32) return 0;
++    if (st[0] != base + OFF_ST8 || st[1] != base + OFF_ST16 || st[2] != base + OFF_ST32) return 0;
++    orig_ld8 = (wld_fn)(uintptr_t)ld[0]; orig_ld16 = (wld_fn)(uintptr_t)ld[1]; orig_ld32 = (wld_fn)(uintptr_t)ld[2];
++    orig_st8 = (wst_fn)(uintptr_t)st[0]; orig_st16 = (wst_fn)(uintptr_t)st[1]; orig_st32 = (wst_fn)(uintptr_t)st[2];
++    long ps = sysconf(_SC_PAGESIZE);
++    uintptr_t page = (base + WIFI_LOAD_TBL) & ~(uintptr_t)(ps - 1);
++    if (!protect((void *)page, ps, PROT_READ | PROT_WRITE)) return 0;
++    ld[0] = (uint64_t)(uintptr_t)hook_load8; ld[1] = (uint64_t)(uintptr_t)hook_load16; ld[2] = (uint64_t)(uintptr_t)hook_load32;
++    st[0] = (uint64_t)(uintptr_t)hook_store8; st[1] = (uint64_t)(uintptr_t)hook_store16; st[2] = (uint64_t)(uintptr_t)hook_store32;
++    protect((void *)page, ps, PROT_READ);
++    return 1;
++}
++
++/* Runs after dsflip.c's init_locks (101) and before its unprioritised init(), i.e. before DraStic's main.
++ * DraStic's children (`sh -c pactl subscribe`) inherit the preload; init() marks the game process with
++ * DSFLIP_IN_GAME, so in a child that variable is already set and there is nothing to hook. */
++__attribute__((constructor(102))) static void wifi_init(void) {
++    if (getenv("DSFLIP_IN_GAME")) return;
++    pthread_mutexattr_t a; pthread_mutexattr_init(&a);
++    pthread_mutexattr_settype(&a, PTHREAD_MUTEX_RECURSIVE);
++    pthread_mutex_init(&wmu, &a);
++    pthread_mutexattr_destroy(&a);
++    wmu_ok = 1;
++    debug = getenv("DSFLIP_WFC_DEBUG") && strcmp(getenv("DSFLIP_WFC_DEBUG"), "0");
++    if (!setting_on()) return;
++    if (!build_ok()) { fail_reason = "DraStic build id is not r2.5.2.2"; goto thread; }
++    uintptr_t base = load_bias();
++    if (!base || !patch_tables(base)) { fail_reason = "wifi handler table was not where r2.5.2.2 keeps it"; goto thread; }
++    wfcnet_cfg cfg; memset(&cfg, 0, sizeof cfg);
++    cfg.ds_ip = htonl(0x0a0d2514u);               /* 10.13.37.20 */
++    cfg.gw_ip = htonl(0x0a0d2501u);               /* 10.13.37.1 */
++    cfg.dns_ip = dns_ip;
++    memcpy(cfg.gw_mac, BSSID, 6);
++    cfg.inject = inject_eth; cfg.log = net_log; cfg.debug = debug;
++    net = wfcnet_create(&cfg);
++    if (!net) { fail_reason = "out of memory"; goto thread; }
++    hooked = 1; active = 1;
++thread: {
++        pthread_t t; pthread_attr_t at;
++        pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
++        if (!pthread_create(&t, &at, svc, 0)) pthread_setname_np(t, "dsf-wfc");
++        pthread_attr_destroy(&at);
++    }
++}
+diff --git a/src/wififrame.c b/src/wififrame.c
+new file mode 100644
+index 0000000..977302f
+--- /dev/null
++++ b/src/wififrame.c
+@@ -0,0 +1,158 @@
++/* 802.11 data/management frames and the RX circular buffer, from the public register notes
++ * (akkit DS wifi reference, GBATEK): 12-byte TX/RX headers, FCS is the Ethernet CRC. */
++#include "wififrame.h"
++#include <string.h>
++
++uint32_t wififrame_crc32(const uint8_t *p, int n) {
++    uint32_t c = 0xffffffffu;
++    for (int i = 0; i < n; i++) {
++        c ^= p[i];
++        for (int b = 0; b < 8; b++) c = (c >> 1) ^ (0xedb88320u & -(c & 1));
++    }
++    return c ^ 0xffffffffu;
++}
++
++static void put16(uint8_t *p, unsigned v) { p[0] = v & 0xff; p[1] = (v >> 8) & 0xff; }
++
++static int finish(uint8_t *o, int n, int cap) {
++    if (n < 0 || n + 4 > cap) return -1;
++    uint32_t c = wififrame_crc32(o, n);
++    o[n] = c & 0xff; o[n + 1] = (c >> 8) & 0xff; o[n + 2] = (c >> 16) & 0xff; o[n + 3] = (c >> 24) & 0xff;
++    return n + 4;
++}
++
++static int mgmt(uint8_t *o, int cap, unsigned fc, const uint8_t *a1, const uint8_t *a2, const uint8_t *a3, unsigned seq) {
++    if (cap < 24) return -1;
++    put16(o, fc);
++    put16(o + 2, 0);
++    memcpy(o + 4, a1, 6);
++    memcpy(o + 10, a2, 6);
++    memcpy(o + 16, a3, 6);
++    put16(o + 22, (seq & 0xfff) << 4);
++    return 24;
++}
++
++static const uint8_t bcast[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
++
++/* ESS, short preamble, no privacy. Rates are 1/2/5.5/11, the two DS rates marked basic. */
++static int put_ssid(uint8_t *p, const char *ssid) {
++    if (!ssid || !ssid[0]) ssid = "rocknixds";
++    int n = 0; while (ssid[n] && n < 32) n++;
++    p[0] = 0; p[1] = n; memcpy(p + 2, ssid, n);
++    return 2 + n;
++}
++static int put_ies(uint8_t *p, const char *ssid, int channel) {
++    int n = put_ssid(p, ssid);
++    p[n] = 1; p[n + 1] = 4; p[n + 2] = 0x82; p[n + 3] = 0x84; p[n + 4] = 0x8b; p[n + 5] = 0x96; n += 6;
++    p[n] = 3; p[n + 1] = 1; p[n + 2] = channel ? channel : 1; n += 3;
++    p[n] = 5; p[n + 1] = 4; p[n + 2] = 0; p[n + 3] = 1; p[n + 4] = 0; p[n + 5] = 0; n += 6; /* TIM */
++    return n;
++}
++
++static int beacon_body(uint8_t *o, int at, const char *ssid, int channel, uint64_t tsf) {
++    for (int i = 0; i < 8; i++) o[at++] = (tsf >> (8 * i)) & 0xff;
++    put16(o + at, 100); at += 2;          /* beacon interval, TU */
++    put16(o + at, 0x0021); at += 2;       /* capability */
++    return at + put_ies(o + at, ssid, channel);
++}
++
++int wififrame_beacon(uint8_t *o, int cap, const uint8_t bssid[6], const char *ssid, int channel, uint16_t seq, uint64_t tsf) {
++    int n = mgmt(o, cap, 0x0080, bcast, bssid, bssid, seq);
++    if (n < 0 || n + 64 > cap) return -1;
++    n = beacon_body(o, n, ssid, channel, tsf);
++    return finish(o, n, cap);
++}
++
++int wififrame_probe_resp(uint8_t *o, int cap, const uint8_t bssid[6], const uint8_t da[6], const char *ssid, int channel, uint16_t seq, uint64_t tsf) {
++    int n = mgmt(o, cap, 0x0050, da, bssid, bssid, seq);
++    if (n < 0 || n + 64 > cap) return -1;
++    n = beacon_body(o, n, ssid, channel, tsf);
++    return finish(o, n, cap);
++}
++
++int wififrame_auth(uint8_t *o, int cap, const uint8_t bssid[6], const uint8_t da[6], uint16_t seq) {
++    int n = mgmt(o, cap, 0x00b0, da, bssid, bssid, seq);
++    if (n < 0 || n + 6 > cap) return -1;
++    put16(o + n, 0); put16(o + n + 2, 2); put16(o + n + 4, 0); /* open, seq 2, success */
++    return finish(o, n + 6, cap);
++}
++
++int wififrame_assoc_resp(uint8_t *o, int cap, const uint8_t bssid[6], const uint8_t da[6], const char *ssid, uint16_t seq) {
++    int n = mgmt(o, cap, 0x0010, da, bssid, bssid, seq);
++    if (n < 0 || n + 48 > cap) return -1;
++    put16(o + n, 0x0021); put16(o + n + 2, 0); put16(o + n + 4, 0xc001); n += 6; /* cap, status, AID 1 */
++    n += put_ies(o + n, ssid, 1);
++    return finish(o, n, cap);
++}
++
++int wififrame_fromds(uint8_t *o, int cap, const uint8_t da[6], const uint8_t bssid[6], const uint8_t sa[6],
++                     uint16_t seq, uint16_t ethertype, const uint8_t *payload, int plen) {
++    if (plen < 0 || plen > 1600) return -1;
++    int n = mgmt(o, cap, 0x0208, da, bssid, sa, seq); /* from-DS data: addr1 DA, addr2 BSSID, addr3 SA */
++    if (n < 0 || n + 8 + plen + 4 > cap) return -1;
++    static const uint8_t snap[6] = { 0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00 };
++    memcpy(o + n, snap, 6); n += 6;
++    o[n] = ethertype >> 8; o[n + 1] = ethertype & 0xff; n += 2;
++    if (plen) memcpy(o + n, payload, plen);
++    return finish(o, n + plen, cap);
++}
++
++int wififrame_ie_ssid(const uint8_t *ies, int n, char *out, int cap) {
++    if (cap) out[0] = 0;
++    for (int i = 0; i + 2 <= n; ) {
++        int id = ies[i], ln = ies[i + 1];
++        if (i + 2 + ln > n) return -1;
++        if (id == 0) {
++            if (ln >= cap) ln = cap > 0 ? cap - 1 : 0;
++            if (ln && cap) memcpy(out, ies + i + 2, ln);
++            if (cap) out[ln] = 0;
++            return ln;
++        }
++        i += 2 + ln;
++    }
++    return -1;
++}
++
++/* RXHDR[0] low nibble, from the public header notes: 1 beacon, 8 data, 5 ps-poll, else management. Bit 4 is always set. */
++static uint16_t rx_flags(const uint8_t *frame, int flen) {
++    if (flen < 2) return 0x0010;
++    unsigned fc = frame[0] | ((unsigned)frame[1] << 8);
++    unsigned type = (fc >> 2) & 3u, subtype = (fc >> 4) & 0xfu, low = 0;
++    if (type == 0 && subtype == 8) low = 0x01;
++    else if (type == 2 && subtype < 8) low = 0x08;
++    else if (type == 1 && subtype == 10) low = 0x05;
++    return (uint16_t)(low | 0x0010u);
++}
++
++int wififrame_rx_push(uint8_t *mac, uint16_t *wrcsr, uint16_t readcsr, uint16_t begin, uint16_t end,
++                      const uint8_t *frame, int flen, int bssid_match) {
++    if (!mac || !wrcsr || flen < 0 || flen > 2400) return 0;
++    if (begin < 0x4000 || end > 0x6000 || end <= begin || ((begin | end) & 1)) return 0;
++    unsigned rec = (12u + (unsigned)flen + 3u) & ~3u;
++    unsigned size = (unsigned)(end - begin);
++    if (rec >= size) return 0;
++    unsigned wr = 0x4000u + (unsigned)(*wrcsr) * 2u;
++    unsigned rd = 0x4000u + (unsigned)readcsr * 2u;
++    if (wr < begin || wr >= end || rd < begin || rd >= end) return 0;
++    unsigned used = wr >= rd ? wr - rd : size - (rd - wr);
++    if (rec >= size - used) return 0;                 /* landing on the read cursor looks like an empty fifo */
++    uint16_t flags = rx_flags(frame, flen);
++    if (bssid_match) flags |= 0x8000;
++    uint8_t hdr[12];
++    memset(hdr, 0, sizeof hdr);
++    hdr[0] = flags & 0xff; hdr[1] = flags >> 8;
++    hdr[2] = 0x40;                                    /* normal reception */
++    hdr[6] = 0x14;                                    /* 2 Mbit/s */
++    hdr[8] = flen & 0xff; hdr[9] = (flen >> 8) & 0xff; /* IEEE length, FCS not included */
++    hdr[10] = 0x80; hdr[11] = 0x40;                   /* max / min RSSI */
++    for (unsigned i = 0; i < rec; i++) {
++        unsigned a = begin + (wr - begin + i) % size;
++        uint8_t b = 0;
++        if (i < 12) b = hdr[i];
++        else if (i < 12u + (unsigned)flen) b = frame[i - 12];
++        mac[a & 0x3fff] = b;
++    }
++    unsigned next = begin + (wr - begin + rec) % size;
++    *wrcsr = (uint16_t)((next - 0x4000u) / 2u);
++    return 1;
++}
+diff --git a/src/wififrame.h b/src/wififrame.h
+new file mode 100644
+index 0000000..e827ad3
+--- /dev/null
++++ b/src/wififrame.h
+@@ -0,0 +1,24 @@
++/* 802.11 frames for the DraStic wifi hook. No DraStic types: the host test links this. */
++#ifndef WIFIFRAME_H
++#define WIFIFRAME_H
++#include <stdint.h>
++
++uint32_t wififrame_crc32(const uint8_t *p, int n);
++
++/* Each builder writes one 802.11 frame, FCS included, and returns its length (or -1). */
++int wififrame_beacon(uint8_t *o, int cap, const uint8_t bssid[6], const char *ssid, int channel, uint16_t seq, uint64_t tsf);
++int wififrame_probe_resp(uint8_t *o, int cap, const uint8_t bssid[6], const uint8_t da[6], const char *ssid, int channel, uint16_t seq, uint64_t tsf);
++int wififrame_auth(uint8_t *o, int cap, const uint8_t bssid[6], const uint8_t da[6], uint16_t seq);
++int wififrame_assoc_resp(uint8_t *o, int cap, const uint8_t bssid[6], const uint8_t da[6], const char *ssid, uint16_t seq);
++int wififrame_fromds(uint8_t *o, int cap, const uint8_t da[6], const uint8_t bssid[6], const uint8_t sa[6],
++                     uint16_t seq, uint16_t ethertype, const uint8_t *payload, int plen);
++
++/* SSID information element. Returns the length, 0 for a wildcard, -1 if the element is absent. */
++int wififrame_ie_ssid(const uint8_t *ies, int n, char *out, int cap);
++
++/* mac[] is the wifi address window: index with addr & 0x3fff (a 32 KiB buffer).
++ * begin/end are byte addresses (0x4C00..0x5F60). wrcsr/readcsr are halfword indexes: byte = 0x4000 + reg*2.
++ * frame is the IEEE header and body, without the FCS. bssid_match sets RX-header bit 15. Returns 1 if queued. */
++int wififrame_rx_push(uint8_t *mac, uint16_t *wrcsr, uint16_t readcsr, uint16_t begin, uint16_t end,
++                      const uint8_t *frame, int flen, int bssid_match);
++#endif
+diff --git a/tools/README.md b/tools/README.md
+index d3ceef9..809903b 100644
+--- a/tools/README.md
++++ b/tools/README.md
+@@ -5,6 +5,7 @@ Test and measurement tools, run on the device unless noted.
+ | Tool | |
+ |---|---|
+ | `shtest.c` | Runs one shader on a frame without DraStic and times it (`sh build.sh <sysroot> shtest`) |
++| `wfc_test.c` | Host test for the Wi-Fi code in `src/wififrame.c` and `src/wfcnet.c` (`sh build.sh wfc_test`; runs on the PC) |
+ | `touchtap.py` | Injects a real tap or swipe into the touchscreen (evdev write) |
+ | `padkey.py` | Presses a gamepad button the same way |
+ | `touchcal.c` | Draws crosshairs on the panels to calibrate the touchscreen (KMS) |
+diff --git a/tools/wfc_test.c b/tools/wfc_test.c
+new file mode 100644
+index 0000000..535fe1c
+--- /dev/null
++++ b/tools/wfc_test.c
+@@ -0,0 +1,352 @@
++/* Host test for the wifi frame builder and the userspace NAT (src/wififrame.c, src/wfcnet.c). No DraStic, no device.
++ *   sh build.sh wfc_test
++ * or, from the repository root:
++ *   gcc -O2 -Wall -Wextra -pthread -Isrc -o build/wfc_test src/wfcnet.c src/wififrame.c tools/wfc_test.c && build/wfc_test
++ */
++#define _GNU_SOURCE
++#include "wfcnet.h"
++#include "wififrame.h"
++#include <arpa/inet.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <netinet/in.h>
++#include <pthread.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/socket.h>
++#include <unistd.h>
++
++static int fails;
++static void expect(int cond, const char *msg) {
++    if (cond) return;
++    fprintf(stderr, "FAIL %s\n", msg);
++    fails++;
++}
++
++static uint32_t csum_add(uint32_t s, const uint8_t *p, int n) {
++    while (n > 1) { s += (p[0] << 8) | p[1]; p += 2; n -= 2; }
++    if (n) s += p[0] << 8;
++    return s;
++}
++static int csum_ok(const uint8_t *p, int n) {
++    uint32_t s = csum_add(0, p, n);
++    while (s >> 16) s = (s & 0xffff) + (s >> 16);
++    return s == 0xffff;
++}
++
++/* ---------- frames ---------- */
++static void test_frames(void) {
++    const uint8_t s[] = "123456789";
++    expect(wififrame_crc32(s, 9) == 0xcbf43926u, "crc32");
++    uint8_t bssid[6] = { 2, 9, 0xbf, 0x11, 0x22, 0x33 };
++    uint8_t da[6] = { 2, 0, 0, 0, 0, 1 };
++    uint8_t frm[400];
++    int n = wififrame_beacon(frm, sizeof frm, bssid, "rocknixds", 1, 7, 0x1234);
++    expect(n > 28, "beacon length");
++    expect(frm[0] == 0x80 && frm[1] == 0, "beacon fc");
++    expect(wififrame_crc32(frm, n - 4) == (uint32_t)(frm[n - 4] | (frm[n - 3] << 8) | (frm[n - 2] << 16) | (frm[n - 1] << 24)), "beacon fcs");
++    char ssid[33];
++    expect(wififrame_ie_ssid(frm + 36, n - 4 - 36, ssid, sizeof ssid) == 9, "beacon ssid len");
++    expect(!strcmp(ssid, "rocknixds"), "beacon ssid");
++    n = wififrame_probe_resp(frm, sizeof frm, bssid, da, "saved", 1, 1, 0);
++    expect(n > 0 && frm[0] == 0x50, "probe resp");
++    expect(wififrame_ie_ssid(frm + 36, n - 4 - 36, ssid, sizeof ssid) == 5 && !strcmp(ssid, "saved"), "probe ssid");
++    n = wififrame_auth(frm, sizeof frm, bssid, da, 1);
++    expect(n > 24 && frm[0] == 0xb0 && frm[24] == 0 && frm[26] == 2 && frm[28] == 0, "auth open seq 2");
++    n = wififrame_assoc_resp(frm, sizeof frm, bssid, da, "rocknixds", 2);
++    expect(n > 30 && frm[0] == 0x10 && frm[26] == 0 && (frm[28] | (frm[29] << 8)) == 0xc001, "assoc aid");
++    uint8_t payload[4] = { 1, 2, 3, 4 };
++    uint8_t sa[6] = { 9, 9, 9, 9, 9, 9 };
++    n = wififrame_fromds(frm, sizeof frm, da, bssid, sa, 3, 0x0800, payload, 4);
++    expect(n == 24 + 8 + 4 + 4, "from-ds length");
++    expect(frm[0] == 0x08 && frm[1] == 0x02, "from-ds fc");
++    expect(!memcmp(frm + 4, da, 6) && !memcmp(frm + 10, bssid, 6) && !memcmp(frm + 16, sa, 6), "from-ds addrs");
++    expect(frm[24] == 0xaa && frm[30] == 0x08 && frm[31] == 0x00 && !memcmp(frm + 32, payload, 4), "snap");
++
++    uint8_t mac[0x8000];
++    memset(mac, 0, sizeof mac);
++    /* address 0x4000 is index 0: DraStic stores RAM at addr & 0x3fff. FC 0x0001 is management, so flags are 0x10. */
++    uint16_t wr = 0, rd = 0;
++    uint8_t one[4] = { 1, 2, 3, 4 };
++    expect(wififrame_rx_push(mac, &wr, rd, 0x4000, 0x4800, one, 4, 0) == 1, "rx push base");
++    expect(mac[0] == 0x10 && mac[2] == 0x40 && mac[6] == 0x14 && mac[8] == 4 && mac[12] == 1, "rx at index 0");
++    /* firmware layout: BEGIN/END are byte addresses, the cursors are halfword indexes (0x4C00 -> 0x0600) */
++    memset(mac, 0, sizeof mac);
++    wr = rd = 0x0600;
++    n = wififrame_beacon(frm, sizeof frm, bssid, "rocknixds", 1, 1, 0);
++    expect(n > 4 && wififrame_rx_push(mac, &wr, rd, 0x4c00, 0x5f60, frm, n - 4, 1) == 1, "rx firmware cursor");
++    expect(mac[0x0c00] == 0x11 && mac[0x0c01] == 0x80 && (mac[0x0c08] | (mac[0x0c09] << 8)) == n - 4, "beacon header");
++    expect(mac[0x0c0c] == 0x80 && wr == 0x0600 + (((12 + (n - 4) + 3) & ~3) / 2), "beacon body, cursor in halfwords");
++    /* 64-byte fifo [0x5fc0, 0x6000). A 20-byte record starts 16 bytes before the end, so 4 bytes wrap to 0x5fc0. */
++    memset(mac, 0, sizeof mac);
++    wr = rd = (0x5ff0 - 0x4000) / 2;
++    uint8_t frame[8];
++    memset(frame, 0xab, sizeof frame);
++    expect(wififrame_rx_push(mac, &wr, rd, 0x5fc0, 0x6000, frame, 8, 0) == 1, "rx push wrap");
++    expect(mac[0x5ff0 & 0x3fff] == 0x10 && mac[(0x5ff0 + 8) & 0x3fff] == 8, "rx header");
++    expect(mac[(0x5ff0 + 12) & 0x3fff] == 0xab, "rx body");
++    expect(mac[0x5fc0 & 0x3fff] == 0xab, "wrapped tail");
++    expect(wr == (0x5fc4 - 0x4000) / 2, "cursor wrapped");
++    int pushed = 1;
++    for (int i = 0; i < 8; i++) pushed += wififrame_rx_push(mac, &wr, rd, 0x5fc0, 0x6000, frame, 8, 0);
++    expect(pushed < 9 && mac[0x5ff0 & 0x3fff] == 0x10, "rx drop when full, first header kept");
++}
++
++/* ---------- nat ---------- */
++struct cap {
++    uint8_t pkt[8][2048];
++    int len[8], n;
++    uint8_t dst[8][6];
++    uint16_t et[8];
++};
++static void on_inject(void *ud, const uint8_t dst[6], const uint8_t src[6], uint16_t et,
++                      const uint8_t *payload, int len) {
++    (void)src;
++    struct cap *c = ud;
++    if (c->n >= 8 || len < 0 || len > 2048) return;
++    memcpy(c->pkt[c->n], payload, len);
++    memcpy(c->dst[c->n], dst, 6);
++    c->len[c->n] = len; c->et[c->n] = et; c->n++;
++}
++static void logln(void *ud, const char *line) { (void)ud; fprintf(stderr, "  %s\n", line); }
++
++static uint8_t ds_mac[6] = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x10 };
++static uint8_t gw_mac[6] = { 0x02, 0x09, 0xbf, 0x11, 0x22, 0x33 };
++static uint32_t ds_ip, gw_ip;
++
++static void put16(uint8_t *p, unsigned v) { p[0] = v >> 8; p[1] = v; }
++static void put32(uint8_t *p, uint32_t v) { p[0] = v >> 24; p[1] = v >> 16; p[2] = v >> 8; p[3] = v; }
++static unsigned rd16(const uint8_t *p) { return (p[0] << 8) | p[1]; }
++static uint32_t rd32(const uint8_t *p) { return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3]; }
++
++static int ip_pkt(uint8_t *o, uint32_t src, uint32_t dst, int proto, const uint8_t *l4, int l4len) {
++    int tot = 20 + l4len;
++    memset(o, 0, 20);
++    o[0] = 0x45; o[2] = tot >> 8; o[3] = tot; o[8] = 64; o[9] = proto;
++    memcpy(o + 12, &src, 4); memcpy(o + 16, &dst, 4);
++    uint32_t s = csum_add(0, o, 20);
++    while (s >> 16) s = (s & 0xffff) + (s >> 16);
++    unsigned c = ~s & 0xffff;
++    o[10] = c >> 8; o[11] = c;
++    memcpy(o + 20, l4, l4len);
++    return tot;
++}
++static wfcnet *make_net(struct cap *c, uint32_t dns) {
++    memset(c, 0, sizeof *c);
++    wfcnet_cfg cfg; memset(&cfg, 0, sizeof cfg);
++    cfg.ds_ip = ds_ip; cfg.gw_ip = gw_ip; cfg.dns_ip = dns;
++    memcpy(cfg.gw_mac, gw_mac, 6);
++    cfg.inject = on_inject; cfg.log = logln; cfg.ud = c; cfg.debug = 1;
++    wfcnet *n = wfcnet_create(&cfg);
++    wfcnet_note_mac(n, ds_mac);
++    return n;
++}
++static void feed_ip(wfcnet *n, const uint8_t *ip, int len) {
++    wfcnet_input(n, gw_mac, ds_mac, 0x0800, ip, len);
++}
++
++static void test_dhcp_arp_icmp(void) {
++    struct cap c; uint32_t dns = htonl(0xb23e2bd4u);
++    wfcnet *n = make_net(&c, dns);
++    uint8_t bootp[300]; memset(bootp, 0, sizeof bootp);
++    bootp[0] = 1; bootp[1] = 1; bootp[2] = 6; put32(bootp + 4, 0x11223344);
++    memcpy(bootp + 28, ds_mac, 6);
++    bootp[236] = 0x63; bootp[237] = 0x82; bootp[238] = 0x53; bootp[239] = 0x63;
++    bootp[240] = 53; bootp[241] = 1; bootp[242] = 1; bootp[243] = 255;
++    uint8_t udp[8 + 300];
++    put16(udp, 68); put16(udp + 2, 67); put16(udp + 4, 8 + 244);
++    memcpy(udp + 8, bootp, 244);
++    uint8_t ip[600];
++    int iplen = ip_pkt(ip, 0, htonl(0xffffffffu), 17, udp, 8 + 244);
++    feed_ip(n, ip, iplen);
++    expect(c.n == 1 && c.et[0] == 0x0800, "dhcp inject");
++    expect(csum_ok(c.pkt[0], 20), "dhcp ip csum");
++    const uint8_t *o = c.pkt[0];
++    expect(o[9] == 17 && !memcmp(o + 16, "\xff\xff\xff\xff", 4), "dhcp broadcast");
++    const uint8_t *b = o + 20 + 8;
++    expect(b[0] == 2 && !memcmp(b + 16, &ds_ip, 4), "dhcp yiaddr");
++    int found_dns = 0, mtype = 0;
++    for (int i = 240; i < 400 && b[i] != 255; ) {
++        if (b[i] == 0) { i++; continue; }
++        int l = b[i + 1];
++        if (b[i] == 53 && l == 1) mtype = b[i + 2];
++        if (b[i] == 6 && l == 4 && !memcmp(b + i + 2, &dns, 4)) found_dns = 1;
++        i += 2 + l;
++    }
++    expect(mtype == 2 && found_dns, "dhcp offer dns");
++
++    c.n = 0;
++    uint8_t arp[28]; memset(arp, 0, sizeof arp);
++    put16(arp, 1); put16(arp + 2, 0x0800); arp[4] = 6; arp[5] = 4; put16(arp + 6, 1);
++    memcpy(arp + 8, ds_mac, 6); memcpy(arp + 14, &ds_ip, 4); memcpy(arp + 24, &gw_ip, 4);
++    wfcnet_input(n, gw_mac, ds_mac, 0x0806, arp, 28);
++    expect(c.n == 1 && c.et[0] == 0x0806 && rd16(c.pkt[0] + 6) == 2, "arp reply");
++    expect(!memcmp(c.pkt[0] + 8, gw_mac, 6) && !memcmp(c.pkt[0] + 14, &gw_ip, 4), "arp gw");
++
++    c.n = 0;
++    uint8_t echo[16]; memset(echo, 0, sizeof echo);
++    echo[0] = 8; echo[4] = 0x12; echo[6] = 0x34; memcpy(echo + 8, "ping", 4);
++    uint32_t s = csum_add(0, echo, 16); while (s >> 16) s = (s & 0xffff) + (s >> 16);
++    unsigned cs = ~s & 0xffff; echo[2] = cs >> 8; echo[3] = cs;
++    iplen = ip_pkt(ip, ds_ip, gw_ip, 1, echo, 16);
++    feed_ip(n, ip, iplen);
++    expect(c.n == 1 && c.pkt[0][20] == 0 && !memcmp(c.pkt[0] + 28, "ping", 4), "icmp echo");
++    expect(csum_ok(c.pkt[0] + 20, 16), "icmp csum");
++    wfcnet_destroy(n);
++}
++
++struct srv { int fd; int got; char data[64]; };
++static void *udp_srv(void *a) {
++    struct srv *s = a;
++    struct sockaddr_in from; socklen_t sl = sizeof from;
++    int n = recvfrom(s->fd, s->data, sizeof s->data, 0, (struct sockaddr *)&from, &sl);
++    if (n > 0) { s->got = n; sendto(s->fd, s->data, n, 0, (struct sockaddr *)&from, sl); }
++    return 0;
++}
++static void *tcp_srv(void *a) {
++    struct srv *s = a;
++    int c = accept(s->fd, 0, 0);
++    if (c < 0) return 0;
++    int fl = fcntl(c, F_GETFL, 0); fcntl(c, F_SETFL, fl | O_NONBLOCK);
++    int off = 0;
++    for (int i = 0; i < 200 && off < 4; i++) {
++        int n = recv(c, s->data + off, sizeof s->data - off, 0);
++        if (n > 0) off += n;
++        else usleep(5000);
++    }
++    s->got = off;
++    if (off) send(c, s->data, off, 0);
++    usleep(30000);
++    close(c);
++    return 0;
++}
++static int listen_udp(struct srv *s) {
++    int fd = socket(AF_INET, SOCK_DGRAM, 0);
++    struct sockaddr_in a; memset(&a, 0, sizeof a);
++    a.sin_family = AF_INET; a.sin_addr.s_addr = htonl(0x7f000001);
++    if (bind(fd, (struct sockaddr *)&a, sizeof a)) { close(fd); return -1; }
++    socklen_t sl = sizeof a; getsockname(fd, (struct sockaddr *)&a, &sl);
++    s->fd = fd; s->got = 0;
++    return ntohs(a.sin_port);
++}
++static int listen_tcp(struct srv *s) {
++    int fd = socket(AF_INET, SOCK_STREAM, 0);
++    int one = 1; setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
++    struct sockaddr_in a; memset(&a, 0, sizeof a);
++    a.sin_family = AF_INET; a.sin_addr.s_addr = htonl(0x7f000001);
++    if (bind(fd, (struct sockaddr *)&a, sizeof a) || listen(fd, 1)) { close(fd); return -1; }
++    socklen_t sl = sizeof a; getsockname(fd, (struct sockaddr *)&a, &sl);
++    s->fd = fd; s->got = 0;
++    return ntohs(a.sin_port);
++}
++
++static void tcp_segment(uint8_t *o, int *len, uint16_t sport, uint16_t dport, uint32_t seq, uint32_t ack,
++                        unsigned flags, const uint8_t *data, int dlen) {
++    uint8_t seg[64]; memset(seg, 0, 20);
++    put16(seg, sport); put16(seg + 2, dport); put32(seg + 4, seq); put32(seg + 8, ack);
++    seg[12] = 5 << 4; seg[13] = flags; put16(seg + 14, 1400);
++    if (dlen) memcpy(seg + 20, data, dlen);
++    int total = 20 + dlen;
++    uint8_t ph[12]; memcpy(ph, &ds_ip, 4); uint32_t dst = htonl(0x7f000001); memcpy(ph + 4, &dst, 4);
++    ph[8] = 0; ph[9] = 6; ph[10] = total >> 8; ph[11] = total;
++    uint32_t s = csum_add(csum_add(0, ph, 12), seg, total);
++    while (s >> 16) s = (s & 0xffff) + (s >> 16);
++    unsigned c = ~s & 0xffff; seg[16] = c >> 8; seg[17] = c;
++    *len = ip_pkt(o, ds_ip, dst, 6, seg, total);
++}
++
++static int l4_ok(const uint8_t *ip, int len) {
++    if (len < 20 || !csum_ok(ip, 20)) return 0;
++    int ihl = (ip[0] & 0xf) * 4, proto = ip[9], l4 = len - ihl;
++    uint8_t ph[12];
++    memcpy(ph, ip + 12, 8); ph[8] = 0; ph[9] = proto; ph[10] = l4 >> 8; ph[11] = l4;
++    uint32_t s = csum_add(csum_add(0, ph, 12), ip + ihl, l4);
++    while (s >> 16) s = (s & 0xffff) + (s >> 16);
++    return s == 0xffff;
++}
++
++static void test_udp(void) {
++    struct srv sv; int port = listen_udp(&sv);
++    expect(port > 0, "udp bind");
++    pthread_t th; pthread_create(&th, 0, udp_srv, &sv);
++    struct cap c; wfcnet *n = make_net(&c, htonl(0x7f000001));
++    uint8_t uh[8 + 4]; memset(uh, 0, 8);
++    put16(uh, 5000); put16(uh + 2, port); put16(uh + 4, 12); memcpy(uh + 8, "dns?", 4);
++    uint8_t ip[64]; int len = ip_pkt(ip, ds_ip, htonl(0x7f000001), 17, uh, 12);
++    feed_ip(n, ip, len);
++    int saw = 0;
++    for (int i = 0; i < 50 && !saw; i++) {
++        c.n = 0; wfcnet_poll(n); usleep(10000);
++        for (int k = 0; k < c.n; k++) {
++            if (c.et[k] != 0x0800 || c.len[k] < 28) continue;
++            if (c.pkt[k][9] != 17) continue;
++            if (rd16(c.pkt[k] + 22) == 5000 && c.len[k] >= 32 && !memcmp(c.pkt[k] + 28, "dns?", 4)) saw = l4_ok(c.pkt[k], c.len[k]);
++        }
++    }
++    expect(saw, "udp echo");
++    expect(sv.got == 4, "udp server got it");
++    pthread_join(th, 0); close(sv.fd); wfcnet_destroy(n);
++}
++
++static void test_tcp(void) {
++    struct srv sv; int port = listen_tcp(&sv);
++    expect(port > 0, "tcp bind");
++    pthread_t th; pthread_create(&th, 0, tcp_srv, &sv);
++    struct cap c; wfcnet *n = make_net(&c, htonl(0x7f000001));
++    uint8_t ip[128]; int len;
++    tcp_segment(ip, &len, 4000, port, 1000, 0, 0x02, 0, 0); /* SYN */
++    c.n = 0; feed_ip(n, ip, len);
++    expect(c.n >= 1, "syn-ack sent");
++    const uint8_t *sa = 0; int salen = 0;
++    for (int k = 0; k < c.n; k++) if (c.pkt[k][9] == 6) { sa = c.pkt[k]; salen = c.len[k]; }
++    expect(sa && (sa[20 + 13] & 0x12) == 0x12, "syn-ack flags");
++    expect(sa && l4_ok(sa, salen), "syn-ack csum");
++    uint32_t iss = sa ? rd32(sa + 24) : 0;
++    expect(sa && rd32(sa + 28) == 1001, "syn-ack ack");
++    /* leave it unacked long enough to retransmit once */
++    int syns = 1;
++    for (int i = 0; i < 20 && syns < 2; i++) {
++        usleep(50000); c.n = 0; wfcnet_poll(n);
++        for (int k = 0; k < c.n; k++) if (c.pkt[k][9] == 6 && (c.pkt[k][33] & 0x02)) syns++;
++    }
++    expect(syns >= 2, "syn-ack retransmit");
++    tcp_segment(ip, &len, 4000, port, 1001, iss + 1, 0x10, 0, 0);
++    c.n = 0; feed_ip(n, ip, len);
++    uint8_t hello[4] = { 'p', 'i', 'n', 'g' };
++    tcp_segment(ip, &len, 4000, port, 1001, iss + 1, 0x18, hello, 4);
++    feed_ip(n, ip, len);
++    int got = 0; uint32_t seq = 0; int dlen = 0;
++    for (int i = 0; i < 80 && !got; i++) {
++        c.n = 0; wfcnet_poll(n); usleep(10000);
++        for (int k = 0; k < c.n; k++) {
++            if (c.pkt[k][9] != 6 || c.len[k] < 40) continue;
++            int hlen = (c.pkt[k][32] >> 4) * 4;
++            int pl = c.len[k] - 20 - hlen;
++            if (pl >= 4 && !memcmp(c.pkt[k] + 20 + hlen, "ping", 4)) {
++                got = l4_ok(c.pkt[k], c.len[k]);
++                seq = rd32(c.pkt[k] + 24); dlen = pl;
++            }
++        }
++    }
++    expect(got, "tcp echo");
++    if (got) {
++        tcp_segment(ip, &len, 4000, port, 1005, seq + dlen, 0x10, 0, 0);
++        feed_ip(n, ip, len);
++    }
++    pthread_join(th, 0);
++    expect(sv.got == 4 && !memcmp(sv.data, "ping", 4), "tcp server got ping");
++    close(sv.fd); wfcnet_destroy(n);
++}
++
++int main(void) {
++    ds_ip = htonl(0x0a0d2514u);
++    gw_ip = htonl(0x0a0d2501u);
++    test_frames();
++    test_dhcp_arp_icmp();
++    test_udp();
++    test_tcp();
++    if (fails) { fprintf(stderr, "%d failed\n", fails); return 1; }
++    printf("wfc_test ok\n");
++    return 0;
++}
+-- 
+2.56.0
+
+
+From 0861654f97441d280960ff3a1757773aa49064be Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 5 Oct 2026 17:56:24 +0000
+Subject: [PATCH 3/4] Wi-Fi: ARP only for the gateway, RX records with their
+ FCS and W_RXLEN_CROP, a probe of DraStic's W_IF store;
+ 0.4.0-beta.2-rocknixds.2
+
+Three things a review against melonDS and the DS hardware found before any device run:
+- wfcnet answered ARP requests for any address, the DS's own included: a DHCP client that probes its offered
+  lease (RFC 2131 4.4.1) would have declined it. It answers for the gateway only; the host test covers the probe.
+- The RX record held the frame without its FCS and reported that length, and W_RXLEN_CROP (0x0DA) was never read.
+  The record now holds the whole frame as the hardware stores it, and the header's length takes off what the
+  crop register says ((crop << 1) & 0x1FE for plain frames, (crop >> 7) & 0x1FE for WEP ones; the firmware's
+  0x0602 crops the 4-byte FCS), so a stack that sets the crop differently still sees the right length.
+- The hook assumed DraStic's stock 16-bit store keeps a written W_IF as is. The layout check now probes that
+  (0x5a5a through the stock handler, read back) and logs "IF store plain" or "write-1-to-clear"; in the latter
+  case the flags go straight into the register memory, so a set is never turned into a clear.
+VERSION 0.4.0-beta.2-rocknixds.2: the shader output patch plus the Wi-Fi path (off unless configured).
+Still untested on a handheld.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01EHHmyacNZtyRhmxZoUYRa8
+---
+ src/wfcnet.c     |  5 ++++-
+ src/wifi.c       | 29 +++++++++++++++++++++++------
+ src/wififrame.c  |  5 +++--
+ src/wififrame.h  |  7 +++++--
+ tools/wfc_test.c | 18 +++++++++++++-----
+ 5 files changed, 48 insertions(+), 16 deletions(-)
+
+diff --git a/src/wfcnet.c b/src/wfcnet.c
+index 85fda59..a4f3676 100644
+--- a/src/wfcnet.c
++++ b/src/wfcnet.c
+@@ -411,11 +411,14 @@ static void dhcp_input(wfcnet *n, const uint8_t *udp, int len) {
+ static void arp_input(wfcnet *n, const uint8_t src[6], const uint8_t *p, int len) {
+     if (len < 28 || rd16(p) != 1 || rd16(p + 2) != 0x0800 || p[4] != 6 || p[5] != 4) return;
+     if (rd16(p + 6) != 1) return;
++    /* only the gateway's own address: a DHCP client probes the address it was offered (RFC 2131 4.4.1) and declines
++     * the lease if anyone answers for it, and off-subnet addresses are the gateway's business, not an ARP's */
++    if (memcmp(p + 24, &n->cfg.gw_ip, 4) != 0) return;
+     uint8_t reply[28];
+     memset(reply, 0, sizeof reply);
+     put16(reply, 1); put16(reply + 2, 0x0800); reply[4] = 6; reply[5] = 4; put16(reply + 6, 2);
+     memcpy(reply + 8, n->cfg.gw_mac, 6);
+-    memcpy(reply + 14, p + 24, 4);                /* the address they asked for, on our MAC */
++    memcpy(reply + 14, p + 24, 4);                /* the gateway, on our MAC */
+     memcpy(reply + 18, src, 6);
+     memcpy(reply + 24, p + 14, 4);
+     inject(n, src, 0x0806, reply, 28);
+diff --git a/src/wifi.c b/src/wifi.c
+index d8bc6c1..7ba0b7a 100644
+--- a/src/wifi.c
++++ b/src/wifi.c
+@@ -147,9 +147,17 @@ static void arm7_irq(void *mem) {
+     if (pend) *(uint32_t *)(arm7 + ARM7_ALERT) |= 2;
+ }
+ 
++/* W_IF (0x010) is written through DraStic's own 16-bit handler when the layout check found it stores the value as
++ * is; a handler that already clears the written bits (write-1-to-clear, what the hardware does) would turn our set
++ * into a clear, so the flags then go straight into the register memory */
++static int if_plain = 1;
++static void if_put(void *mem, uint16_t v) {
++    if (if_plain) orig_st16(mem, 0x0010, v);
++    else *(volatile uint16_t *)((uint8_t *)mem + REG_BASE + 0x10) = v;
++}
+ static void wifi_if(void *mem, uint16_t bits) {
+     uint16_t now = raw16(mem, 0x10) | bits;
+-    orig_st16(mem, 0x0010, now);
++    if_put(mem, now);
+     if (now & raw16(mem, 0x12)) arm7_irq(mem);
+ }
+ 
+@@ -158,14 +166,20 @@ static int layout_check(void *mem) {
+     orig_st16(mem, 0x0012, 0x5a5a);
+     int reg_ok = raw16(mem, 0x0012) == 0x5a5a;
+     orig_st16(mem, 0x0012, old);
++    /* and whether the stock handler stores W_IF as is (then our set/clear go through it) or clears the written
++     * bits (then they go into the register memory directly); the probe is undone either way */
++    uint16_t iold = raw16(mem, 0x0010);
++    orig_st16(mem, 0x0010, 0x5a5a);
++    if_plain = raw16(mem, 0x0010) == 0x5a5a;
++    *(volatile uint16_t *)((uint8_t *)mem + REG_BASE + 0x10) = iold;
+     uint16_t rold = orig_ld16(mem, 0x4000);
+     orig_st16(mem, 0x4000, 0xbeef);
+     /* load_wifi_16 indexes RAM with addr & 0x3fff, so 0x4000 lands at the base */
+     uint16_t got = *(volatile uint16_t *)(mac_base(mem) + (0x4000u & 0x3fffu));
+     orig_st16(mem, 0x4000, rold);
+     if (!layout_logged) {
+-        dsflip_log("[wfc] layout %s (reg %s, mac %s)\n", reg_ok && got == 0xbeef ? "ok" : "mismatch",
+-                   reg_ok ? "ok" : "no", got == 0xbeef ? "ok" : "no");
++        dsflip_log("[wfc] layout %s (reg %s, mac %s, IF store %s)\n", reg_ok && got == 0xbeef ? "ok" : "mismatch",
++                   reg_ok ? "ok" : "no", got == 0xbeef ? "ok" : "no", if_plain ? "plain" : "write-1-to-clear");
+         layout_logged = 1;
+     }
+     return reg_ok && got == 0xbeef;
+@@ -182,9 +196,12 @@ static int bssid_match(void *mem, const uint8_t *frm, int len) {
+ 
+ static void rx_queue(void *mem, const uint8_t *frm, int len) {
+     if (!rx_on || !rx_latched || len <= 4) return;
+-    len -= 4;                                         /* the RX header length excludes the FCS, and the FCS is not stored */
++    /* the record holds the frame with its FCS, as the hardware stores it; the header's length takes off what
++     * W_RXLEN_CROP says (the firmware sets 0x0602: the 4-byte FCS on plain frames, 12 bytes on WEP ones) */
++    uint16_t crop = raw16(mem, 0x0da), fc = (uint16_t)(frm[0] | (frm[1] << 8));
++    int cb = (fc & 0x4000) ? ((crop >> 7) & 0x1fe) : ((crop << 1) & 0x1fe);
+     uint16_t wr = raw16(mem, 0x54), rd = raw16(mem, 0x5a);
+-    if (!wififrame_rx_push(mac_base(mem), &wr, rd, rx_begin, rx_end, frm, len, bssid_match(mem, frm, len))) {
++    if (!wififrame_rx_push(mac_base(mem), &wr, rd, rx_begin, rx_end, frm, len, cb, bssid_match(mem, frm, len))) {
+         if (debug) dsflip_log("[wfc] rx drop, %d bytes\n", len);
+         return;
+     }
+@@ -424,7 +441,7 @@ static void hook_store16(void *mem, uint32_t addr, uint32_t val) {
+         if (v & 0x8000 && net) wfcnet_reset(net);
+         break;
+     case 0x010:                                       /* write-1-to-clear */
+-        orig_st16(mem, 0x0010, raw16(mem, 0x10) & ~v);
++        if_put(mem, raw16(mem, 0x10) & ~v);
+         break;
+     case 0x030:
+         orig_st16(mem, addr, v);
+diff --git a/src/wififrame.c b/src/wififrame.c
+index 977302f..8ae58c2 100644
+--- a/src/wififrame.c
++++ b/src/wififrame.c
+@@ -125,8 +125,9 @@ static uint16_t rx_flags(const uint8_t *frame, int flen) {
+ }
+ 
+ int wififrame_rx_push(uint8_t *mac, uint16_t *wrcsr, uint16_t readcsr, uint16_t begin, uint16_t end,
+-                      const uint8_t *frame, int flen, int bssid_match) {
++                      const uint8_t *frame, int flen, int crop_bytes, int bssid_match) {
+     if (!mac || !wrcsr || flen < 0 || flen > 2400) return 0;
++    int hlen = flen - crop_bytes; if (hlen < 0) hlen = 0;   /* what the header reports: the frame less the crop */
+     if (begin < 0x4000 || end > 0x6000 || end <= begin || ((begin | end) & 1)) return 0;
+     unsigned rec = (12u + (unsigned)flen + 3u) & ~3u;
+     unsigned size = (unsigned)(end - begin);
+@@ -143,7 +144,7 @@ int wififrame_rx_push(uint8_t *mac, uint16_t *wrcsr, uint16_t readcsr, uint16_t
+     hdr[0] = flags & 0xff; hdr[1] = flags >> 8;
+     hdr[2] = 0x40;                                    /* normal reception */
+     hdr[6] = 0x14;                                    /* 2 Mbit/s */
+-    hdr[8] = flen & 0xff; hdr[9] = (flen >> 8) & 0xff; /* IEEE length, FCS not included */
++    hdr[8] = hlen & 0xff; hdr[9] = (hlen >> 8) & 0xff; /* IEEE length after W_RXLEN_CROP (the FCS, normally) */
+     hdr[10] = 0x80; hdr[11] = 0x40;                   /* max / min RSSI */
+     for (unsigned i = 0; i < rec; i++) {
+         unsigned a = begin + (wr - begin + i) % size;
+diff --git a/src/wififrame.h b/src/wififrame.h
+index e827ad3..e1efd51 100644
+--- a/src/wififrame.h
++++ b/src/wififrame.h
+@@ -18,7 +18,10 @@ int wififrame_ie_ssid(const uint8_t *ies, int n, char *out, int cap);
+ 
+ /* mac[] is the wifi address window: index with addr & 0x3fff (a 32 KiB buffer).
+  * begin/end are byte addresses (0x4C00..0x5F60). wrcsr/readcsr are halfword indexes: byte = 0x4000 + reg*2.
+- * frame is the IEEE header and body, without the FCS. bssid_match sets RX-header bit 15. Returns 1 if queued. */
++ * frame is the whole IEEE frame as received, FCS included (flen counts it), stored as the hardware stores it;
++ * the RX header's length is flen minus crop bytes, what W_RXLEN_CROP (0x0DA) takes off: ((crop << 1) & 0x1FE)
++ * for an unencrypted frame, ((crop >> 7) & 0x1FE) for a WEP one (0x0602, the usual setting, crops the 4-byte FCS).
++ * bssid_match sets RX-header bit 15. Returns 1 if queued. */
+ int wififrame_rx_push(uint8_t *mac, uint16_t *wrcsr, uint16_t readcsr, uint16_t begin, uint16_t end,
+-                      const uint8_t *frame, int flen, int bssid_match);
++                      const uint8_t *frame, int flen, int crop_bytes, int bssid_match);
+ #endif
+diff --git a/tools/wfc_test.c b/tools/wfc_test.c
+index 535fe1c..a90f87d 100644
+--- a/tools/wfc_test.c
++++ b/tools/wfc_test.c
+@@ -69,27 +69,29 @@ static void test_frames(void) {
+     /* address 0x4000 is index 0: DraStic stores RAM at addr & 0x3fff. FC 0x0001 is management, so flags are 0x10. */
+     uint16_t wr = 0, rd = 0;
+     uint8_t one[4] = { 1, 2, 3, 4 };
+-    expect(wififrame_rx_push(mac, &wr, rd, 0x4000, 0x4800, one, 4, 0) == 1, "rx push base");
++    expect(wififrame_rx_push(mac, &wr, rd, 0x4000, 0x4800, one, 4, 0, 0) == 1, "rx push base");
+     expect(mac[0] == 0x10 && mac[2] == 0x40 && mac[6] == 0x14 && mac[8] == 4 && mac[12] == 1, "rx at index 0");
+     /* firmware layout: BEGIN/END are byte addresses, the cursors are halfword indexes (0x4C00 -> 0x0600) */
+     memset(mac, 0, sizeof mac);
+     wr = rd = 0x0600;
+     n = wififrame_beacon(frm, sizeof frm, bssid, "rocknixds", 1, 1, 0);
+-    expect(n > 4 && wififrame_rx_push(mac, &wr, rd, 0x4c00, 0x5f60, frm, n - 4, 1) == 1, "rx firmware cursor");
++    /* the whole frame with its FCS is stored (n bytes); with the usual W_RXLEN_CROP 0x0602 the header says n - 4 */
++    expect(n > 4 && wififrame_rx_push(mac, &wr, rd, 0x4c00, 0x5f60, frm, n, 4, 1) == 1, "rx firmware cursor");
+     expect(mac[0x0c00] == 0x11 && mac[0x0c01] == 0x80 && (mac[0x0c08] | (mac[0x0c09] << 8)) == n - 4, "beacon header");
+-    expect(mac[0x0c0c] == 0x80 && wr == 0x0600 + (((12 + (n - 4) + 3) & ~3) / 2), "beacon body, cursor in halfwords");
++    expect(mac[0x0c0c] == 0x80 && wr == 0x0600 + (((12 + n + 3) & ~3) / 2), "beacon body, cursor in halfwords");
++    expect(mac[0x0c0c + n - 1] == frm[n - 1], "fcs stored after the frame");
+     /* 64-byte fifo [0x5fc0, 0x6000). A 20-byte record starts 16 bytes before the end, so 4 bytes wrap to 0x5fc0. */
+     memset(mac, 0, sizeof mac);
+     wr = rd = (0x5ff0 - 0x4000) / 2;
+     uint8_t frame[8];
+     memset(frame, 0xab, sizeof frame);
+-    expect(wififrame_rx_push(mac, &wr, rd, 0x5fc0, 0x6000, frame, 8, 0) == 1, "rx push wrap");
++    expect(wififrame_rx_push(mac, &wr, rd, 0x5fc0, 0x6000, frame, 8, 0, 0) == 1, "rx push wrap");
+     expect(mac[0x5ff0 & 0x3fff] == 0x10 && mac[(0x5ff0 + 8) & 0x3fff] == 8, "rx header");
+     expect(mac[(0x5ff0 + 12) & 0x3fff] == 0xab, "rx body");
+     expect(mac[0x5fc0 & 0x3fff] == 0xab, "wrapped tail");
+     expect(wr == (0x5fc4 - 0x4000) / 2, "cursor wrapped");
+     int pushed = 1;
+-    for (int i = 0; i < 8; i++) pushed += wififrame_rx_push(mac, &wr, rd, 0x5fc0, 0x6000, frame, 8, 0);
++    for (int i = 0; i < 8; i++) pushed += wififrame_rx_push(mac, &wr, rd, 0x5fc0, 0x6000, frame, 8, 0, 0);
+     expect(pushed < 9 && mac[0x5ff0 & 0x3fff] == 0x10, "rx drop when full, first header kept");
+ }
+ 
+@@ -183,6 +185,12 @@ static void test_dhcp_arp_icmp(void) {
+     wfcnet_input(n, gw_mac, ds_mac, 0x0806, arp, 28);
+     expect(c.n == 1 && c.et[0] == 0x0806 && rd16(c.pkt[0] + 6) == 2, "arp reply");
+     expect(!memcmp(c.pkt[0] + 8, gw_mac, 6) && !memcmp(c.pkt[0] + 14, &gw_ip, 4), "arp gw");
++    /* a probe for the DS's own address (a DHCP client checking its lease) must get no answer */
++    c.n = 0;
++    memcpy(arp + 24, &ds_ip, 4);
++    wfcnet_input(n, gw_mac, ds_mac, 0x0806, arp, 28);
++    expect(c.n == 0, "arp probe for the DS's address unanswered");
++    memcpy(arp + 24, &gw_ip, 4);
+ 
+     c.n = 0;
+     uint8_t echo[16]; memset(echo, 0, sizeof echo);
+-- 
+2.56.0
+
+
+From d8291e0d67a1a77942bc6ea7dabb2cd5b90e5a9c Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 5 Oct 2026 18:07:03 +0000
+Subject: [PATCH 4/4] Microphone: tunables and logs for the handheld, a
+ joystick-button fallback for the fake microphone; 0.4.0-beta.2-rocknixds.3
+
+A real blow does nothing on the RG DS (ROCKNIXDS issue 26). The mic thread can now be tuned and watched without a
+rebuild: DSFLIP_MIC_DEBUG prints the level, floor, speaker level, learned leak, the gate's bar and the key's state
+every ~190 ms and on every press and release; DSFLIP_MIC_GATE sets the echo gate's factor (0 turns it off);
+DSFLIP_MIC_COUPLING_MAX caps the leak it learns; DSFLIP_MIC_HOLD_MS keeps the key down for a minimum time.
+
+DSFLIP_MIC_LF asks a press for a low-frequency share (the RMS below ~250 Hz over the RMS) above a value: a blow into
+the mic is wind, mostly below that, game sound mostly above. The uploaded logs of an RG DS Plus show the speaker's
+leak at the mic (0.2-0.35 RMS) as loud as a blow, where no level bar can tell them apart. Off by default; the 10 s
+line reports the share's range over the blocks above floor + threshold so a device run can pick the value.
+
+The thread reads how config/drastic.cfg binds DraStic's fake microphone (resume_control_code) and says so at start:
+the keyboard set (327, Scroll Lock) is what we press; when it is unbound but the joystick set has a button, it presses
+that button instead (dsflip_mic_button, an SDL_JOYBUTTON event with the joystick DraStic opened), DSFLIP_MIC_KEY picks.
+A capture that stays at zero for 5 s is reported as silent (no source behind ALSA's default).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01EHHmyacNZtyRhmxZoUYRa8
+---
+ VERSION      |  2 +-
+ src/audio.c  | 88 +++++++++++++++++++++++++++++++++++++++++++++-------
+ src/dsflip.c | 10 ++++++
+ src/resume.c | 11 +++++++
+ 4 files changed, 98 insertions(+), 13 deletions(-)
+
+diff --git a/VERSION b/VERSION
+index d229e09..08c0d0c 100644
+--- a/VERSION
++++ b/VERSION
+@@ -1 +1 @@
+-0.5.0-beta.1
++0.5.0-beta.1-rocknixds.3
+diff --git a/src/audio.c b/src/audio.c
+index 0dd4fd1..920711f 100644
+--- a/src/audio.c
++++ b/src/audio.c
+@@ -342,20 +342,65 @@ static volatile int mic_state, mic_quiet;            /* 0 none, 1 listening, -1
+ static volatile long long meter_until;               /* monitor-only thread: runs until then (ns, monotonic) */
+ static volatile int monitor_running;
+ static float mic_thr;                                /* ES's threshold (0: off) */
++void dsflip_mic_button(int button, int down);
++int resume_control_code(const char *set, const char *name);   /* resume.c: a drastic.cfg control code, -1 if unset */
++/* Tunables, for finding out on a handheld why a real blow does nothing (ROCKNIXDS issue 26) without a rebuild:
++ *   DSFLIP_MIC_DEBUG=1        one line per 8 blocks (~5 a second) with level, floor, speaker level, coupling, bleed,
++ *                             the gate's bar and the key's state, every press and release, and a silence check
++ *   DSFLIP_MIC_GATE=<k>       the echo gate's factor: the mic must be above k x the expected bleed (3, the measured
++ *                             setting; 0 turns the gate off: libdrastouch's plain floor + threshold)
++ *   DSFLIP_MIC_COUPLING_MAX=<r>  the most speaker-to-mic leak the gate may learn (4; the learned leak includes the
++ *                             room's noise, so a lower cap keeps the bar reachable while music plays)
++ *   DSFLIP_MIC_HOLD_MS=<ms>   once pressed, the key stays down at least this long (0: it follows every 23 ms block)
++ *   DSFLIP_MIC_LF=<r>         a press also needs the block's low-frequency share (the RMS below ~250 Hz over the RMS)
++ *                             above r: a blow into the mic is mostly wind below that, game sound mostly above; for a
++ *                             speaker whose leak is as loud as a blow, where no level bar can separate them (the
++ *                             uploaded logs of an RG DS Plus: leak peaks 0.2-0.35, a blow 0.2-0.4). 0: off. The
++ *                             10 s line reports the share of the blocks above floor + threshold (lf lo-hi) to pick r
++ *   DSFLIP_MIC_KEY=auto|key|button  what presses DraStic's fake microphone: the keyboard control (Scroll Lock, 327),
++ *                             the joystick button drastic.cfg maps to it, or auto: the key when either set maps 327,
++ *                             else the button when controls_b has one, else the key with a warning (ROCKNIX's
++ *                             drastic.cfg for the RG DS maps 327 in both sets since 2026-02-04; older copies 65535) */
++static float envf(const char *name, float dflt) { const char *e = getenv(name); return e && *e ? (float)strtod(e, 0) : dflt; }
+ static void *mic_thread(void *a) {
+     float thresh = *(float *)a;
+     void *cap = 0;
++    int debug = getenv("DSFLIP_MIC_DEBUG") && strcmp(getenv("DSFLIP_MIC_DEBUG"), "0");
++    float gate_k = envf("DSFLIP_MIC_GATE", 3.0f), coup_max = envf("DSFLIP_MIC_COUPLING_MAX", 4.0f);
++    int hold_ms = (int)envf("DSFLIP_MIC_HOLD_MS", 0);
++    float lf_k = envf("DSFLIP_MIC_LF", 0);
++    if (gate_k < 0) gate_k = 0;
++    if (coup_max < 0.1f) coup_max = 0.1f;
++    if (hold_ms < 0) hold_ms = 0;
++    if (lf_k < 0) lf_k = 0;
++    /* how the fake microphone is pressed: DraStic reads keyboard controls as 256 + the key's code (Scroll Lock = 327)
++     * and joystick buttons as 1024 + the button; the setting it has decides which of ours can reach it */
++    const char *how = getenv("DSFLIP_MIC_KEY"); if (!how || !*how) how = "auto";
++    int code_a = resume_control_code("a", "FAKE_MICROPHONE"), code_b = resume_control_code("b", "FAKE_MICROPHONE");
++    int use_button = -1;
++    if (!strcmp(how, "button")) use_button = code_b >= 1024 && code_b < 1024 + 64 ? code_b - 1024 : (code_a >= 1024 && code_a < 1024 + 64 ? code_a - 1024 : -1);
++    else if (strcmp(how, "key") && code_a != 327 && code_b != 327 && code_b >= 1024 && code_b < 1024 + 64) use_button = code_b - 1024;
+     if (alsa_pcm(&cap, 1 /* SND_PCM_STREAM_CAPTURE */, 1, 44100, 100000, "mic") < 0) {
+         dsflip_log("[mic] no capture device\n");
+         mic_state = -1; if (thresh <= 0) monitor_running = 0;
+         return 0;
+     }
+     mic_state = 1;
+-    if (thresh <= 0) dsflip_log("[mic] the menu's meter is listening\n"); else
+-    dsflip_log("[mic] listening, threshold %.3f, echo gate %s\n", thresh, dcb ? "on" : "off (no audio pump)");
++    if (thresh <= 0) dsflip_log("[mic] the menu's meter is listening\n"); else {
++        dsflip_log("[mic] listening, threshold %.3f, echo gate %s (x%.1f, leak cap %.1f), hold %d ms, low-frequency share %s\n", thresh,
++                   dcb && gate_k > 0 ? "on" : dcb ? "off (DSFLIP_MIC_GATE=0)" : "off (no audio pump)", gate_k, coup_max, hold_ms,
++                   lf_k > 0 ? "required" : "logged only (DSFLIP_MIC_LF=0)");
++        if (use_button >= 0) dsflip_log("[mic] fake microphone: drastic.cfg controls_a %d, controls_b %d: pressing joystick button %d\n", code_a, code_b, use_button);
++        else if (code_a == 327 || code_b == 327) dsflip_log("[mic] fake microphone: drastic.cfg controls_a %d, controls_b %d (327 = Scroll Lock, either set counts): pressing the key\n", code_a, code_b);
++        else dsflip_log("[mic] fake microphone: drastic.cfg controls_a %d, controls_b %d: pressing Scroll Lock (327), which %s\n",
++                        code_a, code_b, code_a < 0 ? "no config maps (config/drastic.cfg unreadable?)" : "this config does NOT map: bind it, or let session.sh repair it");
++    }
+     float coup = 0; int coup_n = 0;     /* how much speaker output leaks into the mic (mic rms / output rms) */
+     int16_t buf[1024];
+-    float floor_ = 0, peak = 0; int n = 0, down = 0, blocks = 0, presses = 0;
++    float floor_ = 0, peak = 0, allpeak = 0; int n = 0, down = 0, blocks = 0, presses = 0, total = 0, silent_said = 0;
++    long long down_since = 0;
++    float lp = 0, lf_lo = 9, lf_hi = 0;  /* a first-order low-pass at ~250 Hz (1 - exp(-2 pi 250 / 44100)); the share's range */
++    const float lpa = 0.035f;
+     int errs = 0;
+     for (;;) {
+         long r = a_readi(cap, buf, 1024);
+@@ -366,9 +411,10 @@ static void *mic_thread(void *a) {
+         }
+         if (r <= 0) continue;
+         errs = 0;
+-        double acc = 0;
+-        for (long i = 0; i < r; i++) { float v = buf[i] * (1.0f / 32768); acc += v * v; }
++        double acc = 0, acclo = 0;
++        for (long i = 0; i < r; i++) { float v = buf[i] * (1.0f / 32768); acc += v * v; lp += lpa * (v - lp); acclo += lp * lp; }
+         float level = (float)sqrt(acc / r);
++        float lf = level > 1e-6f ? (float)sqrt(acclo / r) / level : 0;   /* the low-frequency share of this block */
+         mic_lvl = level;
+         if (thresh <= 0) {                /* the menu's meter only */
+             if (n < 60) { floor_ = (floor_ * n + level) / (n + 1); n++; } else floor_ = floor_ * 0.999f + level * 0.001f;
+@@ -376,6 +422,12 @@ static void *mic_thread(void *a) {
+             if (mono_ns() > meter_until) break;
+             continue;
+         }
++        if (level > allpeak) allpeak = level;
++        total++;
++        if (total == 215 && !silent_said && allpeak < 0.0005f) {   /* ~5 s of nothing at all: no source behind "default"? */
++            silent_said = 1;
++            dsflip_log("[mic] capture is silent (peak %.5f in 5 s): is a microphone source behind ALSA's default? (wpctl status)\n", allpeak);
++        }
+         if (n < 60) { floor_ = (floor_ * n + level) / (n + 1); n++; mic_flr = floor_; continue; }
+         floor_ = floor_ * 0.999f + level * 0.001f; mic_flr = floor_;
+         /* echo gate: the mic hears the game's own sound from the speaker (measured: bleed peaks 0.13-0.23, far
+@@ -383,17 +435,29 @@ static void *mic_thread(void *a) {
+          * is played: learn the leak (mic/output ratio while not triggered) and require the mic to be clearly above
+          * the expected bleed. out: the loudest output chunk of the last ~186 ms (covers the output latency). */
+         float out = 0; for (int i = 0; i < 32; i++) if (out_hist[i] > out) out = out_hist[i];
+-        float bleed = coup * out;
+-        int loud = level > floor_ + thresh && (!dcb || level > 3 * bleed + thresh) && !mic_quiet;
++        float bleed = coup * out, bar = floor_ + thresh;
++        if (dcb && gate_k > 0 && gate_k * bleed + thresh > bar) bar = gate_k * bleed + thresh;
++        int loud = level > bar && (lf_k <= 0 || lf > lf_k) && !mic_quiet;
++        if (level > floor_ + thresh) { if (lf < lf_lo) lf_lo = lf; if (lf > lf_hi) lf_hi = lf; }
+         if (!loud && out > 0.01f) {      /* learn the coupling only from blocks that aren't a real blow */
+-            float r = level / out; if (r > 4) r = 4;
+-            coup = coup_n < 50 ? (coup * coup_n + r) / (coup_n + 1) : coup * 0.99f + r * 0.01f; coup_n++;
++            float rr = level / out; if (rr > coup_max) rr = coup_max;
++            coup = coup_n < 50 ? (coup * coup_n + rr) / (coup_n + 1) : coup * 0.99f + rr * 0.01f; coup_n++;
++        }
++        long long tnow = mono_ns();
++        if (down && !loud && hold_ms > 0 && tnow - down_since < (long long)hold_ms * 1000000) loud = 1;   /* held on */
++        if (loud != down) {
++            down = loud; presses += down;
++            if (down) down_since = tnow;
++            if (use_button >= 0) dsflip_mic_button(use_button, down); else dsflip_mic_key(down);
++            if (debug) dsflip_log("[mic] %s: level %.4f floor %.4f out %.4f coup %.2f bar %.4f lf %.2f\n", down ? "PRESS" : "release", level, floor_, out, coup, bar, lf);
+         }
+-        if (loud != down) { down = loud; dsflip_mic_key(down); presses += down; }
++        if (debug && (total & 7) == 0)
++            dsflip_log("[mic] level %.4f floor %.4f out %.4f coup %.2f bleed %.4f bar %.4f lf %.2f down %d\n", level, floor_, out, coup, bleed, bar, lf, down);
+         if (level > peak) peak = level;
+         if (++blocks >= 431) {           /* ~10 s: levels for bug reports and tuning */
+-            dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses\n", floor_, peak, coup, presses);
+-            blocks = presses = 0; peak = 0;
++            if (lf_hi > 0) dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses, lf %.2f-%.2f above floor\n", floor_, peak, coup, presses, lf_lo, lf_hi);
++            else dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses\n", floor_, peak, coup, presses);
++            blocks = presses = 0; peak = 0; lf_lo = 9; lf_hi = 0;
+         }
+     }
+     if (a_close) a_close(cap);            /* the meter's own thread, no longer looked at */
+diff --git a/src/dsflip.c b/src/dsflip.c
+index b76f401..c547b1e 100644
+--- a/src/dsflip.c
++++ b/src/dsflip.c
+@@ -905,6 +905,16 @@ static void dsflip_key(int scancode, int down) {
+     push_ev(&e);
+ }
+ void dsflip_mic_key(int down) { dsflip_key(71, down); }
++/* the same through a joystick button (SDL_JOYBUTTONDOWN/UP, as resume.c presses DraStic's save/load controls): for a
++ * drastic.cfg whose keyboard set has no fake microphone but whose joystick set does (DSFLIP_MIC_KEY, audio.c) */
++int resume_joy_id(void);
++void dsflip_mic_button(int button, int down) {
++    sdl_ev e; memset(&e, 0, sizeof e);
++    uint32_t type = down ? 0x603 : 0x604, ts = SDL_GetTicks(); int32_t which = resume_joy_id();
++    memcpy(e.pad, &type, 4); memcpy(e.pad + 4, &ts, 4); memcpy(e.pad + 8, &which, 4);
++    e.pad[12] = (uint8_t)button; e.pad[13] = down ? 1 : 0;
++    push_ev(&e);
++}
+ /* DraStic ignores the absolute x/y of mouse events: it moves its stylus by the RELATIVE deltas (xrel/yrel),
+  * 1:1 in DS pixels, clamped to the bottom screen, starting from the centre (measured by logging where it
+  * draws its 32x32 cursor). So we track its stylus position and send exact deltas. On every touch-down we
+diff --git a/src/resume.c b/src/resume.c
+index 9892be8..f397894 100644
+--- a/src/resume.c
++++ b/src/resume.c
+@@ -145,6 +145,17 @@ static int control_button_in(const char *set, const char *name) {
+     return b;
+ }
+ static int control_button(const char *name) { return control_button_in("a", name); }
++/* the raw code of controls_<set>[CONTROL_INDEX_<name>] (keyboard: 256 + key, joystick: 1024 + button, 65535 unbound),
++ * -1 when the config has no such line (audio.c: how the fake microphone is bound) */
++int resume_control_code(const char *set, const char *name) {
++    FILE *f = fopen("config/drastic.cfg", "r"); if (!f) return -1;
++    char key[96], line[256]; int v = -1;
++    snprintf(key, sizeof key, "controls_%s[CONTROL_INDEX_%s] = ", set, name);
++    while (fgets(line, sizeof line, f)) if (!strncmp(line, key, strlen(key))) { v = atoi(line + strlen(key)); break; }
++    fclose(f);
++    return v;
++}
++int resume_joy_id(void) { return joy_id >= 0 ? joy_id : 0; }   /* the joystick SDL opened first (dsflip.c's mic button) */
+ /* either set (ROCKNIX maps START and SELECT in controls_b) */
+ static int control_button_any(const char *name) { int b = control_button_in("a", name); return b >= 0 ? b : control_button_in("b", name); }
+ 
+-- 
+2.56.0
+
