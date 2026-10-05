@@ -48,29 +48,50 @@ system on exit, so even after adding a game the menu did not open on the DS. Fou
 the Pixel engine on the host with empty data (no crash, no bad layout: the engine itself survives 0 games and 0
 systems, under the address sanitizer).
 
-**Done on the host.** `dii-ess-aye/es-rgds-emptylibrary.patch` (in `tools/build-es.sh`'s list, `emulationstation-rgds`
-rebuilt): the systems in `RGDS_KEEP_SYSTEMS` (default `nds`) are loaded, themed and visible with zero games (five
-gates in `SystemData.cpp`); the engine shows the placeholder as **No games yet / Copy games to roms/nds** and
-refuses to start it (`RndsEs.cpp`, `RndsUI.cpp`). `install.sh` sends `LastSystem` back to `nds` when it holds one of
-the fallback systems. README and release notes updated.
+**Done on the host.** `dii-ess-aye/es-rgds-emptylibrary.patch` (in `tools/build-es.sh`'s list): the systems in
+`RGDS_KEEP_SYSTEMS` (default `nds`) are loaded, themed and visible with zero games (five gates in `SystemData.cpp`).
+The Pixel engine (its files live in `es-rgds-rnds.patch`; after editing them in the patched tree,
+`tools/regen-rnds-patch.sh <es src> dii-ess-aye/es-rgds-rnds.patch` rewrites their sections) counts ES's placeholder
+as no game and draws an empty state: the bubble **No games yet / Copy .nds files to roms/nds** over an empty reel (no
+cartridge, no plate, no START), the rail `00 / 00`, the faces *B Back* and a muted *No games*; the top screen the DS
+icon in the cover frame with the same two lines. Collections say **Nothing here yet** with their own hint (Favorites:
+*Y on a game adds it here*; Last played: *Games you play show up here*). The engine never asks the host for a game
+past the count, never opens a library with no systems and never favourites nothing (`RndsUI.cpp`, `RndsEs.cpp`).
+The host harness (`dii-ess-aye/rnds/test`, built with `-DMOCKDATA='"empty.inc"'`) renders that state under the
+address sanitizer, and with games present 24 frames (home, library, ready screen, back; dark and light) are
+byte-identical to the previous engine. `emulationstation-rgds` rebuilt; `install.sh` sends `LastSystem` back to
+`nds` when it holds one of the fallback systems. README and release notes updated.
 
 **On the device** (a handheld with DS games; simulate the fresh card):
 
 1. `mv /storage/roms/nds /storage/roms/nds.bak && mkdir /storage/roms/nds && systemctl restart essway.service`
    (ES reads `roms/nds` at start; the directory must exist, as ROCKNIX creates it at boot).
-2. The shelf shows **Nintendo DS** (0 games) and the menu opens on it. Open it: the bottom screen shows one
-   cartridge card named "No games yet", the top screen the title with "Copy games to roms/nds". **A** does nothing,
-   **a tap on the cartridge and on START does nothing** (before the fix: "Starting..." for ever), **B** goes back.
-   `grep -c 'System "nds" has no games' /var/log/es_log.txt` is `0`.
+2. The shelf shows **Nintendo DS** (Games 0) and the menu opens on it. Open it: the bottom screen shows the bubble
+   "No games yet / Copy .nds files to roms/nds" over an empty reel (no cartridge, no START), the rail `00 / 00`,
+   *B Back* and a muted *No games*; the top screen the DS icon in the frame with the same two lines. **A, X, Y, up,
+   down, L, R**, a tap on the reel, on START's old spot and on the *No games* face do nothing harmful (X opens ES's
+   own game options on the placeholder, as it always did: close it; before the fix a tap on START hung the ready
+   screen on "Starting..."); **B** goes back; X on the shelf (resume) does nothing. Right to Favorites, A: "Nothing
+   here yet / Y on a game adds it here"; Last played: "Games you play show up here".
+   `grep -c 'System "nds" has no games' /var/log/es_log.txt` is `0` (ES's log may instead be
+   `/storage/.config/emulationstation/es_log.txt`). Grab both panels for the record: `export
+   XDG_RUNTIME_DIR=/var/run/0-runtime-dir SWAYSOCK=$(ls /var/run/0-runtime-dir/sway-ipc.*.sock | head -n1); grim -o
+   DSI-2 /storage/roms/screenshots/empty-top.png; grim -o DSI-1 /storage/roms/screenshots/empty-bottom.png`.
 3. Still with the empty folder: Music Player / Tools / the collections look as before; nothing else gained a shelf
    entry (`LoadEmptySystems` stays off).
-4. `rm -rf /storage/roms/nds && mv /storage/roms/nds.bak /storage/roms/nds && systemctl restart essway.service`: the
-   games are back, play stats intact (they live in gamelist.xml inside the folder, which moved with it).
-5. The real thing, if a spare card is at hand: flash the image, boot with no games: step 2's menu on the first boot,
+4. Add a game live: copy one `.nds` into the empty `/storage/roms/nds`, then `curl -s
+   http://127.0.0.1:1234/reloadgames` (or restart essway): the library shows its cartridge, the shelf "Games 1", it
+   launches, and the menu is back on the DS after the quit.
+5. `rm -rf /storage/roms/nds && mv /storage/roms/nds.bak /storage/roms/nds && systemctl restart essway.service`: the
+   games are back, play stats intact (they live in gamelist.xml inside the folder, which moved with it); the shelf,
+   the library, the ready screen and a subfolder look exactly as before.
+6. The real thing, if a spare card is at hand: flash the image, boot with no games: step 2's menu on the first boot,
    then copy one game over the network and restart: it opens on the DS with the game.
+7. A card that ran 1.5.10-1.5.12 without games holds `LastSystem` = music/tools/favorites/recent in
+   `/storage/.config/emulationstation/es_settings.cfg`; after the update it says `nds` and the menu opens on the DS.
 
-**Acceptance:** steps 2 and 4; with games present nothing looks different; `grep -c "nds" /var/log/es_log.txt` shows
-the system loaded ("Loading system nds" or its gamelist line) on the empty run.
+**Acceptance:** steps 2, 4 and 5; with games present nothing looks different; `grep -c "nds" /var/log/es_log.txt`
+shows the system loaded ("Loading system nds" or its gamelist line) on the empty run.
 
 ## 3. The real microphone
 
@@ -98,6 +119,19 @@ for Scroll Lock, which DraStic reads as control code 327 → `controls_a[CONTROL
 - **H5, the key flickers.** The key follows every 23 ms block; a blow hovering around the bar presses and releases
   several times inside one DraStic frame, which a game's blow detector never sees as held.
 
+**What the uploaded logs say** (branch `device-logs`, `docs/data/device/<device>/`; the handheld uploads one record a
+second with `dsflip.log`'s new lines). Two handhelds have `[mic]` lines. `48acc59e82bc43ed`, Phantom Hourglass on
+2026-10-03 (the issue's day and game): `noise floor 0.037-0.060, peak 0.21-0.29, speaker leak x0.30-0.65`, 1 press
+in the first 10 s and 0 in the next 70. `36ae0e2f8fd74c2a` (Mario & Luigi, Mario Kart, HeartGold; nobody blowing):
+`floor 0.003-0.09, peak 0.22-0.35, leak x0.39-0.58, 0 presses`: the game's own sound reaches that mic at 0.22-0.35
+RMS, as loud as a blow (0.2-0.4). So on these two the capture works and the units are right (H3 and H4 out), the gate
+held the bar at 3 × leak × output, around 0.5-0.7, which no blow reaches (H2 is the mechanism), and lowering the
+factor alone cannot be the whole fix where the leak is as loud as a blow: at ×1 the music would press the key.
+That is what the low-frequency share below is for. Also in the logs: one session with `floor 0.0000, peak 0.0000`
+for its whole 2.5 minutes, and two where the peak sat at `0.0000` for 100 s mid-game and came back: the capture
+delivers silence at times (a suspended PipeWire source? the pause menu?), which the `capture is silent` line now
+names at start and which step 2 can catch mid-game.
+
 **Done on the host** (SuperDrastic `0.4.0-beta.2-rocknixds.3`, commit *Microphone: tunables and logs for the
 handheld* in `dsflip/superdrastic-0.4.0-beta.2-rocknixds.3.patch`; nothing needs a rebuild to test):
 
@@ -121,7 +155,13 @@ handheld* in `dsflip/superdrastic-0.4.0-beta.2-rocknixds.3.patch`; nothing needs
     volume while music plays).
   - `DSFLIP_MIC_HOLD_MS=ms`: the key stays down at least this long after a press (0 shipped).
   - `DSFLIP_MIC_KEY=auto|key|button`: what presses the control (auto as described above).
-  - The `[mic] listening, threshold T, echo gate on (x3.0, leak cap 4.0), hold 0 ms` line echoes what was read.
+  - `DSFLIP_MIC_LF=r`: a press also needs the block's low-frequency share above r: the RMS below ~250 Hz over the
+    whole RMS. A blow into the mic is wind, mostly below that; game sound is mostly above (synthetic check on the
+    host: filtered wind 0.7-0.8, tones 0.5-0.6, white noise 0.14; the real numbers come from the device). 0 shipped
+    (logged only): every `[mic] 10 s:` line ends with `lf lo-hi above floor`, the share's range over the blocks
+    above floor + threshold, and the debug lines carry `lf`.
+  - The `[mic] listening, threshold T, echo gate on (x3.0, leak cap 4.0), hold 0 ms, low-frequency share logged only
+    (DSFLIP_MIC_LF=0)` line echoes what was read.
 
 **On the device** (an RG DS Plus, the reporter's model; an RG DS too if one is at hand). Phantom Hourglass's first
 candle (Mercay Island, the two candles in Oshus's house, blow to put them out) or Nintendogs are the games; the
@@ -150,12 +190,17 @@ thread, so it separates DraStic's side from ours when both lines are on the desk
    (a blow: > 0.05; < 0.002: silent). Silent: `amixer -c <rk817 index> contents | grep -A4 -i capture`, raise *Mic
    Capture Gain* / *Master Capture Volume* with `amixer cset`, and then the fix is a `wpctl set-volume` / amixer line
    in `session.sh`'s audio block (next to the 48 kHz PipeWire setting) plus ROCKNIX's UCM, to report upstream.
-3. **H2, the gate.** Repeat step 1 with `DSFLIP_MIC_GATE=0`: if the candle now goes out, the gate was the cause;
-   then find the setting that keeps it out and gives 0 false presses in 2 minutes of the game's music at the
-   handheld's full volume: try `DSFLIP_MIC_GATE=1.5`, then `DSFLIP_MIC_COUPLING_MAX=1` with the gate at 3. Note
-   the debug lines' `coup` and `bleed` during music for the record. The fix is the found values as the defaults in
-   `src/audio.c` (`envf("DSFLIP_MIC_GATE", ...)`, `envf("DSFLIP_MIC_COUPLING_MAX", ...)`), or, if only the gate off
-   works, the gate learning its leak from `level - floor_` instead of `level`.
+3. **H2, the gate.** Repeat step 1 with `DSFLIP_MIC_GATE=0`: if the candle now goes out, the gate was the cause
+   (expected from the logs); then find the setting that keeps it out and gives 0 false presses in 2 minutes of the
+   game's music at the handheld's full volume: try `DSFLIP_MIC_GATE=1.5`, then `DSFLIP_MIC_COUPLING_MAX=1` with the
+   gate at 3. Note the debug lines' `coup` and `bleed` during music for the record. The fix is the found values as
+   the defaults in `src/audio.c` (`envf("DSFLIP_MIC_GATE", ...)`, `envf("DSFLIP_MIC_COUPLING_MAX", ...)`).
+   **The leak as loud as a blow.** When every factor either misses blows or presses on music (the logged leak says
+   it will), read `lf` from the `10 s:` lines of two runs, one blowing with the game paused or its volume down and
+   one music only: a blow should sit at 0.7-0.95, music lower. Pick r between the two and run `DSFLIP_MIC_GATE=1
+   DSFLIP_MIC_LF=<r>` (or `DSFLIP_MIC_GATE=0 DSFLIP_MIC_LF=<r>`) through the candle and the 2 minutes of music; the
+   fix is those two as the defaults. If the two ranges overlap, the share needs another corner frequency (`lpa` in
+   `src/audio.c`, 0.035 = 250 Hz, 0.014 = 100 Hz) or real echo cancellation, and that is the finding to report.
 4. **H5, flicker.** `DSFLIP_MIC_HOLD_MS=150` (then 300): the `PRESS` count per blow drops to 1-2 and the candle goes
    out. The fix is that value as `envf("DSFLIP_MIC_HOLD_MS", ...)`'s default.
 5. **Rebuild** once the defaults are known: in a SuperDrastic checkout on branch `rocknixds-wfc` (or
@@ -164,7 +209,8 @@ thread, so it separates DraStic's side from ours when both lines are on the desk
    names the toolchain), ship the tarball in `dsflip/`, regenerate the patch (`git format-patch --stdout
    v0.4.0-beta.2..rocknixds-wfc`), pin version and sha256 in `SUPERDRASTIC`, and test the package with
    `RGDS_SUPERDRASTIC=<tarball> sh install.sh`. Then `systemctl unset-environment DSFLIP_MIC_DEBUG DSFLIP_MIC_GATE
-   DSFLIP_MIC_COUPLING_MAX DSFLIP_MIC_HOLD_MS DSFLIP_MIC_KEY` and run the acceptance with no switches set.
+   DSFLIP_MIC_COUPLING_MAX DSFLIP_MIC_HOLD_MS DSFLIP_MIC_KEY DSFLIP_MIC_LF` and run the acceptance with no switches
+   set.
 6. **Medium and low.** Repeat the candle at *medium*; note whether *low* can work at all with music (if not, say so
    in the README's microphone paragraph: *high* or *medium*).
 

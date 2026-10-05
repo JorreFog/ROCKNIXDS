@@ -197,7 +197,8 @@ the menu's updater pick the right one for the handheld they run on.
 - **A fresh card opens on the DS** (1.5.13). ES drops a system with no games, so until the first DS game was copied
   the menu landed on Music Player, Tools and two empty collections, their "no entries" placeholder dressed as a
   cartridge that hung the ready screen when tapped. The patched ES keeps the DS listed and themed with no games
-  (`es-rgds-emptylibrary.patch`), and its library says "No games yet: copy games to roms/nds".
+  (`es-rgds-emptylibrary.patch`), and its library draws an empty state instead of a card: "No games yet / Copy .nds
+  files to roms/nds" (a collection: "Nothing here yet").
 - **The recommended settings are the defaults** (1.5.13). *3D renderer* on *Auto* is Gengis Engine (a player who
   picked *DraStic* keeps it), and the installer switches threaded 3D on where it was never set, as the Plus line did
   since 1.5. The README's "set the best settings" step is gone: a fresh install plays with them.
@@ -208,8 +209,9 @@ the menu's updater pick the right one for the handheld they run on.
 - **The microphone, ready for its test on the handheld** (1.5.13, SuperDrastic 0.4.0-beta.2-rocknixds.3). A real
   blow did nothing on an RG DS Plus (issue 26) while a bound button did. The engine now logs how DraStic's fake
   microphone is bound and presses the bound joystick button when the key is unbound, the launcher repairs an unbound
-  key, a silent capture is reported, and the echo gate, a minimum hold and the debug trace are switches that need no
-  rebuild (`DSFLIP_MIC_*`; `docs/handoff-local.md`). The cause is to be read off the handheld's log.
+  key, a silent capture is reported, and the echo gate, a minimum hold, a low-frequency test for a speaker as loud as
+  a blow at the mic, and the debug trace are switches that need no rebuild (`DSFLIP_MIC_*`; `docs/handoff-local.md`).
+  The uploaded handheld logs already say the capture works and the gate held the bar above any blow.
 - **The menu stays up during DS games** (1.5.13). Fast switching, opt-in since 1.4, is on for everyone: the game runs on
   another console (VT) while ES and sway wait, so after a quit the menu is back about a second later, however many
   games the library holds. Before, ES was stopped and started again for every game, and its start grew with every
@@ -461,8 +463,9 @@ start) under the Nintendo DS system's or the game's options, or the mic stays of
 hears the speaker, so an echo gate fed by the audio pump's output level keeps game music from pressing it (0 false
 presses in testing, with music playing). If a blow does nothing (reported once, on an RG DS Plus), `dsflip.log`'s
 `[mic]` lines say what the engine captured, how DraStic's fake microphone is bound and what pressed it; `DSFLIP_MIC_DEBUG=1`,
-`DSFLIP_MIC_GATE=0` (gate off) and the other `DSFLIP_MIC_*` switches (`systemctl set-environment`) narrow it down
-without a rebuild. The launcher binds the control (Scroll Lock) where an old `drastic.cfg` left it unbound.
+`DSFLIP_MIC_GATE=0` (gate off), `DSFLIP_MIC_LF` (a blow's low-frequency share, for a speaker as loud as a blow at the
+mic) and the other `DSFLIP_MIC_*` switches (`systemctl set-environment`) narrow it down without a rebuild. The
+launcher binds the control (Scroll Lock) where an old `drastic.cfg` left it unbound.
 
 **Wi-Fi online play (1.5.13, experimental, not yet tried on a handheld).** DraStic itself has no Wi-Fi: its wifi
 registers are stubs. With ES's DraStic *wfc dns* option set (under the Nintendo DS system's or a game's options; off
@@ -765,7 +768,8 @@ dark-background and a light-background version, a stacked version for small squa
   (and a tap on it hung the ready screen). The patched ES keeps the DS listed and shows "No games yet".
 - **A real blow did nothing on an RG DS Plus** (issue 26; a button bound to DraStic's *Fake Microphone* works).
   1.5.13 ships the engine's microphone with logs and switches to find the cause on the handheld (`docs/handoff-local.md`,
-  section 3); the shipped defaults are unchanged until a device run settles them.
+  section 3); the shipped defaults are unchanged until a device run settles them. The uploaded logs point at the
+  echo gate: the speaker reaches the mic as loud as a blow.
 - **RetroAchievements:** softcore only.
 - **Heavy stretches at 2× can still drop frames** (up to ~10/s in one run). There, DraStic's own frame
   times vary so much that its frames arrive spread over the whole refresh cycle, and no latch position can

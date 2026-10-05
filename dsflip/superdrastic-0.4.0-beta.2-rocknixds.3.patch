@@ -2426,7 +2426,7 @@ index 535fe1c..a90f87d 100644
 2.43.0
 
 
-From c4ef045443f0957d0a782e72d3c465829f9ebfd0 Mon Sep 17 00:00:00 2001
+From 21bcccb56cf27eefef450af5d689ee64d43975c1 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 18:07:03 +0000
 Subject: [PATCH 4/4] Microphone: tunables and logs for the handheld, a
@@ -2437,6 +2437,11 @@ rebuild: DSFLIP_MIC_DEBUG prints the level, floor, speaker level, learned leak, 
 every ~190 ms and on every press and release; DSFLIP_MIC_GATE sets the echo gate's factor (0 turns it off);
 DSFLIP_MIC_COUPLING_MAX caps the leak it learns; DSFLIP_MIC_HOLD_MS keeps the key down for a minimum time.
 
+DSFLIP_MIC_LF asks a press for a low-frequency share (the RMS below ~250 Hz over the RMS) above a value: a blow into
+the mic is wind, mostly below that, game sound mostly above. The uploaded logs of an RG DS Plus show the speaker's
+leak at the mic (0.2-0.35 RMS) as loud as a blow, where no level bar can tell them apart. Off by default; the 10 s
+line reports the share's range over the blocks above floor + threshold so a device run can pick the value.
+
 The thread reads how config/drastic.cfg binds DraStic's fake microphone (resume_control_code) and says so at start:
 the keyboard set (327, Scroll Lock) is what we press; when it is unbound but the joystick set has a button, it presses
 that button instead (dsflip_mic_button, an SDL_JOYBUTTON event with the joystick DraStic opened), DSFLIP_MIC_KEY picks.
@@ -2446,10 +2451,10 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01EHHmyacNZtyRhmxZoUYRa8
 ---
  VERSION      |  2 +-
- src/audio.c  | 62 ++++++++++++++++++++++++++++++++++++++++++++++------
- src/dsflip.c | 10 +++++++++
- src/resume.c | 11 ++++++++++
- 4 files changed, 77 insertions(+), 8 deletions(-)
+ src/audio.c  | 82 +++++++++++++++++++++++++++++++++++++++++++++-------
+ src/dsflip.c | 10 +++++++
+ src/resume.c | 11 +++++++
+ 4 files changed, 93 insertions(+), 12 deletions(-)
 
 diff --git a/VERSION b/VERSION
 index b67ae5d..96a43ed 100644
@@ -2459,10 +2464,10 @@ index b67ae5d..96a43ed 100644
 -0.4.0-beta.2-rocknixds.2
 +0.4.0-beta.2-rocknixds.3
 diff --git a/src/audio.c b/src/audio.c
-index e1c246c..86e5b45 100644
+index e1c246c..e9dbd6f 100644
 --- a/src/audio.c
 +++ b/src/audio.c
-@@ -289,17 +289,49 @@ void audio_pump_log(void) {
+@@ -289,17 +289,58 @@ void audio_pump_log(void) {
   * The threshold is ES's "microphone sensitivity" (DSHOOK_MIC_THRESH: high 0.03, medium 0.15, low 0.3; off 0).
   * Capture goes straight through ALSA (PipeWire's mic source). */
  void dsflip_mic_key(int down);
@@ -2476,6 +2481,11 @@ index e1c246c..86e5b45 100644
 + *   DSFLIP_MIC_COUPLING_MAX=<r>  the most speaker-to-mic leak the gate may learn (4; the learned leak includes the
 + *                             room's noise, so a lower cap keeps the bar reachable while music plays)
 + *   DSFLIP_MIC_HOLD_MS=<ms>   once pressed, the key stays down at least this long (0: it follows every 23 ms block)
++ *   DSFLIP_MIC_LF=<r>         a press also needs the block's low-frequency share (the RMS below ~250 Hz over the RMS)
++ *                             above r: a blow into the mic is mostly wind below that, game sound mostly above; for a
++ *                             speaker whose leak is as loud as a blow, where no level bar can separate them (the
++ *                             uploaded logs of an RG DS Plus: leak peaks 0.2-0.35, a blow 0.2-0.4). 0: off. The
++ *                             10 s line reports the share of the blocks above floor + threshold (lf lo-hi) to pick r
 + *   DSFLIP_MIC_KEY=auto|key|button  what presses DraStic's fake microphone: the keyboard control (Scroll Lock, 327),
 + *                             the joystick button drastic.cfg maps to it, or auto: the key when controls_a maps 327,
 + *                             else the button when controls_b has one, else the key with a warning (ROCKNIX's
@@ -2487,7 +2497,8 @@ index e1c246c..86e5b45 100644
 +    int debug = getenv("DSFLIP_MIC_DEBUG") && strcmp(getenv("DSFLIP_MIC_DEBUG"), "0");
 +    float gate_k = envf("DSFLIP_MIC_GATE", 3.0f), coup_max = envf("DSFLIP_MIC_COUPLING_MAX", 4.0f);
 +    int hold_ms = (int)envf("DSFLIP_MIC_HOLD_MS", 0);
-+    if (gate_k < 0) gate_k = 0; if (coup_max < 0.1f) coup_max = 0.1f; if (hold_ms < 0) hold_ms = 0;
++    float lf_k = envf("DSFLIP_MIC_LF", 0);
++    if (gate_k < 0) gate_k = 0; if (coup_max < 0.1f) coup_max = 0.1f; if (hold_ms < 0) hold_ms = 0; if (lf_k < 0) lf_k = 0;
 +    /* how the fake microphone is pressed: DraStic reads keyboard controls as 256 + the key's code (Scroll Lock = 327)
 +     * and joystick buttons as 1024 + the button; the setting it has decides which of ours can reach it */
 +    const char *how = getenv("DSFLIP_MIC_KEY"); if (!how || !*how) how = "auto";
@@ -2500,8 +2511,9 @@ index e1c246c..86e5b45 100644
          return 0;
      }
 -    dsflip_log("[mic] listening, threshold %.3f, echo gate %s\n", thresh, dcb ? "on" : "off (no audio pump)");
-+    dsflip_log("[mic] listening, threshold %.3f, echo gate %s (x%.1f, leak cap %.1f), hold %d ms\n", thresh,
-+               dcb && gate_k > 0 ? "on" : dcb ? "off (DSFLIP_MIC_GATE=0)" : "off (no audio pump)", gate_k, coup_max, hold_ms);
++    dsflip_log("[mic] listening, threshold %.3f, echo gate %s (x%.1f, leak cap %.1f), hold %d ms, low-frequency share %s\n", thresh,
++               dcb && gate_k > 0 ? "on" : dcb ? "off (DSFLIP_MIC_GATE=0)" : "off (no audio pump)", gate_k, coup_max, hold_ms,
++               lf_k > 0 ? "required" : "logged only (DSFLIP_MIC_LF=0)");
 +    if (use_button >= 0) dsflip_log("[mic] fake microphone: drastic.cfg controls_a %d, controls_b %d: pressing joystick button %d\n", code_a, code_b, use_button);
 +    else if (code_a == 327) dsflip_log("[mic] fake microphone: drastic.cfg controls_a 327 (Scroll Lock), controls_b %d: pressing the key\n", code_b);
 +    else dsflip_log("[mic] fake microphone: drastic.cfg controls_a %d, controls_b %d: pressing Scroll Lock (327), which %s\n",
@@ -2511,13 +2523,21 @@ index e1c246c..86e5b45 100644
 -    float floor_ = 0, peak = 0; int n = 0, down = 0, blocks = 0, presses = 0;
 +    float floor_ = 0, peak = 0, allpeak = 0; int n = 0, down = 0, blocks = 0, presses = 0, total = 0, silent_said = 0;
 +    long long down_since = 0;
++    float lp = 0, lf_lo = 9, lf_hi = 0;  /* a first-order low-pass at ~250 Hz (1 - exp(-2 pi 250 / 44100)); the share's range */
++    const float lpa = 0.035f;
      int errs = 0;
      for (;;) {
          long r = a_readi(cap, buf, 1024);
-@@ -313,6 +345,12 @@ static void *mic_thread(void *a) {
-         double acc = 0;
-         for (long i = 0; i < r; i++) { float v = buf[i] * (1.0f / 32768); acc += v * v; }
+@@ -310,9 +351,16 @@ static void *mic_thread(void *a) {
+         }
+         if (r <= 0) continue;
+         errs = 0;
+-        double acc = 0;
+-        for (long i = 0; i < r; i++) { float v = buf[i] * (1.0f / 32768); acc += v * v; }
++        double acc = 0, acclo = 0;
++        for (long i = 0; i < r; i++) { float v = buf[i] * (1.0f / 32768); acc += v * v; lp += lpa * (v - lp); acclo += lp * lp; }
          float level = (float)sqrt(acc / r);
++        float lf = level > 1e-6f ? (float)sqrt(acclo / r) / level : 0;   /* the low-frequency share of this block */
 +        if (level > allpeak) allpeak = level;
 +        total++;
 +        if (total == 215 && !silent_said && allpeak < 0.0005f) {   /* ~5 s of nothing at all: no source behind "default"? */
@@ -2527,7 +2547,7 @@ index e1c246c..86e5b45 100644
          if (n < 60) { floor_ = (floor_ * n + level) / (n + 1); n++; continue; }
          floor_ = floor_ * 0.999f + level * 0.001f;
          /* echo gate: the mic hears the game's own sound from the speaker (measured: bleed peaks 0.13-0.23, far
-@@ -320,13 +358,23 @@ static void *mic_thread(void *a) {
+@@ -320,17 +368,29 @@ static void *mic_thread(void *a) {
           * is played: learn the leak (mic/output ratio while not triggered) and require the mic to be clearly above
           * the expected bleed. out: the loudest output chunk of the last ~186 ms (covers the output latency). */
          float out = 0; for (int i = 0; i < 32; i++) if (out_hist[i] > out) out = out_hist[i];
@@ -2535,7 +2555,8 @@ index e1c246c..86e5b45 100644
 -        int loud = level > floor_ + thresh && (!dcb || level > 3 * bleed + thresh);
 +        float bleed = coup * out, bar = floor_ + thresh;
 +        if (dcb && gate_k > 0 && gate_k * bleed + thresh > bar) bar = gate_k * bleed + thresh;
-+        int loud = level > bar;
++        int loud = level > bar && (lf_k <= 0 || lf > lf_k);
++        if (level > floor_ + thresh) { if (lf < lf_lo) lf_lo = lf; if (lf > lf_hi) lf_hi = lf; }
          if (!loud && out > 0.01f) {      /* learn the coupling only from blocks that aren't a real blow */
 -            float r = level / out; if (r > 4) r = 4;
 -            coup = coup_n < 50 ? (coup * coup_n + r) / (coup_n + 1) : coup * 0.99f + r * 0.01f; coup_n++;
@@ -2548,14 +2569,21 @@ index e1c246c..86e5b45 100644
 +            down = loud; presses += down;
 +            if (down) down_since = tnow;
 +            if (use_button >= 0) dsflip_mic_button(use_button, down); else dsflip_mic_key(down);
-+            if (debug) dsflip_log("[mic] %s: level %.4f floor %.4f out %.4f coup %.2f bar %.4f\n", down ? "PRESS" : "release", level, floor_, out, coup, bar);
++            if (debug) dsflip_log("[mic] %s: level %.4f floor %.4f out %.4f coup %.2f bar %.4f lf %.2f\n", down ? "PRESS" : "release", level, floor_, out, coup, bar, lf);
          }
 -        if (loud != down) { down = loud; dsflip_mic_key(down); presses += down; }
 +        if (debug && (total & 7) == 0)
-+            dsflip_log("[mic] level %.4f floor %.4f out %.4f coup %.2f bleed %.4f bar %.4f down %d\n", level, floor_, out, coup, bleed, bar, down);
++            dsflip_log("[mic] level %.4f floor %.4f out %.4f coup %.2f bleed %.4f bar %.4f lf %.2f down %d\n", level, floor_, out, coup, bleed, bar, lf, down);
          if (level > peak) peak = level;
          if (++blocks >= 431) {           /* ~10 s: levels for bug reports and tuning */
-             dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses\n", floor_, peak, coup, presses);
+-            dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses\n", floor_, peak, coup, presses);
+-            blocks = presses = 0; peak = 0;
++            if (lf_hi > 0) dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses, lf %.2f-%.2f above floor\n", floor_, peak, coup, presses, lf_lo, lf_hi);
++            else dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses\n", floor_, peak, coup, presses);
++            blocks = presses = 0; peak = 0; lf_lo = 9; lf_hi = 0;
+         }
+     }
+     return 0;
 diff --git a/src/dsflip.c b/src/dsflip.c
 index f623a28..9d41bba 100644
 --- a/src/dsflip.c

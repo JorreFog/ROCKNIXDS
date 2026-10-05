@@ -46,5 +46,17 @@ list 0.74% / 0.66% at 1x; 1.7-3% at 1.6x, where Chrome's dither tile and glyph e
 list's top screen and the ready screen differ on purpose: the box cover replaces the screenshot, and the cartridge
 goes into the console. (The harness takes a 6th argument, `light`, for the light palette.)
 
+A library with no games (a fresh card): build the harness with `-DMOCKDATA='"empty.inc"'` (a DS and a Favorites
+collection with zero games; the mock dir needs `icons/nds.png` and `icons/favorites.png`) and, say, `-O1 -g
+-fsanitize=address,undefined`; `./harness-empty <assets> <mock dir> 1 out/ "home 0; wait 2400; shot home; press a;
+wait 2400; shot lib; press a; press x; press y; press up; press down; press b; wait 600; shot back"` must exit 0
+with no sanitizer report, every press after the first A printing `view 1` until B prints `view 0`, and no `launch`
+in the source log. With games present the engine must not change a pixel: render the same script with
+`mockdata.inc` against the previous engine and `cmp` the PNGs.
+
+The engine's files are "new file" sections of `dii-ess-aye/es-rgds-rnds.patch`. After editing them in the tree
+`tools/build-es.sh` patched, `tools/regen-rnds-patch.sh <es src> dii-ess-aye/es-rgds-rnds.patch` rewrites exactly
+those sections; the patch's hunks in ES's own files stay as they are.
+
 `test/fixture.py` builds a `/storage` with the mockup's systems and games (art, play counts, last played, favourites)
 for running the real ES on a desktop (`--resolution 1920 480 --windowed`, or 3072 768 for the RG DS Plus layout).

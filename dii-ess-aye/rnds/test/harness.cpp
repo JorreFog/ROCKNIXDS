@@ -1,6 +1,7 @@
 // Host test harness for the rnds engine: the mockup's own data as the Source, a software compositor as the Backend.
 //   harness <assets> <mockup dir> <scale> <outprefix> <script>
 // script: commands separated by ';'  e.g. "home 7; wait 2400; shot home-psx"
+// -DMOCKDATA='"empty.inc"' takes another data file (empty.inc: a DS and a Favorites collection with no games).
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #include "rnds/RndsUI.h"
@@ -15,8 +16,11 @@ using namespace rnds;
 
 struct G { std::string title, genre, year; int plays; std::string last, time; int a, b; std::string slug; };
 struct S { std::string id, name, maker; unsigned accent; int games, played; std::string time; int resume; std::vector<G> list; };
+#ifndef MOCKDATA
+#define MOCKDATA "mockdata.inc"
+#endif
 static std::vector<S> SYS = {
-#include "mockdata.inc"
+#include MOCKDATA
 };
 
 static Bitmap stbDecode(const std::string& path)
@@ -124,21 +128,25 @@ struct MockSource : Source
 	std::vector<std::string> log;
 	MockSource(const std::string& mock) : art(mock + "/art/"), icons(mock + "/icons/"), sysFav(SYS.size(), false) {}
 	int systemCount() override { return (int)SYS.size(); }
+	// out of range and empty lists answered as RndsEs does: an empty SysInfo/GameInfo, no resume game
 	SysInfo system(int i) override
 	{
-		const S& s = SYS[i];
 		SysInfo r;
+		if (i < 0 || i >= (int)SYS.size()) return r;
+		const S& s = SYS[i];
 		r.id = s.id; r.name = s.name; r.maker = s.maker; r.accent = Color::hex(s.accent);
 		r.icon = icons + s.id + ".png"; r.games = s.games; r.played = s.played; r.time = s.time; r.fav = sysFav[i];
+		if (s.list.empty()) return r;
 		const G& g = s.list[s.resume < (int)s.list.size() ? s.resume : 0];
 		r.hasResume = true; r.resumeEyebrow = "Last played"; r.resumeTitle = g.title; r.resumeBox = art + g.slug + "-box.jpg";
 		return r;
 	}
-	int gameCount() override { return (int)SYS[lib].list.size(); }
+	int gameCount() override { return lib >= 0 && lib < (int)SYS.size() ? (int)SYS[lib].list.size() : 0; }
 	GameInfo game(int i) override
 	{
-		const G& g = SYS[lib].list[i];
 		GameInfo r;
+		if (i < 0 || i >= gameCount()) return r;
+		const G& g = SYS[lib].list[i];
 		r.title = g.title;
 		r.sub = g.genre + " · " + g.year;
 		r.plays = std::to_string(g.plays); r.last = g.last; r.time = g.time;
@@ -152,12 +160,15 @@ struct MockSource : Source
 	bool online() override { return true; }
 	void selectSystem(int i) override { log.push_back("selectSystem " + std::to_string(i)); }
 	void selectGame(int i) override { log.push_back("selectGame " + std::to_string(i)); }
-	int openLibrary(int sys) override { lib = sys; log.push_back("openLibrary " + std::to_string(sys)); return SYS[sys].resume; }
+	int openLibrary(int sys) override { if (sys < 0 || sys >= (int)SYS.size()) return 0; lib = sys; log.push_back("openLibrary " + std::to_string(sys)); return SYS[sys].list.empty() ? 0 : SYS[sys].resume; }
 	void backToHome() override { log.push_back("backToHome"); }
 	void launch(int g) override { log.push_back("launch " + std::to_string(g)); }
-	void toggleSystemFav(int s) override { sysFav[s] = !sysFav[s]; }
+	void toggleSystemFav(int s) override { if (s >= 0 && s < (int)sysFav.size()) sysFav[s] = !sysFav[s]; }
 	void toggleGameFav(int) override {}
-	int resumeGame(int sys) override { lib = sys; return SYS[sys].resume; }
+	int resumeGame(int sys) override { if (sys < 0 || sys >= (int)SYS.size()) return -1; lib = sys; return SYS[sys].list.empty() ? -1 : SYS[sys].resume; }
+	// the empty library's text as the ES host words it (RndsEs.cpp): a collection, or a system and its roms folder
+	std::string emptyTitle() override { return lib >= 0 && lib < (int)SYS.size() && SYS[lib].maker == "Collection" ? "Nothing here yet" : "No games yet"; }
+	std::string emptyHint() override { return lib >= 0 && lib < (int)SYS.size() && SYS[lib].maker == "Collection" ? "Y on a game adds it here" : "Copy .nds files to roms/nds"; }
 };
 
 int main(int argc, char** argv)
@@ -182,7 +193,7 @@ int main(int argc, char** argv)
 		else if (op == "lib") { int s, g; cs >> s >> g; src.lib = s; ui.setLibrary(s, g); }
 		else if (op == "launch") { int s, g; cs >> s >> g; src.lib = s; ui.setLaunch(s, g, false); }
 		else if (op == "wait") { double ms; cs >> ms; now += ms; }
-		else if (op == "press") { std::string b; cs >> b; UI::Button m = b == "left" ? UI::LEFT : b == "right" ? UI::RIGHT : b == "a" ? UI::A : b == "b" ? UI::B : b == "x" ? UI::X : b == "y" ? UI::Y : b == "l" ? UI::L : UI::R; ui.update(now); ui.press(m); }
+		else if (op == "press") { std::string b; cs >> b; UI::Button m = b == "left" ? UI::LEFT : b == "right" ? UI::RIGHT : b == "up" ? UI::UP : b == "down" ? UI::DOWN : b == "a" ? UI::A : b == "b" ? UI::B : b == "x" ? UI::X : b == "y" ? UI::Y : b == "l" ? UI::L : UI::R; ui.update(now); bool used = ui.press(m); fprintf(stderr, "press %s: %s, view %d sys %d game %d\n", b.c_str(), used ? "used" : "unused", (int)ui.view(), ui.systemIndex(), ui.gameIndex()); }
 		else if (op == "shot")
 		{
 			std::string name; cs >> name;

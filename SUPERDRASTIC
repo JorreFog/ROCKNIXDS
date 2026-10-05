@@ -5,4 +5,4 @@
 # is set; its pre-device fixes; the microphone's tunables, logs and joystick-button fallback), built with SuperDrastic's
 # build.sh (clang 18 + lld, an Ubuntu noble arm64 sysroot: libc6 2.39, libdrm 2.4.125) and package.sh; it needs glibc
 # 2.38 like the release. Once the patch is in a SuperDrastic release, pin that release here instead and drop the patch.
-0.4.0-beta.2-rocknixds.3 f1dc1053f7462abda218fb5a8d5d277f30a0d0068be2d7cd5e2a3bfb35178666
+0.4.0-beta.2-rocknixds.3 0affd218442dc2a1daeeeb7f8b1cb9fa5a9627f5c5eb40c4fde2c538c90ab5a7
