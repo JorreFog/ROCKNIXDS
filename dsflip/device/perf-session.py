@@ -661,7 +661,7 @@ def send_profile(path, send):
     """The profiler's report of the session, if there is one (<log>.prof.txt), after its log: a file of its own next
     to it. Its failure is only noted: the log is what counts."""
     try:
-        prof = open(path + ".prof.txt").read()
+        prof = open(path + ".prof.txt", errors="replace").read()
     except OSError:
         return
     try:
@@ -714,12 +714,13 @@ def try_upload(path, text, summary):
 
 
 def profile_text(directory):
-    """SuperDrastic's sampling profiler reports (prof-<pid>.txt, DSFLIP_PROF), written beside the samples."""
+    """SuperDrastic's sampling profiler reports (prof-<pid>.txt, DSFLIP_PROF), written beside the samples. A byte
+    that isn't UTF-8 (a thread name cut short) becomes U+FFFD: a decode error here would lose the session's log."""
     out = []
     for n in sorted(os.listdir(directory)):
         if n.startswith("prof-") and n.endswith(".txt"):
             try:
-                out.append(open(os.path.join(directory, n)).read())
+                out.append(open(os.path.join(directory, n), errors="replace").read())
             except OSError:
                 pass
     return "\n".join(t for t in out if t)
