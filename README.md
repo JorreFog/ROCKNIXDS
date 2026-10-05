@@ -70,6 +70,22 @@ erased**), and a computer with an SD card reader.
    IP) in File Explorer's address bar; on a Mac use *Go > Connect to Server* with `smb://192.168.1.23`. User `root`,
    password `rocknix`. Copy your DS games (`.nds` or `.zip`) into `roms` > `nds`, then restart the handheld.
 
+6. **Set the best settings.** Every setting starts on *Auto*. For the best performance, open *Start > Game settings >
+   Per system advanced configuration > Nintendo DS* and set:
+
+   | Setting | Set to | Why |
+   |---|---|---|
+   | 3D renderer | **Gengis Engine** | The same picture as DraStic's renderer, with about 12% less CPU work |
+   | 3D texture filter | **nearest (DS)** | Bilinear smooths textures but doubles the 3D work |
+   | 3D resolution | Auto | Gengis Engine's 2×. 3× isn't offered yet |
+   | Shader | **default (bilinear)** for the best performance and battery, or **ds-crisp** for a sharp picture | default needs no GPU work; ds-crisp is the light sharp choice. Avoid ds-fsr, the heaviest |
+   | Power profile | **balanced** | Full speed with the lowest input lag. *performance* only if a game slows down |
+   | Hires 3D | **on** | 2× resolution. The installer already switches it on |
+   | Threaded 3D | **on** | Spreads the 3D work over the cores |
+
+   The same settings can be changed for a single game: highlight it, press **X** for its options and choose the
+   game's advanced settings.
+
 > [!NOTE]
 > Known issue: until there is at least one DS game in `roms` > `nds`, the menu has a UI bug. It is harmless and goes
 > away once you add a DS game and restart.
