@@ -56,11 +56,16 @@ stuck_report() {
   if [ "$DSFLIP_VT" = 1 ] && systemctl is-active -q sway.service; then
     # VT mode (drastic-wrapper.sh sets DSFLIP_VT=1 when ES kept its window for this launch: fast switching, the
     # default): sway and ES stay up. Switching the console away from sway's VT makes seatd disable sway's session,
-    # which releases the display (DRM master) in ~80 ms; restore.sh switches back. tty12 is unused; graphics mode
-    # keeps the kernel console from drawing on it in between.
+    # which releases the display (DRM master) in ~80 ms; restore.sh switches back. tty12 is unused. It stays a text
+    # console: from one in graphics mode the kernel ignores every switch (chvt back never returns; tried on an RG DS
+    # Plus, 2026-10-05), and the kernel console takes the panels on either. So the panels show that console from here
+    # until libdsflip has them (~0.3 s), and again from the game's end until the menu is back: it is cleared and its
+    # cursor hidden first, so that is plain black and not "an empty terminal" (the cursor showed, 1.5.13 test build).
     VT=1
     fgconsole > /tmp/dsflip-vt 2>/dev/null || echo 1 > /tmp/dsflip-vt
+    rm -f /tmp/dsflip-vt-later
     python3 -c 'import fcntl, os; fcntl.ioctl(os.open("/dev/tty12", os.O_RDWR), 0x4B3A, 0)' 2>/dev/null   # KDSETMODE KD_TEXT
+    printf '\033[2J\033[H\033[?25l' > /dev/tty12 2>/dev/null
     chvt 12
     echo 0 > /sys/class/graphics/fb0/blank 2>/dev/null   # a blanked console powers the panels down under us
     echo "$(ms) ms: display released by VT switch (sway on tty$(cat /tmp/dsflip-vt) stays up)"
@@ -281,8 +286,8 @@ stuck_report() {
   # the RG DS Plus, 1.5.1). Once a SIGKILL has been pending for 5 s, keep the evidence and bring the menu back.
   stuck=0; k=0
   while alive $P; do
-    if kill_pending $P; then k=$((k + 1)); [ $k -ge 25 ] && { stuck=1; break; }; else k=0; fi
-    sleep 0.2
+    if kill_pending $P; then k=$((k + 1)); [ $k -ge 100 ] && { stuck=1; break; }; else k=0; fi
+    sleep 0.05
   done
   if [ $stuck = 1 ]; then rc=255; stuck_report; else wait $P; rc=$?; fi
   # the watcher only now: killed before the wait, it never ran while the game did
@@ -313,6 +318,8 @@ stuck_report() {
   stop_perf
   RECORD_PID=
   if [ -s $NOTICE ]; then echo "notice: $(cat $NOTICE)"; else record & RECORD_PID=$!; fi
-  RECORD_PID=$RECORD_PID $D/dsflip/restore.sh   # governor back, sway (checked for outputs), ES, then the notice
+  # governor back, sway (checked for outputs), ES, then the notice. In VT mode the panels go back to sway a little
+  # later, once ES is out of the launch command and draws again (DSFLIP_VT_LATER, restore.sh).
+  RECORD_PID=$RECORD_PID DSFLIP_VT_LATER=$VT $D/dsflip/restore.sh
   echo "$(date) restored"
 } >> $LOG 2>&1
