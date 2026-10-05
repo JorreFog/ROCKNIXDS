@@ -4,10 +4,12 @@
 # (nds.power_profile: balanced, performance or battery; unset = balanced; session.sh) and its "3D renderer" option
 # (nds.renderer: superdrastic = Gengis Engine, SuperDrastic's own hi-res rasterizer, DSFLIP_RAST=1 in session.sh;
 # drastic = DraStic's; unset, the menu's Auto, is Gengis Engine since 1.5.13) with a "3D texture filter"
-# (nds.texture_filter: nearest, bilinear, sharp; DSFLIP_RAST_TEXFILTER) that only applies to Gengis Engine, and its
-# "wfc dns" (nds.wfc_dns: off, kaeru, wiilink, altwfc; DSFLIP_WFC in session.sh: Wi-Fi online play through a Nintendo
-# WFC replacement server, 1.5.13). Their value attributes are the system.cfg keys: without one ES derives the key
-# from the name (nds.3D_renderer), which session.sh doesn't read. It also keeps the DS system on
+# (nds.texture_filter: nearest, bilinear, sharp; DSFLIP_RAST_TEXFILTER) that only applies to Gengis Engine.
+# 1.5.13's "wfc dns" option (nds.wfc_dns: Wi-Fi online play through a Nintendo WFC replacement server) is no
+# longer offered: online play is parked for 1.6, and SuperDrastic only turns its Wi-Fi hook on with the DSFLIP_WFC
+# environment switch now. strip_ours still takes the option out of a copy that has it.
+# Their value attributes are the system.cfg keys: without one ES derives the key from the name (nds.3D_renderer),
+# which session.sh doesn't read. It also keeps the DS system on
 # ROCKNIXDS's DraStic: es_systems.cfg's nds entry offers only drastic/drastic-sa (ROCKNIX also lists RetroArch cores
 # and standalone melonDS, which don't use libdsflip). --unlock-nds puts ROCKNIX's list back (uninstall).
 # --strip-options removes the shader choices and options above (uninstall) and repairs a stray </feature>.
@@ -84,12 +86,6 @@ add_ours() {
             print ind "<choice name=\"nearest (DS)\" value=\"nearest\" />"
             print ind "<choice name=\"bilinear\" value=\"bilinear\" />"
             print ind "<choice name=\"sharp bilinear\" value=\"sharp\" />"
-            print fi "</feature>"
-            print fi "<feature name=\"wfc dns\" value=\"wfc_dns\">"
-            print ind "<choice name=\"off\" value=\"off\" />"
-            print ind "<choice name=\"Kaeru WFC (Wiimmfi)\" value=\"kaeru\" />"
-            print ind "<choice name=\"WiiLink DNS (Wiimmfi)\" value=\"wiilink\" />"
-            print ind "<choice name=\"AltWFC (unmaintained)\" value=\"altwfc\" />"
             print fi "</feature>"
             next
         }

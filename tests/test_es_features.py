@@ -160,12 +160,10 @@ class EsFeaturesTest(unittest.TestCase):
         self.assertIn("resume on quit", feats)
         self.assertIn("power profile", feats)
         self.assertIn("microphone sensitivity", feats)
-        self.assertIn("wfc dns", feats)
+        self.assertNotIn("wfc dns", feats)                  # online play is parked for 1.6
         self.assertNotIn("share performance logs", feats)
         self.assertNotIn("3D resolution", feats)
-        self.assertEqual(feats["wfc dns"]["value"], "wfc_dns")
-        self.assertEqual([value for tag, _, value in feats["wfc dns"]["kids"]], ["off", "kaeru", "wiilink", "altwfc"])
-        for name in ("3D renderer", "3D texture filter", "microphone sensitivity", "wfc dns"):
+        for name in ("3D renderer", "3D texture filter", "microphone sensitivity"):
             self.assertFalse(any(tag == "feature" for tag, _, _ in feats[name]["kids"]), name)
         self.assertEqual(feats["3D renderer"]["value"], "renderer")
         self.assertEqual(
@@ -249,7 +247,7 @@ class EsFeaturesTest(unittest.TestCase):
     def test_strip_options_removes_what_this_line_writes(self):
         self.user.write_text(BASE)
         self.run_script()
-        self.assertIn("wfc dns", self.user.read_text())
+        self.assertIn("3D renderer", self.user.read_text())
         self.run_script("--strip-options")
         text = self.user.read_text()
         feats = core_features(text, "drastic-sa")
@@ -368,6 +366,19 @@ class EsFeaturesTest(unittest.TestCase):
         text = self.user.read_text()
         self.assertIn("<!-- ROCKNIX -- DraStic -->", text)
         self.assert_siblings(text.replace("<!-- ROCKNIX -- DraStic -->", ""))
+
+    def test_the_wfc_dns_option_of_1_5_13_is_taken_out(self):
+        # online play is parked for 1.6
+        wfc = ('          <feature name="wfc dns" value="wfc_dns">\n'
+               '            <choice name="off" value="off" />\n'
+               '            <choice name="Kaeru WFC (Wiimmfi)" value="kaeru" />\n'
+               '          </feature>\n')
+        mic = '          <feature name="microphone sensitivity"'
+        self.user.write_text(BASE.replace(mic, wfc + mic, 1))
+        self.run_script()
+        text = self.user.read_text()
+        self.assert_siblings(text)
+        self.assertNotIn("wfc", text.lower())
 
     def test_missing_shader_option_is_left_unchanged(self):
         original = "<features><core name=\"other\"></core></features>\n"
