@@ -62,7 +62,13 @@ stuck_report() {
     # until libdsflip has them (~0.3 s), and again from the game's end until the menu is back: it is cleared and its
     # cursor hidden first, so that is plain black and not "an empty terminal" (the cursor showed, 1.5.13 test build).
     VT=1
-    fgconsole > /tmp/dsflip-vt 2>/dev/null || echo 1 > /tmp/dsflip-vt
+    # The last game's switch back (restore.sh --vt-back) may still be waiting for ES to draw: a start that quick
+    # (two launch requests in a row) must not let it switch the panels back to sway under this game, and the console
+    # is then still tty12, which is not sway's: keep the VT that game recorded.
+    systemctl stop dsflip-vtback.service 2>/dev/null
+    CUR=$(fgconsole 2>/dev/null)
+    if [ "$CUR" = 12 ] && [ -s /tmp/dsflip-vt ]; then echo "$(ms) ms: the last game's switch back was still pending: sway stays on tty$(cat /tmp/dsflip-vt)"
+    else echo "${CUR:-1}" > /tmp/dsflip-vt; fi
     rm -f /tmp/dsflip-vt-later
     python3 -c 'import fcntl, os; fcntl.ioctl(os.open("/dev/tty12", os.O_RDWR), 0x4B3A, 0)' 2>/dev/null   # KDSETMODE KD_TEXT
     printf '\033[2J\033[H\033[?25l' > /dev/tty12 2>/dev/null
@@ -211,15 +217,9 @@ stuck_report() {
     esac
   fi
   if [ -n "$DSFLIP_RAST" ]; then echo "3D renderer: Gengis Engine (${RND:-Auto}; scale ${DSFLIP_RAST_SCALE:-2}, texture filter ${DSFLIP_RAST_TEXFILTER:-0})"; else echo "3D renderer: DraStic"; fi
-  # Wi-Fi online play (ES: the game's or DS system's "wfc dns"; unset or off = stock DraStic, which has no Wi-Fi).
-  # libdsflip then answers the game as an open access point named rocknixds and hands it that DNS server (Kaeru WFC,
-  # WiiLink's DNS, AltWFC: kaeru, wiilink, altwfc, or a dotted address) over DHCP, and the game's traffic goes out over
-  # the handheld's own network. Untested on a handheld: docs/handoff-local.md, section 4. DSFLIP_WFC already in the
-  # environment (systemctl set-environment DSFLIP_WFC=kaeru DSFLIP_WFC_DEBUG=1 for a test) wins over the setting.
-  WFC=$(grep -F "nds[\"$GAME\"].wfc_dns=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  [ -n "$WFC" ] || WFC=$(grep "^nds.wfc_dns=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  case "$WFC" in ""|off|auto|none) WFC= ;; esac
-  [ -n "$WFC" ] && export DSFLIP_WFC=${DSFLIP_WFC:-$WFC}
+  # Wi-Fi online play is parked for 1.6 (it doesn't get past the game's own Wi-Fi setup yet): ES no longer offers
+  # "wfc dns" and libdsflip ignores nds.wfc_dns. Only the test switch turns it on (systemctl set-environment
+  # DSFLIP_WFC=kaeru DSFLIP_WFC_DEBUG=1; docs/handoff-local.md, section 4).
   echo "wifi: ${DSFLIP_WFC:-off}"
   # The real microphone presses DraStic's "fake microphone" control (Scroll Lock, code 327 in the keyboard set).
   # ROCKNIX's drastic.cfg for the RG DS binds it in both control sets since 2026-02-04, but a config/drastic.cfg that
@@ -284,9 +284,26 @@ stuck_report() {
   # Wait for DraStic, but not forever. One stuck in the kernel (state D: a display call that never returns) ignores
   # kill -9, and waiting on it left the panels white, the exit hotkey dead and a reset the only way out (reported on
   # the RG DS Plus, 1.5.1). Once a SIGKILL has been pending for 5 s, keep the evidence and bring the menu back.
-  stuck=0; k=0
+  # And DraStic alive but wedged with libdsflip's own threads (libdsflip ends a game that only stops showing frames
+  # itself: its stall watch). Its presenter thread wakes at least 20 times a second whatever the game does, in
+  # DraStic's menu too: its CPU time (schedstat, ns) not moving for 15 s of this loop (which doesn't run while the
+  # handheld sleeps) means nothing in there runs. Kill it; the check above takes over if even that can't land.
+  stuck=0; k=0; hb=0; hbt=; n=0; PT=
   while alive $P; do
     if kill_pending $P; then k=$((k + 1)); [ $k -ge 100 ] && { stuck=1; break; }; else k=0; fi
+    n=$((n + 1))
+    if [ "$v" = ready ] && [ $((n % 20)) -eq 0 ]; then
+      [ -n "$PT" ] || for t in /proc/$P/task/[0-9]*; do [ "$(cat $t/comm 2>/dev/null)" = dsf-present ] && PT=${t##*/}; done
+      cpu=; [ -n "$PT" ] && read cpu _ < /proc/$P/task/$PT/schedstat 2>/dev/null
+      if [ -z "$cpu" ]; then hb=0
+      elif [ "$cpu" = "$hbt" ]; then hb=$((hb + 1))
+      else hb=0; hbt=$cpu; fi
+      if [ $hb -eq 15 ]; then
+        echo "$(ms) ms: libdsflip's presenter hasn't run for 15 s: DraStic is wedged, killing it"
+        kill -9 $P 2>/dev/null
+        echo "The game stopped responding and was closed. Logs: $D/dsflip" > $NOTICE
+      fi
+    fi
     sleep 0.05
   done
   if [ $stuck = 1 ]; then rc=255; stuck_report; else wait $P; rc=$?; fi
