@@ -1,8 +1,8 @@
 From 02b181f40a019b94299b02b8dc5f334ca74781c4 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 15:21:56 +0000
-Subject: [PATCH 1/8] Shaders can draw a smaller buffer than the panel; ds-fsr
- draws 3x on the RG DS Plus
+Subject: [PATCH 01/11] Shaders can draw a smaller buffer than the panel;
+ ds-fsr draws 3x on the RG DS Plus
 
 A shader's source may say "// dsflip-output: Nx" (N times the DS screen's 256x192) or "dsflip-output: WxH": its
 output buffers are made that size, never larger than the panel, and the display controller (VOP2, bilinear, free)
@@ -312,7 +312,7 @@ index 1939acf..e7dd4a9 100644
 From 3de78751408ed7350c4f6d726775267571fcfd5a Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 17:39:05 +0000
-Subject: [PATCH 2/8] Port the Wi-Fi (Nintendo WFC) path from ROCKNIXDS
+Subject: [PATCH 02/11] Port the Wi-Fi (Nintendo WFC) path from ROCKNIXDS
  cursor/drastic-wfc-dns into SuperDrastic
 
 Ported, unchanged in logic, from ROCKNIXDS commit b1a4564 (branch origin/cursor/drastic-wfc-dns-24ad,
@@ -2196,7 +2196,7 @@ index 0000000..535fe1c
 From 0861654f97441d280960ff3a1757773aa49064be Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 17:56:24 +0000
-Subject: [PATCH 3/8] Wi-Fi: ARP only for the gateway, RX records with their
+Subject: [PATCH 03/11] Wi-Fi: ARP only for the gateway, RX records with their
  FCS and W_RXLEN_CROP, a probe of DraStic's W_IF store;
  0.4.0-beta.2-rocknixds.2
 
@@ -2413,7 +2413,7 @@ index 535fe1c..a90f87d 100644
 From d8291e0d67a1a77942bc6ea7dabb2cd5b90e5a9c Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 18:07:03 +0000
-Subject: [PATCH 4/8] Microphone: tunables and logs for the handheld, a
+Subject: [PATCH 04/11] Microphone: tunables and logs for the handheld, a
  joystick-button fallback for the fake microphone; 0.4.0-beta.2-rocknixds.3
 
 A real blow does nothing on the RG DS (ROCKNIXDS issue 26). The mic thread can now be tuned and watched without a
@@ -2633,7 +2633,7 @@ index 9892be8..f397894 100644
 From fe2c56f1a6a455a5c776ac5dbdf15c6c92678f81 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 22:54:27 +0000
-Subject: [PATCH 5/8] Stall watch, a quit that works on a stuck game,
+Subject: [PATCH 05/11] Stall watch, a quit that works on a stuck game,
  RetroAchievements logins that survive no network
 
 2026-10-05, an RG DS Plus: Black 2 started with its resume state, DraStic stopped presenting frames a few seconds
@@ -3134,7 +3134,7 @@ index f397894..1e31a47 100644
 From bb4f885cfbd1e7f5fa0b0818a62567a81e67292b Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 22:54:27 +0000
-Subject: [PATCH 6/8] Online play parked for ROCKNIXDS 1.6: only DSFLIP_WFC
+Subject: [PATCH 06/11] Online play parked for ROCKNIXDS 1.6: only DSFLIP_WFC
  turns the Wi-Fi hook on
 
 nds.wfc_dns from system.cfg (ES's "wfc dns", offered by the 1.5.13 test builds) is read only with
@@ -3203,8 +3203,8 @@ index 7ba0b7a..888b56a 100644
 From b874a209b2e70875fd1716ceea146deec4494795 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 23:09:32 +0000
-Subject: [PATCH 7/8] In-game menu's Blow presses DraStic's fake microphone the
- way its binding asks (ROCKNIXDS issue 26)
+Subject: [PATCH 07/11] In-game menu's Blow presses DraStic's fake microphone
+ the way its binding asks (ROCKNIXDS issue 26)
 
 The Microphone page's Blow held the keyboard control (Scroll Lock, 327) only. A drastic.cfg whose keyboard set has no
 fake microphone but whose joystick set does never saw it; the real-mic thread already pressed the joystick button in
@@ -3301,7 +3301,7 @@ index fd02359..b3be979 100644
 From 09c5054a6c56610ad0c4a34ee49242df0138147d Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 23:10:02 +0000
-Subject: [PATCH 8/8] 0.5.0-beta.1-rocknixds.4: the ROCKNIXDS 1.6 test build
+Subject: [PATCH 08/11] 0.5.0-beta.1-rocknixds.4: the ROCKNIXDS 1.6 test build
  (both handhelds)
 
 v0.5.0-beta.1 plus the 1.5.13 commits (ds-fsr 3x, the parked Wi-Fi path off by default, microphone tunables) and
@@ -3322,6 +3322,154 @@ index 08c0d0c..b560c44 100644
 @@ -1 +1 @@
 -0.5.0-beta.1-rocknixds.3
 +0.5.0-beta.1-rocknixds.4
+-- 
+2.43.0
+
+
+From f81578546546e5f6d2d004cf20ed6b297a6201af Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 5 Oct 2026 23:15:36 +0000
+Subject: [PATCH 09/11] DSFLIP_STALL_TEST: DraStic's main thread stops after
+ that many seconds, to test the stall watch on a handheld
+
+The 2026-10-05 freeze (DraStic alive, its main thread no longer presenting) can't be made on purpose: SIGSTOP stops
+every thread, the presenter's too. With DSFLIP_STALL_TEST=<s> the main thread stops in SDL_RenderPresent that long
+after the first frame and never comes back, so the stall card, the exit hotkey on a stuck game and the 20 s ending
+with the launcher's notice can be checked (ROCKNIXDS docs/handoff-local.md).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01TipFb6VWRr6YwuU4pm2dbw
+---
+ docs/INTEGRATION.md | 1 +
+ src/dsflip.c        | 6 ++++++
+ 2 files changed, 7 insertions(+)
+
+diff --git a/docs/INTEGRATION.md b/docs/INTEGRATION.md
+index e5b356a..d217cd6 100644
+--- a/docs/INTEGRATION.md
++++ b/docs/INTEGRATION.md
+@@ -158,6 +158,7 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
+ | `DSFLIP_LATCH_MARGIN` | 1300 | The shortest time (µs) before a vblank that a frame is committed at (diagnostics) |
+ | `DSFLIP_RESUME_FILE`, `DSFLIP_RESUME_LOAD` | | See *Quitting with a save* |
+ | `DSFLIP_STALL_QUIT` | 20 | Seconds without a frame from DraStic (outside its menu and the in-game menu) before the game is ended; 0 = never. After 5 s the log lists every thread's state and a card says so, and the exit hotkey quits at once |
++| `DSFLIP_STALL_TEST` | off | Seconds after the first frame at which DraStic's main thread stops for good (tests the stall watch) |
+ | `DSFLIP_NOTICE` | `/tmp/dsflip-notice` | Where that ending leaves a line for the launcher to show |
+ | `DSFLIP_SPREAD_THREADS` | 1 | 0 = new threads inherit their creator's CPUs (with DraStic's main thread confined to one CPU, its new helper threads then share that CPU only) |
+ | `DSFLIP_GPU_CLOCKS`, `DSFLIP_AUDIO_RATE` | 1, 1 | The launcher's GPU clock and PipeWire rate handling |
+diff --git a/src/dsflip.c b/src/dsflip.c
+index b7be2fd..9e82449 100644
+--- a/src/dsflip.c
++++ b/src/dsflip.c
+@@ -1587,6 +1587,12 @@ int SDL_RenderClear(void *rn) {
+ void SDL_RenderPresent(void *rn) {
+     REAL(void, SDL_RenderPresent, void *);
+     if (!ok) { real(rn); return; }
++    {   /* DSFLIP_STALL_TEST=<s>: that long after the first frame, DraStic's main thread stops here for good, as it did
++         * on 2026-10-05: tests the stall watch, the exit hotkey on a stuck game and the launcher's notice */
++        static long long stall_test_at = -1;
++        if (stall_test_at < 0) { const char *e = getenv("DSFLIP_STALL_TEST"); stall_test_at = e && atoi(e) > 0 ? now_us() + atoi(e) * 1000000LL : 0; }
++        if (stall_test_at && now_us() >= stall_test_at) { LOG("[stall] DSFLIP_STALL_TEST: DraStic's main thread stops here\n"); for (;;) pause(); }
++    }
+     int held = 0;                       /* this present waited on a full queue */
+     if (queue_wait_us && queue_depth && pacing_latch) {
+         /* a full queue would drop its oldest frame for this one: hold DraStic until a commit makes room (it then
+-- 
+2.43.0
+
+
+From d5900155f037aafaddb585f0611db842525186ca Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 5 Oct 2026 23:19:16 +0000
+Subject: [PATCH 10/11] Stall card: 15 s at a time while the stall lasts, so it
+ doesn't outstay a stall that ends; the menu's Quit timestamps its request
+
+The card was posted for 10 minutes: a stall that ended (a long pause, not a hang) left it over the game. It is now
+posted for 15 s (up to the default ending at 20 s) and again every 15 s while DraStic shows no frame. resume_quit()
+(the in-game menu's Quit) records when it asked, like the hotkey, so a hotkey press right after it counts as a repeat
+and doesn't drop the save.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01TipFb6VWRr6YwuU4pm2dbw
+---
+ src/dsflip.c | 15 +++++++++++++--
+ src/resume.c |  2 +-
+ 2 files changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/src/dsflip.c b/src/dsflip.c
+index 9e82449..e390b9e 100644
+--- a/src/dsflip.c
++++ b/src/dsflip.c
+@@ -873,11 +873,15 @@ static void stall_dump(FILE *f) {       /* every thread: name, state, CPU time,
+ static void *stall_report(void *a) {    /* its own thread: the presenter never waits on files or the overlay */
+     long long idle = (long long)(intptr_t)a;
+     if (lg) { flockfile(lg); fprintf(lg, "[stall] no frame from DraStic for %.1f s (not in a menu): its threads\n", idle / 1e6); stall_dump(lg); funlockfile(lg); fflush(lg); fsync(fileno(lg)); }
+-    dsflip_toast("The game stopped responding", stall_quit_s > 0 ? "Exit hotkey: back to the menu now (or wait)" : "Exit hotkey: back to the menu", 0xe04040, 600000);
+     return 0;
+ }
++/* the card: 15 s at a time (up to the default ending), again while the stall lasts; gone soon if frames come back */
++static void stall_card(void) {
++    dsflip_toast("The game stopped responding", stall_quit_s > 0 ? "Exit hotkey: back to the menu now (or wait)" : "Exit hotkey: back to the menu", 0xe04040, 15000);
++}
++static void *stall_card_thread(void *a) { (void)a; stall_card(); return 0; }
+ static void stall_watch(long long t) {  /* the presenter, every wake-up (at least every 50 ms), mu not held */
+-    static int seen;
++    static int seen; static long long card_at;
+     int p = dsflip_presents;
+     if (p != seen || !p || menu_touch || menu_is_open() || resume_saving()) {
+         if (dsflip_stalled) LOG("[stall] DraStic shows frames again after %.1f s\n", (t - stall_t0) / 1e6);
+@@ -890,6 +894,13 @@ static void stall_watch(long long t) {  /* the presenter, every wake-up (at leas
+         pthread_t th; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
+         if (!pthread_create(&th, &at, stall_report, (void *)(intptr_t)idle)) pthread_setname_np(th, "dsf-stall");
+         pthread_attr_destroy(&at);
++        card_at = 0;
++    }
++    if (dsflip_stalled && t - card_at >= 15000000LL) {   /* the card (ui.c may take a moment: its own thread) */
++        card_at = t;
++        pthread_t th; pthread_attr_t at; pthread_attr_init(&at); pthread_attr_setdetachstate(&at, PTHREAD_CREATE_DETACHED);
++        if (!pthread_create(&th, &at, stall_card_thread, 0)) pthread_setname_np(th, "dsf-stallcard");
++        pthread_attr_destroy(&at);
+     }
+     if (dsflip_stalled && stall_quit_s > 0 && idle >= stall_quit_s * 1000000LL) {
+         const char *np = getenv("DSFLIP_NOTICE"); if (!np || !*np) np = "/tmp/dsflip-notice";
+diff --git a/src/resume.c b/src/resume.c
+index 1e31a47..51152b7 100644
+--- a/src/resume.c
++++ b/src/resume.c
+@@ -321,7 +321,7 @@ int resume_menu_load(const char *path, const char *backup, const char *msg, cons
+ }
+ /* quit to the menu, with a resume state when that is on: 1 if it saves first */
+ int resume_quit(void) {
+-    if (resume_on() && !saving) { want_save = 1; return 1; }
++    if (resume_on() && !saving) { if (!want_save) usr1_t = now_ms(); want_save = 1; return 1; }   /* (a hotkey press now is a repeat) */
+     kill(getpid(), SIGKILL);
+     return 0;
+ }
+-- 
+2.43.0
+
+
+From 212712c1ffb195ca1211e05f043ba430dbd20161 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 5 Oct 2026 23:19:35 +0000
+Subject: [PATCH 11/11] 0.5.0-beta.1-rocknixds.5: the ROCKNIXDS 1.6 test build,
+ with the stall test switch and the shorter stall card
+
+.4 plus DSFLIP_STALL_TEST (DraStic's main thread stops on purpose, to test the stall watch on a handheld), the stall
+card shown 15 s at a time while the stall lasts, and the in-game menu's Quit timestamping its save request.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01TipFb6VWRr6YwuU4pm2dbw
+---
+ VERSION | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/VERSION b/VERSION
+index b560c44..b400b70 100644
+--- a/VERSION
++++ b/VERSION
+@@ -1 +1 @@
+-0.5.0-beta.1-rocknixds.4
++0.5.0-beta.1-rocknixds.5
 -- 
 2.43.0
 
