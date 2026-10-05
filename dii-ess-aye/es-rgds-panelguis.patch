@@ -1,0 +1,185 @@
+es-rgds-panelguis: VIEW GAME MEDIA, the save state manager and manual scrape on the bottom panel, sized to fit it
+
+The dual-screen themes run ES on a canvas three panels wide (1920x480 on the RG DS, 3072x768 on the Plus), and
+es-rgds-uiwidth.patch sizes the menus against one panel (ES_UI_WIDTH), centred on the bottom one. Three screens were
+still sized against the whole canvas:
+
+- VIEW GAME MEDIA (GuiImageViewer), its zoom view and VIEW FULLSCREEN VIDEO (GuiVideoViewer) took all three panels. A
+  picture was fitted to the canvas' height only, so a wide one ran over the top screen and off the bottom one, and the
+  zoom view (centred on the top panel) was zoomed to the canvas' width (ROCKNIXDS issue 32). They now take the bottom
+  panel. The zoom view opens with the whole picture fitted to the panel (L/R zoom from there), and a zoomed or moved
+  picture stays on the panel. VIEW GAME MEDIA's zoom view was also always empty: it got the entry's number ("1")
+  instead of its picture.
+- The save state manager (GuiSaveState) was as wide as the canvas: its title sat on the bottom screen, START NEW GAME
+  on the top one and the last third of the tiles off the screen (ROCKNIXDS issue 34). It is one panel wide now, on the
+  bottom one, with the 4.5 tiles of a 4:3 screen (13.6 across the canvas).
+- Manual scrape (ScraperSearchComponent): in a window one panel wide (576 or 922 px) the labels took nearly all of the
+  metadata's 24%, so a publisher, developer or genre showed a letter or two and the release date ran out of the window
+  (ROCKNIXDS issue 35). The values now get as much room as the labels, and at least what a date and the rating stars
+  take, from the result list's share (at most 45% of the window). A label that doesn't fit is shortened with "...",
+  never the date. The column only grows: where 24% is enough (a big screen), the layout is stock.
+
+diff --git a/es-app/src/components/ScraperSearchComponent.cpp b/es-app/src/components/ScraperSearchComponent.cpp
+index 280412b6..eae19125 100644
+--- a/es-app/src/components/ScraperSearchComponent.cpp
++++ b/es-app/src/components/ScraperSearchComponent.cpp
+@@ -150,6 +150,19 @@ void ScraperSearchComponent::resizeMetadata()
+ 				maxLblWidth = it->first->getSize().x(); // +6;
+ 		}
+ 
++		// The values get as much room as the labels, and at least what the stars and a date take (a date is never
++		// shortened with "..."). In a window one panel wide (ES_UI_WIDTH, 640 or 1024 px) the labels took nearly
++		// all of the metadata's 24%: a value showed a letter or two and the date ran out of the window (ROCKNIXDS
++		// issue 35). The metadata takes what it needs from the result list's share, up to 45% of the window.
++		std::string date = Utils::Time::timeToString(Utils::Time::stringToTime("20001228T000000"), Utils::Time::getSystemDateFormat());
++		float minValueWidth = Math::max(font->getHeight() * 0.65f * 5, font->sizeText(date).x()); // the stars, a date
++		float mdWidth = Math::min(maxLblWidth * 1.2f + Math::max(maxLblWidth, minValueWidth), mSize.x() * 0.45f);
++		if (mdWidth > mMD_Grid->getSize().x())
++		{
++			mGrid.setColWidthPerc(3, mdWidth / mSize.x(), false);
++			mMD_Grid->setSize(mGrid.getColWidth(3), mGrid.getRowHeight(1));
++		}
++
+ 		float rowHeight = (font->getLetterHeight() + 2) / mMD_Grid->getSize().y();
+ 
+ 		for (unsigned int i = 0; i < mMD_Pairs.size(); i++)
+@@ -162,7 +175,8 @@ void ScraperSearchComponent::resizeMetadata()
+ 		mMD_Genre->setFont(font);
+ 		mMD_Players->setFont(font);
+ 
+-		mMD_Grid->setColWidthPerc(0, (maxLblWidth * 1.2f) / mMD_Grid->getSize().x());
++		// labels too long for the window (a translation) are shortened with "...", the values keep their room
++		mMD_Grid->setColWidthPerc(0, Math::max(0.0f, Math::min(maxLblWidth * 1.2f, mMD_Grid->getSize().x() - minValueWidth)) / mMD_Grid->getSize().x());
+ 
+ 		// rating is manually sized
+ 		mMD_Rating->setSize(mMD_Grid->getColWidth(2), font->getHeight() * 0.65f);
+diff --git a/es-app/src/guis/GuiImageViewer.cpp b/es-app/src/guis/GuiImageViewer.cpp
+index 7ceeffdf..1e3ec1a0 100644
+--- a/es-app/src/guis/GuiImageViewer.cpp
++++ b/es-app/src/guis/GuiImageViewer.cpp
+@@ -30,9 +30,10 @@ public:
+ 		setIsLinear(true);
+ 		setImage(image, false, MaxSizeInfo(8192, 8192));
+ 
+-		setPosition(Renderer::getUIWidth() * 0.5, Renderer::getScreenHeight() * 0.5);
++		// on the menus' panel (ES_UI_WIDTH) like the gallery, not zoomed to the 3-panel canvas (ROCKNIXDS issue 32)
++		setPosition(Renderer::getUILeft() + Renderer::getUIWidth() * 0.5, Renderer::getScreenHeight() * 0.5);
+ 		setOrigin(0.5, 0.5);
+-		setMaxSize(Renderer::getScreenWidth(), Renderer::getScreenHeight());	
++		setMaxSize(Renderer::getUIWidth(), Renderer::getScreenHeight());
+ 	}
+ 
+ 	void runAnimation()
+@@ -42,15 +43,10 @@ public:
+ 		{
+ 			auto fromOrigin = getOrigin();
+ 			auto fromScale = getScale();
+-			auto toScale = Renderer::getScreenWidth() / sz.x();
++			// the whole picture, fitted to the panel (filling it cut off a wide picture's sides); L/R zoom from there
++			auto toScale = Math::min(Renderer::getUIWidth() / sz.x(), Renderer::getScreenHeight() / sz.y());
+ 			auto toOrigin = fromOrigin;
+ 
+-			auto imgHeight = sz.y() * toScale;
+-			if (imgHeight > Renderer::getScreenHeight())
+-				toOrigin = Vector2f(0.5, Renderer::getScreenHeight() / imgHeight / 2.0);
+-			else
+-				toScale = Renderer::getScreenHeight() / sz.y();
+-
+ 			Animation* infoFadeIn = new LambdaAnimation([this, fromScale, toScale, fromOrigin, toOrigin](float t)
+ 			{
+ 				auto cubic = Math::easeOutCubic(t);
+@@ -192,6 +188,14 @@ public:
+ 		mLocked = state;
+ 	}
+ 
++	void render(const Transform4x4f& parentTrans) override
++	{
++		// zoomed in or moved, the picture stays on its panel
++		Renderer::pushClipRect(Renderer::getUILeft(), 0, Renderer::getUIWidth(), Renderer::getScreenHeight());
++		ImageComponent::render(parentTrans);
++		Renderer::popClipRect();
++	}
++
+ 	bool hitTest(int x, int y, Transform4x4f& parentTransform, std::vector<GuiComponent*>* pResult)
+ 	{
+ 		if (pResult != nullptr)
+@@ -275,8 +279,10 @@ GuiImageViewer::GuiImageViewer(Window* window, bool linearSmooth) :
+ {
+ 	g_isGuiImageViewerRunning = true;
+ 
+-	setPosition(0, 0);
+-	setSize(Renderer::getScreenWidth(), Renderer::getScreenHeight());
++	// one panel (ES_UI_WIDTH), where the menus are. Sized to the 3-panel canvas, a picture was fitted to its height
++	// only and a wide one ran over the top screen and off the bottom one (ROCKNIXDS issue 32).
++	setPosition(Renderer::getUILeft(), 0);
++	setSize(Renderer::getUIWidth(), Renderer::getScreenHeight());
+ 		
+ 	mGrid.setPosition(0, 0);
+ 	mGrid.setSize(mSize);
+@@ -324,7 +330,7 @@ GuiImageViewer::GuiImageViewer(Window* window, bool linearSmooth) :
+ 
+ 	mGrid.applyTheme(mTheme, "grid", "gamegrid", 0);
+ 
+-	animateTo(Vector2f(0, Renderer::getScreenHeight()), Vector2f(0, 0));
++	animateTo(Vector2f(Renderer::getUILeft(), Renderer::getScreenHeight()), Vector2f(Renderer::getUILeft(), 0));
+ }
+ 
+ void GuiImageViewer::loadPdf(const std::string& imagePath)
+@@ -587,8 +593,8 @@ bool GuiImageViewer::input(InputConfig* config, Input input)
+ 					);
+ 				}
+ 			}
+-			else
+-				mWindow->pushGui(new ZoomableImageComponent(mWindow, path));
++			else // the entry's picture: VIEW GAME MEDIA numbers its entries, and its zoom view got "1" and stayed empty
++				mWindow->pushGui(new ZoomableImageComponent(mWindow, mGrid.getImage(path)));
+ 		}
+ 
+ 		return true;
+@@ -713,8 +719,9 @@ void GuiVideoViewer::playVideo(Window* window, const std::string videoPath)
+ 
+ GuiVideoViewer::GuiVideoViewer(Window* window, const std::string& path) : GuiComponent(window)
+ {
+-	setPosition(0, 0);
+-	setSize(Renderer::getScreenWidth(), Renderer::getScreenHeight());
++	// on the menus' panel, like the pictures
++	setPosition(Renderer::getUILeft(), 0);
++	setSize(Renderer::getUIWidth(), Renderer::getScreenHeight());
+ 
+ #ifdef _RPI_
+ 	if (Settings::getInstance()->getBool("VideoOmxPlayer"))
+@@ -729,8 +736,8 @@ GuiVideoViewer::GuiVideoViewer(Window* window, const std::string& path) : GuiCom
+ 	}
+ 	
+ 	mVideo->setOrigin(0.5f, 0.5f);
+-	mVideo->setPosition(Renderer::getScreenWidth() / 2.0f, Renderer::getScreenHeight() / 2.0f);
+-	mVideo->setMaxSize(Renderer::getScreenWidth(), Renderer::getScreenHeight());
++	mVideo->setPosition(Renderer::getUIWidth() / 2.0f, Renderer::getScreenHeight() / 2.0f);
++	mVideo->setMaxSize(Renderer::getUIWidth(), Renderer::getScreenHeight());
+ 
+ 	mVideo->setOnVideoEnded([&]()
+ 	{		
+diff --git a/es-app/src/guis/GuiSaveState.cpp b/es-app/src/guis/GuiSaveState.cpp
+index 9a21a260..d2934d26 100644
+--- a/es-app/src/guis/GuiSaveState.cpp
++++ b/es-app/src/guis/GuiSaveState.cpp
+@@ -38,7 +38,7 @@ GuiSaveState::GuiSaveState(Window* window, FileData* game, const std::function<v
+ 	addChild(&mLayout);
+ 	
+ 	float cellProportion = 1.77;
+-	float screenProportion = (float)Renderer::getScreenWidth() / (float)Renderer::getScreenHeight();
++	float screenProportion = (float)Renderer::getUIWidth() / (float)Renderer::getScreenHeight(); // one panel wide
+ 
+ 	float sh = (float)Math::min(Renderer::getScreenHeight(), Renderer::getScreenWidth());
+ 	sh = (float) theme->TextSmall.font->getSize() / sh;
+@@ -193,7 +193,9 @@ void GuiSaveState::onSizeChanged()
+ 
+ void GuiSaveState::centerWindow()
+ {
+-	setSize(Renderer::getScreenWidth(), WINDOW_HEIGHT);
++	// one panel wide (ES_UI_WIDTH), centred on the menus' panel. As wide as the 3-panel canvas, its title sat on the
++	// bottom screen and START NEW GAME on the top one (ROCKNIXDS issue 34).
++	setSize(Renderer::getUIWidth(), WINDOW_HEIGHT);
+ 	animateTo(
+ 		Vector2f((Renderer::getScreenWidth() - getSize().x()) / 2, Renderer::getScreenHeight()),
+ 		Vector2f((Renderer::getScreenWidth() - getSize().x()) / 2, Renderer::getScreenHeight() - WINDOW_HEIGHT),
