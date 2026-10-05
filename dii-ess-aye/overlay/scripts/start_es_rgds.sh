@@ -204,6 +204,11 @@ if [ -e /tmp/rocknixds-es-started ]; then
 fi
 touch /tmp/rocknixds-es-started
 
+# ES's memory every 30 s while it runs, in es-mem.log, and a restart before it can take the handheld's memory
+# (es-memwatch.sh: 2026-10-05, 713 MB and minutes of thrashing until the kernel killed it). It ends with ES's unit.
+MEMWATCH=/storage/.config/emulationstation/themes/dii-ess-aye/scripts/es-memwatch.sh
+[ -x "$MEMWATCH" ] && "$MEMWATCH" </dev/null >/dev/null 2>&1 &
+
 if [ -n "$USE_PATCHED" ]; then
     export ES_UI_WIDTH=640
     START=$(date +%s)
