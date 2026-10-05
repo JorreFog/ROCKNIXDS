@@ -161,7 +161,10 @@ class EsFeaturesTest(unittest.TestCase):
         self.assertIn("resume on quit", feats)
         self.assertIn("power profile", feats)
         self.assertIn("microphone sensitivity", feats)
-        for name in ("share performance logs", "3D renderer", "3D resolution", "3D texture filter", "microphone sensitivity"):
+        self.assertIn("wfc dns", feats)
+        self.assertEqual(feats["wfc dns"]["value"], "wfc_dns")
+        self.assertEqual([value for tag, _, value in feats["wfc dns"]["kids"]], ["off", "kaeru", "wiilink", "altwfc"])
+        for name in ("share performance logs", "3D renderer", "3D resolution", "3D texture filter", "microphone sensitivity", "wfc dns"):
             self.assertFalse(any(tag == "feature" for tag, _, _ in feats[name]["kids"]), name)
         self.assertEqual(feats["3D renderer"]["value"], "renderer")
         self.assertEqual(

@@ -6,8 +6,9 @@
 # option (nds.renderer: superdrastic = Gengis Engine, SuperDrastic's own hi-res rasterizer, DSFLIP_RAST=1 in session.sh;
 # drastic = DraStic's; unset, the menu's Auto, is Gengis Engine since 1.5.13), its "3D resolution" (nds.resolution3d: 2x; DSFLIP_RAST_SCALE, Gengis Engine only;
 # unset is the menu's Auto, and Gengis Engine keeps its own scale) and its "3D texture filter" (nds.texture_filter:
-# nearest, bilinear, sharp; DSFLIP_RAST_TEXFILTER, only used with Gengis Engine) are their own options, siblings of
-# share performance logs. 3x is not offered. 1.5.6 saved nds.resolution3d=3x; that line is removed so the menu shows Auto.
+# nearest, bilinear, sharp; DSFLIP_RAST_TEXFILTER, only used with Gengis Engine) and its "wfc dns" (nds.wfc_dns: off,
+# kaeru, wiilink, altwfc; DSFLIP_WFC in session.sh: Wi-Fi online play through a Nintendo WFC replacement server, 1.5.13,
+# untested on a handheld) are their own options, siblings of share performance logs. 3x is not offered. 1.5.6 saved nds.resolution3d=3x; that line is removed so the menu shows Auto.
 # Their value attributes are the system.cfg keys: without one ES derives the key from the name (nds.3D_renderer), which
 # session.sh doesn't read. It also keeps the DS system on
 # ROCKNIXDS's DraStic: es_systems.cfg's nds entry offers only drastic/drastic-sa (ROCKNIX also lists RetroArch cores
@@ -37,7 +38,7 @@ SYSCFG=${SYSCFG:-/storage/.config/system/configs/system.cfg}
 # </features> is the wrapper, not a feature. Reads stdin.
 strip_ours() {
     grep -vE 'value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"' | awk '
-        depth == 0 && ($0 ~ /<feature name="resume on quit"/ || $0 ~ /<feature name="power profile"/ || $0 ~ /<feature name="share performance logs"/ || $0 ~ /<feature name="3D renderer"/ || $0 ~ /<feature name="3D texture filter"/ || $0 ~ /<feature name="3D resolution"/) { depth = 1; next }
+        depth == 0 && ($0 ~ /<feature name="resume on quit"/ || $0 ~ /<feature name="power profile"/ || $0 ~ /<feature name="share performance logs"/ || $0 ~ /<feature name="3D renderer"/ || $0 ~ /<feature name="3D texture filter"/ || $0 ~ /<feature name="3D resolution"/ || $0 ~ /<feature name="wfc dns"/) { depth = 1; next }
         depth > 0 {
             if ($0 ~ /<feature[ \t]/ && $0 !~ /\/>[ \t\r]*$/) depth++
             if ($0 ~ /<\/feature>[ \t\r]*$/) depth--
@@ -92,6 +93,12 @@ add_ours() {
             print ind "<choice name=\"nearest (DS)\" value=\"nearest\" />"
             print ind "<choice name=\"bilinear\" value=\"bilinear\" />"
             print ind "<choice name=\"sharp bilinear\" value=\"sharp\" />"
+            print fi "</feature>"
+            print fi "<feature name=\"wfc dns\" value=\"wfc_dns\">"
+            print ind "<choice name=\"off\" value=\"off\" />"
+            print ind "<choice name=\"Kaeru WFC (Wiimmfi)\" value=\"kaeru\" />"
+            print ind "<choice name=\"WiiLink DNS (Wiimmfi)\" value=\"wiilink\" />"
+            print ind "<choice name=\"AltWFC (unmaintained)\" value=\"altwfc\" />"
             print fi "</feature>"
             next
         }

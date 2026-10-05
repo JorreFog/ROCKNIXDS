@@ -206,6 +206,16 @@ stuck_report() {
     esac
   fi
   if [ -n "$DSFLIP_RAST" ]; then echo "3D renderer: Gengis Engine (${RND:-Auto}; scale ${DSFLIP_RAST_SCALE:-2}, texture filter ${DSFLIP_RAST_TEXFILTER:-0})"; else echo "3D renderer: DraStic"; fi
+  # Wi-Fi online play (ES: the game's or DS system's "wfc dns"; unset or off = stock DraStic, which has no Wi-Fi).
+  # libdsflip then answers the game as an open access point named rocknixds and hands it that DNS server (Kaeru WFC,
+  # WiiLink's DNS, AltWFC: kaeru, wiilink, altwfc, or a dotted address) over DHCP, and the game's traffic goes out over
+  # the handheld's own network. Untested on a handheld: docs/handoff-local.md, section 4. DSFLIP_WFC already in the
+  # environment (systemctl set-environment DSFLIP_WFC=kaeru DSFLIP_WFC_DEBUG=1 for a test) wins over the setting.
+  WFC=$(grep -F "nds[\"$GAME\"].wfc_dns=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ -n "$WFC" ] || WFC=$(grep "^nds.wfc_dns=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  case "$WFC" in ""|off|auto|none) WFC= ;; esac
+  [ -n "$WFC" ] && export DSFLIP_WFC=${DSFLIP_WFC:-$WFC}
+  echo "wifi: ${DSFLIP_WFC:-off}"
   cd $D
   # preload-guard.so keeps libdsflip out of the processes DraStic starts (SuperDrastic 0.3.0-beta.3, 1.5's, started pactl
   # and wpctl for its volume card; with libdsflip in them, they rotated the game's log and overwrote its verdict).

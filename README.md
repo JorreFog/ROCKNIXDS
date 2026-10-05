@@ -201,6 +201,10 @@ the menu's updater pick the right one for the handheld they run on.
 - **The recommended settings are the defaults** (1.5.13). *3D renderer* on *Auto* is Gengis Engine (a player who
   picked *DraStic* keeps it), and the installer switches threaded 3D on where it was never set, as the Plus line did
   since 1.5. The README's "set the best settings" step is gone: a fresh install plays with them.
+- **Wi-Fi online play, experimental and untested** (1.5.13). A *wfc dns* option (off by default) points a game at a
+  community replacement for Nintendo Wi-Fi Connection (Kaeru WFC into Wiimmfi, WiiLink's DNS, AltWFC): the engine
+  answers the game as an open access point and carries its traffic over the handheld's network. Not yet run on a
+  handheld; see *Using it* and `docs/handoff-local.md`.
 - **The menu stays up during DS games** (1.5.13). Fast switching, opt-in since 1.4, is on for everyone: the game runs on
   another console (VT) while ES and sway wait, so after a quit the menu is back about a second later, however many
   games the library holds. Before, ES was stopped and started again for every game, and its start grew with every
@@ -450,6 +454,18 @@ speak, like ROCKNIX's `libdrastouch` does: an RMS level per block against an ada
 *microphone sensitivity* setting as the threshold. **That setting is off by default:** set it (medium is a good
 start) under the Nintendo DS system's or the game's options, or the mic stays off, as on stock ROCKNIX. The mic also hears the speaker, so an echo gate fed by the audio
 pump's output level keeps game music from pressing it (0 false presses in testing, with music playing).
+
+**Wi-Fi online play (1.5.13, experimental, not yet tried on a handheld).** DraStic itself has no Wi-Fi: its wifi
+registers are stubs. With ES's DraStic *wfc dns* option set (under the Nintendo DS system's or a game's options; off
+by default), libdsflip answers the game as an open access point named `rocknixds`, hands it over DHCP the DNS server
+of a community replacement for Nintendo Wi-Fi Connection, and carries the game's traffic over the handheld's own
+network: **Kaeru WFC** (178.62.43.212, into Wiimmfi's 300+ DS games; the one to try first), **WiiLink's DNS**
+(167.235.229.36, also Wiimmfi) or **AltWFC** (172.104.88.237, unmaintained); no patched ROM and no account. In the
+game: *Nintendo WFC Setup > Connection 1 > Search for an Access Point*, pick `rocknixds`, keep *Auto-obtain IP* and
+*Auto-obtain DNS*, *Test Connection*. Logins, lobbies and the GTS are what this build can reach; races and battles
+between players need a full-cone NAT it does not have yet. The Wi-Fi code hooks DraStic's register handlers at fixed
+offsets for the r2.5.2.2 build; with the option off nothing is hooked. What to check on the handheld and how is in
+[`docs/handoff-local.md`](docs/handoff-local.md).
 
 Not in this mode yet: gptokeyb keyboard hotkeys. Everything DraStic maps to buttons itself works.
 
