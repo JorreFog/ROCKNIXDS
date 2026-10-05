@@ -44,6 +44,17 @@ Anbernic RG DS and RG DS Plus on ROCKNIX.</b></p>
   </picture>
 </p>
 
+> [!NOTE]
+> ROCKNIXDS is a vibecoded — and fairly sloppily vibecoded — project. It does things great, but it also contains flaws. It is meant to push this community of retro handhelds forward by providing new ways of doing things with the help of AI. GammaOS has been a huge inspiration for this, and what the GammaOS developer is doing is probably the greatest thing that has ever happened to the retro community that we all are a part of. I think he deserves every penny he receives through his Patreon, and I myself will continue to subscribe to it. If this project can help GammaOS improve in any way, then I am very happy. I would always recommend people use software that is created by humans first and foremost. AI should not be used to replace anything; it is only a tool that can help development and make it faster. All the love to GammaOS and its creator.
+>
+> The area this project is focusing on the most right now is improving NDS emulation performance at the lowest clock speeds possible. This means that other functionality, minor bugs, and things like that will be prioritized a bit less. I will try to address as many of the bugs being reported as possible. But just keep this in mind when using ROCKNIXDS.
+>
+> An `.img` file to simplify the installation is almost done. It has been going through some manual testing just to make sure it works properly.
+>
+> I also have a lot of school stuff happening right now, so I will have to prioritize those things a bit more moving forward, and updates will come less frequently.
+>
+> Thanks to everyone who has tested this and contributed to its development.
+
 The Anbernic RG DS is a clamshell handheld with two 640×480 touch panels and an RK3566 (4× Cortex-A55,
 Mali-G52); the RG DS Plus has two 1024×768 panels. ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [ROCKNIX](https://rocknix.org) install:
 
