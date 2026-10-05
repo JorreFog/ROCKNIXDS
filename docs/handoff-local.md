@@ -14,6 +14,42 @@ curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh 
 `/storage/.config/drastic/dsflip/dsflip.log` (the engine's log of the last game), `last-session.log` (the launcher's),
 `/var/log/es_log.txt` (EmulationStation).
 
+## Results on an RG DS Plus, 2026-10-05
+
+Run on an RG DS Plus (ROCKNIX 20260930) with this tree ported to the Plus line (`plus-beta` + these changes, SuperDrastic
+`0.5.0-beta.1-rocknixds.3`: v0.5.0-beta.1, the in-game menu, plus the four patch commits). That port is the branch
+`claude/tender-volta-a9nkpk-plus` (version `1.5.13-plus-beta.2-dev`, a test build: its release notes are still the RG
+DS's `v1.5.13.md`); on an RG DS Plus, `RGDS_BRANCH=claude/tender-volta-a9nkpk-plus` in the command above installs it.
+Games were started through ES's API and quit with the exit hotkey's signal; nobody held the handheld.
+
+- **Fast switching (1.5.13's first item): works after one fix.** The kept ES window came back from the VT switch one
+  panel wide (1024x768 instead of 3072x768), so the bottom panel stayed black. `restore.sh` there now lifts sway's
+  floating size limit, resizes to three panels and puts the limit back. That code is the Plus line's own path in
+  `restore.sh` (this branch's file has only the RG DS's `resize set 1920 480`), so the fix is in
+  `claude/tender-volta-a9nkpk-plus` and v1.5.13-plus has to be cut from that branch or carry it. The RG DS path is
+  unchanged and has not run on an RG DS. `tools/switchtime.sh`, HeartGold, 4 cycles after the fix: ES shown
+  0.99-1.02 s after the kill, ES's API idle at 2.6-2.7 s. A real quit (SIGUSR1, resume state saved in 1.05 s): unit ended at 2.6 s, API idle at 3.7 s;
+  the next start resumed from it.
+- **1, defaults:** with `nds.renderer` unset the log says `3D renderer: Gengis Engine (Auto; texture filter 0)` (the
+  Plus line has no 3D resolution, so no `scale`). The rasterizer's own line (`[rast] Gengis Engine: hooked
+  video_3d_render_bins_4x, mode ours, scale 2`) is in `drastic.out`, not `dsflip.log`. Steps 3-5 not run.
+- **ds-fsr at 3x:** `[dsflip] shader output: 768x576 per panel, scaled to 1024x768 by the display controller`,
+  59.6-60.9 presents a second with `dropped=0` over 25 s of HeartGold. The picture was not looked at by a person.
+- **2, empty library:** steps 2, 4 and 5 pass (screenshots taken): the shelf lists Nintendo DS with 0 games, the
+  library shows "No games yet / Copy .nds files to roms/nds", `00 / 00`, *B Back*, a muted *No games*; A, up, down, L,
+  R, Y and taps on the reel, START's old spot and *No games* change nothing; a tap on *Back* goes back; no `System
+  "nds" has no games` line. One game copied in + `/reloadgames`: "1 game", it launches, the menu is back on the DS.
+  Seen with that one never-played game: the home card shows it as *Last played* with an empty cover.
+- **3, microphone:** H1 and H3 are out on this unit (`controls_a 327, controls_b 327`; a 3 s capture reads RMS 0.067).
+  With sensitivity *high* and `DSFLIP_MIC_DEBUG=1` the new lines all appear; 28 s of HeartGold with nobody blowing
+  gave 2 presses (one at level 0.35, lf 0.97). Background blocks read lf 0.7-0.97, as high as a blow is expected to.
+  The blow test itself (steps 1, 3, 4, 6) still needs a person.
+- **4, Wi-Fi:** step 1: build id `7a5e0e5f...0748`, type 3. Step 2 from the handheld (on a phone hotspot): all four
+  servers answer all three names with their own addresses, and all four conntest pages return 200. Step 3 (Mario
+  Kart DS, `DSFLIP_WFC=kaeru`): `[wfc] online via Kaeru WFC (178.62.43.212)` and `[wfc] layout ok (reg ok, mac ok, IF
+  store plain)`, 60 presents a second. Steps 4-9 need a person in the game's Wi-Fi setup.
+- The in-game menu (0.5.0-beta.1) opens and closes in this build under fast switching (`[menu] open` / `closed`).
+
 ## 1. The recommended settings are the defaults
 
 **Done on the host.** `dsflip/device/session.sh` runs Gengis Engine when *3D renderer* is *Auto* (unset) or
