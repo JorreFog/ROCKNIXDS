@@ -57,7 +57,7 @@ stuck_report() {
     # The last game's switch back (restore.sh --vt-back) may still be waiting for ES to draw: a start that quick
     # (two launch requests in a row) must not let it switch the panels back to sway under this game, and the console
     # is then still tty12, which is not sway's: keep the VT that game recorded.
-    systemctl stop dsflip-vtback.service 2>/dev/null
+    [ -e /tmp/dsflip-vt-later ] && systemctl stop dsflip-vtback.service 2>/dev/null   # (pending exactly while it exists)
     CUR=$(fgconsole 2>/dev/null)
     if [ "$CUR" = 12 ] && [ -s /tmp/dsflip-vt ]; then echo "$(ms) ms: the last game's switch back was still pending: sway stays on tty$(cat /tmp/dsflip-vt)"
     else echo "${CUR:-1}" > /tmp/dsflip-vt; fi
