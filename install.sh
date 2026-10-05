@@ -259,7 +259,7 @@ if [ $UNINSTALL = 1 ]; then
         if [ -e $DRASTIC/drastic.dvsync ]; then cp -p $DRASTIC/drastic.dvsync $DRASTIC/drastic
         else printf '#!/bin/sh\nexec /storage/.config/drastic/drastic.real "$@"\n' > $DRASTIC/drastic; chmod +x $DRASTIC/drastic; fi
     fi
-    [ -e $DRASTIC/dsflip/vt-switch ] && es_del HideWindow      # fast-switch on set it; ROCKNIX's default again
+    sed -i '/<bool name="HideWindow" /d' $ES_SETTINGS 2>/dev/null      # fast-switch on (up to 1.5.12) set it; ROCKNIX's default again
     # ROCKNIX's DS emulators again (lockdown), while es-features.sh is still there
     [ -f $DRASTIC/dsflip/es-features.sh ] && sh $DRASTIC/dsflip/es-features.sh --unlock-nds
     rm -rf $DRASTIC/dsflip
@@ -484,6 +484,12 @@ if [ $DSFLIP_ON = 1 ]; then
        "$SRC/dsflip/device/media-auto.sh" "$SRC/dsflip/device/preload-guard.so" "$SRC/dsflip/device/drastic-launch" \
        $WORK/dsflip/
     sh $WORK/dsflip/install.sh
+    # fast switching (dsflip/fast-switch): ES and sway stay up during a DS game, which runs on another VT, so the menu
+    # is back about a second after a quit whatever the size of the library (nothing restarts). On unless the player
+    # turned it off (fast-switch off leaves fast-switch-off). ES is stopped here, so no restart: it reads the switch at
+    # every launch and the HideWindow override an older fast-switch wrote is gone by the time it starts.
+    if [ -e $DRASTIC/dsflip/fast-switch-off ]; then say "Fast switching stays off (fast-switch off)"
+    else say "Fast switching on: the menu stays up during DS games"; sh $DRASTIC/dsflip/fast-switch on; fi
 
     # DS-pixel-aware shaders for DraStic (sharp and LCD-grid looks that work at 1x and 2x) + their ES entries
     mkdir -p $DRASTIC/shaders

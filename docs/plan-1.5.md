@@ -15,6 +15,12 @@ the launcher shows the window then). Now: outputs +1.38-1.43 s, ES answering +3.
 (0.43 s), sway's start (0.8 s) and ES loading its gamelists and theme (~1.4 s after its window appears).
 Test launches (smoke.sh, switchtime.sh) no longer count as plays (/tmp/rocknixds-testing).
 
+**Done (2026-10-05, 1.5.13):** fast switching (1.4's opt-in VT mode) is the default, so the way back no longer
+restarts ES and no longer grows with the library: the patched ES keeps its window for exactly those launches
+(es-rgds-keepwindow.patch, a DS game run by DraStic while dsflip/vt-switch exists) instead of HideWindow being off for
+every system, and tells the launcher (RGDS_ES_KEEPS_WINDOW) so it takes the VT path only then. `fast-switch off` is
+kept across updates. Not yet re-measured on a handheld (1.4: ES answering 1.2 s, visible 1.6-1.8 s).
+
 1.4 starts a game as fast as 1.3 (first frame 3.47 s after the launch request, 1.3: 3.44 s), but the way back to the
 menu is ~0.8 s slower: ES answers its API 3.51 s after the game ends (1.3: 2.65 s) and is visible at 5.26 s (1.3:
 4.47 s). Known so far: it isn't the menu governor hook (ES starts in ~1.7 s with or without it), the CPU clock limit
@@ -54,7 +60,10 @@ itself (ROCKNIX's runemu.sh and start_drastic.sh take ~2.3 s before our unit sta
 - **Skipping unchanged frames with a shader**: needs a way to know a frame didn't change without reading DraStic's
   uncached buffers back.
 - **ds-fsr** (5.3 ms per panel at 800 MHz, 4.3 in the 1.4 comparison session): a two-pass version that analyses each
-  source pixel once.
+  source pixel once. **Done (2026-10-05, 1.5.13), for the RG DS Plus:** the shader asks for a 3x buffer
+  (`dsflip-output: 3x`, SuperDrastic 0.4.0-beta.2-rocknixds.1), 768x576 instead of 1024x768 per panel (56% of the
+  pixels; a 2x game upscaled 1.5x by EASU, the rest by the VOP), so the pass should fit the frame where a panel-sized
+  one took ~25 ms. To measure on a Plus: SuperDrastic's `tools/shaders.sh` with `OUT=1024x768`.
 - **Other systems**: ROCKNIX's per-system governors for RetroArch cores, measured with free homebrew ROMs.
 
 ## 3. SuperDrastic

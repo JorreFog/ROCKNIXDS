@@ -1,0 +1,68 @@
+diff --git a/es-app/src/FileData.cpp b/es-app/src/FileData.cpp
+index cf680fc2..d3bef303 100644
+--- a/es-app/src/FileData.cpp
++++ b/es-app/src/FileData.cpp
+@@ -35,6 +35,7 @@
+ #include "resources/TextureData.h"
+ #include "views/gamelist/GameNameFormatter.h"
+ #include "watchers/WatchersManager.h"
++#include <stdlib.h>
+ 
+ using namespace Utils::Platform;
+ 
+@@ -696,6 +697,23 @@ std::string FileData::getMessageFromExitCode(int exitCode)
+ 	return _("UKNOWN ERROR") + " : " + std::to_string(exitCode);
+ }
+ 
++// ROCKNIXDS (es-rgds-keepwindow.patch): fast switching. A DS game run by ROCKNIXDS's DraStic launcher switches the
++// console to another VT, so seatd hands the display to the game and back afterwards while ES waits for it: nothing
++// restarts, and the menu is back about a second after the game, whatever the size of the library. For that ES must
++// keep its window and renderer during the game: torn down (HideWindow, ROCKNIX's default on this hardware), its GL
++// re-init after the VT round trip fails (glGenTextures, SIGSEGV). So such a launch keeps them whatever HideWindow
++// says, and every other launch (other systems, DS with fast switching off) follows HideWindow as before.
++// RGDS_ES_KEEPS_WINDOW in the game's environment tells the launcher (dsflip/drastic-wrapper.sh) which it got, so both
++// sides always take the same path. dsflip/vt-switch is the switch (dsflip/fast-switch on|off), read at every launch.
++static bool rgdsKeepsWindow(FileData* game)
++{
++	if (game == nullptr || game->getSystemName() != "nds" || game->getEmulator() != "drastic")
++		return false;
++	return Utils::FileSystem::exists("/storage/.config/drastic/dsflip/vt-switch", false) &&
++		Utils::FileSystem::exists("/storage/.config/drastic/dsflip/libdsflip.so", false) &&
++		!Utils::FileSystem::exists("/storage/.config/drastic/nodsflip", false);
++}
++
+ bool FileData::launchGame(Window* window, LaunchGameOptions options)
+ {
+ 	LOG(LogInfo) << "Attempting to launch game...";
+@@ -716,6 +734,9 @@ bool FileData::launchGame(Window* window, LaunchGameOptions options)
+ 	VolumeControl::getInstance()->deinit();
+ 
+ 	bool hideWindow = Settings::getInstance()->getBool("HideWindow");
++	bool keepForVt = rgdsKeepsWindow(gameToUpdate);	// ROCKNIXDS: the window stays for a fast-switching DS game (above)
++	if (keepForVt)
++		hideWindow = false;
+ 	window->deinit(hideWindow);
+ 	
+ 	const std::string rom = Utils::FileSystem::getEscapedPath(getPath());
+@@ -735,9 +756,11 @@ bool FileData::launchGame(Window* window, LaunchGameOptions options)
+ 	WatchersManager::pause();
+ 
+ 	ProcessStartInfo process(command);
+-	process.window = hideWindow ? NULL : window;
++	process.window = hideWindow || keepForVt ? NULL : window;	// ROCKNIXDS: no launch splash over the theme's ready screen
+ 	
++	setenv("RGDS_ES_KEEPS_WINDOW", keepForVt ? "1" : "0", 1);	// ROCKNIXDS: for the launcher (above)
+ 	int exitCode = process.run();
++	unsetenv("RGDS_ES_KEEPS_WINDOW");
+ 	
+ 	// Resume watchers when returning to ES
+ 	WatchersManager::resume();
+@@ -762,7 +785,7 @@ bool FileData::launchGame(Window* window, LaunchGameOptions options)
+ 
+ 	Scripting::fireEvent("game-end");
+ 
+-	if (!hideWindow && Settings::getInstance()->getBool("HideWindowFullReinit"))
++	if (!hideWindow && !keepForVt && Settings::getInstance()->getBool("HideWindowFullReinit"))	// ROCKNIXDS: never after a VT switch
+ 	{
+ 		ResourceManager::getInstance()->reloadAll();
+ 		window->deinit();

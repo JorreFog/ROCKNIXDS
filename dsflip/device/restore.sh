@@ -40,7 +40,8 @@ wait_outputs() {                # up to 3 s
     i=0; while [ $i -lt 60 ]; do sway_has_outputs && return 0; sleep 0.05; i=$((i + 1)); done; return 1
 }
 # VT mode (session.sh switched the console away from sway): switch back, sway takes the display again and ES,
-# which kept running, carries on (it makes a new window after a game; its launcher places it).
+# which kept running and kept its window (es-rgds-keepwindow.patch), carries on; its window is placed again in case
+# sway resized it while the console was away.
 if [ -f /tmp/dsflip-vt ]; then
     VT=$(cat /tmp/dsflip-vt); rm -f /tmp/dsflip-vt
     chvt "${VT:-1}"

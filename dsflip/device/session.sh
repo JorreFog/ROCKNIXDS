@@ -1,7 +1,9 @@
 #!/bin/sh
 # libdsflip game session (runs as systemd unit dsflip-game, outside ES's process tree).
-# Stops ES + sway, runs DraStic with libdsflip on the bare panels, then brings sway + ES back. If this script is
-# killed with the unit (systemctl stop dsflip-game), the unit's ExecStopPost (restore.sh) does that instead.
+# Fast switching (DSFLIP_VT=1, the default): switches the console to another VT so seatd hands the panels to DraStic
+# while ES and sway wait, and back afterwards. Otherwise stops ES + sway, runs DraStic with libdsflip on the bare
+# panels, then brings sway + ES back. If this script is killed with the unit (systemctl stop dsflip-game), the unit's
+# ExecStopPost (restore.sh) does that instead.
 # The exit hotkey (killall -9 drastic) works because DraStic runs through a symlink named "drastic".
 D=/storage/.config/drastic
 LOG=$D/dsflip/last-session.log
@@ -51,8 +53,9 @@ stuck_report() {
   # own), so kill it outright, as start_drastic.sh itself does after a game. One stop for both units: systemd
   # orders it (ES first) without a second round trip.
   kill -9 $(pidof gptokeyb) 2>/dev/null
-  if [ -e $D/dsflip/vt-switch ] && systemctl is-active -q sway.service; then
-    # VT mode: sway and ES stay up. Switching the console away from sway's VT makes seatd disable sway's session,
+  if [ "$DSFLIP_VT" = 1 ] && systemctl is-active -q sway.service; then
+    # VT mode (drastic-wrapper.sh sets DSFLIP_VT=1 when ES kept its window for this launch: fast switching, the
+    # default): sway and ES stay up. Switching the console away from sway's VT makes seatd disable sway's session,
     # which releases the display (DRM master) in ~80 ms; restore.sh switches back. tty12 is unused; graphics mode
     # keeps the kernel console from drawing on it in between.
     VT=1
@@ -81,8 +84,10 @@ stuck_report() {
   GPU_MIN=$(cat $GPU/min_freq 2>/dev/null)
   case "${DSHOOK_SHADER:-none}" in
     none|bilinear) GOV=powersave; MIN= ;;
-    # ds-fsr (FSR 1.0) needs ~9.5 ms of GPU per frame: under simple_ondemand it sat at 800 MHz 97% of the time
-    # and dropped frames while ramping up from the floor at the start, so it gets the full clock from the start
+    # ds-fsr (FSR 1.0) needs ~9.5 ms of GPU per frame on the RG DS (~14 ms on the Plus, where it draws 3x the DS
+    # screen, 768x576, and the display controller scales the rest; SuperDrastic's shaders/ds-fsr.frag): under
+    # simple_ondemand it sat at 800 MHz 97% of the time and dropped frames while ramping up from the floor at the
+    # start, so it gets the full clock from the start
     ds-fsr) GOV=${DSFLIP_SHADER_GOV:-performance}; MIN=$DSFLIP_SHADER_GPU_MIN ;;
     *) GOV=${DSFLIP_SHADER_GOV:-simple_ondemand}; MIN=${DSFLIP_SHADER_GPU_MIN:-400000000} ;;
   esac

@@ -78,7 +78,7 @@ erased**), and a computer with an SD card reader.
    | 3D renderer | **Gengis Engine** | The same picture as DraStic's renderer, with about 12% less CPU work |
    | 3D texture filter | **nearest (DS)** | Bilinear smooths textures but doubles the 3D work |
    | 3D resolution | Auto | Gengis Engine's 2×. 3× isn't offered yet |
-   | Shader | **default (bilinear)** for the best performance and battery, or **ds-crisp** for a sharp picture | default needs no GPU work; ds-crisp is the light sharp choice. Avoid ds-fsr, the heaviest |
+   | Shader | **default (bilinear)** for the best performance and battery, or **ds-crisp** for a sharp picture | default needs no GPU work; ds-crisp is the light sharp choice. ds-fsr (smooth edges) is the heaviest: it runs the GPU at full clock |
    | Power profile | **balanced** | Full speed with the lowest input lag. *performance* only if a game slows down |
    | Hires 3D | **on** | 2× resolution. The installer already switches it on |
    | Threaded 3D | **on** | Spreads the 3D work over the cores |
@@ -196,6 +196,16 @@ the menu's updater pick the right one for the handheld they run on.
 - **A faster Gengis Engine** (1.5.9, SuperDrastic 0.4.0-beta.2). A leaner rasterizer and a NEON compositor for the 3D
   layer: Pokémon HeartGold takes ~5% less CPU than with 1.5.5's Gengis Engine and ~12% less than with DraStic's renderer,
   and runs closer to full speed at 816 MHz (53 fps instead of 51.6). Still pixel for pixel the same picture as DraStic.
+- **The menu stays up during DS games** (1.5.13). Fast switching, opt-in since 1.4, is on for everyone: the game runs on
+  another console (VT) while ES and sway wait, so after a quit the menu is back about a second later, however many
+  games the library holds. Before, ES was stopped and started again for every game, and its start grew with every
+  game it had to load. The patched ES keeps its window for exactly those launches (`es-rgds-keepwindow.patch`), so
+  other emulators keep ROCKNIX's behaviour; `fast-switch off` goes back to stopping ES.
+- **ds-fsr upscales 2× to 3× on the RG DS Plus** (1.5.13, SuperDrastic 0.4.0-beta.2-rocknixds.1). On the Plus's
+  1024×768 panels the FSR pass drew every panel pixel, 2.6× the RG DS's work and more than a frame of GPU time.
+  It now draws 3× the DS screen (768×576; a 2× game is upscaled 1.5×, FSR's *Quality* ratio) and the display
+  controller scales the rest, at 56% of the GPU time. A shader can ask for its output size with a
+  `dsflip-output:` line. Not yet measured on a Plus; the RG DS is unchanged.
 
 ### New in 1.4
 
@@ -210,7 +220,7 @@ the menu's updater pick the right one for the handheld they run on.
   achievements that read the DS's DTCM memory work; the unlock sound chosen in ES plays; ES's RetroAchievements
   menu opens again (it said "Unauthenticated").
 - **Play stats for DS games:** last played, play count and time played are recorded.
-- **fast-switch** (experimental, opt-in): ES and sway stay up during DS games, and the menu is back in ~1.7 s.
+- **fast-switch** (experimental, opt-in; the default since 1.5.13): ES and sway stay up during DS games, and the menu is back in ~1.7 s.
 - **Other themes** get stock ROCKNIX's layout, and the patched ES runs on any ROCKNIX release where it links.
 - **Media tool:** RetroAchievements counts leave out RA's hidden warning achievement, and errors are shown
   instead of silently keeping old strips.
@@ -297,7 +307,8 @@ downloads > ROCKNIXDS* in the menu keeps it up to date.
 It installs the ROCKNIXDS Pixel themes (light, the default, and dark), the dii-ess-aye theme (downloaded from
 [upstream](https://github.com/beebono/dii-ess-aye) at the pinned commit, then this repo's overlay), the patched
 EmulationStation, `libdsflip` as the default DraStic launcher, and
-switches on 2× resolution for DS. It also adds the ds-* shaders to ES's shader menu, and keeps them there when a
+switches on 2× resolution for DS and fast switching (ES stays up during DS games; `dsflip/fast-switch off` undoes
+that part). It also adds the ds-* shaders to ES's shader menu, and keeps them there when a
 ROCKNIX update changes that menu. Everything it replaces is backed up first under `/storage/rgds-rocknix-backup/`
 (the folder keeps its old name so earlier installs can still be undone).
 Running it again upgrades an earlier version in place.
@@ -399,15 +410,21 @@ its measure-first phases are in [`docs/drastic-2x-plan.md`](docs/drastic-2x-plan
 
 It's installed as the default DraStic launcher: start any DS game from EmulationStation as usual.
 
-- The game runs in a detached systemd unit (`dsflip-game`). The unit stops ES and sway, which gives
-  DraStic DRM master, and brings them back when you quit. The game's first frame comes about 3.5 s after you
-  start it (2.3 s of that is ROCKNIX's own launch scripts), and the menu is back about 4.3 s after you quit
-  (`tools/switchtime.sh <device-ip>` measures each step).
-- **Fast switching (experimental, since 1.4):** `/storage/.config/drastic/dsflip/fast-switch on` keeps ES and sway
-  running during DS games: the game switches the console to another VT so seatd hands it the display, and back
-  afterwards. The menu is back ~1.7 s after you quit instead of ~4.3 s. It turns off ES's *HideWindow* setting,
-  which applies to every system, so other emulators may show ES's loading screen on their unused screen.
-  `fast-switch off` undoes it; uninstalling does too.
+- The game runs in a detached systemd unit (`dsflip-game`), and ES and sway stay up while it runs (**fast switching**,
+  opt-in since 1.4, the default since 1.5.13): the session switches the console to another VT, so seatd hands DraStic
+  the display (DRM master), and back afterwards; ES, which was waiting for the game, carries on. The game's first
+  frame comes about 3.5 s after you start it (2.3 s of that is ROCKNIX's own launch scripts), and the menu is back
+  about a second after you quit (1.4 measured 1.2 s to ES answering, 1.6–1.8 s visible), however many games the
+  library holds: nothing restarts and nothing is reloaded (`tools/switchtime.sh <device-ip>` measures each step).
+  For that the patched ES keeps its window and renderer during the game (`es-rgds-keepwindow.patch`: with them torn
+  down, ES's GL re-init after the VT round trip failed), for exactly these launches: a DS game run by DraStic while
+  `dsflip/vt-switch` exists. It tells the launcher so (`RGDS_ES_KEEPS_WINDOW`), which takes the VT path only then.
+  Other emulators follow ES's *HideWindow* setting as before (up to 1.5.12 fast switching turned it off for every
+  system, which could put ES's loading screen on the panel another emulator didn't use: that is why it was opt-in).
+- **`/storage/.config/drastic/dsflip/fast-switch off`** goes back to the stop/start way: the unit stops ES and sway
+  for the game and starts them again afterwards, and the menu is back ~4.3 s after you quit with a handful of
+  games, longer with every game ES has to load again. The choice is kept across updates; `fast-switch on` turns it
+  back on. Stock ES (the launcher's fallback when the patched one can't run) always takes this way.
 - If a game ends abnormally, ES says why once it's back: DraStic crashed, or libdsflip couldn't take over the
   screens (then the session stops at once instead of leaving them black).
 - To quit, use the ROCKNIX exit hotkey or *Exit DraStic* in DraStic's menu (MODE button). Stopping the unit
@@ -449,7 +466,7 @@ stock path uses:
   | ds-grid | sharp, with an LCD pixel grid on the real DS pixels |
   | ds-grid + NDS color | ds-grid with the DS color profile |
   | ds-grid-2x | pixel-perfect at 2×, with an even DS-pixel grid |
-  | ds-fsr | AMD FSR 1.0 (EASU): smooth, edge-aware upscaling instead of sharp pixels. Heavier: it runs the GPU at 800 MHz |
+  | ds-fsr | AMD FSR 1.0 (EASU): smooth, edge-aware upscaling instead of sharp pixels. Heavier: it runs the GPU at 800 MHz. On the RG DS Plus it upscales to 3× (768×576) and the display controller does the last step, see *Cost* |
   | ds-integer | pixel-perfect: each screen at exactly 2× (512×384), centred in a dark bezel. Touch follows the smaller screen |
 
   The NDS color profile is the one ROCKNIX's lcd1x+nds-color uses, except that very saturated blues are clamped
@@ -479,6 +496,14 @@ stock path uses:
   16.7 ms frame for both), so it pins the GPU at 800 MHz; a straight port of FSR took 9.7 ms per screen and
   dropped every other frame (see the shader's header for how it was made twice as fast). HeartGold at 2× with lcd3x: 4 dropped frames in
   60 s of walking, SoC ~60 °C.
+- **ds-fsr on the RG DS Plus** (1.5.13): its panels are 1024×768, 2.56× the RG DS's pixels, so a panel-sized FSR pass
+  would take ~12 ms per screen, ~25 ms per frame for both: more than the refresh, every other frame dropped. The
+  shader now asks for a 3× buffer (`// dsflip-output: 3x` in its source, SuperDrastic 0.4.0-beta.2-rocknixds.1):
+  it draws 768×576 per screen, upscaling a 2× game 2× → 3× (1.5×, the ratio FSR calls *Quality*), and the display
+  controller scales that to the panel like it scales DraStic's own frames without a shader. 56% of the pixels:
+  ~7 ms per screen, ~14 ms per frame, which fits. On the RG DS (640×480) 3× doesn't fit, so nothing changes there.
+  Not yet measured on a Plus: `tools/shaders.sh` in SuperDrastic with `OUT=1024x768` times it as the library runs
+  it. `DSFLIP_SHADER_OUTPUT=4x` (or `panel`, `WxH`) tries other sizes without editing the shader.
 - At 2× (hires) the source is 512×384, so shaders written for integer scales ≥2× (sharp-bilinear, lcd3x) scale
   unevenly (1.25×). ds-crisp is the sharp choice there.
 
@@ -711,8 +736,8 @@ dark-background and a light-background version, a stacked version for small squa
 - **Heavy stretches at 2× can still drop frames** (up to ~10/s in one run). There, DraStic's own frame
   times vary so much that its frames arrive spread over the whole refresh cycle, and no latch position can
   separate them. Calm stretches drop about one frame every 8 s.
-- `libdsflip` stops ES while a game runs, so switching takes ~3.5 s in and ~4.3 s out. Keeping ES running
-  across a game is possible (see the plan).
+- Starting a DS game takes ~3.5 s, 2.3 s of them in ROCKNIX's own launch scripts. (Quitting used to restart ES, ~4.3 s
+  plus every game it had to load again; since 1.5.13 ES stays up and the menu is back about a second after a quit.)
 
 ## Credits
 

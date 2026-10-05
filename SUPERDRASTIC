@@ -1,3 +1,7 @@
 # The SuperDrastic release install.sh installs (https://github.com/JorreFog/SuperDrastic): version and the sha256 of
 # superdrastic-<version>-aarch64.tar.gz. Bump both together. This release ships the package in dsflip/.
-0.4.0-beta.2 3ddf98ee5ca92f716dbbc76e472e7392f3537c78ed8f0326d74d05a63b0ff2d1
+# 0.4.0-beta.2-rocknixds.1 is SuperDrastic v0.4.0-beta.2 plus dsflip/superdrastic-0.4.0-beta.2-rocknixds.1.patch (shader
+# output sizes, ds-fsr at 3x on the RG DS Plus), built with SuperDrastic's build.sh (clang 18 + lld, an Ubuntu noble arm64
+# sysroot: libc6 2.39, libdrm 2.4.125) and package.sh; it needs glibc 2.38 like the release. Once the patch is in a
+# SuperDrastic release, pin that release here instead and drop the patch.
+0.4.0-beta.2-rocknixds.1 63e6be05ba741f81dde4c471edf44ce8dd5d58e88f44fb1897138428994238c5
