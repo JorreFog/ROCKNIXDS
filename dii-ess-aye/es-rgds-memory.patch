@@ -1,0 +1,67 @@
+es-rgds-memory: glibc's allocator keeps less, and gives the menu's freed memory back before a game
+
+The menu once grew to 713 MB on an RG DS Plus (975 MB RAM, no swap) and was OOM-killed after the handheld had been
+unreachable for minutes (2026-10-05; not reproduced in ten game round trips since). Whatever grew, glibc made it stick:
+images are decoded at full size on several threads, freed buffers stay in per-thread arenas (up to eight per core),
+and after its first big free glibc raises its mmap threshold, so later big buffers come from those arenas as well.
+ES now runs with two arenas and maps every buffer from 256 KB up on its own, which goes back to the system when freed
+(MALLOC_ARENA_MAX / MALLOC_MMAP_THRESHOLD_ in the environment still decide when set), and trims the heap
+(malloc_trim) right before a game starts, so the game gets what the menu freed. The rnds engine's texture cache has
+a byte budget of its own (es-rgds-rnds.patch).
+
+diff --git a/es-app/src/main.cpp b/es-app/src/main.cpp
+index 75714e3d..056a703f 100644
+--- a/es-app/src/main.cpp
++++ b/es-app/src/main.cpp
+@@ -41,6 +41,9 @@
+ #include "Paths.h"
+ #include "resources/TextureData.h"
+ #include "resources/TextureResource.h"
++#if defined(__GLIBC__)
++#include <malloc.h>
++#endif
+ #include "Scripting.h"
+ #include "watchers/WatchersManager.h"
+ #include "HttpReq.h"
+@@ -488,6 +491,17 @@ int main(int argc, char* argv[])
+ {
+ 	// Utils::MathExpr::performUnitTests();
+ 
++#if defined(__GLIBC__)
++	// ROCKNIXDS (es-rgds-memory): the menu once grew to 713 MB on an RG DS Plus (975 MB, no swap) and was OOM-killed
++	// after minutes of thrashing. Images are decoded at full size on several threads, and glibc then keeps freed
++	// buffers in per-thread arenas (up to 8 per core) and, past its first big free, raises its mmap threshold so later
++	// big buffers come from those arenas too: the process only grows. Two arenas, and buffers from 256 KB up mapped
++	// on their own (returned to the system when freed). MALLOC_ARENA_MAX / MALLOC_MMAP_THRESHOLD_ in the environment
++	// still win (glibc reads them first; mallopt here only fills in the unset ones).
++	if (!getenv("MALLOC_ARENA_MAX")) mallopt(M_ARENA_MAX, 2);
++	if (!getenv("MALLOC_MMAP_THRESHOLD_")) mallopt(M_MMAP_THRESHOLD, 256 * 1024);
++#endif
++
+ #ifdef WIN32
+ 	// Must run before any window/message-queue APIs are touched.
+ 	Utils::Platform::setDpiAwareness();
+diff --git a/es-app/src/views/ViewController.cpp b/es-app/src/views/ViewController.cpp
+index c1b63879..71680576 100644
+--- a/es-app/src/views/ViewController.cpp
++++ b/es-app/src/views/ViewController.cpp
+@@ -30,6 +30,9 @@
+ #include "guis/GuiMsgBox.h"
+ #include "utils/ThreadPool.h"
+ #include <SDL_timer.h>
++#if defined(__GLIBC__)
++#include <malloc.h>
++#endif
+ #include "TextToSpeech.h"
+ #include "VolumeControl.h"
+ #include "guis/GuiNetPlay.h"
+@@ -472,6 +475,9 @@ bool ViewController::doLaunchGame(FileData* game, LaunchGameOptions options)
+ 	// Silence TTS when launching a game
+ 	TextToSpeech::getInstance()->say(" ");
+ 
++#if defined(__GLIBC__)
++	malloc_trim(0);	// ROCKNIXDS (es-rgds-memory): what the menu freed goes back to the system before the game needs it
++#endif
+ 	bool reload = game->launchGame(mWindow, options) && game->getSourceFileData()->getSystemName() == "windows_installers";
+ 	sLastGameEndedAt = SDL_GetTicks();
+ 	if (sLastGameEndedAt == 0)
