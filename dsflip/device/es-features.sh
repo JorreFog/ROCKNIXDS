@@ -32,17 +32,19 @@ STATE=${ESF_STATE:-/storage/rgds-rocknix-backup}     # the installer's backup di
 # failed to parse (CustomFeatures::loadEsFeaturesFile returns without a fallback to ROCKNIX's copy), so every system's
 # options in that file disappeared, DraStic's included (#36, #37).
 # Depth counts nested <feature> elements. A </feature> with nothing open is the stray close, and is dropped.
+# A line that opens and closes a <feature> counts as both, the open first, so its close isn't taken for a stray one:
+# a one-line option of ROCKNIX's stays, and a one-line copy of ours goes on its own.
 # </features> is the wrapper, not a feature. Reads stdin.
 strip_ours() {
     grep -vE 'value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"' | awk '
-        depth == 0 && ($0 ~ /<feature name="resume on quit"/ || $0 ~ /<feature name="power profile"/ || $0 ~ /<feature name="share performance logs"/ || $0 ~ /<feature name="3D renderer"/ || $0 ~ /<feature name="3D texture filter"/ || $0 ~ /<feature name="3D resolution"/ || $0 ~ /<feature name="wfc dns"/) { depth = 1; next }
+        depth == 0 && ($0 ~ /<feature name="resume on quit"/ || $0 ~ /<feature name="power profile"/ || $0 ~ /<feature name="share performance logs"/ || $0 ~ /<feature name="3D renderer"/ || $0 ~ /<feature name="3D texture filter"/ || $0 ~ /<feature name="3D resolution"/ || $0 ~ /<feature name="wfc dns"/) { if ($0 !~ /<\/feature>[ \t\r]*$/) depth = 1; next }
         depth > 0 {
             if ($0 ~ /<feature[ \t]/ && $0 !~ /\/>[ \t\r]*$/) depth++
             if ($0 ~ /<\/feature>[ \t\r]*$/) depth--
             next
         }
-        /<\/feature>[ \t\r]*$/ { if (opened <= 0) next; opened-- }
         /<feature[ \t]/ && $0 !~ /\/>[ \t\r]*$/ { opened++ }
+        /<\/feature>[ \t\r]*$/ { if (opened <= 0) next; opened-- }
         { print }
     '
 }

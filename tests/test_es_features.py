@@ -281,6 +281,30 @@ class EsFeaturesTest(unittest.TestCase):
         feats = core_features(text, "nestopia")
         self.assertEqual(feats["nested-parent"]["kids"][0][1], "nested-child")
 
+    def test_a_one_line_option_of_rocknix_stays(self):
+        # its close came before its open and was taken for a stray one, so the whole option was deleted
+        line = ('          <feature name="smooth" value="smooth"><choice name="on" value="1" />'
+                '<choice name="off" value="0" /></feature>\n')
+        mic = '          <feature name="microphone sensitivity"'
+        for text in (BASE, STRAY):
+            self.user.write_text(text.replace(mic, line + mic, 1))
+            self.run_script()
+            fixed = self.user.read_text()
+            self.assert_siblings(fixed)
+            self.assertEqual([value for _, _, value in core_features(fixed, "drastic-sa")["smooth"]["kids"]], ["1", "0"])
+            self.run_script("--strip-options")
+            self.assertIn(line, self.user.read_text())
+
+    def test_a_one_line_copy_of_ours_goes_on_its_own(self):
+        # it opened a skip that ran on through the next options and the closing tags
+        ours = '          <feature name="power profile"><choice name="balanced" value="balanced" /></feature>\n'
+        mic = '          <feature name="microphone sensitivity"'
+        self.user.write_text(BASE.replace(mic, ours + mic, 1))
+        self.run_script("--strip-options")
+        text = self.user.read_text()
+        self.assertEqual(list(core_features(text, "drastic-sa")), ["shader", "microphone sensitivity"])
+        self.assertEqual(core_features(text, "nestopia")["nested-parent"]["kids"][0][1], "nested-child")
+
     def test_missing_shader_option_is_left_unchanged(self):
         original = "<features><core name=\"other\"></core></features>\n"
         self.user.write_text(original)
