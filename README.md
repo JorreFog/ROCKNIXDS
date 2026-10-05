@@ -65,11 +65,14 @@ erased**), and a computer with an SD card reader.
 4. **Start the handheld.** Put the card in the handheld and switch it on. The first start takes a few minutes and
    restarts once by itself: ROCKNIX sets up the card, then ROCKNIXDS installs itself. Leave it on until the
    menu appears.
-5. **Add your games.** In the menu, connect to Wi-Fi (*Start > Network Settings*). On your computer, open the
-   handheld's network share: on Windows type `\\ROCKNIX.local` in File Explorer's address bar, on a Mac use
-   *Go > Connect to Server* with `smb://ROCKNIX.local` (or the handheld's IP address from *Network Settings*).
-   User `root`, password `rocknix`. Copy your DS games (`.nds` or `.zip`) into `roms` > `nds`. They show up the
-   next time the menu loads (or after a restart).
+5. **Add your games.** In the menu, connect to Wi-Fi (*Start > Network Settings*) and note the IP address it shows
+   (like `192.168.1.23`). On your computer, open the handheld's network share: on Windows type `\\192.168.1.23` (your
+   IP) in File Explorer's address bar; on a Mac use *Go > Connect to Server* with `smb://192.168.1.23`. User `root`,
+   password `rocknix`. Copy your DS games (`.nds` or `.zip`) into `roms` > `nds`, then restart the handheld.
+
+> [!NOTE]
+> Known issue: until there is at least one DS game in `roms` > `nds`, the menu has a UI bug. It is harmless and goes
+> away once you add a DS game and restart.
 
 Updates come through the menu: *Updates & downloads > ROCKNIXDS*. Already running ROCKNIX?
 See [Install](#install) for the one-line install over ssh.
@@ -686,6 +689,8 @@ dark-background and a light-background version, a stacked version for small squa
 
 ## Known issues
 
+- **No DS games yet:** with an empty `roms/nds` (as on a freshly flashed card), the menu has a UI bug. It goes away
+  once a DS game is added and the menu restarts.
 - **RetroAchievements:** softcore only.
 - **Heavy stretches at 2× can still drop frames** (up to ~10/s in one run). There, DraStic's own frame
   times vary so much that its frames arrive spread over the whole refresh cycle, and no latch position can
