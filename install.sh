@@ -274,7 +274,7 @@ if [ $UNINSTALL = 1 ]; then
           /storage/.config/system.d/timers.target.wants/rocknixds-update-check.timer
     rmdir /storage/.config/system.d/timers.target.wants 2>/dev/null; systemctl daemon-reload
     # Döda Kvarter: its Ports entry and pictures (the game itself goes with /storage/.config/rocknixds)
-    systemctl stop dodakvarter-game.service 2>/dev/null || true
+    systemctl stop dodakvarter-game.service dodakvarter-selftest.service 2>/dev/null || true
     if [ -f /storage/.config/rocknixds/dodakvarter/gamelist.py ]; then
         python3 /storage/.config/rocknixds/dodakvarter/gamelist.py remove /storage/roms/ports 2>/dev/null || true
     fi

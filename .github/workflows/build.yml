@@ -29,8 +29,9 @@ jobs:
             case "$(head -n1 "$f")" in *bash*) bash -n "$f" ;; *) sh -n "$f" ;; esac || { echo "syntax error in $f"; exit 1; }
           done
 
-  # Döda Kvarter (dodakvarter/): the art is generated from its sources, the tests pass (500 towns, the bot playing
-  # whole runs under AddressSanitizer and UBSan), and it builds for the RG DS against a Debian trixie arm64 sysroot
+  # Döda Kvarter (dodakvarter/): the art is generated from its sources, the tests pass (500 towns, the rules, a run
+  # saved and loaded, the bot playing whole runs under AddressSanitizer and UBSan and sixteen towns without a stalled
+  # round, every sound), and it builds for the RG DS against a Debian trixie arm64 sysroot
   # (glibc 2.41, as ROCKNIX's; the binary may need 2.38 at most). The build is kept as an artifact.
   dodakvarter:
     runs-on: ubuntu-latest
