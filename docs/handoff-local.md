@@ -21,6 +21,22 @@ new in 1.6 `/storage/.config/emulationstation/es-mem.log`.
 
 Sections A-H are 1.6's; 1-4 below them are 1.5.13's, still to finish on a handheld.
 
+**Where to start** (a Plus first, then the RG DS):
+1. RG DS Plus: install its branch (table above). After one game,
+   `grep -a 'stall watch' /storage/.config/drastic/dsflip/dsflip.log` shows the 1.6 library.
+2. Copy the scripts over (`scp docs/1.6-prep/*.sh root@<handheld>:/storage/`) and run
+   `sh /storage/stall-checks.sh <rom>` (section A): seven PASS lines in about 5 minutes. 4c may be a SKIP when
+   the save is quicker than the second press.
+3. `sh /storage/freeze-repro.sh "black version 2" 10 old`, then `new` (section A): the freeze's likely cause.
+4. Sections B, C (the menu-over-a-game-list check first), D (row by row), E and F.
+5. RG DS: install its branch and repeat 1-4. Nothing on that line has run on an RG DS since 1.5.8, and section F's
+   in-game menu never has.
+6. Send back:
+   - the reports the two scripts write to `/storage`;
+   - `es-mem.log`;
+   - `dsflip.log` / `last-session.log` of anything odd;
+   - screenshots of anything that looks wrong on either panel.
+
 ## A. The freeze after a resume load (1.6 task 1)
 
 **What happened** (Black 2, RG DS Plus, 2026-10-05 18:07; the 1.5.13 test build): the game loaded its resume state,
