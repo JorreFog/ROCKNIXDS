@@ -224,7 +224,7 @@ static void use_inter(int i) {
         banner(0xffe060, tr("POWER ON"), 0);
         sfx(SFX_POWER, 1, 0);
         shake(4);
-        world_repaint_rect(0, 0, G->w, G->h);              /* windows and shops light up */
+        world_power_wave(it->x, it->y);                  /* windows, shops and lamps light up, spreading from here */
         prop_lights();
         break;
     case IT_LOOT: loot_container(it); break;

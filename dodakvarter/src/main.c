@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
     Input in, prev; memset(&in, 0, sizeof in); memset(&prev, 0, sizeof prev);
     double t0 = plat_now(), acc = 0, fps_t = t0;
     int fps_n = 0; float fps = 0;
-    int prof = getenv("DK_PROFILE") != 0; double pu = 0, pr = 0, pp = 0, pmax = 0; int pn = 0;   /* ms per frame */
+    int prof = getenv("DK_PROFILE") ? atoi(getenv("DK_PROFILE")) : 0; double pu = 0, pr = 0, pp = 0, pmax = 0; int pn = 0;   /* ms per frame */
     for (int f = 0; !stop && !A.quit && (frames < 0 || f < frames); f++) {
         plat_poll(&in);
         if (bot) { Input b; bot_input(&b); b.touch[0] = in.touch[0]; in = b; }
@@ -91,6 +91,7 @@ int main(int argc, char **argv) {
             double tp3 = plat_now();
             pu += tp1 - tp0; pr += tp2 - tp1; pp += tp3 - tp2; pn++;
             if (tp2 - tp0 > pmax) pmax = tp2 - tp0;
+            if (prof > 1 && tp2 - tp0 > 0.002) plat_log("slow frame %d: update %.2f ms, render %.2f ms (state %d, round %d, %d zombies)", f, (tp1 - tp0) * 1000, (tp2 - tp1) * 1000, A.state, G->round, zombies_alive());
             if (pn == 600) {
                 plat_log("profile: update %.2f ms, render %.2f ms, present %.2f ms, worst update+render %.2f ms (state %d, round %d, %d zombies)",
                          pu / pn * 1000, pr / pn * 1000, pp / pn * 1000, pmax * 1000, A.state, G->round, zombies_alive());

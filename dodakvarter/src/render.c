@@ -4,6 +4,9 @@
 #include "game.h"
 #include <stdio.h>
 #include <stdlib.h>
+#if defined(__ARM_NEON)
+#include <arm_neon.h>
+#endif
 
 static uint16_t *lr, *lg, *lb;            /* light per pixel, 256 = full */
 static int lw, lh;
@@ -54,7 +57,10 @@ static void add_light(float wx, float wy, float rad, uint32_t col, float k) {
     for (int y = y0; y <= y1; y++) {
         int dy = y - cy;
         size_t row = (size_t)y * lw;
-        for (int x = x0; x <= x1; x++) {
+        float rem = rad * rad - dy * dy * 1.3f;                /* the row's span inside the ellipse */
+        if (rem <= 0) continue;
+        int span = (int)sqrtf(rem), xa = MAX(x0, cx - span), xb = MIN(x1, cx + span);
+        for (int x = xa; x <= xb; x++) {
             int dx = x - cx;
             float f = 1.0f - (dx * dx + dy * dy * 1.3f) * inv;
             if (f <= 0) continue;
@@ -69,9 +75,18 @@ static void add_light(float wx, float wy, float rad, uint32_t col, float k) {
 
 /* the torch: a cone along the aim, soft at the edges, stopped by walls tile by tile */
 static void add_torch(float wx, float wy, float ang, float range, float half) {
-    int cx = (int)(wx - G->camx), cy = (int)(wy - G->camy), r = (int)range;
-    int x0 = MAX(0, cx - r), x1 = MIN(lw - 1, cx + r), y0 = MAX(0, cy - r), y1 = MIN(lh - 1, cy + r);
-    float ax = cosf(ang), ay = sinf(ang), cosh = cosf(half), cos_in = cosf(half * 0.5f);
+    int cx = (int)(wx - G->camx), cy = (int)(wy - G->camy);
+    float ax = cosf(ang), ay = sinf(ang), cosh = cosf(half), cos_in = cosf(half * 0.5f), cosh2 = cosh * cosh;
+    /* the box around the cone and the glow: its two edges, and the axes it crosses */
+    float bx0 = cx - 18, bx1 = cx + 18, by0 = cy - 18, by1 = cy + 18;
+    for (int k = 0; k < 6; k++) {
+        float a = k == 0 ? ang - half : k == 1 ? ang + half : (k - 2) * (PI_F / 2);
+        if (k >= 2 && fabsf(angdiff(a, ang)) > half) continue;
+        float ex = cx + cosf(a) * range, ey = cy + sinf(a) * range;
+        bx0 = MIN(bx0, ex); bx1 = MAX(bx1, ex); by0 = MIN(by0, ey); by1 = MAX(by1, ey);
+    }
+    int x0 = MAX(0, (int)floorf(bx0)), x1 = MIN(lw - 1, (int)ceilf(bx1)), y0 = MAX(0, (int)floorf(by0)), y1 = MIN(lh - 1, (int)ceilf(by1));
+    if (x0 > x1 || y0 > y1) return;
     /* which tiles the torch reaches: a ray per tile centre */
     int tx0 = (int)((G->camx + x0) / TS), ty0 = (int)((G->camy + y0) / TS), tx1 = (int)((G->camx + x1) / TS), ty1 = (int)((G->camy + y1) / TS);
     static uint8_t vis[40][40];
@@ -93,7 +108,9 @@ static void add_torch(float wx, float wy, float ang, float range, float half) {
         for (int x = x0; x <= x1; x++) {
             float dx = (float)(x - cx), d2 = dx * dx + dy * dy;
             if (d2 > range * range) continue;
-            float d = sqrtf(d2) + 0.001f, c = (dx * ax + dy * ay) / d;
+            float dot = dx * ax + dy * ay;
+            if (d2 >= 18 * 18 && (dot <= 0 || dot * dot <= cosh2 * d2)) continue;   /* neither the glow nor the cone */
+            float d = sqrtf(d2) + 0.001f, c = dot / d;
             float f;
             if (d < 18) f = 0.55f * (1 - d / 18);                  /* a little glow around you */
             else f = 0;
@@ -118,7 +135,26 @@ static void apply_light(Surf *s) {
     for (int y = 0; y < s->h; y++) {
         uint32_t *px = s->px + (size_t)y * s->pitch;
         size_t row = (size_t)y * lw;
-        for (int x = 0; x < s->w; x++) {
+        int x = 0;
+#if defined(__ARM_NEON)
+        {   /* the same sums as below, eight pixels at a time: (colour * ((light + dither) >> 4)) >> 4, saturated */
+            const uint8_t *b4 = bayer[y & 3];
+            const uint16_t dd[8] = { b4[0], b4[1], b4[2], b4[3], b4[0], b4[1], b4[2], b4[3] };
+            uint16x8_t dv = vld1q_u16(dd);
+            for (; x + 8 <= s->w; x += 8) {
+                uint16x8_t qr = vshrq_n_u16(vaddq_u16(vld1q_u16(lr + row + x), dv), 4);
+                uint16x8_t qg = vshrq_n_u16(vaddq_u16(vld1q_u16(lg + row + x), dv), 4);
+                uint16x8_t qb = vshrq_n_u16(vaddq_u16(vld1q_u16(lb + row + x), dv), 4);
+                uint8x8x4_t c = vld4_u8((const uint8_t *)(px + x));          /* B, G, R, X */
+                c.val[0] = vqshrn_n_u16(vmulq_u16(vmovl_u8(c.val[0]), qb), 4);
+                c.val[1] = vqshrn_n_u16(vmulq_u16(vmovl_u8(c.val[1]), qg), 4);
+                c.val[2] = vqshrn_n_u16(vmulq_u16(vmovl_u8(c.val[2]), qr), 4);
+                c.val[3] = vdup_n_u8(0);
+                vst4_u8((uint8_t *)(px + x), c);
+            }
+        }
+#endif
+        for (; x < s->w; x++) {
             /* light in steps of 1/16 with ordered dither: a pixel-art night instead of smooth gradients */
             int d = bayer[y & 3][x & 3];
             int r = ((lr[row + x] + d) >> 4) << 4, g = ((lg[row + x] + d) >> 4) << 4, b = ((lb[row + x] + d) >> 4) << 4;
@@ -489,7 +525,11 @@ void render_game(Surf *s) {
     light_alloc(s->w, s->h);
     int ar, ag, ab; ambient(&ar, &ag, &ab);
     for (size_t i = 0; i < (size_t)lw * lh; i++) { lr[i] = (uint16_t)ar; lg[i] = (uint16_t)ag; lb[i] = (uint16_t)ab; }
-    for (int i = 0; i < G->nlights; i++) add_light(G->lights[i].x, G->lights[i].y, G->lights[i].r, G->lights[i].col, G->lights[i].k);
+    for (int i = 0; i < G->nlights; i++) {
+        Light *L = &G->lights[i];
+        if (L->power && !powered_at(L->x, L->y)) continue;
+        add_light(L->x, L->y, L->r, L->col, L->k);
+    }
     if (!p->downed) add_torch(p->x, p->y - 8, p->aim, 150, 0.62f);
     if (p->muzzle_t > 0) add_light(p->x + cosf(p->aim) * 12, p->y - 8 + sinf(p->aim) * 9, 70, 0xffe0a0, 1.2f);
     for (int i = 0; i < MAX_PARTS; i++) {
@@ -503,8 +543,8 @@ void render_game(Surf *s) {
     for (int i = 0; i < G->nit; i++) {                   /* machines glow */
         Inter *it = &G->it[i];
         float x = it->tx * TS + it->tw * 8.0f, y = (it->ty + it->th) * TS;
-        if (it->type == IT_PERK && (G->power_on || it->a == PK_KANELBULLE)) add_light(x, y - 4, 40, PERKS[it->a].color2, 0.8f);
-        else if (it->type == IT_PAP && G->power_on) add_light(x, y - 6, 50, 0xc070ff, 0.8f);
+        if (it->type == IT_PERK && (powered_at(it->x, it->y) || it->a == PK_KANELBULLE)) add_light(x, y - 4, 40, PERKS[it->a].color2, 0.8f);
+        else if (it->type == IT_PAP && powered_at(it->x, it->y)) add_light(x, y - 6, 50, 0xc070ff, 0.8f);
         else if (it->type == IT_BOX && G->box_spots[G->box_at] == i && !G->box_moving) add_light(x, y - 6, 44, 0xffe8a0, 0.7f);
         else if (it->type == IT_POWER && !G->power_on) add_light(x, y - 6, 24, 0xff4040, 0.3f + 0.2f * sinf(G->time * 4));
     }
@@ -553,7 +593,7 @@ void render_game(Surf *s) {
     }
     for (int i = 0; i < G->nprops; i++) {                  /* lamp heads */
         Prop *pr = &G->props[i];
-        if (!G->power_on || (pr->kind != P_LAMP && pr->kind != P_LAMP_WALL)) continue;
+        if ((pr->kind != P_LAMP && pr->kind != P_LAMP_WALL) || !powered_at(pr->x, pr->y)) continue;
         int x = pr->x - cx, y = pr->y - cy;
         if (x < -10 || x > s->w + 10 || y < 0 || y > s->h + 40) continue;
         if (pr->kind == P_LAMP) hline(s, x - 7, x - 3, y - 29, 0xfff4c8);

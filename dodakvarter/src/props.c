@@ -517,9 +517,13 @@ static void flat_prop(Surf *s, const Prop *p) {
     }
 }
 
-void props_paint_flat(void) {
-    Surf s; s.w = G->ww; s.h = G->wh; s.pitch = G->ww; s.px = G->world; surf_noclip(&s);
-    for (int i = 0; i < G->nprops; i++) if (!prop_is_tall(G->props[i].kind)) flat_prop(&s, &G->props[i]);
+void props_paint_flat(int x0, int y0, int x1, int y1) {
+    Surf s; s.w = G->ww; s.h = G->wh; s.pitch = G->ww; s.px = G->world; surf_clip(&s, x0, y0, x1 - x0, y1 - y0);
+    for (int i = 0; i < G->nprops; i++) {
+        const Prop *p = &G->props[i];
+        if (prop_is_tall(p->kind) || p->x + 40 < x0 || p->x - 40 >= x1 || p->y + 24 < y0 || p->y - 40 >= y1) continue;
+        flat_prop(&s, p);
+    }
 }
 
 void prop_bounds(const Prop *p, int *w, int *h) {
@@ -536,7 +540,7 @@ void prop_bounds(const Prop *p, int *w, int *h) {
 /* tall props, every frame (sx, sy: the prop's feet on screen) */
 void prop_draw(Surf *s, const Prop *p, int sx, int sy) {
     uint32_t v = p->var;
-    int lit = G->power_on;
+    int lit = powered_at(p->x, p->y);
     switch (p->kind) {
     case P_BIRCH: tree_birch(s, sx, sy - 1, v); break;
     case P_PINE: tree_pine(s, sx, sy - 1, v); break;
@@ -578,10 +582,10 @@ void prop_lights(void) {
             if (p->kind == P_BONFIRE) G->lights[G->nlights++] = (Light){ p->x, p->y - 6, 60, 0xf0a040, 1.0f };
             continue;
         }
-        if (p->kind == P_LAMP) G->lights[G->nlights++] = (Light){ p->x - 5, p->y - 4, 64, 0xf2c890, 1.0f };
-        else if (p->kind == P_LAMP_WALL) G->lights[G->nlights++] = (Light){ p->x, p->y - 4, 44, 0xf2b65a, 0.9f };
-        else if (p->kind == P_SIGN_T) G->lights[G->nlights++] = (Light){ p->x, p->y - 10, 36, 0xd8e8ff, 0.8f };
-        else if (p->kind == P_TICKET) G->lights[G->nlights++] = (Light){ p->x, p->y - 8, 24, 0x8ad8f8, 0.7f };
+        if (p->kind == P_LAMP) G->lights[G->nlights++] = (Light){ p->x - 5, p->y - 4, 64, 0xf2c890, 1.0f, 1 };
+        else if (p->kind == P_LAMP_WALL) G->lights[G->nlights++] = (Light){ p->x, p->y - 4, 44, 0xf2b65a, 0.9f, 1 };
+        else if (p->kind == P_SIGN_T) G->lights[G->nlights++] = (Light){ p->x, p->y - 10, 36, 0xd8e8ff, 0.8f, 1 };
+        else if (p->kind == P_TICKET) G->lights[G->nlights++] = (Light){ p->x, p->y - 8, 24, 0x8ad8f8, 0.7f, 1 };
         else if (p->kind == P_BONFIRE) G->lights[G->nlights++] = (Light){ p->x, p->y - 6, 60, 0xf0a040, 1.0f };
     }
     /* lit shop windows and stations glow onto the pavement */
@@ -589,9 +593,9 @@ void prop_lights(void) {
         Building *b = &G->b[i];
         int st = b->style;
         if (st == BS_SHOP || st == BS_KIOSK || st == BS_STATION || st == BS_MALL)
-            G->lights[G->nlights++] = (Light){ (b->x + b->w / 2.0f) * TS, (b->y + b->h) * TS + 4, 26 + b->w * 6, 0xf0e0b0, 0.8f };
+            G->lights[G->nlights++] = (Light){ (b->x + b->w / 2.0f) * TS, (b->y + b->h) * TS + 4, 26 + b->w * 6, 0xf0e0b0, 0.8f, 1 };
         else if (b->lit && (st == BS_LAMELL || st == BS_LAMELL_BRICK || st == BS_OLDTOWN || st == BS_VILLA || st == BS_SCHOOL || st == BS_CHURCH))
-            G->lights[G->nlights++] = (Light){ (b->x + b->w / 2.0f) * TS, (b->y + b->h) * TS - 4, 18 + b->w * 4, 0xf2c070, 0.45f };
+            G->lights[G->nlights++] = (Light){ (b->x + b->w / 2.0f) * TS, (b->y + b->h) * TS - 4, 18 + b->w * 4, 0xf2c070, 0.45f, 1 };
     }
 }
 
@@ -642,7 +646,7 @@ static void window_draw(Surf *s, Inter *it, int x0, int y0) {           /* board
 
 static void perk_draw(Surf *s, Inter *it, int x, int y) {               /* a vending machine, 16 x 28, feet at y */
     const PerkDef *pd = &PERKS[it->a];
-    int on = G->power_on || it->a == PK_KANELBULLE;
+    int on = powered_at(it->x, it->y) || it->a == PK_KANELBULLE;
     if (it->a == PK_KANELBULLE && G->p.bulle_used >= 3) return;          /* gone after three, as solo Quick Revive */
     uint32_t c = on ? pd->color : sh(pd->color, 140);
     int x0 = x - 8, y0 = y - 28;

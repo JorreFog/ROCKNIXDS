@@ -1,6 +1,7 @@
 // scene: set up a situation and write both screens to a PNG, for looking at the art in place.
 //   scene <name> <out.png> [season] [seed]
-//   names: horde wolves moose box loot pap title gameover scores settings name howto pause
+//   names: horde wolves moose box loot pap power title gameover scores settings name howto pause
+//   (power: the lights coming on, DK_SCENE_TICKS ticks after the switch)
 #include "../src/game.h"
 #include "../src/menu.h"
 #include <stdio.h>
@@ -57,8 +58,19 @@ int main(int argc, char **argv) {
         return 0;
     }
     game_new(seed, season);
-    G->power_on = 1; world_repaint_rect(0, 0, G->w, G->h); prop_lights();
     Player *p = &G->p;
+    if (!strcmp(name, "power")) {                          /* the switch thrown, the ring of light on its way */
+        for (int i = 0; i < G->nit; i++) if (G->it[i].type == IT_POWER) {
+            Inter *it = &G->it[i]; p->x = it->x; p->y = it->y + 4; G->camx = p->x - top.w / 2; G->camy = p->y - top.h / 2;
+            G->power_on = 1; world_power_wave(it->x, it->y); prop_lights();
+        }
+        int n = getenv("DK_SCENE_TICKS") ? atoi(getenv("DK_SCENE_TICKS")) : 20;
+        G->round = 3; G->rstate = RS_ACTIVE; p->aim = PI_F / 2;
+        ticks(n, &in); A.state = ST_PLAY;
+        app_render(&top, &bot); shot(out);
+        return 0;
+    }
+    G->power_on = 1; world_repaint_rect(0, 0, G->w, G->h); prop_lights();
     p->kr = 12450; p->kills = 213;
     p->w[0] = weapon_make(W_AK5, RAR_EPIC); p->w[1] = weapon_make(W_HAGEL, RAR_RARE);
     p->ar[0] = armor_make(A_HOCKEYHJALM, RAR_RARE); p->ar[1] = armor_make(A_REFLEXVAST, RAR_UNCOMMON); p->ar[1].ap *= 0.6f;

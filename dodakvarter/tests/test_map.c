@@ -3,6 +3,7 @@
 //   - every zone has spawn points that can be reached, the box has spots, the power switch and the Pack-a-Punch
 //     exist and can be reached, perk machines and wall buys stand on reachable tiles
 //   - zombie health, round sizes and spawn rates follow Black Ops' numbers (docs/research.md)
+//   - repainting part of the town changes nothing that was there; the power wave ends as a whole repaint does
 #include "../src/game.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,6 +37,42 @@ static int usable(const Inter *it) {
         if (x >= 0 && y >= 0 && x < G->w && y < G->h && seen[y][x] && !(G->t[y][x].f & TF_SOLID)) return 1;
     }
     return 0;
+}
+
+/* the painted town: a repaint anywhere gives the same pixels (nothing drawn or blended twice), and the power
+   coming on building by building ends where a whole repaint with the power on does */
+static void paint_checks(int seed) {
+    world_paint();
+    size_t n = (size_t)G->ww * G->wh;
+    uint32_t *ref = malloc(n * 4); memcpy(ref, G->world, n * 4);
+    uint32_t r = (uint32_t)seed * 2654435761u;
+    for (int k = 0; k < 40; k++) {
+        r = r * 1664525u + 1013904223u; int x = (int)(r >> 8) % G->w;
+        r = r * 1664525u + 1013904223u; int y = (int)(r >> 8) % G->h;
+        r = r * 1664525u + 1013904223u; int w = 1 + (int)(r >> 8) % 9, h = 1 + (int)(r >> 20) % 7;
+        world_repaint_rect(x - 2, y - 2, w, h);
+        if (memcmp(ref, G->world, n * 4)) {
+            CHECK(0, "seed %d: repainting %d,%d %dx%d changed what was there", seed, x - 2, y - 2, w, h);
+            if (getenv("DK_TEST_VERBOSE")) {
+                int bx0 = 1 << 30, by0 = 1 << 30, bx1 = -1, by1 = -1, cnt = 0;
+                for (size_t i = 0; i < n; i++) if (ref[i] != G->world[i]) { int px = (int)(i % G->ww), py = (int)(i / G->ww); cnt++; bx0 = MIN(bx0, px); by0 = MIN(by0, py); bx1 = MAX(bx1, px); by1 = MAX(by1, py); }
+                printf("   %d px differ in %d,%d-%d,%d (tiles %d,%d-%d,%d)\n", cnt, bx0, by0, bx1, by1, bx0 / TS, by0 / TS, bx1 / TS, by1 / TS);
+                for (int ty = by0 / TS; ty <= by1 / TS; ty++) for (int tx = bx0 / TS; tx <= bx1 / TS; tx++) { Tile *t = tile_at(tx, ty); printf("   tile %d,%d g %d f %d deco %d bld %d\n", tx, ty, t->g, t->f, t->deco, t->bld); }
+                for (int i = 0; i < G->nprops; i++) { Prop *pp = &G->props[i]; if (pp->x >= bx0 - 40 && pp->x <= bx1 + 40 && pp->y >= by0 - 40 && pp->y <= by1 + 40) printf("   prop %d kind %d at %d,%d\n", i, pp->kind, pp->x, pp->y); }
+            }
+            memcpy(G->world, ref, n * 4);
+        }
+    }
+    Inter *sw = 0; for (int i = 0; i < G->nit; i++) if (G->it[i].type == IT_POWER) sw = &G->it[i];
+    if (sw) {
+        G->power_on = 1; world_power_wave(sw->x, sw->y);
+        for (int k = 0; k < 60 * 30 && G->wave_on; k++) world_update(1.0f / 60);
+        CHECK(!G->wave_on, "seed %d: the power wave never ends", seed);
+        memcpy(ref, G->world, n * 4);
+        world_repaint_rect(0, 0, G->w, G->h);
+        CHECK(!memcmp(ref, G->world, n * 4), "seed %d: the power wave left other pixels than a whole repaint", seed);
+    }
+    free(ref); free(G->world); G->world = 0;
 }
 
 int main(int argc, char **argv) {
@@ -79,6 +116,7 @@ int main(int argc, char **argv) {
         CHECK(G->nbox_spots >= 2, "seed %d: %d box spots", seed, G->nbox_spots);
         CHECK(walls >= 2, "seed %d: %d wall buys", seed, walls);
         CHECK(G->w <= MAPW_MAX && G->h <= MAPH_MAX, "seed %d: map %dx%d too big", seed, G->w, G->h);
+        if (seed <= 60) paint_checks(seed);
     }
     /* Black Ops' rounds (docs/research.md, section A1) */
     static const int counts[] = { 6, 8, 13, 18, 24, 27, 28, 28, 29, 33 };

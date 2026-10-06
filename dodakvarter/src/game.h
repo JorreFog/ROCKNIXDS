@@ -205,7 +205,7 @@ typedef struct { int alive; float x0, y0, x1, y1, life; uint32_t col; int kind; 
 typedef struct { int alive; float x, y, vx, vy, z, vz, t; int kind; } Grenade;   /* kind: C_GRANAT, C_SMALLARE, C_MOLOTOV */
 typedef struct { int alive; float x, y, r, t, dur; int kind; } Cloud;            /* fire or stink gas on the ground */
 typedef struct { int alive; float x, y, vy, t; char s[24]; uint32_t col; int screen; } FloatText;
-typedef struct { float x, y, r; uint32_t col; float k; } Light;
+typedef struct { float x, y, r; uint32_t col; float k; int power; } Light;   /* power: comes on with the power */
 
 enum { SEASON_AUTUMN, SEASON_WINTER, SEASON_SUMMER, SEASON_COUNT };
 enum { RS_INTRO, RS_ACTIVE, RS_BREAK };
@@ -237,6 +237,7 @@ typedef struct {
     int drop_pending;                   /* the points-based power-up drop waits for the next kill */
     float insta_t, double_t, firesale_t;
     int power_on; float power_t;
+    int wave_on; float wave_x, wave_y, wave_r;   /* the power coming on: a ring of light spreading from the switch */
     int over; float over_t;
     /* actors */
     Player p;
@@ -288,6 +289,12 @@ void refresh_walls(void);
 /* world.c: the painted world */
 void world_paint(void);
 void world_repaint_rect(int tx, int ty, int tw, int th);
+void world_power_wave(float x, float y);
+/* the power is on here (the wave has come this far) */
+static inline int powered_at(float x, float y) {
+    return G->power_on && (!G->wave_on || dist2f(x, y, G->wave_x, G->wave_y) <= G->wave_r * G->wave_r);
+}
+void world_update(float dt);
 void world_decal_blood(float x, float y, int amount);
 void world_decal_scorch(float x, float y, float r);
 uint32_t ground_color(int g, int season);
@@ -296,7 +303,7 @@ uint32_t ground_color(int g, int season);
 void prop_draw(Surf *s, const Prop *p, int sx, int sy);
 void prop_bounds(const Prop *p, int *w, int *h);
 void inter_draw(Surf *s, Inter *it, int sx, int sy);
-void props_paint_flat(void);
+void props_paint_flat(int x0, int y0, int x1, int y1);
 int prop_is_tall(int kind);
 void prop_lights(void);
 

@@ -5,10 +5,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/* a repaint paints only inside its rectangle (pixels): what reaches across the edge isn't painted or blended twice */
+static int pcx0, pcy0, pcx1 = 1 << 30, pcy1 = 1 << 30;
 static inline uint32_t *wpx(int x, int y) { return &G->world[(size_t)y * G->ww + x]; }
-static inline void wset(int x, int y, uint32_t c) { if (x >= 0 && y >= 0 && x < G->ww && y < G->wh) *wpx(x, y) = c & 0xFFFFFF; }
+static inline int win_(int x, int y) { return x >= pcx0 && y >= pcy0 && x < pcx1 && y < pcy1 && x < G->ww && y < G->wh; }
+static inline void wset(int x, int y, uint32_t c) { if (win_(x, y)) *wpx(x, y) = c & 0xFFFFFF; }
 static inline void wblend(int x, int y, uint32_t c, int a) {
-    if (x < 0 || y < 0 || x >= G->ww || y >= G->wh) return;
+    if (!win_(x, y)) return;
     *wpx(x, y) = col_mix(*wpx(x, y), c, a);
 }
 static inline uint32_t vary(uint32_t c, int x, int y, int salt, int amp) {
@@ -18,7 +21,7 @@ static inline uint32_t vary(uint32_t c, int x, int y, int salt, int amp) {
 static inline uint32_t shade(uint32_t c, int k) { return col_scale(c, k); }   /* 256 = same */
 
 /* a surface over the world bitmap, for the drawing helpers in gfx.c */
-static Surf wsurf(void) { Surf s; s.w = G->ww; s.h = G->wh; s.pitch = G->ww; s.px = G->world; surf_noclip(&s); return s; }
+static Surf wsurf(void) { Surf s; s.w = G->ww; s.h = G->wh; s.pitch = G->ww; s.px = G->world; surf_clip(&s, pcx0, pcy0, pcx1 - pcx0, pcy1 - pcy0); return s; }
 
 /* ---------------------------------------------------------------- ground */
 uint32_t ground_color(int g, int season) {
@@ -306,9 +309,9 @@ static void sign_board(Bp *p, int cx, int y, const char *txt, uint32_t bg, uint3
     int tw = text_w(FONT_SMALL, txt), w = tw + 6, x = cx - w / 2;
     if (w > p->w - 2) { w = p->w - 2; x = p->x0 + 1; }
     bevel(s, x, y, w, 9, bg, shade(bg, 320), shade(bg, 150));
-    surf_clip(s, x + 1, y + 1, w - 2, 7);
-    text(s, FONT_SMALL, cx - tw / 2, y + 2, fg, txt);
-    surf_noclip(s);
+    Surf c = *s;                                        /* the text inside the board (and inside a repaint's clip) */
+    c.cx0 = MAX(s->cx0, x + 1); c.cy0 = MAX(s->cy0, y + 1); c.cx1 = MIN(s->cx1, x + w - 1); c.cy1 = MIN(s->cy1, y + 8);
+    if (c.cx1 > c.cx0 && c.cy1 > c.cy0) text(&c, FONT_SMALL, cx - tw / 2, y + 2, fg, txt);
 }
 
 static void door_px(Bp *p, int x, int y, int w, int h, uint32_t col, uint32_t frame) {
@@ -527,15 +530,49 @@ static void paint_building(int bi) {
 /* ---------------------------------------------------------------- the whole picture */
 void world_repaint_rect(int tx, int ty, int tw, int th) {
     int x0 = MAX(0, tx), y0 = MAX(0, ty), x1 = MIN(G->w, tx + tw), y1 = MIN(G->h, ty + th);
+    if (x0 >= x1 || y0 >= y1) return;
+    pcx0 = x0 * TS; pcy0 = y0 * TS; pcx1 = x1 * TS; pcy1 = y1 * TS;
     for (int y = y0; y < y1; y++) for (int x = x0; x < x1; x++) paint_ground(x, y);
     for (int y = y0; y < y1; y++) for (int x = x0; x < x1; x++) paint_edges(x, y);
-    for (int y = y0; y < y1; y++) for (int x = x0; x < x1; x++) if (G->t[y][x].deco) paint_deco(x, y);
+    for (int y = MAX(0, y0 - 1); y < MIN(G->h, y1 + 1); y++)       /* (a tile around: the pitch's circle reaches over) */
+        for (int x = MAX(0, x0 - 1); x < MIN(G->w, x1 + 1); x++) if (G->t[y][x].deco) paint_deco(x, y);
     for (int i = 0; i < G->nb; i++) {
         Building *b = &G->b[i];
-        if (b->x + b->w <= x0 || b->y + b->h <= y0 || b->x >= x1 || b->y >= y1) continue;
+        if (b->x + b->w + 1 <= x0 || b->y + b->h + 1 <= y0 || b->x >= x1 || b->y >= y1) continue;   /* (+1: its shadow, door steps) */
         paint_building(i);
     }
-    props_paint_flat();
+    props_paint_flat(pcx0, pcy0, pcx1, pcy1);
+    pcx0 = pcy0 = 0; pcx1 = pcy1 = 1 << 30;
+}
+
+/* one building again (the power came on): the same pixels a whole repaint would give it */
+static void world_repaint_building(int bi) {
+    Building *b = &G->b[bi];
+    pcx0 = b->x * TS; pcy0 = b->y * TS; pcx1 = (b->x + b->w) * TS; pcy1 = (b->y + b->h) * TS;
+    paint_building(bi);
+    props_paint_flat(pcx0, pcy0, pcx1, pcy1);
+    pcx0 = pcy0 = 0; pcx1 = pcy1 = 1 << 30;
+}
+
+/* the power comes on building by building, in a ring spreading from the switch (the lamps follow it, render.c) */
+static uint8_t wave_b[MAX_BUILDINGS]; static float wave_d[MAX_BUILDINGS]; static int wave_n, wave_next;
+void world_power_wave(float x, float y) {
+    G->wave_on = 1; G->wave_x = x; G->wave_y = y; G->wave_r = 0;
+    wave_n = wave_next = 0;
+    for (int i = 0; i < G->nb; i++) {                    /* nearest first */
+        Building *b = &G->b[i];
+        float nx = CLAMP(x, b->x * TS, (b->x + b->w) * TS), ny = CLAMP(y, b->y * TS, (b->y + b->h) * TS);
+        float d = sqrtf(dist2f(x, y, nx, ny));
+        int k = wave_n++;
+        while (k > 0 && wave_d[k - 1] > d) { wave_d[k] = wave_d[k - 1]; wave_b[k] = wave_b[k - 1]; k--; }
+        wave_d[k] = d; wave_b[k] = (uint8_t)i;
+    }
+}
+void world_update(float dt) {
+    if (!G->wave_on) return;
+    G->wave_r += dt * 420;
+    while (wave_next < wave_n && wave_d[wave_next] <= G->wave_r) world_repaint_building(wave_b[wave_next++]);
+    if (wave_next >= wave_n && G->wave_r > (G->w + G->h) * TS) G->wave_on = 0;
 }
 
 void world_paint(void) {

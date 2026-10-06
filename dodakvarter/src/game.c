@@ -449,7 +449,7 @@ void game_new(uint64_t seed, int season) {
      * DK_DEBUG_OPEN=1 every barrier gone */
     const char *e;
     if ((e = getenv("DK_DEBUG_KR"))) p->kr = atoi(e);
-    if (getenv("DK_DEBUG_POWER")) { G->power_on = 1; world_repaint_rect(0, 0, G->w, G->h); prop_lights(); }
+    if (getenv("DK_DEBUG_POWER")) { G->power_on = 1; world_power_wave(G->p.x, G->p.y); prop_lights(); }
     if (getenv("DK_DEBUG_OPEN"))
         for (int i = 0; i < G->nit; i++) if (G->it[i].type == IT_BARRIER) {
             Inter *it = &G->it[i]; it->state = 1;
@@ -467,6 +467,7 @@ void game_update(const Input *in, const Input *prev, float dt) {
     if (G->insta_t > 0) G->insta_t -= dt;
     if (G->double_t > 0) G->double_t -= dt;
     if (G->firesale_t > 0) G->firesale_t -= dt;
+    world_update(dt);
     player_update(in, prev, dt);
     inter_update(in, prev, dt);
     flow_update(0);
