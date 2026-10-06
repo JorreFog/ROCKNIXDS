@@ -162,16 +162,15 @@ class EsFeaturesTest(unittest.TestCase):
         self.assertIn("microphone sensitivity", feats)
         self.assertNotIn("wfc dns", feats)                  # online play is parked for 1.6
         self.assertNotIn("share performance logs", feats)
-        self.assertNotIn("3D resolution", feats)
-        for name in ("3D renderer", "3D texture filter", "microphone sensitivity"):
+        self.assertEqual(feats["3D resolution"]["value"], "resolution3d")       # 1.6: 2x and 3x on the Plus too
+        self.assertEqual([value for _, _, value in feats["3D resolution"]["kids"]], ["2x", "3x"])
+        for name in ("3D renderer", "3D texture filter", "3D resolution", "microphone sensitivity"):
             self.assertFalse(any(tag == "feature" for tag, _, _ in feats[name]["kids"]), name)
         self.assertEqual(feats["3D renderer"]["value"], "renderer")
         self.assertEqual(
             [(name, value) for tag, name, value in feats["3D renderer"]["kids"]],
             [("DraStic", "drastic"), ("Gengis Engine", "superdrastic")],
         )
-        self.assertNotIn('value="3x"', text)
-        self.assertNotIn('name="3x"', text)
         self.assertEqual(feats["3D texture filter"]["value"], "texture_filter")
         self.assertEqual(
             [value for tag, _, value in feats["3D texture filter"]["kids"]],
