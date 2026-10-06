@@ -232,7 +232,7 @@ static const Img *zombie_img(Zombie *z, int *flip) {
    midsummer a flower wreath; in the autumn rain a yellow sydväst */
 enum { DRESS_NONE, DRESS_LUCIA, DRESS_WREATH, DRESS_SYDVAST };
 static int dress(const Zombie *z) {
-    if (z->type != ZT_WALKER) return DRESS_NONE;
+    if (z->type != ZT_WALKER || z->crawl) return DRESS_NONE;
     if (G->season == SEASON_WINTER) return z->variant == 5 ? DRESS_LUCIA : DRESS_NONE;
     if (G->season == SEASON_SUMMER) return z->variant == 1 || z->variant == 4 ? DRESS_WREATH : DRESS_NONE;
     return z->variant == 0 || z->variant == 7 ? DRESS_SYDVAST : DRESS_NONE;
@@ -283,6 +283,18 @@ static void draw_zombie(Surf *s, Zombie *z) {
         Surf c = *s; surf_clip(&c, ox - 2, sy - show, im->w + 4, show);
         blit(&c, im, ox, sy - show, flip);
         ellipse_blend(s, sx, sy, 7, 2, 0x2a1e14, 160);
+        return;
+    }
+    if (z->crawl) {                                         /* the top half, low on the ground, pulling itself on */
+        int cut = 12;                                       /* (the sprite's rows above its legs) */
+        int cy0 = sy - cut + 2;
+        draw_shadow(s, sx, sy, 7);
+        Surf c = *s; surf_clip(&c, ox - 4, cy0, im->w + 8, cut);
+        blit_ex(&c, im, ox, cy0, flip, z->flash > 0 ? 0xffffff : 0, z->flash > 0 ? 200 : 0, 255);
+        int ax = z->dir == 2 ? 1 : z->dir == 3 ? -1 : 0, ay = z->dir == 0 ? 1 : z->dir == 1 ? -1 : 0, reach = ((int)(z->anim * 2) & 1) ? 6 : 4;
+        line(s, sx - 3, sy - 2, sx - 3 + ax * reach + (ay ? -1 : 0), sy - 2 + ay * reach, 0x5a7a4a);
+        line(s, sx + 3, sy - 2, sx + 3 + ax * reach + (ay ? 1 : 0), sy - 2 + ay * reach, 0x5a7a4a);
+        z->rimg = im; z->rx = (int16_t)ox; z->ry = (int16_t)cy0; z->rflip = (uint8_t)flip; z->rclip = (int16_t)(cy0 + cut);
         return;
     }
     draw_shadow(s, sx, sy, z->type == ZT_MOOSE ? 16 : z->type == ZT_WOLF ? 7 : 6);

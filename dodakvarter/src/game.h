@@ -184,6 +184,7 @@ typedef struct {
     int crit_kill;
     float stuck_t, lastx, lasty;
     float swipe;                        /* in a window: a swipe through the gap, winding up */
+    int crawl;                          /* its legs blown off: it drags itself along */
     const Img *rimg; int16_t rx, ry, rclip; uint8_t rflip;   /* how it was last drawn (its eyes glow on top) */
 } Zombie;
 

@@ -287,7 +287,7 @@ static void zombie_update(Zombie *z, float dt) {
     float slow = z->slow > 0 ? 0.35f : 1.0f;
     if (z->burn > 0) slow *= 0.8f;
     float pdx = p->x - z->x, pdy = p->y - z->y, pd = sqrtf(pdx * pdx + pdy * pdy);
-    float reach = z->type == ZT_MOOSE ? 22 : z->type == ZT_BRUTE ? 16 : z->type == ZT_WOLF ? 13 : 14;
+    float reach = z->type == ZT_MOOSE ? 22 : z->type == ZT_BRUTE ? 16 : z->type == ZT_WOLF ? 13 : z->crawl ? 11 : 14;
     if (z->atk_cd > 0) z->atk_cd -= dt;
     if (z->state == ZS_ATTACK) {
         z->t -= dt;
@@ -345,6 +345,7 @@ static void zombie_update(Zombie *z, float dt) {
     move_actor(&z->x, &z->y, vx * dt, vy * dt, r);
     z->anim += dt * (z->speed / 9.0f) * slow;
     if (fabsf(dx) > fabsf(dy)) z->dir = dx > 0 ? 2 : 3; else z->dir = dy > 0 ? 0 : 1;
+    if (z->crawl && rng_chance(&G->fx, dt * 0.6f)) world_decal_blood(z->x, z->y, 1);   /* a smear behind it */
     /* groans now and then */
     if (rng_chance(&G->fx, dt * 0.15f)) sfx_at(z->type == ZT_WOLF ? SFX_WOLF : SFX_GROAN1 + rng_int(&G->fx, 3), z->x, z->y, 0.35f);
     /* stuck far away for long: it comes back somewhere else (Black Ops does this too) */
@@ -356,7 +357,7 @@ static void zombie_update(Zombie *z, float dt) {
         z->stuck_t = 0; z->lastx = z->x; z->lasty = z->y;
     }
     /* the last zombie of a round runs (from round 4) */
-    if (G->round >= 4 && G->spawned >= G->to_spawn && zombies_alive() == 1 && z->type == ZT_WALKER && z->speed < 60) z->speed = 62;
+    if (G->round >= 4 && G->spawned >= G->to_spawn && zombies_alive() == 1 && z->type == ZT_WALKER && !z->crawl && z->speed < 60) z->speed = 62;
 }
 
 void zombies_update(float dt) {

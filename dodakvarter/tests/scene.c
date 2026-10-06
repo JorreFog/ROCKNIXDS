@@ -125,6 +125,9 @@ int main(int argc, char **argv) {
         if (!strcmp(name, "gameover")) { G->over = 1; A.state = ST_GAMEOVER; A.t = 3; A.rank = 2; G->round = 14; }
         else if (!strcmp(name, "pause")) { A.state = ST_PAUSE; A.sel = 0; }
         else A.state = ST_PLAY;
+    } else if (!strcmp(name, "crawl")) {                    /* after a grenade: some of them crawling */
+        for (int k = 0; k < 6; k++) { Zombie *z = put(ZT_WALKER, -70 + k * 26, (k & 1) ? 35 : 55, k); z->crawl = k % 2 == 0; z->dir = 1; }
+        p->aim = PI_F / 2; ticks(3, &in); A.state = ST_PLAY;
     } else if (!strcmp(name, "wolves")) {
         G->special = 1;
         for (int k = 0; k < 5; k++) put(ZT_WOLF, -60 + k * 28, -40 + (k & 1) * 70, 0);

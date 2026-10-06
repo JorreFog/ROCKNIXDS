@@ -67,7 +67,9 @@ decompiled scripts and are in [docs/research.md](docs/research.md).
 formula), at most 24 alive at a time, coming faster every round (2 s apart in round 1, 1.26 s in round 10).
 Their health is 150 in round 1, 100 more every round up to 950 in round 9, then 10% more each round (1045, 2701 at
 round 20, 7000 at round 30). Each one rolls its speed: walkers first, runners from round 2, sprinters from round 6,
-only sprinters from round 10; from round 4 the last zombie of a round always runs. Ten seconds between rounds, the
+only sprinters from round 10; from round 4 the last zombie of a round always runs. A grenade or a rocket that
+doesn't kill a walker may take its legs: it crawls on, slow and low (and, as in Call of Duty, a crawler left alive
+is a breather: it never runs). Ten seconds between rounds, the
 round in red chalk marks in the corner, and when you fall: *YOU SURVIVED 7 ROUNDS*.
 
 **Kronor.** You start with 500 kr. Every hit that doesn't kill is +10, a kill +60, a critical hit +100 (the

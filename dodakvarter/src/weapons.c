@@ -123,7 +123,7 @@ static Zombie *ray_hit(float x0, float y0, float dx, float dy, float maxd, float
         int skipit = 0; for (int k = 0; k < nskip; k++) if (skip[k] == z) skipit = 1;
         if (skipit) continue;
         float r = z->type == ZT_MOOSE ? 16 : z->type == ZT_BRUTE ? 9 : z->type == ZT_WOLF ? 6 : 7;
-        float cx = z->x, cy = z->y - (z->type == ZT_MOOSE ? 14 : z->type == ZT_WOLF ? 5 : 8);
+        float cx = z->x, cy = z->y - (z->type == ZT_MOOSE ? 14 : z->type == ZT_WOLF || z->crawl ? 5 : 8);
         float px = cx - x0, py = cy - y0, t = px * dx + py * dy;
         if (t < 0 || t > bd) continue;
         float ex = px - dx * t, ey = py - dy * t;
@@ -279,6 +279,12 @@ void explode(float x, float y, float r, float dmg, int from_player) {
         if (d > r) continue;
         float k = 1.0f - 0.6f * d / r;
         damage_zombie(z, dmg * k, 0, 0, dx / (d + 1) * 60, dy / (d + 1) * 60);
+        /* a walker the blast didn't kill may lose its legs, and crawl on (as in Call of Duty) */
+        if (z->type == ZT_WALKER && !z->crawl && z->state != ZS_DEAD && z->state != ZS_WINDOW && z->state != ZS_RISE && rng_chance(&G->rng, 0.5f)) {
+            z->crawl = 1; z->speed = MAX(9.0f, z->speed * 0.35f); z->state = ZS_CHASE;
+            spawn_parts(PT_GIB, z->x, z->y - 4, 6, 0x8a1010, 60);
+            world_decal_blood(z->x, z->y, 8);
+        }
     }
     Player *p = &G->p;
     float pd = sqrtf(dist2f(p->x, p->y - 6, x, y));

@@ -3,6 +3,7 @@
 //     you if you stand in it, then charges for a minute
 //   - a zombie in a window swipes at whoever stands at the gap, and can be shot through the boards
 //   - pulling the trigger on a gun that has run dry brings out one that hasn't
+//   - a blast that doesn't kill may leave a walker crawling, slower, and a crawler never runs as the round's last
 //   - finding the three trädgårdstomtar plays the song and leaves a present
 #include "../src/game.h"
 #include <stdio.h>
@@ -89,6 +90,20 @@ int main(void) {
         p->w[1] = weapon_make(W_PIST88, RAR_COMMON); p->cur = 0; p->fired_this_press = 0; p->reloading = 0; p->fire_cd = 0;
         weapon_fire();
         CHECK(p->cur == 1, "a dry gun didn't hand over to the one with ammo");
+    }
+    /* a blast that doesn't kill may take a walker's legs: it crawls on, slower, and doesn't run as the round's last */
+    {
+        Player *p = &G->p; calm(); G->over = 0; p->downed = 0; G->god = 1;
+        Zombie *zs[10];
+        for (int k = 0; k < 10; k++) { zs[k] = zombie_at(p->x + 60 + (k % 5) * 3, p->y + 40 + (k / 5) * 3, ZS_CHASE); zs[k]->hp = zs[k]->maxhp = 1e6f; zs[k]->speed = 30; }
+        explode(p->x + 66, p->y + 40, 60, 500, 0);
+        int crawlers = 0, slow = 1;
+        for (int k = 0; k < 10; k++) if (zs[k]->crawl) { crawlers++; if (zs[k]->speed > 30 * 0.36f && zs[k]->speed > 9.0f) slow = 0; }
+        CHECK(crawlers >= 1 && crawlers <= 9 && slow, "a blast made %d crawlers of 10 (slow: %d)", crawlers, slow);
+        G->round = 6; G->spawned = G->to_spawn = 10;
+        for (int k = 0; k < 10; k++) if (!zs[k]->crawl || k != 0) zs[k]->alive = 0;
+        for (int k = 0; k < 10; k++) if (zs[k]->crawl) { zs[k]->alive = 1; for (int j = 0; j < 10; j++) if (j != k) zs[j]->alive = 0; tick(30, &none); CHECK(zs[k]->speed < 20, "the last crawler of a round ran (speed %.0f)", zs[k]->speed); break; }
+        calm(); G->god = 0;
     }
     /* the three trädgårdstomtar: the song, and a present */
     {
