@@ -1,8 +1,12 @@
-// save.c: settings and the high score list, as plain text in the data directory (settings.txt, scores.txt).
+// save.c: settings and the high score list, as plain text in the data directory (settings.txt, scores.txt), and the
+// run in progress (run.sav) so that quitting doesn't end it.
 #include "game.h"
 #include "save.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
+#include <unistd.h>
+#include <pthread.h>
 
 Settings S = { .volume = 80, .music = 1, .shake = 1, .assist = 2, .scheme = 0, .season = 0, .lang = LANG_EN, .swap_ab = 0, .show_fps = 0, .touch_aim = 1 };
 Score scores[MAX_SCORES]; int nscores;
@@ -90,4 +94,92 @@ void score_insert(const Score *s, int at) {
     for (int i = nscores - 1; i > at; i--) scores[i] = scores[i - 1];
     scores[at] = *s;
     scores_save();
+}
+
+/* ---------------------------------------------------------------- the run in progress
+ * The Game struct as it stands: plain data but for the painted town (painted again on loading) and where each zombie
+ * was last drawn. A header ties it to this build's layout; a checksum catches a file cut short. Written to a temporary
+ * file, synced, then renamed over the old one: a power cut leaves the old save or the new one, never half of one. */
+typedef struct { char magic[8]; uint32_t layout, size, sum, pad; } RunHeader;
+
+static uint32_t fnv(const void *p, size_t n, uint32_t h) { const uint8_t *b = p; while (n--) h = (h ^ *b++) * 16777619u; return h; }
+static uint32_t layout_id(void) {
+    size_t v[] = { sizeof(Game), sizeof(Zombie), sizeof(Player), sizeof(Item), sizeof(Inter), sizeof(Prop), sizeof(Tile),
+                   sizeof(Weapon), sizeof(Armor), offsetof(Game, p), offsetof(Game, z), offsetof(Game, items), MAPW_MAX, MAPH_MAX,
+                   W_COUNT, A_COUNT, C_COUNT, PK_COUNT, ZT_COUNT, PU_COUNT, IT_COUNT, P_COUNT };
+    uint32_t h = fnv(v, sizeof v, 2166136261u);
+    return fnv(DK_VERSION, strlen(DK_VERSION), h);
+}
+
+static int write_run(const Game *g) {
+    char p[600], t[610]; path(p, sizeof p, "run.sav"); snprintf(t, sizeof t, "%s.tmp", p);
+    FILE *f = fopen(t, "wb");
+    if (!f) return -1;
+    RunHeader h; memset(&h, 0, sizeof h);
+    memcpy(h.magic, "DKRUN01", 8); h.layout = layout_id(); h.size = sizeof(Game); h.sum = fnv(g, sizeof(Game), 2166136261u);
+    int ok = fwrite(&h, sizeof h, 1, f) == 1 && fwrite(g, sizeof(Game), 1, f) == 1 && fflush(f) == 0;
+    if (ok) fsync(fileno(f));
+    if (fclose(f) != 0) ok = 0;
+    if (!ok || rename(t, p) != 0) { unlink(t); return -1; }
+    return 0;
+}
+
+static pthread_t saver; static int saver_on; static Game *saver_buf;
+static void saver_wait(void) { if (saver_on) { pthread_join(saver, 0); saver_on = 0; } }
+static void *saver_main(void *g) { write_run(g); return 0; }
+
+int run_save(void) {
+    saver_wait();
+    int r = write_run(G);
+    plat_log(r ? "could not save the run" : "saved the run (round %d)", G->round);
+    return r;
+}
+void run_autosave(void) {
+    saver_wait();
+    if (!saver_buf && !(saver_buf = malloc(sizeof(Game)))) return;
+    memcpy(saver_buf, G, sizeof(Game));
+    if (pthread_create(&saver, 0, saver_main, saver_buf) == 0) saver_on = 1;
+    else write_run(saver_buf);
+}
+void run_discard(void) {
+    saver_wait();
+    char p[600]; path(p, sizeof p, "run.sav");
+    unlink(p);
+}
+
+/* reads and checks the file; into `into` when given */
+static int read_run(Game *into) {
+    char p[600]; path(p, sizeof p, "run.sav");
+    FILE *f = fopen(p, "rb");
+    if (!f) return -1;
+    RunHeader h; int ok = fread(&h, sizeof h, 1, f) == 1 && !memcmp(h.magic, "DKRUN01", 8) && h.layout == layout_id() && h.size == sizeof(Game);
+    if (ok && into) ok = fread(into, sizeof(Game), 1, f) == 1 && fnv(into, sizeof(Game), 2166136261u) == h.sum;
+    fclose(f);
+    return ok ? 0 : -1;
+}
+int run_saved(void) { saver_wait(); return read_run(0) == 0; }
+int run_peek(char *town, int n, int *round) {
+    saver_wait();
+    Game *g = malloc(sizeof(Game));
+    int r = g ? read_run(g) : -1;
+    if (!r) { snprintf(town, (size_t)n, "%s", g->town); *round = g->round; }
+    free(g);
+    return r;
+}
+
+int run_load(void) {
+    saver_wait();
+    Game *g = malloc(sizeof(Game));
+    if (!g) return -1;
+    if (read_run(g)) { free(g); plat_log("the saved run doesn't fit this build: left alone"); return -1; }
+    int vw = G->view_w, vh = G->view_h;
+    game_free();
+    memcpy(G, g, sizeof(Game));
+    free(g);
+    G->world = 0; G->view_w = vw; G->view_h = vh;
+    for (int i = 0; i < MAX_ZOMBIES; i++) G->z[i].rimg = 0;
+    world_paint();                                      /* the town as it is now, power and all */
+    if (G->wave_on) world_power_wave_resume();          /* the lamps still follow the ring */
+    plat_log("continuing the run in %s, round %d", G->town, G->round);
+    return 0;
 }

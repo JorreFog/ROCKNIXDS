@@ -11,9 +11,13 @@ typedef struct {
     int quit;
     uint64_t seed_override;
     int bot_w, bot_h;
+    int has_save, save_checked, save_round, last_rstate;   /* a saved run on the title */
+    char save_town[32];
 } App;
 extern App A;
 
 void app_update(const Input *in, const Input *prev, float dt);
+void app_new_run(void);                 /* a new run now (--start) */
+int app_run_in_progress(void);          /* saved when the program is quit */
 void app_render(Surf *top, Surf *bot);
 void title_top(Surf *s);

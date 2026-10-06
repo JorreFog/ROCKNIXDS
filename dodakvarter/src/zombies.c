@@ -57,9 +57,8 @@ void flow_update(int force) {
         G->flow_x = tx; G->flow_y = ty; G->flow_t = 1.0f;
         bfs_from(G->flow, tx, ty);
     }
-    static int lure_was;
-    if (G->lure_on && !lure_was) bfs_from(G->lureflow, (int)(G->lure_x / TS), (int)(G->lure_y / TS));
-    lure_was = G->lure_on;
+    if (G->lure_on && !G->lure_was) bfs_from(G->lureflow, (int)(G->lure_x / TS), (int)(G->lure_y / TS));
+    G->lure_was = G->lure_on;
 }
 
 /* ---------------------------------------------------------------- spawning */

@@ -145,12 +145,27 @@ static void logo(Surf *s, int cy, float t) {
 }
 
 /* ---------------------------------------------------------------- screens */
-static const char *TITLE_ITEMS_EN[] = { "PLAY", "HIGH SCORES", "SETTINGS", "HOW TO PLAY", "QUIT" };
+/* the title's entries: Continue (and New run) when a run is saved */
+enum { T_CONTINUE, T_PLAY, T_NEW, T_SCORES, T_SETTINGS, T_HOWTO, T_QUIT };
+static int title_items(int *acts, const char **labels) {
+    static const char *en[] = { "CONTINUE", "PLAY", "NEW RUN", "HIGH SCORES", "SETTINGS", "HOW TO PLAY", "QUIT" };
+    int n = 0;
+    if (A.has_save) { acts[n++] = T_CONTINUE; acts[n++] = T_NEW; } else acts[n++] = T_PLAY;
+    acts[n++] = T_SCORES; acts[n++] = T_SETTINGS; acts[n++] = T_HOWTO; acts[n++] = T_QUIT;
+    for (int i = 0; labels && i < n; i++) labels[i] = tr(en[acts[i]]);
+    return n;
+}
+static int title_index(int act) { int acts[8], n = title_items(acts, 0); for (int i = 0; i < n; i++) if (acts[i] == act) return i; return 0; }
+static int title_y0(int h, int n) { return h / 2 - 60 - (n > 5 ? 11 : 0); }
 
 static void draw_title_bottom(Surf *s) {
     bg_bottom(s);
-    const char *items[5]; for (int i = 0; i < 5; i++) items[i] = tr(TITLE_ITEMS_EN[i]);
-    menu_list(s, items, 5, A.sel, s->h / 2 - 60);
+    int acts[8]; const char *items[8]; int n = title_items(acts, items);
+    menu_list(s, items, n, A.sel, title_y0(s->h, n));
+    if (A.has_save && acts[A.sel] == T_CONTINUE) {
+        char b[96]; snprintf(b, sizeof b, "%s, %s %d", A.save_town, tr("Round"), A.save_round);
+        text_center(s, FONT_SMALL, s->w / 2, title_y0(s->h, n) - 10, 0x9aa4b8, 0, b);
+    }
     char b[96];
     if (nscores) { snprintf(b, sizeof b, "%s: %s - %s %d", tr("HIGH SCORES"), scores[0].name, tr("Round"), scores[0].round); text_center(s, FONT_SMALL, s->w / 2, s->h - 30, 0xd8b040, 0, b); }
     snprintf(b, sizeof b, "v%s", DK_VERSION);
@@ -204,14 +219,14 @@ static void settings_change(int i, int d) {
 
 /* how to play: pages of text on the bottom screen, a picture on the top */
 static const char *HOWTO_EN[] = {
-    "SURVIVE\n\nThe dead come in rounds, more and tougher each time. Survive as many rounds as you can: that is your score.\n\nEvery hit is +10 kr, a kill +60, a critical +100, the knife +130.",
+    "SURVIVE\n\nThe dead come in rounds, more and tougher each time. Survive as many rounds as you can: that is your score.\n\nEvery hit is +10 kr, a kill +60, a critical +100, the knife +130.\n\nQuitting keeps the run: Continue it from the title.",
     "SPEND YOUR KRONOR\n\nClear barriers to open new districts. Chalk outlines on walls are guns for sale. Lådan (the Mystery Box, 950 kr) gives a random weapon, until the Dalahäst carries it away.",
     "THE POWER\n\nFind the Elcentral and switch the power on. Then the perk machines and Smedjan (5 000 kr: Pack-a-Punch) work, and the street lamps light up.",
     "PERKS (max 4)\n\nJulmust 2 500: 250 health. Snabbkaffe 3 000: fast reloads. Salmiak 2 000: fire faster, hit harder. Kanelbulle 500: get back up. Blåbärssoppa 2 000: run. Lingondricka 2 000: shock on reload. Kaviar 4 000: a third gun.",
     "LOOT\n\nSearch bins, cars, mailboxes and sheds. Rarity: grey, green, blue, purple, gold. It gets better every round. Helmets and vests take hits for you. Wolves come on Vargnatt, and the moose... runs.",
 };
 static const char *HOWTO_SV[] = {
-    "ÖVERLEV\n\nDe döda kommer i rundor, fler och starkare varje gång. Överlev så många rundor du kan: det är din poäng.\n\nVarje träff ger +10 kr, att döda +60, en kritisk träff +100, kniven +130.",
+    "ÖVERLEV\n\nDe döda kommer i rundor, fler och starkare varje gång. Överlev så många rundor du kan: det är din poäng.\n\nVarje träff ger +10 kr, att döda +60, en kritisk träff +100, kniven +130.\n\nAvslutar du sparas spelet: fortsätt från titelskärmen.",
     "SPENDERA KRONOR\n\nRöj barrikader för att öppna nya kvarter. Kritkonturer på väggarna är vapen till salu. Lådan (950 kr) ger ett slumpvapen, tills Dalahästen bär iväg den.",
     "STRÖMMEN\n\nHitta elcentralen och slå på strömmen. Då fungerar automaterna och Smedjan (5 000 kr: uppgradera vapnet), och gatlyktorna tänds.",
     "FÖRMÅNER (max 4)\n\nJulmust 2 500: 250 hälsa. Snabbkaffe 3 000: snabb omladdning. Salmiak 2 000: skjut snabbare, hårdare. Kanelbulle 500: res dig igen. Blåbärssoppa 2 000: spring. Lingondricka 2 000: stöt vid omladdning. Kaviar 4 000: ett tredje vapen.",
@@ -321,15 +336,30 @@ void title_top(Surf *s) {
 }
 
 /* ---------------------------------------------------------------- the state machine (main.c calls) */
-static void start_run(void) {
+#define PAUSE_ITEMS 5
+static void refresh_save_info(void) { A.has_save = run_peek(A.save_town, sizeof A.save_town, &A.save_round) == 0; }
+void app_new_run(void) {
+    run_discard(); A.has_save = 0;
     uint64_t seed = A.seed_override ? A.seed_override : ((uint64_t)time(0) * 2654435761u) ^ (uint64_t)clock();
     int season = S.season ? S.season - 1 : (int)((seed * 0x9E3779B97F4A7C15ull >> 40) % SEASON_COUNT);   /* a seed is a whole run */
     game_new(seed, season);
-    A.state = ST_PLAY; A.t = 0;
+    A.state = ST_PLAY; A.t = 0; A.last_rstate = G->rstate;
     music_play(MUS_NONE);
+}
+static void continue_run(void) {
+    if (run_load()) { refresh_save_info(); return; }
+    A.state = ST_PAUSE; A.sel = 0; A.t = 0; A.last_rstate = G->rstate;   /* back where you left it, paused */
+    music_play(MUS_NONE);
+}
+/* a run is going on (playing, paused, or in a menu opened from the pause) */
+int app_run_in_progress(void) {
+    if (!G || G->over || G->round <= 0) return 0;
+    return A.state == ST_PLAY || A.state == ST_PAUSE || (A.state == ST_SETTINGS && A.settings_from == ST_PAUSE) ||
+           (A.state == ST_HOWTO && A.howto_from == ST_PAUSE);
 }
 
 static void end_run(void) {
+    run_discard(); A.has_save = 0;
     A.state = ST_GAMEOVER; A.t = 0; G->over = 1;
     memset(&A.last, 0, sizeof A.last);
     A.last.round = G->round; A.last.kills = G->p.kills; A.last.kr = G->p.kr_total; A.last.secs = (int)G->time;
@@ -343,18 +373,22 @@ void app_update(const Input *in, const Input *prev, float dt) {
     int up = pressed(in, prev, B_UP), down = pressed(in, prev, B_DOWN), left = pressed(in, prev, B_LEFT), right = pressed(in, prev, B_RIGHT);
     switch (A.state) {
     case ST_TITLE: {
-        if (up) { A.sel = (A.sel + 4) % 5; sfx(SFX_MENU_MOVE, 0.5f, 0); }
-        if (down) { A.sel = (A.sel + 1) % 5; sfx(SFX_MENU_MOVE, 0.5f, 0); }
-        int tr_ = touch_down(in, prev) ? touch_row(in, A.bot_h / 2 - 60, 5) : -1;
+        if (!A.save_checked) { refresh_save_info(); A.save_checked = 1; }
+        int acts[8], n = title_items(acts, 0);
+        if (A.sel >= n) A.sel = 0;
+        if (up) { A.sel = (A.sel + n - 1) % n; sfx(SFX_MENU_MOVE, 0.5f, 0); }
+        if (down) { A.sel = (A.sel + 1) % n; sfx(SFX_MENU_MOVE, 0.5f, 0); }
+        int tr_ = touch_down(in, prev) ? touch_row(in, title_y0(A.bot_h, n), n) : -1;
         if (tr_ >= 0) A.sel = tr_;
         if (ok_pressed(in, prev) || tr_ >= 0) {
             sfx(SFX_MENU_OK, 0.6f, 0);
-            switch (A.sel) {
-            case 0: start_run(); break;
-            case 1: A.state = ST_SCORES; A.rank = -1; break;
-            case 2: A.state = ST_SETTINGS; A.settings_from = ST_TITLE; A.sel = 0; break;
-            case 3: A.state = ST_HOWTO; A.page = 0; break;
-            case 4: A.quit = 1; break;
+            switch (acts[A.sel]) {
+            case T_CONTINUE: continue_run(); break;
+            case T_PLAY: case T_NEW: app_new_run(); break;
+            case T_SCORES: A.state = ST_SCORES; A.rank = -1; break;
+            case T_SETTINGS: A.state = ST_SETTINGS; A.settings_from = ST_TITLE; A.sel = 0; break;
+            case T_HOWTO: A.state = ST_HOWTO; A.page = 0; break;
+            case T_QUIT: A.quit = 1; break;
             }
         }
         break;
@@ -363,14 +397,14 @@ void app_update(const Input *in, const Input *prev, float dt) {
         if (pressed(in, prev, B_START) || pressed(in, prev, B_MENU)) { A.state = ST_PAUSE; A.sel = 0; sfx(SFX_MENU_BACK, 0.5f, 0); break; }
         if (in->touch[1] && !prev->touch[1]) hud_touch(in->tx[1], in->ty[1]);
         game_update(in, prev, dt);
+        if (G->rstate == RS_BREAK && A.last_rstate != RS_BREAK && !G->over) run_autosave();   /* a round won: kept */
+        A.last_rstate = G->rstate;
         if (G->over && G->over_t > 1.5f) end_run();
         break;
     case ST_PAUSE: {
-        static const char *items_en[4] = { "RESUME", "SETTINGS", "HOW TO PLAY", "QUIT RUN" };
-        (void)items_en;
-        if (up) { A.sel = (A.sel + 3) % 4; sfx(SFX_MENU_MOVE, 0.5f, 0); }
-        if (down) { A.sel = (A.sel + 1) % 4; sfx(SFX_MENU_MOVE, 0.5f, 0); }
-        int tr_ = touch_down(in, prev) ? touch_row(in, A.bot_h / 2 - 50, 4) : -1;
+        if (up) { A.sel = (A.sel + PAUSE_ITEMS - 1) % PAUSE_ITEMS; sfx(SFX_MENU_MOVE, 0.5f, 0); }
+        if (down) { A.sel = (A.sel + 1) % PAUSE_ITEMS; sfx(SFX_MENU_MOVE, 0.5f, 0); }
+        int tr_ = touch_down(in, prev) ? touch_row(in, A.bot_h / 2 - 56, PAUSE_ITEMS) : -1;
         if (tr_ >= 0) A.sel = tr_;
         if (pressed(in, prev, B_START) || back_pressed(in, prev)) { A.state = ST_PLAY; break; }
         if (pressed(in, prev, btn_fire()) || tr_ >= 0) {
@@ -378,7 +412,10 @@ void app_update(const Input *in, const Input *prev, float dt) {
             if (A.sel == 0) A.state = ST_PLAY;
             else if (A.sel == 1) { A.state = ST_SETTINGS; A.settings_from = ST_PAUSE; A.sel = 0; }
             else if (A.sel == 2) { A.state = ST_HOWTO; A.page = 0; A.howto_from = ST_PAUSE; }
-            else { G->over = 1; end_run(); }
+            else if (A.sel == 3) {                           /* save and quit: the run waits on the title */
+                run_save(); refresh_save_info();
+                A.state = ST_TITLE; A.sel = 0; A.t = 0; music_play(MUS_TITLE);
+            } else { G->over = 1; end_run(); }
         }
         break;
     }
@@ -394,7 +431,7 @@ void app_update(const Input *in, const Input *prev, float dt) {
         if (back_pressed(in, prev) || pressed(in, prev, B_START) || (A.sel == 10 && pressed(in, prev, btn_fire()))) {
         settings_back:
             sfx(SFX_MENU_BACK, 0.5f, 0);
-            A.state = A.settings_from; A.sel = A.settings_from == ST_PAUSE ? 1 : 2;
+            A.state = A.settings_from; A.sel = A.settings_from == ST_PAUSE ? 1 : title_index(T_SETTINGS);
         }
         break;
     }
@@ -474,8 +511,8 @@ void app_render(Surf *top, Surf *bot) {
         rect_blend(top, 0, 0, top->w, top->h, 0x000000, 140);
         text_big(top, top->w / 2 - text_w(FONT_NORMAL, tr("PAUSED")) * 3 / 2, top->h / 2 - 12, 3, 0xffffff, 0x000000, tr("PAUSED"));
         bg_bottom(bot);
-        const char *items[4] = { tr("RESUME"), tr("SETTINGS"), tr("HOW TO PLAY"), tr("QUIT RUN") };
-        menu_list(bot, items, 4, A.sel, bot->h / 2 - 50);
+        const char *items[PAUSE_ITEMS] = { tr("RESUME"), tr("SETTINGS"), tr("HOW TO PLAY"), tr("SAVE AND QUIT"), tr("GIVE UP") };
+        menu_list(bot, items, PAUSE_ITEMS, A.sel, bot->h / 2 - 56);
         break;
     }
     case ST_GAMEOVER: case ST_NAME: {

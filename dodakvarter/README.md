@@ -39,12 +39,16 @@ works too.
 | Sprint | hold **L** | hold **L** |
 | Grenade | **R2** | **L2** |
 | Bag | **L2** uses the item, **SELECT** picks the next one; or tap it | tap it on the bottom screen |
-| Pause | **START** | **START** |
+| Pause (save and quit, or give up) | **START** | **START** |
 
 The touchscreens work: tap a bag item to pick it (tap again to use it), tap a weapon to switch to it, and touch the
 top screen to fire where you touch (*Touch aiming* in the settings). With *Swap A/B* fire and use change buttons.
 On a computer: arrows or WASD, J or Z to fire, K or X to use, U reload, I switch, E knife, Q sprint, 1 item,
 3 grenade, Tab next item, Enter pause; the mouse aims (left button fires) and clicks the bottom screen.
+
+Quitting never loses a run: *Save and quit* in the pause menu, ROCKNIX's exit hotkey, or a shutdown while it runs
+keep it in `run.sav`, and the title offers *Continue* (back where you were, paused). The run is also
+kept after every round, so even a flat battery costs one round at most. A run that ends (or *Give up*) is gone.
 
 ## How it works
 

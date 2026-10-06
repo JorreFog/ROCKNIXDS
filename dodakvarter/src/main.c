@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
     A.state = ST_TITLE; A.rank = -1; A.seed_override = seed;
     A.bot_w = pi.bot_w; A.bot_h = pi.bot_h;
     music_play(MUS_TITLE);
-    if (start) { Input z; memset(&z, 0, sizeof z); A.sel = 0; Input p1 = z; p1.held = BIT(B_A); app_update(&p1, &z, 0); }
+    if (start) app_new_run();
     Input in, prev; memset(&in, 0, sizeof in); memset(&prev, 0, sizeof prev);
     double t0 = plat_now(), acc = 0, fps_t = t0;
     int fps_n = 0; float fps = 0;
@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
         double now = plat_now();
         if (now - fps_t >= 1.0) { fps = (float)(fps_n / (now - fps_t)); fps_n = 0; fps_t = now; }
     }
-    if (A.state == ST_PLAY || A.state == ST_PAUSE) plat_log("quit during round %d", G ? G->round : 0);
+    if (app_run_in_progress()) { plat_log("quit during round %d", G->round); run_save(); }   /* Continue on the title */
     settings_save();
     plat_shutdown();
     plat_log("bye");

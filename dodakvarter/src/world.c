@@ -568,6 +568,13 @@ void world_power_wave(float x, float y) {
         wave_d[k] = d; wave_b[k] = (uint8_t)i;
     }
 }
+/* after loading a run saved while the lights were coming on: the same ring, as far as it had come */
+void world_power_wave_resume(void) {
+    float r = G->wave_r;
+    world_power_wave(G->wave_x, G->wave_y);
+    G->wave_r = r;
+    while (wave_next < wave_n && wave_d[wave_next] <= r) wave_next++;   /* (painted already: the load painted it all) */
+}
 void world_update(float dt) {
     if (!G->wave_on) return;
     G->wave_r += dt * 420;

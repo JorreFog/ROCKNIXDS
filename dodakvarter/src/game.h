@@ -225,7 +225,7 @@ typedef struct {
     uint8_t lightmask[MAPH_MAX][MAPW_MAX];
     uint16_t flow[MAPH_MAX][MAPW_MAX];  /* steps to the player (flow field) */
     int flow_x, flow_y; float flow_t;
-    uint16_t lureflow[MAPH_MAX][MAPW_MAX]; int lure_on; float lure_x, lure_y;
+    uint16_t lureflow[MAPH_MAX][MAPW_MAX]; int lure_on, lure_was; float lure_x, lure_y;
     /* run */
     uint64_t seed; int season;
     Rng rng, fx;
@@ -291,6 +291,7 @@ void refresh_walls(void);
 void world_paint(void);
 void world_repaint_rect(int tx, int ty, int tw, int th);
 void world_power_wave(float x, float y);
+void world_power_wave_resume(void);
 /* the power is on here (the wave has come this far) */
 static inline int powered_at(float x, float y) {
     return G->power_on && (!G->wave_on || dist2f(x, y, G->wave_x, G->wave_y) <= G->wave_r * G->wave_r);
