@@ -30,12 +30,18 @@ void float_text(float x, float y, uint32_t col, const char *s) {
 }
 void shake(float a) { if (S.shake) G->shake = MAX(G->shake, a); }
 
-void spawn_parts(int type, float x, float y, int n, uint32_t col, float speed) {
+Part *spawn_parts(int type, float x, float y, int n, uint32_t col, float speed) {
     Rng *r = &G->fx;
+    Part *last = 0;
+    if (n > 1 && render_fx_light()) n = (n + 1) / 2;       /* the light effects: half the bits */
     for (int k = 0; k < n; k++) {
         Part *p = 0;
-        for (int i = 0; i < MAX_PARTS; i++) if (!G->parts[i].alive) { p = &G->parts[i]; break; }
-        if (!p) return;
+        for (int j = 0; j < MAX_PARTS; j++) {
+            int i = (G->part_next + j) % MAX_PARTS;
+            if (!G->parts[i].alive) { p = &G->parts[i]; G->part_next = (i + 1) % MAX_PARTS; break; }
+        }
+        if (!p) return last;
+        last = p;
         memset(p, 0, sizeof *p);
         p->alive = 1; p->type = type; p->x = x; p->y = y; p->col = col;
         float a = rng_float(r) * 2 * PI_F, sp = speed * (0.4f + rng_float(r) * 0.8f);
@@ -55,6 +61,7 @@ void spawn_parts(int type, float x, float y, int n, uint32_t col, float speed) {
         case PT_CONFETTI: p->vz = 60 + rng_float(r) * 60; p->life = p->max = 1.2f; break;
         }
     }
+    return last;
 }
 
 static void parts_update(float dt) {

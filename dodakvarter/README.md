@@ -160,7 +160,10 @@ C, about 10,000 lines, no libraries but libc, libm and libdrm (SDL2 and libasoun
 
 A frame takes about 1 ms on a desktop core (the night's lighting, the heaviest part, runs eight pixels at a time
 with NEON on the handheld); `DK_PROFILE=1` writes the time per frame to the log every 10 s, to see it on the
-handheld, and `DK_PROFILE=2` every frame over 2 ms. Settings, the high score list (`scores.txt`) and the log (`dodakvarter.log`) are in
+handheld, and `DK_PROFILE=2` every frame over 2 ms. *Effects* in the settings is *Auto* at first: should frames ever
+take over 11 ms on the handheld, it changes to *Light* for the rest of the run (the night's light worked out at half
+the resolution, under the same dithering, and half the particles; about a quarter less work a frame, and hard to tell
+apart). *Full* and *Light* fix it either way. Settings, the high score list (`scores.txt`) and the log (`dodakvarter.log`) are in
 `/storage/.config/rocknixds/dodakvarter/data` on the device (`DK_DATA` elsewhere).
 
 **On the RG DS.** `device/` has the Ports entry (`Doda Kvarter.sh`), `launch.sh` (starts the session in a systemd

@@ -204,9 +204,7 @@ static void frost_cone(float x, float y, float ang, const Weapon *w) {     /* Sn
     }
     for (int k = 0; k < 3; k++) {
         float a = ang + rng_rangef(&G->fx, -0.35f, 0.35f);
-        Part *p = 0;
-        spawn_parts(PT_FROST, x + cosf(a) * 6, y + sinf(a) * 6, 1, 0xe0f4ff, 0);
-        for (int i = MAX_PARTS - 1; i >= 0; i--) if (G->parts[i].alive && G->parts[i].type == PT_FROST && G->parts[i].life == G->parts[i].max) { p = &G->parts[i]; break; }
+        Part *p = spawn_parts(PT_FROST, x + cosf(a) * 6, y + sinf(a) * 6, 1, 0xe0f4ff, 0);
         if (p) { p->vx = cosf(a) * range * 1.6f; p->vy = sinf(a) * range * 1.6f; p->z = 8; p->vz = 0; p->life = p->max = 0.4f; }
     }
 }

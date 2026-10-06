@@ -29,6 +29,7 @@ void settings_load(void) {
         else if (!strcmp(k, "swap_ab")) S.swap_ab = !!v;
         else if (!strcmp(k, "show_fps")) S.show_fps = !!v;
         else if (!strcmp(k, "touch_aim")) S.touch_aim = !!v;
+        else if (!strcmp(k, "effects")) S.effects = CLAMP(v, 0, 2);
     }
     fclose(f);
 }
@@ -37,8 +38,8 @@ void settings_save(void) {
     char p[600], t[610]; path(p, sizeof p, "settings.txt"); snprintf(t, sizeof t, "%s.tmp", p);
     FILE *f = fopen(t, "w");
     if (!f) return;
-    fprintf(f, "volume %d\nmusic %d\nshake %d\nassist %d\nscheme %d\nseason %d\nlang %d\nswap_ab %d\nshow_fps %d\ntouch_aim %d\n",
-            S.volume, S.music, S.shake, S.assist, S.scheme, S.season, S.lang, S.swap_ab, S.show_fps, S.touch_aim);
+    fprintf(f, "volume %d\nmusic %d\nshake %d\nassist %d\nscheme %d\nseason %d\nlang %d\nswap_ab %d\nshow_fps %d\ntouch_aim %d\neffects %d\n",
+            S.volume, S.music, S.shake, S.assist, S.scheme, S.season, S.lang, S.swap_ab, S.show_fps, S.touch_aim, S.effects);
     fclose(f);
     rename(t, p);
 }

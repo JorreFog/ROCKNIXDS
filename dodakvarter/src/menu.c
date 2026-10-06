@@ -173,10 +173,14 @@ static void draw_title_bottom(Surf *s) {
     text(s, FONT_SMALL, s->w - 4 - text_w(FONT_SMALL, "ROCKNIXDS"), s->h - 8, 0x4a5262, "ROCKNIXDS");
 }
 
+#define SETTINGS_N 12                   /* rows, BACK the last */
+#define SETTINGS_BACK (SETTINGS_N - 1)
+#define SETTINGS_ROW 19
 static void draw_settings(Surf *s) {
     bg_bottom(s);
     static const char *assist[3] = { "Off", "Low", "High" }, *season[4] = { "Random", "Autumn", "Winter", "Midsummer" };
-    char items[11][48];
+    static const char *effects[3] = { "Auto", "Full", "Light" };
+    char items[SETTINGS_N][48];
     snprintf(items[0], 48, "%s: %d", tr("Volume"), S.volume);
     snprintf(items[1], 48, "%s: %s", tr("Music"), tr(S.music ? "On" : "Off"));
     snprintf(items[2], 48, "%s: %s", tr("Screen shake"), tr(S.shake ? "On" : "Off"));
@@ -187,16 +191,17 @@ static void draw_settings(Surf *s) {
     snprintf(items[7], 48, "%s: %s", tr("Season"), tr(season[S.season]));
     snprintf(items[8], 48, "%s: %s", tr("Language"), S.lang ? "Svenska" : "English");
     snprintf(items[9], 48, "%s: %s", tr("Show FPS"), tr(S.show_fps ? "On" : "Off"));
-    snprintf(items[10], 48, "%s", tr("BACK"));
-    const char *p[11]; for (int i = 0; i < 11; i++) p[i] = items[i];
-    /* compact rows: 11 items */
-    int y0 = 8;
-    for (int i = 0; i < 11; i++) {
-        int y = y0 + i * 20, w = 240, cx = s->w / 2;
+    snprintf(items[10], 48, "%s: %s%s", tr("Effects"), tr(effects[S.effects]), S.effects == FX_AUTO && render_fx_light() ? tr(" (light now)") : "");
+    snprintf(items[SETTINGS_BACK], 48, "%s", tr("BACK"));
+    const char *p[SETTINGS_N]; for (int i = 0; i < SETTINGS_N; i++) p[i] = items[i];
+    /* compact rows */
+    int y0 = 6;
+    for (int i = 0; i < SETTINGS_N; i++) {
+        int y = y0 + i * SETTINGS_ROW, w = 240, cx = s->w / 2;
         if (i == A.sel) { rectf(s, cx - w / 2, y, w, 17, 0x3a1416); rect_line(s, cx - w / 2, y, w, 17, 0xc81818); }
         else rect_line(s, cx - w / 2, y, w, 17, 0x2a3040);
         text_center(s, FONT_NORMAL, cx, y + 4, i == A.sel ? 0xffffff : 0xa0a8b8, 0, p[i]);
-        if (i == A.sel && i < 10) { text(s, FONT_NORMAL, cx - w / 2 + 4, y + 4, 0xc81818, "\xe2\x97\x80"); text(s, FONT_NORMAL, cx + w / 2 - 9, y + 4, 0xc81818, "\xe2\x96\xb6"); }
+        if (i == A.sel && i < SETTINGS_BACK) { text(s, FONT_NORMAL, cx - w / 2 + 4, y + 4, 0xc81818, "\xe2\x97\x80"); text(s, FONT_NORMAL, cx + w / 2 - 9, y + 4, 0xc81818, "\xe2\x96\xb6"); }
     }
 }
 
@@ -212,6 +217,7 @@ static void settings_change(int i, int d) {
     case 7: S.season = (S.season + d + 4) % 4; break;
     case 8: S.lang = !S.lang; break;
     case 9: S.show_fps = !S.show_fps; break;
+    case 10: S.effects = (S.effects + d + 3) % 3; break;
     }
     sfx(SFX_MENU_MOVE, 0.5f, 0);
     settings_save();
@@ -340,6 +346,7 @@ void title_top(Surf *s) {
 static void refresh_save_info(void) { A.has_save = run_peek(A.save_town, sizeof A.save_town, &A.save_round) == 0; }
 void app_new_run(void) {
     run_discard(); A.has_save = 0;
+    render_fx_reset();
     uint64_t seed = A.seed_override ? A.seed_override : ((uint64_t)time(0) * 2654435761u) ^ (uint64_t)clock();
     int season = S.season ? S.season - 1 : (int)((seed * 0x9E3779B97F4A7C15ull >> 40) % SEASON_COUNT);   /* a seed is a whole run */
     game_new(seed, season);
@@ -422,15 +429,15 @@ void app_update(const Input *in, const Input *prev, float dt) {
         break;
     }
     case ST_SETTINGS: {
-        if (up) { A.sel = (A.sel + 10) % 11; sfx(SFX_MENU_MOVE, 0.5f, 0); }
-        if (down) { A.sel = (A.sel + 1) % 11; sfx(SFX_MENU_MOVE, 0.5f, 0); }
+        if (up) { A.sel = (A.sel + SETTINGS_N - 1) % SETTINGS_N; sfx(SFX_MENU_MOVE, 0.5f, 0); }
+        if (down) { A.sel = (A.sel + 1) % SETTINGS_N; sfx(SFX_MENU_MOVE, 0.5f, 0); }
         if (in->touch[1] && !prev->touch[1]) {
-            int r = (in->ty[1] - 8) / 20;
-            if (r >= 0 && r < 11) { A.sel = r; if (r < 10) settings_change(r, in->tx[1] < A.bot_w / 2 ? -1 : 1); else goto settings_back; }
+            int r = (in->ty[1] - 6) / SETTINGS_ROW;
+            if (r >= 0 && r < SETTINGS_N) { A.sel = r; if (r < SETTINGS_BACK) settings_change(r, in->tx[1] < A.bot_w / 2 ? -1 : 1); else goto settings_back; }
         }
-        if (A.sel < 10 && (left || right)) settings_change(A.sel, left ? -1 : 1);
-        if (A.sel < 10 && pressed(in, prev, btn_fire())) settings_change(A.sel, 1);
-        if (back_pressed(in, prev) || pressed(in, prev, B_START) || (A.sel == 10 && pressed(in, prev, btn_fire()))) {
+        if (A.sel < SETTINGS_BACK && (left || right)) settings_change(A.sel, left ? -1 : 1);
+        if (A.sel < SETTINGS_BACK && pressed(in, prev, btn_fire())) settings_change(A.sel, 1);
+        if (back_pressed(in, prev) || pressed(in, prev, B_START) || (A.sel == SETTINGS_BACK && pressed(in, prev, btn_fire()))) {
         settings_back:
             sfx(SFX_MENU_BACK, 0.5f, 0);
             A.state = A.settings_from; A.sel = A.settings_from == ST_PAUSE ? 1 : title_index(T_SETTINGS);

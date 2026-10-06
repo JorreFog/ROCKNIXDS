@@ -245,7 +245,7 @@ typedef struct {
     Zombie z[MAX_ZOMBIES];
     Shot shots[MAX_SHOTS];
     Tracer tr[64];
-    Part parts[MAX_PARTS];
+    Part parts[MAX_PARTS]; int part_next;   /* where to look for a free one first */
     Item items[MAX_ITEMS];
     PowerUp pu[MAX_POWERUPS];
     Grenade gr[MAX_GRENADES];
@@ -272,7 +272,7 @@ extern const uint32_t RARITY_COL[RAR_COUNT];
 
 /* settings (save.c) */
 typedef struct {
-    int volume, music, shake, assist, scheme, season, lang, swap_ab, show_fps, touch_aim;
+    int volume, music, shake, assist, scheme, season, lang, swap_ab, show_fps, touch_aim, effects;
 } Settings;
 extern Settings S;
 
@@ -316,7 +316,7 @@ void game_free(void);
 void msg(uint32_t col, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void banner(uint32_t col, const char *a, const char *b);
 void add_kr(int n, int scaled);
-void spawn_parts(int type, float x, float y, int n, uint32_t col, float speed);
+Part *spawn_parts(int type, float x, float y, int n, uint32_t col, float speed);   /* returns the last one */
 void float_text(float x, float y, uint32_t col, const char *s);
 void shake(float amount);
 float player_speed(void);
@@ -382,6 +382,10 @@ void box_place(int spot);
 
 /* render.c */
 void render_game(Surf *top);
+enum { FX_AUTO, FX_FULL, FX_LIGHT };
+void render_frame_cost(float ms);       /* main.c: how long update and render took; Auto goes light when it's long */
+void render_fx_reset(void);             /* a new run: full effects again */
+int render_fx_light(void);              /* the light effects: half-resolution night, half the particles */
 void render_init(void);
 /* hud.c */
 void render_hud(Surf *bot, const Input *in);

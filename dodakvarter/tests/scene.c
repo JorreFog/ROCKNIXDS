@@ -42,6 +42,7 @@ int main(int argc, char **argv) {
     surf_alloc(&top, pw / sc, ph / sc); surf_alloc(&bot, pw / sc, ph / sc);
     G = calloc(1, sizeof *G); G->view_w = top.w; G->view_h = top.h;
     S.assist = 2; S.shake = 0; S.lang = getenv("DK_LANG_SV") ? LANG_SV : LANG_EN;
+    if (getenv("DK_SCENE_FX")) S.effects = atoi(getenv("DK_SCENE_FX"));   /* 2: the light effects */
     render_init();
     A.bot_w = bot.w; A.bot_h = bot.h;
     Input in; memset(&in, 0, sizeof in);

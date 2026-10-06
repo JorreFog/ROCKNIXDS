@@ -5,6 +5,7 @@
 static const char *SV[][2] = {
     {"PLAY", "SPELA"}, {"HIGH SCORES", "TOPPLISTA"}, {"SETTINGS", "INSTÄLLNINGAR"}, {"HOW TO PLAY", "SÅ SPELAR DU"},
     {"QUIT", "AVSLUTA"}, {"RESUME", "FORTSÄTT"}, {"QUIT RUN", "AVSLUTA RUNDAN"}, {"BACK", "TILLBAKA"},
+    {"Effects", "Effekter"}, {"Auto", "Auto"}, {"Full", "Fullt"}, {"Light", "Lätt"}, {" (light now)", " (lätt nu)"},
     {"CONTINUE", "FORTSÄTT"}, {"NEW RUN", "NYTT SPEL"}, {"SAVE AND QUIT", "SPARA OCH AVSLUTA"}, {"GIVE UP", "GE UPP"},
     {"ROUND", "RUNDA"}, {"YOU SURVIVED", "DU ÖVERLEVDE"}, {"ROUNDS", "RUNDOR"}, {"ROUND ONE", "EN RUNDA"},
     {"PAUSED", "PAUS"}, {"Kills", "Döda"}, {"Score", "Poäng"}, {"Round", "Runda"}, {"Rounds", "Rundor"},

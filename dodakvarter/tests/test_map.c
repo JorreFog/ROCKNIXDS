@@ -126,6 +126,17 @@ int main(int argc, char **argv) {
     CHECK(zombie_hp_for_round(1) == 150 && zombie_hp_for_round(9) == 950, "health rounds 1/9: %.0f %.0f", zombie_hp_for_round(1), zombie_hp_for_round(9));
     CHECK(zombie_hp_for_round(10) == 1045, "health round 10: %.0f", zombie_hp_for_round(10));
     CHECK(fabsf(zombie_hp_for_round(20) - 2701) < 2, "health round 20: %.0f, want 2701", zombie_hp_for_round(20));
+    /* Auto effects: frames that run long switch the light effects on, and a new run starts at full again */
+    S.effects = FX_AUTO; render_fx_reset();
+    for (int i = 0; i < 600; i++) render_frame_cost(6.0f);
+    CHECK(!render_fx_light(), "effects went light on 6 ms frames");
+    for (int i = 0; i < 600; i++) render_frame_cost(14.0f);
+    CHECK(render_fx_light(), "effects stayed full on 14 ms frames");
+    render_fx_reset();
+    CHECK(!render_fx_light(), "a new run didn't start at full effects");
+    S.effects = FX_FULL; for (int i = 0; i < 600; i++) render_frame_cost(30.0f);
+    CHECK(!render_fx_light(), "Full went light");
+    S.effects = FX_AUTO; render_fx_reset();
     printf("%d maps checked, %d failures\n", n, fails);
     return fails ? 1 : 0;
 }

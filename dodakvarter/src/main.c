@@ -81,6 +81,7 @@ int main(int argc, char **argv) {
         double tp1 = plat_now();
         app_render(&top, &bot_s);
         double tp2 = plat_now();
+        if (!headless && A.state == ST_PLAY) render_frame_cost((float)((tp2 - tp0) * 1000));
         if (S.show_fps) { char b[24]; snprintf(b, sizeof b, "%.0f FPS", fps); text_ol(&top, FONT_SMALL, top.w - 4 - text_w(FONT_SMALL, b), 2, 0x80ff80, 0x000000, b); }
         if (snapdir && snap_every > 0 && f % snap_every == 0) {
             char p[600]; snprintf(p, sizeof p, "%s/frame%06d.png", snapdir, f);

@@ -10,6 +10,19 @@
 
 static uint16_t *lr, *lg, *lb;            /* light per pixel, 256 = full */
 static int lw, lh;
+static int ls = 1;                        /* screen pixels per light pixel: 2 with the light effects */
+
+/* ---------------------------------------------------------------- effects: full, or light when frames run long */
+static float cost_avg; static int auto_light;
+void render_frame_cost(float ms) {        /* main.c, every frame: update + render, ms */
+    cost_avg += (ms - cost_avg) * 0.02f;   /* about a second's memory */
+    if (S.effects == FX_AUTO && !auto_light && cost_avg > 11.0f) {
+        auto_light = 1;
+        plat_log("effects: light from here (frames took %.1f ms)", cost_avg);
+    }
+}
+void render_fx_reset(void) { auto_light = 0; cost_avg = 0; }
+int render_fx_light(void) { return S.effects == FX_LIGHT || (S.effects == FX_AUTO && auto_light); }
 static const char *ZPAL[8];
 static const char *WOLFPAL, *BRUTEPAL, *BLOATPAL;
 
@@ -49,7 +62,8 @@ static void ambient(int *r, int *g, int *b) {
 }
 
 static void add_light(float wx, float wy, float rad, uint32_t col, float k) {
-    int cx = (int)(wx - G->camx), cy = (int)(wy - G->camy), r = (int)rad;
+    rad /= (float)ls;
+    int cx = (int)((wx - G->camx) / ls), cy = (int)((wy - G->camy) / ls), r = (int)rad;
     if (cx + r < 0 || cy + r < 0 || cx - r >= lw || cy - r >= lh) return;
     int x0 = MAX(0, cx - r), x1 = MIN(lw - 1, cx + r), y0 = MAX(0, cy - r), y1 = MIN(lh - 1, cy + r);
     float inv = 1.0f / (rad * rad);
@@ -75,10 +89,12 @@ static void add_light(float wx, float wy, float rad, uint32_t col, float k) {
 
 /* the torch: a cone along the aim, soft at the edges, stopped by walls tile by tile */
 static void add_torch(float wx, float wy, float ang, float range, float half) {
-    int cx = (int)(wx - G->camx), cy = (int)(wy - G->camy);
+    float L = (float)ls, glow = 18 / L, near = 14 / L;      /* (in light pixels) */
+    range /= L;
+    int cx = (int)((wx - G->camx) / L), cy = (int)((wy - G->camy) / L);
     float ax = cosf(ang), ay = sinf(ang), cosh = cosf(half), cos_in = cosf(half * 0.5f), cosh2 = cosh * cosh;
     /* the box around the cone and the glow: its two edges, and the axes it crosses */
-    float bx0 = cx - 18, bx1 = cx + 18, by0 = cy - 18, by1 = cy + 18;
+    float bx0 = cx - glow, bx1 = cx + glow, by0 = cy - glow, by1 = cy + glow;
     for (int k = 0; k < 6; k++) {
         float a = k == 0 ? ang - half : k == 1 ? ang + half : (k - 2) * (PI_F / 2);
         if (k >= 2 && fabsf(angdiff(a, ang)) > half) continue;
@@ -88,7 +104,7 @@ static void add_torch(float wx, float wy, float ang, float range, float half) {
     int x0 = MAX(0, (int)floorf(bx0)), x1 = MIN(lw - 1, (int)ceilf(bx1)), y0 = MAX(0, (int)floorf(by0)), y1 = MIN(lh - 1, (int)ceilf(by1));
     if (x0 > x1 || y0 > y1) return;
     /* which tiles the torch reaches: a ray per tile centre */
-    int tx0 = (int)((G->camx + x0) / TS), ty0 = (int)((G->camy + y0) / TS), tx1 = (int)((G->camx + x1) / TS), ty1 = (int)((G->camy + y1) / TS);
+    int tx0 = (int)((G->camx + x0 * ls) / TS), ty0 = (int)((G->camy + y0 * ls) / TS), tx1 = (int)((G->camx + x1 * ls) / TS), ty1 = (int)((G->camy + y1 * ls) / TS);
     static uint8_t vis[40][40];
     for (int ty = ty0; ty <= ty1 && ty - ty0 < 40; ty++)
         for (int tx = tx0; tx <= tx1 && tx - tx0 < 40; tx++) {
@@ -103,16 +119,16 @@ static void add_torch(float wx, float wy, float ang, float range, float half) {
     for (int y = y0; y <= y1; y++) {
         float dy = (float)(y - cy);
         size_t row = (size_t)y * lw;
-        int wyy = (int)(G->camy + y);
+        int wyy = (int)(G->camy + y * ls);
         int vty = wyy / TS - ty0;
         for (int x = x0; x <= x1; x++) {
             float dx = (float)(x - cx), d2 = dx * dx + dy * dy;
             if (d2 > range * range) continue;
             float dot = dx * ax + dy * ay;
-            if (d2 >= 18 * 18 && (dot <= 0 || dot * dot <= cosh2 * d2)) continue;   /* neither the glow nor the cone */
+            if (d2 >= glow * glow && (dot <= 0 || dot * dot <= cosh2 * d2)) continue;   /* neither the glow nor the cone */
             float d = sqrtf(d2) + 0.001f, c = dot / d;
             float f;
-            if (d < 18) f = 0.55f * (1 - d / 18);                  /* a little glow around you */
+            if (d < glow) f = 0.55f * (1 - d / glow);              /* a little glow around you */
             else f = 0;
             if (c > cosh) {
                 float edge = c > cos_in ? 1.0f : (c - cosh) / (cos_in - cosh);
@@ -120,8 +136,8 @@ static void add_torch(float wx, float wy, float ang, float range, float half) {
                 f += edge * fall * (fall + 0.25f) * 1.1f;
             }
             if (f <= 0.01f) continue;
-            int vtx = (int)(G->camx + x) / TS - tx0;
-            if (vty >= 0 && vty < 40 && vtx >= 0 && vtx < 40 && !vis[vty][vtx] && d > 14) continue;
+            int vtx = (int)(G->camx + x * ls) / TS - tx0;
+            if (vty >= 0 && vty < 40 && vtx >= 0 && vtx < 40 && !vis[vty][vtx] && d > near) continue;
             int a = (int)(f * 256);
             lr[row + x] = (uint16_t)MIN(1023, lr[row + x] + (250 * a >> 8));
             lg[row + x] = (uint16_t)MIN(1023, lg[row + x] + (236 * a >> 8));
@@ -134,7 +150,7 @@ static void apply_light(Surf *s) {
     static const uint8_t bayer[4][4] = { {0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5} };
     for (int y = 0; y < s->h; y++) {
         uint32_t *px = s->px + (size_t)y * s->pitch;
-        size_t row = (size_t)y * lw;
+        size_t row = (size_t)(y / ls) * lw;
         int x = 0;
 #if defined(__ARM_NEON)
         {   /* the same sums as below, eight pixels at a time: (colour * ((light + dither) >> 4)) >> 4, saturated */
@@ -142,9 +158,17 @@ static void apply_light(Surf *s) {
             const uint16_t dd[8] = { b4[0], b4[1], b4[2], b4[3], b4[0], b4[1], b4[2], b4[3] };
             uint16x8_t dv = vld1q_u16(dd);
             for (; x + 8 <= s->w; x += 8) {
-                uint16x8_t qr = vshrq_n_u16(vaddq_u16(vld1q_u16(lr + row + x), dv), 4);
-                uint16x8_t qg = vshrq_n_u16(vaddq_u16(vld1q_u16(lg + row + x), dv), 4);
-                uint16x8_t qb = vshrq_n_u16(vaddq_u16(vld1q_u16(lb + row + x), dv), 4);
+                uint16x8_t l_r, l_g, l_b;
+                if (ls == 1) { l_r = vld1q_u16(lr + row + x); l_g = vld1q_u16(lg + row + x); l_b = vld1q_u16(lb + row + x); }
+                else {                                      /* four light pixels, each twice */
+                    uint16x4x2_t zr = vzip_u16(vld1_u16(lr + row + x / 2), vld1_u16(lr + row + x / 2));
+                    uint16x4x2_t zg = vzip_u16(vld1_u16(lg + row + x / 2), vld1_u16(lg + row + x / 2));
+                    uint16x4x2_t zb = vzip_u16(vld1_u16(lb + row + x / 2), vld1_u16(lb + row + x / 2));
+                    l_r = vcombine_u16(zr.val[0], zr.val[1]); l_g = vcombine_u16(zg.val[0], zg.val[1]); l_b = vcombine_u16(zb.val[0], zb.val[1]);
+                }
+                uint16x8_t qr = vshrq_n_u16(vaddq_u16(l_r, dv), 4);
+                uint16x8_t qg = vshrq_n_u16(vaddq_u16(l_g, dv), 4);
+                uint16x8_t qb = vshrq_n_u16(vaddq_u16(l_b, dv), 4);
                 uint8x8x4_t c = vld4_u8((const uint8_t *)(px + x));          /* B, G, R, X */
                 c.val[0] = vqshrn_n_u16(vmulq_u16(vmovl_u8(c.val[0]), qb), 4);
                 c.val[1] = vqshrn_n_u16(vmulq_u16(vmovl_u8(c.val[1]), qg), 4);
@@ -157,7 +181,8 @@ static void apply_light(Surf *s) {
         for (; x < s->w; x++) {
             /* light in steps of 1/16 with ordered dither: a pixel-art night instead of smooth gradients */
             int d = bayer[y & 3][x & 3];
-            int r = ((lr[row + x] + d) >> 4) << 4, g = ((lg[row + x] + d) >> 4) << 4, b = ((lb[row + x] + d) >> 4) << 4;
+            size_t li = row + (size_t)(x / ls);
+            int r = ((lr[li] + d) >> 4) << 4, g = ((lg[li] + d) >> 4) << 4, b = ((lb[li] + d) >> 4) << 4;
             uint32_t c = px[x];
             int cr = (int)CR(c) * r >> 8, cg = (int)CG(c) * g >> 8, cb = (int)CB(c) * b >> 8;
             px[x] = RGB(MIN(cr, 255), MIN(cg, 255), MIN(cb, 255));
@@ -437,7 +462,7 @@ void render_game(Surf *s) {
     float camx = G->camx, camy = G->camy;
     G->camx = floorf(camx + shx); G->camy = floorf(camy + shy);
     int cx = (int)G->camx, cy = (int)G->camy;
-    fill(s, 0x101010);
+    if (cx < 0 || cy < 0 || cx + s->w > G->ww || cy + s->h > G->wh) fill(s, 0x101010);   /* (past the town's edge) */
     copy_rect(s, G->world, G->ww, G->ww, G->wh, cx, cy, s->w, s->h, 0, 0);
     /* on the walls: chalk outlines, boards, the box spots */
     for (int i = 0; i < G->nit; i++) {
@@ -522,7 +547,8 @@ void render_game(Surf *s) {
         }
     }
     /* ---- the night ---- */
-    light_alloc(s->w, s->h);
+    ls = render_fx_light() ? 2 : 1;
+    light_alloc((s->w + ls - 1) / ls, (s->h + ls - 1) / ls);
     int ar, ag, ab; ambient(&ar, &ag, &ab);
     for (size_t i = 0; i < (size_t)lw * lh; i++) { lr[i] = (uint16_t)ar; lg[i] = (uint16_t)ag; lb[i] = (uint16_t)ab; }
     for (int i = 0; i < G->nlights; i++) {
