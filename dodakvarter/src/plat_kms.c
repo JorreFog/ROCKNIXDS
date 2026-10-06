@@ -31,7 +31,7 @@ typedef struct {
     uint32_t p_fb, p_crtc, p_sx, p_sy, p_sw, p_sh, p_cx, p_cy, p_cw, p_ch, c_crtc, c_mode, c_active;
     Buf b[2]; int front;
     int w, h, scale, ox, oy, lw, lh;
-    uint32_t last_hash; int have_frame;
+    uint64_t last_hash; int have_frame;
 } Panel;
 
 static int fd = -1, pending;
@@ -260,11 +260,14 @@ static void upscale(Panel *p, Buf *b, const Surf *s) {
     }
 }
 
-static uint32_t surf_hash(const Surf *s) {
-    uint32_t h = 2166136261u;
+/* every pixel, two at a time (a single changed pixel always changes it: xor and an odd multiply are both one to one) */
+static uint64_t surf_hash(const Surf *s) {
+    uint64_t h = 1469598103934665603ull;
     for (int y = 0; y < s->h; y++) {
         const uint32_t *r = s->px + (size_t)y * s->pitch;
-        for (int x = 0; x < s->w; x += 2) h = (h ^ r[x]) * 16777619u;
+        int x = 0;
+        for (; x + 1 < s->w; x += 2) { uint64_t v; memcpy(&v, r + x, 8); h = (h ^ v) * 1099511628211ull; }
+        if (x < s->w) h = (h ^ r[x]) * 1099511628211ull;
     }
     return h;
 }
@@ -275,7 +278,7 @@ static void k_present(Surf *top, Surf *bot) {
     int mask = 0;
     for (int i = 0; i < 2; i++) {
         Panel *p = &P[i];
-        uint32_t h = surf_hash(s[i]);
+        uint64_t h = surf_hash(s[i]);
         if (p->have_frame && h == p->last_hash) continue;   /* an unchanged screen keeps its buffer */
         p->last_hash = h; p->have_frame = 1;
         upscale(p, &p->b[!p->front], s[i]);

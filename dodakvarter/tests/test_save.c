@@ -67,6 +67,44 @@ int main(void) {
         }
         printf("season %d: round %d, %d kills, %d kr: the same after a save and a load\n", season, G->round, G->p.kills, G->p.kr);
     }
+    /* dying and quitting at once (the exit hotkey before the game over screen): the run neither comes back on the
+       title nor goes uncounted, and a high score not yet named is kept */
+    {
+        Input none, start; memset(&none, 0, sizeof none); memset(&start, 0, sizeof start); start.held = BIT(B_START);
+        A.seed_override = 4343; app_new_run();
+        play(0, 600);
+        CHECK(run_save() == 0 && run_saved(), "the autosave wasn't written");   /* (as between rounds) */
+        int runs = ST.runs, n = nscores;
+        G->over = 1; G->over_t = 0;                        /* dead: the game over screen comes in 1.5 s */
+        app_update(&none, &none, 1.0f / 60);
+        app_update(&start, &none, 1.0f / 60);              /* START: no pause menu for the dead */
+        CHECK(A.state == ST_PLAY, "paused while dead (state %d)", A.state);
+        CHECK(!run_saved(), "the dead run is still saved");
+        CHECK(ST.runs == runs + 1, "the run wasn't counted in the stats");
+        app_quit();
+        CHECK(!run_saved(), "quitting saved the dead run");
+        CHECK(nscores == n + 1 || A.rank < 0, "the score was lost on quitting (rank %d)", A.rank);
+        app_update(&none, &none, 1.0f / 60);
+        CHECK(ST.runs == runs + 1, "the run was counted twice");
+    }
+    /* the title: NEW RUN asks once more before it gives up a saved run */
+    {
+        Input none, down, ok; memset(&none, 0, sizeof none); memset(&down, 0, sizeof down); memset(&ok, 0, sizeof ok);
+        down.held = BIT(B_DOWN); ok.held = BIT(btn_fire());
+        A.seed_override = 4444; app_new_run(); play(0, 300);
+        CHECK(run_save() == 0, "the run wasn't saved");
+        A.state = ST_TITLE; A.sel = 0; A.save_checked = 0; A.confirm = 0;
+        app_update(&none, &none, 1.0f / 60);
+        CHECK(A.has_save, "no Continue on the title");
+        app_update(&down, &none, 1.0f / 60);                /* NEW RUN */
+        app_update(&ok, &none, 1.0f / 60);
+        CHECK(A.state == ST_TITLE && run_saved(), "NEW RUN gave up the saved run at the first press");
+        app_update(&none, &none, 1.0f / 60);
+        app_update(&ok, &none, 1.0f / 60);
+        CHECK(A.state == ST_PLAY && !run_saved(), "NEW RUN didn't start at the second press (state %d)", A.state);
+        G->over = 1; app_update(&none, &none, 1.0f / 60); A.unnamed = 0;   /* (that one ends here) */
+    }
+    run_save();
     /* a damaged file is refused (and left alone) */
     char p[600]; snprintf(p, sizeof p, "%s/run.sav", dir);
     FILE *f = fopen(p, "r+b");

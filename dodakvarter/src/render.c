@@ -459,8 +459,8 @@ static void overlays(Surf *s) {
         if (im && (tt[k] > 5 || ((int)(G->time * 6) & 1))) blit(s, im, tx, s->h - 20, 0);
         tx += 22;
     }
-    /* banner: round changes, power-ups, perks */
-    if (G->banner_t > 0) {
+    /* banner: round changes, power-ups, perks (not over the game over's words) */
+    if (G->banner_t > 0 && !G->over) {
         float a = MIN(1.0f, G->banner_t / 0.5f);
         int k = 2;
         int w = text_w(FONT_NORMAL, G->banner) * k;
@@ -471,7 +471,7 @@ static void overlays(Surf *s) {
         }
     }
     /* the prompt */
-    if (G->prompt[0]) {
+    if (G->prompt[0] && !G->over) {
         int w = text_w(FONT_NORMAL, G->prompt) + 10, x = s->w / 2 - w / 2, y = s->h - 46;
         rect_blend(s, x, y, w, 14, 0x000000, 150);
         text(s, FONT_NORMAL, x + 5, y + 3, G->prompt_cost_ok ? 0xffffff : 0xff8070, G->prompt);

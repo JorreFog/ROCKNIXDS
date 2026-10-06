@@ -51,6 +51,7 @@ int main(int argc, char **argv) {
         A.t = 3.3f; A.rank = -1; A.page = getenv("DK_SCENE_PAGE") ? atoi(getenv("DK_SCENE_PAGE")) : 1;
         if (getenv("DK_SCENE_SEL")) A.sel = atoi(getenv("DK_SCENE_SEL"));
         if (getenv("DK_SCENE_SAVED")) { A.has_save = A.save_checked = 1; snprintf(A.save_town, sizeof A.save_town, "Björkhagen"); A.save_round = 12; }
+        if (getenv("DK_SCENE_CONFIRM")) A.confirm = atoi(getenv("DK_SCENE_CONFIRM"));   /* NEW RUN pressed once (T_NEW) */
         if (A.state == ST_NAME) { game_new(seed, season); G->round = 14; A.letters[0] = 9; A.letters[1] = 15; A.letters[2] = 26; A.name_pos = 2; }
         if (A.state == ST_SCORES) {
             static const char *n[] = { "JOR", "ÅSA", "ELL", "BOB", "KIM" };

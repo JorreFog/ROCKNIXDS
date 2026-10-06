@@ -1,7 +1,7 @@
 // main.c: Döda Kvarter, a zombie roguelike for the Anbernic RG DS. The top screen is the town at night, the bottom
 // screen the inventory. The loop runs at 60 ticks a second, paced by the panels' refresh.
 //
-//   dodakvarter [--backend kms|sdl|headless] [--seed N] [--start] [--bot] [--frames N]
+//   dodakvarter [--backend kms|sdl|headless] [--seed N] [--start] [--bot | --monkey N] [--frames N]
 //               [--snap DIR --snap-every N] [--size WxH] [--selftest]
 #include "game.h"
 #include "menu.h"
@@ -11,20 +11,22 @@
 #include <unistd.h>
 
 void bot_input(Input *in);
-int selftest(const PlatInfo *pi, Surf *top, Surf *bot);
+void monkey_input(Input *in, uint64_t seed);
 static volatile sig_atomic_t stop;
+int selftest(const PlatInfo *pi, Surf *top, Surf *bot, volatile sig_atomic_t *stop);
 static void on_signal(int s) { (void)s; stop = 1; }
 
 int main(int argc, char **argv) {
     const char *backend = 0, *snapdir = 0;
     int bot = 0, start = 0, frames = -1, snap_every = 0, season = -1, test = 0;
-    uint64_t seed = 0;
+    uint64_t seed = 0, monkey = 0;
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i], *v = i + 1 < argc ? argv[i + 1] : 0;
         if (!strcmp(a, "--backend") && v) { backend = v; i++; }
         else if (!strcmp(a, "--seed") && v) { seed = strtoull(v, 0, 10); i++; }
         else if (!strcmp(a, "--season") && v) { season = atoi(v); i++; }
         else if (!strcmp(a, "--bot")) bot = 1;
+        else if (!strcmp(a, "--monkey") && v) { monkey = strtoull(v, 0, 10) + 1; i++; }
         else if (!strcmp(a, "--start")) start = 1;
         else if (!strcmp(a, "--frames") && v) { frames = atoi(v); i++; }
         else if (!strcmp(a, "--snap") && v) { snapdir = v; i++; }
@@ -54,7 +56,7 @@ int main(int argc, char **argv) {
     audio_set_volume(S.volume);
     A.state = ST_TITLE; A.rank = -1; A.seed_override = seed;
     A.bot_w = pi.bot_w; A.bot_h = pi.bot_h;
-    if (test) { int r = selftest(&pi, &top, &bot_s); plat_shutdown(); return r; }
+    if (test) { int r = selftest(&pi, &top, &bot_s, &stop); plat_shutdown(); return r; }
     music_play(MUS_TITLE);
     if (start) app_new_run();
     Input in, prev; memset(&in, 0, sizeof in); memset(&prev, 0, sizeof prev);
@@ -64,6 +66,7 @@ int main(int argc, char **argv) {
     for (int f = 0; !stop && !A.quit && (frames < 0 || f < frames); f++) {
         plat_poll(&in);
         if (bot) { Input b; bot_input(&b); b.touch[0] = in.touch[0]; in = b; }
+        else if (monkey) monkey_input(&in, monkey);
         if (in.quit) break;
         double tp0 = plat_now();
         if (headless) {                                     /* tests: exactly one tick a frame */
@@ -82,6 +85,7 @@ int main(int argc, char **argv) {
             }
             (void)steps;
         }
+        if (monkey) A.quit = 0;                             /* (it would choose QUIT on the title every few seconds) */
         double tp1 = plat_now();
         app_render(&top, &bot_s);
         double tp2 = plat_now();
@@ -107,7 +111,7 @@ int main(int argc, char **argv) {
         double now = plat_now();
         if (now - fps_t >= 1.0) { fps = (float)(fps_n / (now - fps_t)); fps_n = 0; fps_t = now; }
     }
-    if (app_run_in_progress()) { plat_log("quit during round %d", G->round); run_save(); }   /* Continue on the title */
+    app_quit();                                             /* the run waits on the title (Continue), a score is kept */
     settings_save();
     plat_shutdown();
     plat_log("bye");

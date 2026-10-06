@@ -102,8 +102,43 @@ static void tone_seq(int id, const float *freqs, int nf, float note, float decay
 
 static float midi(int m) { return 440.0f * powf(2.0f, (m - 69) / 12.0f); }
 
+/* the perk machines' jingles: a little tune each (notes and sixteenths; 1 rests), on a toy organ */
+static const signed char JINGLES[PK_COUNT][32] = {
+    { 67,2, 72,2, 72,2, 76,2, 79,4, 76,2, 72,2, 74,2, 77,2, 76,2, 74,2, 72,6 },                     /* Julmust: a march */
+    { 72,1, 74,1, 76,1, 77,1, 79,1, 77,1, 76,1, 74,1, 76,1, 77,1, 79,1, 81,1, 83,2, 84,4 },          /* Snabbkaffe: in a hurry */
+    { 64,2, 64,2, 1,2, 64,2, 67,2, 1,2, 64,2, 62,2, 60,4, 59,4 },                                   /* Salmiak: rat-a-tat */
+    { 65,4, 69,2, 72,2, 69,4, 70,2, 69,2, 67,4, 65,8 },                                             /* Kanelbulle: a waltz */
+    { 72,3, 74,1, 76,3, 72,1, 79,3, 76,1, 77,2, 76,2, 74,2, 72,6 },                                 /* Blåbärssoppa: skipping */
+    { 69,1, 72,1, 76,1, 81,1, 76,1, 72,1, 69,1, 72,1, 76,1, 81,1, 84,2, 81,2, 1,1, 81,4 },          /* Lingondricka: sparks */
+    { 67,2, 67,1, 67,1, 72,4, 67,2, 72,2, 76,4, 79,6 },                                             /* Kaviar: a fanfare */
+};
+static void jingle(int k) {
+    const signed char *j = JINGLES[k];
+    const float six = 0.09f, hold = expf(-2.5f / RATE), fall = expf(-25.0f / RATE);
+    int len = 0; for (int i = 0; j[i]; i += 2) len += j[i + 1];
+    int n; float *b = buf_new(len * six + 0.5f, &n);
+    float t0 = 0;
+    for (int i = 0; j[i]; i += 2) {
+        float d = j[i + 1] * six;
+        if (j[i] > 1) {
+            float f = midi(j[i]) / RATE, ph = 0, e = 1;
+            int s0 = (int)(t0 * RATE), s1 = MIN(n, (int)((t0 + d + 0.3f) * RATE)), sd = s0 + (int)(d * RATE);
+            for (int s = s0; s < s1; s++) {                 /* rings while it's held, then falls away */
+                float a = MIN(1.0f, (float)(s - s0) / (0.006f * RATE));
+                e *= s < sd ? hold : fall;
+                ph += f; ph -= floorf(ph);
+                float w = 2 * PI_F * ph, sw = sinf(w);
+                b[s] += (sw * 0.55f + 0.4f * sw * cosf(w) + (ph < 0.5f ? 0.12f : -0.12f)) * a * e;   /* (sin 2w = 2 sin w cos w) */
+            }
+        }
+        t0 += d;
+    }
+    finish(SFX_JINGLE + k, b, n, 0.5f);
+}
+
 static void synth_all(void) {
     int n; float *b;
+    for (int k = 0; k < PK_COUNT; k++) jingle(k);
     gun(SFX_PISTOL, 0.22f, 7000, 1800, 120, 0.05f);
     gun(SFX_SMG, 0.14f, 8000, 2200, 140, 0.03f);
     gun(SFX_RIFLE, 0.28f, 6000, 1500, 100, 0.07f);
@@ -221,7 +256,7 @@ static void song_build(void) {
 typedef struct { float ph, f, env, t, len, vel; int on; } MV;
 #define NMV 12
 static MV mv[NMV];
-static float song_t; static int song_ev;
+static double song_t; static int song_ev;   /* (a double: a float counting seconds in 1/48000ths drifts after half a minute) */
 static void song_tick(int16_t *out, int frames, const Ev *ev, int n, float period, int organ, float gain, int vol) {
     for (int i = 0; i < frames; i++) {
         while (song_ev < n && ev[song_ev].t <= song_t) {    /* notes starting now take a free voice */
@@ -252,7 +287,7 @@ static void song_tick(int16_t *out, int frames, const Ev *ev, int n, float perio
                 s += (sinf(w) + 0.25f * sinf(2 * w) * v->env + 0.1f * sinf(5.4f * w) * v->env * v->env) * v->env * v->vel * 0.12f;
             }
         }
-        song_t += 1.0f / RATE;
+        song_t += 1.0 / RATE;
         if (period > 0 && song_t >= period) { song_t -= period; song_ev = 0; }
         int o = (int)(s * gain * 32767 * vol / 100);
         out[i * 2] = (int16_t)CLAMP(out[i * 2] + o, -32768, 32767);
@@ -304,7 +339,9 @@ static float amb_gain;                   /* fades between kinds */
 static int amb_kind;
 static uint32_t astate = 777;
 static float anoise(void) { astate = astate * 1664525u + 1013904223u; return ((astate >> 9) & 0xFFFF) / 32768.0f - 1.0f; }
-static float a_t, a_lp[4], a_drop[2], a_bird_t = 3, a_bird_f, a_bird_len, a_bird_ph, a_bird_age;
+static float a_lp[4], a_drop[2], a_bird_t = 3, a_bird_f, a_bird_len, a_bird_ph, a_bird_age;
+static float a_gust[2], a_chirp[3] = { 0, 0.21f, 0.42f }, a_tone[3];   /* phases kept small: a float counting the
+                                                                          seconds in 1/48000ths stops after minutes */
 static int a_bird_n;
 static void ambience_tick(int16_t *out, int frames, int vol) {
     int want = __atomic_load_n(&want_amb, __ATOMIC_RELAXED);
@@ -313,7 +350,6 @@ static void ambience_tick(int16_t *out, int frames, int vol) {
         if (want != amb_kind) { amb_gain -= 1.0f / (RATE * 1.2f); if (amb_gain <= 0) { amb_gain = 0; amb_kind = want; } }
         else if (amb_gain < 1) amb_gain = MIN(1.0f, amb_gain + 1.0f / (RATE * 2.5f));
         if (amb_kind == AMB_NONE || amb_gain <= 0) continue;
-        a_t += 1.0f / RATE;
         float l = 0, r = 0;
         if (amb_kind == AMB_RAIN) {                         /* a wash of noise between 600 Hz and 5 kHz, and drops */
             float nl = anoise(), nr = anoise();
@@ -326,7 +362,9 @@ static void ambience_tick(int16_t *out, int frames, int vol) {
             }
             l += (a_lp[0] - a_lp[1]) * a_drop[0] * 0.12f; r += (a_lp[2] - a_lp[3]) * a_drop[1] * 0.12f;
         } else if (amb_kind == AMB_WIND) {                  /* gusts: low noise with a cutoff that breathes */
-            float g = 0.55f + 0.3f * sinf(2 * PI_F * 0.071f * a_t) + 0.15f * sinf(2 * PI_F * 0.19f * a_t + 1.3f);
+            a_gust[0] += 0.071f / RATE; a_gust[0] -= floorf(a_gust[0]);
+            a_gust[1] += 0.19f / RATE; a_gust[1] -= floorf(a_gust[1]);
+            float g = 0.55f + 0.3f * sinf(2 * PI_F * a_gust[0]) + 0.15f * sinf(2 * PI_F * a_gust[1] + 1.3f);
             float k = (180 + 520 * g) / RATE * 2 * PI_F;
             a_lp[0] += k * (anoise() - a_lp[0]); a_lp[1] += k * (a_lp[0] - a_lp[1]);
             a_lp[2] += k * (anoise() - a_lp[2]); a_lp[3] += k * (a_lp[2] - a_lp[3]);
@@ -334,9 +372,11 @@ static void ambience_tick(int16_t *out, int frames, int vol) {
         } else if (amb_kind == AMB_SUMMER) {                /* crickets, a bird now and then, a breath of air */
             for (int c = 0; c < 3; c++) {
                 static const float per[3] = { 0.61f, 0.73f, 0.89f }, fr[3] = { 4400, 4750, 4150 }, pan[3] = { -0.7f, 0.5f, 0.1f };
-                float ph = fmodf(a_t + c * 0.21f, per[c]);
+                a_chirp[c] += 1.0f / RATE; if (a_chirp[c] >= per[c]) a_chirp[c] -= per[c];
+                a_tone[c] += fr[c] / RATE; a_tone[c] -= floorf(a_tone[c]);
+                float ph = a_chirp[c];
                 float on = ph < 0.09f && fmodf(ph, 0.03f) < 0.016f ? 1.0f : 0.0f;
-                float v = on * sinf(2 * PI_F * fr[c] * a_t) * 0.03f;
+                float v = on * sinf(2 * PI_F * a_tone[c]) * 0.03f;
                 l += v * (1 - pan[c]) * 0.5f; r += v * (1 + pan[c]) * 0.5f;
             }
             a_bird_t -= 1.0f / RATE;
@@ -406,7 +446,9 @@ void audio_offline(void) { synth_all(); song_build(); ready = 1; }
 void audio_render(int16_t *out, int frames) { mix(out, frames); }
 void audio_set_volume(int v) { __atomic_store_n(&master, CLAMP(v, 0, 100), __ATOMIC_RELAXED); }
 
+int sfx_asked[SFX_COUNT];
 void sfx(int id, float vol, float pan) {
+    if (id >= 0 && id < SFX_COUNT) sfx_asked[id]++;
     if (!ready || master == 0) return;
     unsigned h = rhead;
     if (h - __atomic_load_n(&rtail, __ATOMIC_ACQUIRE) >= 255) return;   /* full (the mixer is behind) */

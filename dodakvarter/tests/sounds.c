@@ -46,10 +46,11 @@ int main(int argc, char **argv) {
         "explode", "reload", "empty", "knife", "hit", "groan1", "groan2", "groan3", "zattack", "hurt", "wolf", "moose",
         "board-break", "board-fix", "buy", "deny", "box", "horse", "powerup-spawn", "powerup", "round-start", "round-end",
         "gameover", "swap", "pickup", "menu-move", "menu-ok", "menu-back", "perk", "pap", "power", "door", "splat", "throw",
-        "beep", "gulp", "step", "kaboom", "thunder" };
+        "beep", "gulp", "step", "kaboom", "thunder", "jingle-julmust", "jingle-snabbkaffe", "jingle-salmiak",
+        "jingle-kanelbulle", "jingle-blabarssoppa", "jingle-lingondricka", "jingle-kaviar" };
     for (int i = 0; i < SFX_COUNT; i++) {
         char n[48]; snprintf(n, sizeof n, "sfx-%s", names[i] ? names[i] : "?");
-        quiet(); sfx(i, 1, 0); take(dir, n, i == SFX_ROUND_START || i == SFX_POWER || i == SFX_ROUND_END ? 2.8f : i == SFX_THUNDER ? 3.6f : 1.4f, 0);
+        quiet(); sfx(i, 1, 0); take(dir, n, i == SFX_ROUND_START || i == SFX_POWER || i == SFX_ROUND_END ? 2.8f : i == SFX_THUNDER || i >= SFX_JINGLE ? 3.6f : 1.4f, 0);
     }
     quiet(); music_play(MUS_TITLE); take(dir, "music-title", 24, 0);
     music_play(MUS_NONE); quiet(); music_play(MUS_BOX); take(dir, "music-box", 3.6f, 0);
@@ -58,6 +59,26 @@ int main(int argc, char **argv) {
     music_play(MUS_NONE); quiet();
     static const char *amb[] = { 0, "ambience-autumn-rain", "ambience-winter-wind", "ambience-midsummer-night" };
     for (int k = AMB_RAIN; k <= AMB_SUMMER; k++) { audio_ambience(k); take(dir, amb[k], 12, 4); audio_ambience(AMB_NONE); take(dir, "ambience-fade", 1.5f, 0); }
+    /* a long night: after ten minutes the crickets chirp as high and the wind gusts as much as at first (phases, not
+       a float counting the seconds, which stops) */
+    for (int k = AMB_WIND; k <= AMB_SUMMER; k += AMB_SUMMER - AMB_WIND) {
+        audio_ambience(k);
+        double hf[2] = { 0 }, lv[2] = { 0 }, lv2[2] = { 0 };   /* high frequencies; the level of each half second */
+        for (int t = 0; t < 1320; t++) {                    /* half seconds */
+            audio_render(buf, RATE / 2);
+            int at = t >= 20 && t < 80 ? 0 : t >= 1260 ? 1 : -1;
+            if (at < 0) continue;
+            double e = 0;
+            for (int i = 1; i < RATE / 2; i++) { double d = buf[i * 2] - buf[i * 2 - 2]; hf[at] += d * d; e += (double)buf[i * 2] * buf[i * 2]; }
+            double r = sqrt(e / (RATE / 2)); lv[at] += r; lv2[at] += r * r;
+        }
+        double gust[2];                                     /* how much the level moves: deviation over mean */
+        for (int a = 0; a < 2; a++) { double m = lv[a] / 60; gust[a] = sqrt(fmax(0, lv2[a] / 60 - m * m)) / (m + 1); }
+        double ratio = hf[1] / (hf[0] + 1);
+        printf("%-22s after ten minutes: highs %.2f of the first, gusts %.2f against %.2f\n", k == AMB_WIND ? "a long windy night" : "a long summer night", ratio, gust[1], gust[0]);
+        if (ratio < 0.5 || ratio > 2 || (k == AMB_WIND && gust[1] < gust[0] * 0.5)) { printf("  the ambience changed over ten minutes\n"); fails++; }
+        audio_ambience(AMB_NONE); quiet(); quiet(); quiet();
+    }
     printf("sounds: %d silent or clipped\n", fails);
     return fails ? 1 : 0;
 }

@@ -412,6 +412,7 @@ int hud_touch(int x, int y);
 void audio_init(void);
 void sfx(int id, float vol, float pan);
 void sfx_at(int id, float x, float y, float vol);
+extern int sfx_asked[];                 /* how often each sound was played (the tests count them) */
 void music_play(int track);
 enum { AMB_NONE, AMB_RAIN, AMB_WIND, AMB_SUMMER };
 void audio_ambience(int kind);          /* the night outside, under the play */
@@ -424,7 +425,8 @@ enum {
     SFX_HURT, SFX_WOLF, SFX_MOOSE, SFX_BOARD_BREAK, SFX_BOARD_FIX, SFX_BUY, SFX_DENY, SFX_BOX, SFX_HORSE,
     SFX_POWERUP_SPAWN, SFX_POWERUP, SFX_ROUND_START, SFX_ROUND_END, SFX_GAMEOVER, SFX_SWAP, SFX_PICKUP,
     SFX_MENU_MOVE, SFX_MENU_OK, SFX_MENU_BACK, SFX_PERK, SFX_PAP, SFX_POWER, SFX_DOOR, SFX_SPLAT, SFX_THROW,
-    SFX_BEEP, SFX_GULP, SFX_STEP, SFX_KABOOM, SFX_THUNDER, SFX_COUNT
+    SFX_BEEP, SFX_GULP, SFX_STEP, SFX_KABOOM, SFX_THUNDER,
+    SFX_JINGLE, SFX_COUNT = SFX_JINGLE + PK_COUNT          /* each perk machine's jingle */
 };
 enum { MUS_NONE, MUS_TITLE, MUS_BOX, MUS_GAMEOVER, MUS_SONG };
 

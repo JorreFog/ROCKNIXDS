@@ -5,6 +5,7 @@
 //   - pulling the trigger on a gun that has run dry brings out one that hasn't
 //   - a blast that doesn't kill may leave a walker crawling, slower, and a crawler never runs as the round's last
 //   - finding the three trädgårdstomtar plays the song and leaves a present
+//   - a perk machine plays its jingle now and then to whoever stands by it, once the power is on
 #include "../src/game.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,6 +38,12 @@ int main(void) {
     if (trap) {
         Player *p = &G->p; Inter *gap = &G->it[trap->a];
         G->round = 5; G->rstate = RS_ACTIVE; calm();
+        /* not while its gap is still boarded up (it would guard nothing) */
+        p->x = trap->x; p->y = trap->y; p->kr = 5000; G->power_on = 1;
+        Input use0; memset(&use0, 0, sizeof use0); use0.held = BIT(btn_use());
+        game_update(&use0, &none, 1.0f / 60);
+        CHECK(trap->state == 0 && p->kr == 5000, "the elstängsel was bought before its gap was opened");
+        G->power_on = 0;
         /* open its gap as if bought */
         gap->state = 1;
         for (int j = 0; j < gap->th; j++) for (int i = 0; i < gap->tw; i++) { Tile *t = tile_at(gap->tx + i, gap->ty + j); t->f &= (uint8_t)~(TF_SOLID | TF_INTER); t->inter = 0; }
@@ -120,6 +127,24 @@ int main(void) {
         }
         int weapons = 0; for (int i = 0; i < MAX_ITEMS; i++) weapons += G->items[i].alive && G->items[i].kind == IK_WEAPON && G->items[i].w.rar == RAR_EPIC;
         CHECK(G->song && weapons >= 1 && p->kr >= kr + 1000, "three tomtar: song %d, %d epic weapons dropped, %d kr (from %d)", G->song, weapons, p->kr, kr);
+    }
+    /* the jingles: never from a machine without power (Kanelbulle aside), now and then with it */
+    {
+        Player *p = &G->p; calm(); G->over = 0; p->downed = 0; G->god = 1;
+        Inter *m = 0;
+        for (int i = 0; i < G->nit; i++) if (G->it[i].type == IT_PERK && G->it[i].a != PK_KANELBULLE) m = &G->it[i];
+        CHECK(m != 0, "no perk machine");
+        if (m) {
+            p->x = m->x; p->y = m->y + 14; G->power_on = 0;
+            int before = sfx_asked[SFX_JINGLE + m->a];
+            for (int s = 0; s < 120; s++) { calm(); tick(60, &none); p->x = m->x; p->y = m->y + 14; }
+            CHECK(sfx_asked[SFX_JINGLE + m->a] == before, "%s played its jingle without the power", PERKS[m->a].name);
+            G->power_on = 1;
+            for (int s = 0; s < 120; s++) { calm(); tick(60, &none); p->x = m->x; p->y = m->y + 14; }
+            int n = sfx_asked[SFX_JINGLE + m->a] - before;
+            CHECK(n >= 1 && n <= 8, "%s played its jingle %d times in two minutes", PERKS[m->a].name, n);
+        }
+        G->god = 0;
     }
     printf("rules: %d failures\n", fails);
     return fails ? 1 : 0;

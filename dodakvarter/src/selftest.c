@@ -4,6 +4,7 @@
 #include "game.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 
 static const char *BNAME[B_COUNT] = { "UP", "DOWN", "LEFT", "RIGHT", "A", "B", "X", "Y", "L", "R", "L2", "R2", "SELECT", "START", "MODE" };
 
@@ -39,7 +40,7 @@ static void screen(Surf *s, const char *name, const PlatInfo *pi, int bottom, co
     }
 }
 
-int selftest(const PlatInfo *pi, Surf *top, Surf *bot) {
+int selftest(const PlatInfo *pi, Surf *top, Surf *bot, volatile sig_atomic_t *stop) {
     printf("Döda Kvarter %s self-test: %s, panels %dx%d at %dx (%dx%d top, %dx%d bottom), %.0f Hz\n", DK_VERSION, pi->backend,
            pi->panel_w, pi->panel_h, pi->scale, pi->top_w, pi->top_h, pi->bot_w, pi->bot_h, pi->hz);
     printf("data in %s; the log says which devices were found\n", plat_data_dir());
@@ -47,7 +48,7 @@ int selftest(const PlatInfo *pi, Surf *top, Surf *bot) {
     Input in, prev; memset(&in, 0, sizeof in); memset(&prev, 0, sizeof prev);
     double t0 = plat_now(), beep = t0;
     int frames = 0;
-    while (plat_now() - t0 < 20) {
+    while (plat_now() - t0 < 20 && !*stop) {                /* (SIGTERM: the exit hotkey, the unit stopped) */
         plat_poll(&in);
         if (in.quit || ((in.held & BIT(B_START)) && (in.held & BIT(B_SELECT)))) break;
         for (int i = 0; i < B_COUNT; i++) if ((in.held ^ prev.held) & BIT(i)) printf("%s %s\n", BNAME[i], in.held & BIT(i) ? "down" : "up");

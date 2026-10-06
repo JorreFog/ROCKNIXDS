@@ -30,8 +30,8 @@ jobs:
           done
 
   # Döda Kvarter (dodakvarter/): the art is generated from its sources, the tests pass (500 towns, the rules, a run
-  # saved and loaded, the bot playing whole runs under AddressSanitizer and UBSan and sixteen towns without a stalled
-  # round, every sound), and it builds for the RG DS against a Debian trixie arm64 sysroot
+  # saved and loaded, the bot playing whole runs and a monkey pressing everything under AddressSanitizer and UBSan,
+  # sixteen towns without a stalled round, every sound), and it builds for the RG DS against a Debian trixie arm64 sysroot
   # (glibc 2.41, as ROCKNIX's; the binary may need 2.38 at most). The build is kept as an artifact.
   dodakvarter:
     runs-on: ubuntu-latest

@@ -13,11 +13,15 @@ typedef struct {
     int bot_w, bot_h;
     int has_save, save_checked, save_round, last_rstate;   /* a saved run on the title */
     char save_town[32];
+    int counted;                        /* the run in G is over and counted: no save left, stats and score kept */
+    int unnamed;                        /* its high score waits for initials (kept with the letters so far on quitting) */
+    int confirm;                        /* NEW RUN or TODAY'S TOWN pressed once: again, and the saved run goes */
 } App;
 extern App A;
 
 void app_update(const Input *in, const Input *prev, float dt);
 void app_new_run(void);                 /* a new run now (--start) */
-int app_run_in_progress(void);          /* saved when the program is quit */
+int app_run_in_progress(void);          /* a run is going on */
+void app_quit(void);                    /* the program is quitting: the run saved, a score kept */
 void app_render(Surf *top, Surf *bot);
 void title_top(Surf *s);

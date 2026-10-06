@@ -274,6 +274,7 @@ static void use_inter(int i) {
     }
     case IT_TRAP:
         if (it->state) return;
+        if (it->a >= 0 && !G->it[it->a].state) { msg(0xa0a0a0, "%s", tr("Clear the way first")); sfx(SFX_DENY, 0.5f, 0); return; }   /* (the gap is still boarded up) */
         if (!G->power_on) { msg(0xa0a0a0, "%s", tr("Needs power")); sfx(SFX_DENY, 0.5f, 0); return; }
         if (!pay(it->cost)) return;
         it->state = 1; it->t = TRAP_ON; it->t2 = 0;
@@ -343,6 +344,7 @@ const char *inter_prompt(int i, int *ok) {
     case IT_TRAP:
         if (it->state == 1) { snprintf(b, sizeof b, "%s: %s", tr("Elstängsel"), tr("on")); *ok = 0; break; }
         if (it->state == 2) { snprintf(b, sizeof b, "%s (%s %.0f s)", tr("Elstängsel"), tr("charging"), ceilf(it->t)); *ok = 0; break; }
+        if (it->a >= 0 && !G->it[it->a].state) { snprintf(b, sizeof b, "%s (%s)", tr("Elstängsel"), tr("Clear the way first")); *ok = 0; break; }
         if (!G->power_on) { snprintf(b, sizeof b, "%s (%s)", tr("Elstängsel"), tr("Needs power")); *ok = 0; break; }
         fmt_num(n, it->cost); snprintf(b, sizeof b, "%s: %s - %s kr", use_label(), tr("Elstängsel"), n); *ok = p->kr >= it->cost;
         break;
@@ -378,10 +380,25 @@ const char *inter_prompt(int i, int *ok) {
 int nearest_inter(float x, float y, float r) { (void)x; (void)y; (void)r; return target(0); }
 int inter_target(void) { return target(0); }
 
+/* the perk machines play their jingles now and then when you're near (Kanelbulle even without the power), as the
+   Perk-a-Colas do: a roll every 9 s, made from the clock, so that a saved run plays them the same */
+static void jingles_tick(float dt) {
+    int slot = (int)(G->time / 9);
+    if (slot == (int)((G->time - dt) / 9)) return;
+    for (int i = 0; i < G->nit; i++) {
+        const Inter *it = &G->it[i];
+        if (it->type != IT_PERK || (!G->power_on && it->a != PK_KANELBULLE)) continue;
+        if (dist2f(it->x, it->y, G->p.x, G->p.y) > 120 * 120 || hash3(slot, i, 0x6A) % 4) continue;
+        sfx_at(SFX_JINGLE + it->a, it->x, it->y, 0.6f);
+        break;
+    }
+}
+
 void inter_update(const Input *in, const Input *prev, float dt) {
     Player *p = &G->p;
     boxes_tick(dt);
     traps_tick(dt);
+    jingles_tick(dt);
     G->prompt[0] = 0;
     if (p->downed || G->over) return;
     int t = target(0);

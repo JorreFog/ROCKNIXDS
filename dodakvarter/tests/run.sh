@@ -4,7 +4,8 @@
 #   2. rules played out one by one (the elstängsel, a zombie in a window, a dry gun); the bot plays whole runs
 #      headless (every season, several towns) under AddressSanitizer and UBSan, and sixteen more towns where no
 #      round may stall
-#   3. a run saved and loaded goes on exactly as if it had never stopped; quitting and starting again continues it
+#   3. a run saved and loaded goes on exactly as if it had never stopped; quitting and starting again continues it;
+#      a monkey presses everything everywhere under the sanitizers
 #   4. every sound, the music and the ambience come out of the mixer neither silent nor clipped
 #   5. the tools the screenshots and the map pictures are made with build
 set -e
@@ -45,16 +46,18 @@ DK_DATA=$T/late DK_DEBUG_ROUND=25 DK_DEBUG_KR=60000 DK_DEBUG_POWER=1 DK_DEBUG_OP
     ./build/dk-test --backend headless --seed 77 --start --bot --frames 5400 >/dev/null 2>$T/errlate || { cat $T/errlate; exit 1; }
 grep -q "runtime error\|AddressSanitizer" $T/errlate && { cat $T/errlate; exit 1; }
 echo "late game: ok"
-# no round may stall: the bot plays sixteen more towns (dying and starting over) and no round may take three minutes
+# no round may stall: the bot plays sixteen more towns for six minutes each (dying and starting over), and no round
+# may take two and a half minutes, the one still going when it stops included (its rounds take a minute or so)
 echo "== stalled rounds"
 for s in $(seq 201 216); do
-    DK_DATA=$T/st$s ./build/dk-fast --backend headless --seed $s --season $((s % 3)) --start --bot --frames ${STALL_FRAMES:-10800} >/dev/null 2>&1 &
+    DK_DATA=$T/st$s ./build/dk-fast --backend headless --seed $s --season $((s % 3)) --start --bot --frames ${STALL_FRAMES:-21600} >/dev/null 2>&1 &
     [ $((s % 4)) -eq 0 ] && wait
 done
 wait
 for s in $(seq 201 216); do
-    awk -v seed=$s '/^round [0-9]+: [0-9]+ s/ { r = $2 + 0; t = $3 + 0; if (r == pr + 1 && t - pt > worst) worst = t - pt; pr = r; pt = t }
-        END { if (worst > 180) { printf "seed %d: a round took %d s\n", seed, worst; exit 1 } }' $T/st$s/dodakvarter.log || exit 1
+    awk -v seed=$s '/^round [0-9]+: [0-9]+ s/ { r = $2 + 0; t = $3 + 0; if (r == pr + 1 && t - pt > worst) { worst = t - pt; wr = pr } pr = r; pt = t }
+        /^quit during round [0-9]+ at [0-9]+ s/ { if ($6 - pt > worst) { worst = $6 - pt; wr = pr } }
+        END { if (worst > 150) { printf "seed %d: round %d took %d s\n", seed, wr, worst; exit 1 } }' $T/st$s/dodakvarter.log || exit 1
 done
 echo "no stalled rounds in 16 towns"
 echo "== saving"
@@ -66,6 +69,20 @@ DK_DATA=$T/cont ASAN_OPTIONS=detect_leaks=0 ./build/dk-test --backend headless -
 grep -q "continuing the run" $T/cont/dodakvarter.log || { echo "the saved run wasn't continued"; cat $T/cont/dodakvarter.log; exit 1; }
 grep -q "runtime error\|AddressSanitizer" $T/errc1 $T/errc2 && { cat $T/errc1 $T/errc2; exit 1; }
 echo "continue after quitting: ok"
+# a monkey: random buttons, sticks and touches on both screens, through every menu and the play, under the
+# sanitizers; twice in each data directory, the second time continuing what the first one left
+echo "== monkey"
+for s in 1 2 3 4; do
+    ( for pass in 1 2; do
+        DK_DATA=$T/mk$s ASAN_OPTIONS=detect_leaks=0 ./build/dk-test --backend headless --monkey $((s * 10 + pass)) \
+            --frames ${MONKEY_FRAMES:-12000} >/dev/null 2>>$T/mkerr$s || echo "exit $?" >> $T/mkerr$s
+    done ) &
+done
+wait
+for s in 1 2 3 4; do
+    grep -q "runtime error\|AddressSanitizer\|^exit" $T/mkerr$s && { echo "monkey $s:"; cat $T/mkerr$s; exit 1; }
+    echo "monkey $s: ok ($(grep -c 'game over' $T/mk$s/dodakvarter.log) runs ended, $(grep -c 'continuing' $T/mk$s/dodakvarter.log) continued)"
+done
 echo "== sounds"
 ./build/sounds $T/sounds | tail -n1
 rm -rf "$T"

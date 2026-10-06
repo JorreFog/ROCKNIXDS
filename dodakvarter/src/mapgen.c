@@ -1070,7 +1070,10 @@ void map_generate(uint64_t seed, int season) {
     memset(G->t, 0, sizeof G->t);
     G->nzones = G->nb = G->nprops = G->nit = G->nspawns = G->nbox_spots = 0;
     nports = 0;
-    snprintf(G->town, sizeof G->town, "%s%s", TOWN_A[rng_int(R, ARRAY_LEN(TOWN_A))], TOWN_B[rng_int(R, ARRAY_LEN(TOWN_B))]);
+    {   /* the name: one draw after the other, as town_name makes them (not both in one argument list) */
+        int a = rng_int(R, ARRAY_LEN(TOWN_A)), b = rng_int(R, ARRAY_LEN(TOWN_B));
+        snprintf(G->town, sizeof G->town, "%s%s", TOWN_A[a], TOWN_B[b]);
+    }
 
     /* the grid of cells: usually four by three; sometimes three big districts a row, five narrow ones, or four rows */
     static const struct { int cols, rows, cw0, cw1, rh0, rh1, weight; } SHAPES[] = {

@@ -56,7 +56,9 @@ the best round, the time, the kronor, boxes, critical hits, downs.
 
 Quitting never loses a run: *Save and quit* in the pause menu, ROCKNIX's exit hotkey, or a shutdown while it runs
 keep it in `run.sav`, and the title offers *Continue* (back where you were, paused). The run is also
-kept after every round, so even a flat battery costs one round at most. A run that ends (or *Give up*) is gone.
+kept after every round, so even a flat battery costs one round at most. A run that ends (or *Give up*) is gone, and
+counted the moment it ends: quitting right after dying keeps its score (with the initials chosen so far). *New run*
+and *Today's town* ask for a second press while a run is saved, since they give it up.
 
 ## How it works
 
@@ -85,7 +87,8 @@ most). You spend them on:
 - **Lådan**, the Mystery Box (950 kr): a random weapon you don't have, often a good one, from all twelve, including
   the wonder weapons (Strålpistol, Åskvigg, Snöblåsare). After four pulls a **Dalahäst** may come out instead of a gun:
   your money back, and the box flies to another spot (its beam of light shows where). The odds are Black Ops' bear's.
-- **Perks**, at vending machines once the power is on, four at most, lost when you go down:
+- **Perks**, at vending machines once the power is on, four at most, lost when you go down. Stand by one and
+  now and then it plays its jingle (a little tune of its own each, made up for the game):
 
   | Perk | kr | Does (Black Ops' perk) |
   |---|---|---|
@@ -100,9 +103,9 @@ most). You spend them on:
 - **Smedjan**, the Pack-a-Punch (5000 kr, needs the power): twice the damage, half again the magazine and the
   reserve, a little faster and through one more zombie, and a new name (Ak 5 becomes Ragnarök, the Strålpistol
   Norrskenet).
-- **Elstängsel** (1000 kr, needs the power), the trap: a cabinet by one or two of the gaps between districts. It
-  shocks everything that crosses the gap for 25 s (you too, if you stand in it); those kills count but pay nothing,
-  as in Call of Duty. Then it charges for a minute.
+- **Elstängsel** (1000 kr, needs the power and its gap cleared), the trap: a cabinet by one or two of the gaps
+  between districts. It shocks everything that crosses the gap for 25 s (you too, if you stand in it); those kills
+  count but pay nothing, as in Call of Duty. Then it charges for a minute.
 - **A song**: as on every Call of Duty map, one is hidden in every town. Three garden gnomes might know more.
 - **The power**: find the switchgear (Elcentral), usually far from the start. Then the perk machines and Smedjan
   work, and the lights come on across the town in a ring spreading from the switch: street lamps, shop windows,
@@ -205,14 +208,15 @@ it, ES comes back, and it prints what it found: the panels, the pad, both touchs
 ```sh
 sh build.sh                      # this computer: build/dodakvarter (a window, or --backend headless)
 sh build.sh aarch64 <sysroot>    # the RG DS: build/dodakvarter-aarch64 (the sysroot recipe is in build.sh)
-sh tests/run.sh                  # the tests: 500 towns, the bot playing whole runs under the sanitizers
+sh tests/run.sh                  # the tests: 500 towns, the rules, the bot playing whole runs and a monkey pressing
+                                 # everything, under the sanitizers; saving; the sounds
 python3 art/build_art.py         # after changing art/*.txt (--preview sheet.png to look at it)
 python3 tools/screenshots.py     # the README's pictures and the Ports entry's, rendered by the game
 ./build/sounds build/sounds      # every sound, the music and the ambience as WAV files (tests/run.sh builds it)
 ```
 
 `bin/dodakvarter-aarch64` is the build the installer puts on the device. `./build/dodakvarter --bot` lets the
-computer play, `--seed N` replays a run (the town and its season), `--start` skips the title. For testing deep
+computer play (`--monkey N` lets it press buttons at random), `--seed N` replays a run (the town and its season), `--start` skips the title. For testing deep
 rounds: `DK_DEBUG_ROUND=N`, `DK_DEBUG_KR=N`, `DK_DEBUG_POWER=1`, `DK_DEBUG_OPEN=1` (every barricade gone),
 `DK_DEBUG_GOD=1` (nothing hurts) and `DK_DEBUG_ZLOG=1` (where every zombie is, every 10 s, in the log).
 

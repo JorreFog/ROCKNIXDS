@@ -188,3 +188,49 @@ void bot_input(Input *in) {
     }
     (void)goal_item;
 }
+
+/* --monkey: random buttons, sticks and touches on both screens, held for random stretches, through every screen
+   (title, settings, the name, pause, play). It finds the crashes no sensible player would: the tests run it under
+   the sanitizers. (QUIT on the title is ignored for it.) */
+static uint64_t mk;
+static uint32_t mk_next(void) { mk ^= mk << 13; mk ^= mk >> 7; mk ^= mk << 17; return (uint32_t)(mk >> 11); }
+static int mk_int(int n) { return (int)(mk_next() % (uint32_t)n); }
+void monkey_input(Input *in, uint64_t seed) {
+    static int hold[B_COUNT], touch_t[2], stick_t, mouse_t;
+    static Input m;
+    if (!mk) mk = seed * 0x9E3779B97F4A7C15ull + 1;
+    frame++;
+    /* the menus and pause come up less often than shooting and walking */
+    static const int every[B_COUNT] = { 40, 40, 40, 40, 25, 60, 90, 90, 120, 120, 200, 200, 600, 500, 900 };
+    for (int b = 0; b < B_COUNT; b++) {
+        if (hold[b] > 0) { if (--hold[b] == 0) m.held &= ~BIT(b); continue; }
+        if (mk_int(every[b]) == 0) { hold[b] = 1 + mk_int(mk_int(4) ? 6 : 90); m.held |= BIT(b); }
+    }
+    if (--stick_t <= 0) {
+        stick_t = 1 + mk_int(60);
+        m.has_sticks = mk_int(3) != 0;
+        m.lx = m.has_sticks && mk_int(2) ? (mk_int(201) - 100) / 100.0f : 0;
+        m.ly = m.has_sticks && mk_int(2) ? (mk_int(201) - 100) / 100.0f : 0;
+        m.rx = m.has_sticks && mk_int(2) ? (mk_int(201) - 100) / 100.0f : 0;
+        m.ry = m.has_sticks && mk_int(2) ? (mk_int(201) - 100) / 100.0f : 0;
+    }
+    for (int s = 0; s < 2; s++) {
+        if (touch_t[s] > 0) {
+            touch_t[s]--;
+            if (m.touch[s] && mk_int(4) == 0) { m.tx[s] += mk_int(9) - 4; m.ty[s] += mk_int(9) - 4; }   /* a drag */
+            if (!touch_t[s]) m.touch[s] = 0;
+        } else if (mk_int(s ? 30 : 400) == 0) {
+            int w = s ? A.bot_w : G->view_w, h = s ? A.bot_h : G->view_h;
+            touch_t[s] = 1 + mk_int(mk_int(3) ? 8 : 120);
+            m.touch[s] = 1; m.tx[s] = mk_int(w + 8) - 4; m.ty[s] = mk_int(h + 8) - 4;   /* (a little off the edges too) */
+        }
+    }
+    if (--mouse_t <= 0) {
+        mouse_t = 1 + mk_int(90);
+        m.mouse = mk_int(3) == 0;
+        m.mx = (float)(mk_int(G->view_w + 40) - 20); m.my = (float)(mk_int(G->view_h + 40) - 20);
+        m.last_kbd = mk_int(2);
+    }
+    *in = m;
+    in->quit = 0;
+}

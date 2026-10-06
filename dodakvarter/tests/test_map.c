@@ -85,6 +85,8 @@ int main(int argc, char **argv) {
         memset(G, 0, sizeof *G);
         G->season = season;
         map_generate((uint64_t)seed, season);
+        char name[32]; town_name((uint64_t)seed, name, sizeof name);     /* the title names today's town the same */
+        CHECK(!strcmp(name, G->town), "seed %d: the town is %s, but the title would call it %s", seed, G->town, name);
         Zone *sz = &G->zones[G->start_zone];
         CHECK(!solid_at(sz->cx, sz->cy), "seed %d: the start (%d,%d) is solid", seed, sz->cx, sz->cy);
         flood(sz->cx, sz->cy);

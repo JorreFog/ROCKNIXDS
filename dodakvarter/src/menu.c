@@ -121,7 +121,7 @@ static void skyline(Surf *s, float t, int dim) {
 }
 
 /* the logo with blood running down from the letters */
-static void logo(Surf *s, int cy, float t) {
+static int logo(Surf *s, int cy, float t) {           /* returns where it ends */
     const char *a = "DÖDA", *b = "KVARTER";
     int k1 = s->w >= 340 ? 5 : 4, k2 = s->w >= 340 ? 4 : 3;
     int w1 = text_w(FONT_NORMAL, a) * k1, w2 = text_w(FONT_NORMAL, b) * k2;
@@ -142,6 +142,7 @@ static void logo(Surf *s, int cy, float t) {
         vline(s, col, bottom, bottom + len, 0x8a0c0c);
         pset(s, col, bottom + len + 1, 0xb81414);
     }
+    return cy + 9 * k1 + 9 * k2;
 }
 
 /* ---------------------------------------------------------------- screens */
@@ -170,7 +171,10 @@ static void draw_title_bottom(Surf *s) {
         char b[96]; snprintf(b, sizeof b, "%s, %s %d", A.save_town, tr("Round"), A.save_round);
         text_center(s, FONT_SMALL, s->w / 2, title_y0(s->h, n) - 10, 0x9aa4b8, 0, b);
     }
-    if (acts[A.sel] == T_DAILY) {                          /* which town, and the best anyone here has done in it */
+    if (A.confirm && acts[A.sel] == A.confirm) {          /* pressed once: what a new run would cost */
+        char b[96]; snprintf(b, sizeof b, "%s %s (%s %d)", tr("Press again to give up the run in"), A.save_town, tr("round"), A.save_round);
+        text_center(s, FONT_SMALL, s->w / 2, title_y0(s->h, n) - 10, 0xff8060, 0, b);
+    } else if (acts[A.sel] == T_DAILY) {                   /* which town, and the best anyone here has done in it */
         char town[32], b[96]; int d = today(), best = 0;
         town_name(daily_seed(d), town, sizeof town);
         for (int i = 0; i < nscores; i++) if (scores[i].daily == d) best = MAX(best, scores[i].round);
@@ -368,8 +372,8 @@ static void draw_gameover_bottom(Surf *s) {
 
 void title_top(Surf *s) {
     skyline(s, A.t, 0);
-    logo(s, 30, A.t);
-    text_center(s, FONT_NORMAL, s->w / 2, 30 + 9 * 4 + 9 * 3 + 8, 0x9aa4b8, 0x000000, tr("a zombie roguelike in Swedish suburbia"));
+    int y = logo(s, 30, A.t);                               /* (bigger on the RG DS Plus) */
+    text_center(s, FONT_NORMAL, s->w / 2, y + 8, 0x9aa4b8, 0x000000, tr("a zombie roguelike in Swedish suburbia"));
 }
 
 /* ---------------------------------------------------------------- the state machine (main.c calls) */
@@ -381,13 +385,13 @@ static void new_run(uint64_t seed, int daily) {
     int season = S.season && !daily ? S.season - 1 : (int)((seed * 0x9E3779B97F4A7C15ull >> 40) % SEASON_COUNT);   /* a seed is a whole run */
     game_new(seed, season);
     G->daily = daily;
-    A.state = ST_PLAY; A.t = 0; A.last_rstate = G->rstate;
+    A.state = ST_PLAY; A.t = 0; A.last_rstate = G->rstate; A.counted = 0;
     music_play(MUS_NONE);
 }
 void app_new_run(void) { new_run(A.seed_override ? A.seed_override : ((uint64_t)time(0) * 2654435761u) ^ (uint64_t)clock(), 0); }
 static void continue_run(void) {
     if (run_load()) { refresh_save_info(); return; }
-    A.state = ST_PAUSE; A.sel = 0; A.t = 0; A.last_rstate = G->rstate;   /* back where you left it, paused */
+    A.state = ST_PAUSE; A.sel = 0; A.t = 0; A.last_rstate = G->rstate; A.counted = 0;   /* back where you left it, paused */
     music_play(MUS_NONE);
 }
 /* a run is going on (playing, paused, or in a menu opened from the pause) */
@@ -397,15 +401,34 @@ int app_run_in_progress(void) {
            (A.state == ST_HOWTO && A.howto_from == ST_PAUSE);
 }
 
-static void end_run(void) {
+/* the run is over: its save goes, its stats and its score are counted, at once (so that quitting in the moment
+   before the game over screen, or on it, neither brings the run back nor loses it) */
+static void count_run(void) {
+    if (A.counted) return;
+    A.counted = 1;
     run_discard(); A.has_save = 0;
-    A.state = ST_GAMEOVER; A.t = 0; G->over = 1;
+    G->over = 1;
     memset(&A.last, 0, sizeof A.last);
     A.last.round = G->round; A.last.kills = G->p.kills; A.last.kr = G->p.kr_total; A.last.secs = (int)G->time;
     A.last.season = G->season; A.last.seed = G->seed; A.last.date = (long long)time(0); A.last.daily = G->daily;
     stats_add_run();
     snprintf(A.last.town, sizeof A.last.town, "%s", G->town);
     A.rank = score_rank(&A.last);
+    A.unnamed = A.rank >= 0;
+    A.name_pos = 0; A.letters[0] = A.letters[1] = A.letters[2] = 0;
+}
+static void end_run(void) { count_run(); A.state = ST_GAMEOVER; A.t = 0; }
+/* the initials chosen so far go on the list */
+static void name_score(void) {
+    char nm[16] = { 0 };
+    for (int i = 0; i < 3; i++) { char ch[4]; key_str(A.letters[i], ch); strcat(nm, ch); }
+    snprintf(A.last.name, sizeof A.last.name, "%s", nm);
+    score_insert(&A.last, A.rank);
+    A.unnamed = 0;
+}
+void app_quit(void) {
+    if (app_run_in_progress()) { plat_log("quit during round %d at %d s", G->round, (int)G->time); run_save(); }   /* Continue on the title */
+    else if (A.unnamed) { name_score(); plat_log("kept the score of round %d", A.last.round); }
 }
 
 void app_update(const Input *in, const Input *prev, float dt) {
@@ -418,11 +441,15 @@ void app_update(const Input *in, const Input *prev, float dt) {
         if (!A.save_checked) { refresh_save_info(); A.save_checked = 1; }
         int acts[8], n = title_items(acts, 0);
         if (A.sel >= n) A.sel = 0;
-        if (up) { A.sel = (A.sel + n - 1) % n; sfx(SFX_MENU_MOVE, 0.5f, 0); }
-        if (down) { A.sel = (A.sel + 1) % n; sfx(SFX_MENU_MOVE, 0.5f, 0); }
+        if (up) { A.sel = (A.sel + n - 1) % n; A.confirm = 0; sfx(SFX_MENU_MOVE, 0.5f, 0); }
+        if (down) { A.sel = (A.sel + 1) % n; A.confirm = 0; sfx(SFX_MENU_MOVE, 0.5f, 0); }
         int tr_ = touch_down(in, prev) ? touch_row(in, title_y0(A.bot_h, n), n) : -1;
-        if (tr_ >= 0) A.sel = tr_;
+        if (tr_ >= 0) { if (tr_ != A.sel) A.confirm = 0; A.sel = tr_; }
         if (ok_pressed(in, prev) || tr_ >= 0) {
+            if (A.has_save && (acts[A.sel] == T_NEW || acts[A.sel] == T_DAILY) && A.confirm != acts[A.sel]) {
+                A.confirm = acts[A.sel]; sfx(SFX_DENY, 0.4f, 0); break;   /* the saved run would go: press again */
+            }
+            A.confirm = 0;
             sfx(SFX_MENU_OK, 0.6f, 0);
             switch (acts[A.sel]) {
             case T_CONTINUE: continue_run(); break;
@@ -437,11 +464,12 @@ void app_update(const Input *in, const Input *prev, float dt) {
         break;
     }
     case ST_PLAY:
-        if (pressed(in, prev, B_START) || pressed(in, prev, B_MENU)) { A.state = ST_PAUSE; A.sel = 0; sfx(SFX_MENU_BACK, 0.5f, 0); break; }
+        if (!G->over && (pressed(in, prev, B_START) || pressed(in, prev, B_MENU))) { A.state = ST_PAUSE; A.sel = 0; sfx(SFX_MENU_BACK, 0.5f, 0); break; }
         if (in->touch[1] && !prev->touch[1]) hud_touch(in->tx[1], in->ty[1]);
         game_update(in, prev, dt);
         if (G->rstate == RS_BREAK && A.last_rstate != RS_BREAK && !G->over) run_autosave();   /* a round won: kept */
         A.last_rstate = G->rstate;
+        if (G->over) count_run();
         if (G->over && G->over_t > 1.5f) end_run();
         break;
     case ST_PAUSE: {
@@ -491,7 +519,7 @@ void app_update(const Input *in, const Input *prev, float dt) {
         if (A.t > 2 && (ok_pressed(in, prev) || touch_down(in, prev))) {
             sfx(SFX_MENU_OK, 0.6f, 0);
             if (A.rank >= 0) { A.state = ST_NAME; A.name_pos = 0; A.letters[0] = A.letters[1] = A.letters[2] = 0; }
-            else { A.state = ST_SCORES; A.t = 0; music_play(MUS_TITLE); }
+            else { A.state = ST_SCORES; A.t = 0; A.page = 0; music_play(MUS_TITLE); }
         }
         break;
     case ST_NAME: {
@@ -509,11 +537,8 @@ void app_update(const Input *in, const Input *prev, float dt) {
             else if (c >= 0 && c < cols && r >= 0 && r * cols + c < n && ty >= 72) { A.letters[A.name_pos] = r * cols + c; A.name_pos = MIN(2, A.name_pos + 1); sfx(SFX_MENU_MOVE, 0.4f, 0); }
         }
         if (done) {
-            char nm[16] = { 0 };
-            for (int i = 0; i < 3; i++) { char ch[4]; key_str(A.letters[i], ch); strcat(nm, ch); }
-            snprintf(A.last.name, sizeof A.last.name, "%s", nm);
-            score_insert(&A.last, A.rank);
-            A.state = ST_SCORES; A.t = 0;
+            name_score();
+            A.state = ST_SCORES; A.t = 0; A.page = 0;
             sfx(SFX_MENU_OK, 0.6f, 0);
             music_play(MUS_TITLE);
         }
