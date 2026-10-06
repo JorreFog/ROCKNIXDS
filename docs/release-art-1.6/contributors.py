@@ -72,4 +72,4 @@ n16 = sum(len(p[4].split()) for p in PEOPLE)
 a.text(32, fy + 1, f"25 issues from 8 people, {n16} of them fixed or built in 1.6. Thank you.", 12, INK)
 crisp_text(a, W - 16, fy + 1, "discord.gg/uMPB63kF", 11, (150, 160, 250), anchor="ra")
 
-a.render(os.path.join(OUT, "10-special-thanks.png"))
+a.render(os.path.join(OUT, "08-special-thanks.png"))

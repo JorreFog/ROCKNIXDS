@@ -31,4 +31,4 @@ a.text(tx, 132, "And all the love to GammaOS and its creator, the inspiration fo
 a.text(tx, 152, "See you on Discord:", 12, INK3)
 crisp_text(a, tx + int(a.tlen("See you on Discord:", 12)) + 6, 151, "discord.gg/uMPB63kF", 11, (150, 160, 250))
 
-a.render(os.path.join(OUT, "11-thanks.png"))
+a.render(os.path.join(OUT, "09-thanks.png"))
