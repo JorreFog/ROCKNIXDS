@@ -14,8 +14,9 @@ lays them out for the GitHub release.
 | `06-bank-trade.png` | `bank.py` | Two handhelds trading over Wi-Fi with the Bank's own screenshots, and what the app does |
 | `07-doda-kvarter.png` | `doda.py` | 90s box art: the title screen on a CRT with a VHS overlay, chrome lettering, a sticker, a Win95 window, and the game's own sprites (from its `art/*.txt`) walking the street |
 | `02-discord.png` | `discord.py` | Join the Discord. The invite is set in DejaVu Sans Mono: the pixel font's B looks like an 8 |
+| `doda-kvarter-horde.gif`, `doda-kvarter-boss.gif` | `gameplay.sh` | Real Döda Kvarter play: the game's headless backend runs its test bot and writes every frame; debug hooks pick the round and the boss, a seed makes it repeat exactly. Needs the game built and ffmpeg |
 | `08-special-thanks.png` | `contributors.py` | Everyone who opened an issue on GitHub, by name: issues, comments, what they found, how many are fixed or built in 1.6. The avatars are pixel identicons made from each name |
-| `09-thanks.png` | `thanks.py` | The page's sign-off |
+| `11-thanks.png` | `thanks.py` | The page's sign-off |
 
 `lib.py` holds the drawing helpers (panels, dithered gradients, the handheld, the pixel text). The logo is the standard one, `logo/rocknixds-logo.svg`, drawn smooth by Chromium (`svg2png.mjs`), with text beside it in its typeface, Unbounded. Until the
 Döda Kvarter, Bank and 1.6 branches are merged, `build.sh` takes their screenshots, sprites and 1.6's fixed font
