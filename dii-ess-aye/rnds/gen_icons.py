@@ -409,6 +409,47 @@ def phone():
     return c.rows()
 
 
+def zombie():
+    """Döda Kvarter (ROCKNIXDS's zombie roguelike): one of the dead, in the pack's style."""
+    c = Canvas()
+    c.ellipse(16, 14.5, 10, 10, 'g')                              # the head
+    c.rect(8, 15, 23, 23, 'g'); c.rect(10, 24, 21, 26, 'g')       # jaw and chin
+    c.rect(7, 16, 7, 20, 'g'); c.rect(24, 16, 24, 20, 'g')        # ears
+    c.rect(22, 12, 23, 23, 'h'); c.rect(20, 24, 21, 26, 'h'); c.rect(24, 17, 24, 20, 'h')   # the side in shadow
+    c.rect(11, 25, 19, 26, 'h')
+    c.poly([(6.2, 12), (7, 7), (10, 4), (16, 3), (22, 4), (25, 7), (25.8, 12), (23, 9), (20, 10.5), (17, 8), (14, 10.5),
+            (11, 8.5), (8.5, 10.5)], 'k')                        # hair, in tufts
+    c.rect(10, 5, 14, 5, 'd'); c.rect(8, 7, 9, 7, 'd')            # its light edge
+    c.rect(9, 12, 12, 12, 'G'); c.rect(8, 13, 8, 15, 'G')         # the brow's light
+    c.ellipse(12, 16.5, 3.2, 3.2, 'w')                            # the open eye
+    c.rect(12, 16, 13, 17, 'r'); c.px(12, 16, 'R')
+    c.rect(18, 15, 22, 15, 'k'); c.rect(19, 16, 21, 17, 'k'); c.px(20, 16, 'y')   # the other one, sunk
+    c.rect(15, 18, 16, 20, 'h')                                   # nose
+    c.rect(11, 22, 21, 23, 'k')                                   # mouth
+    for x in (12, 15, 18):                                        # teeth
+        c.px(x, 22, 'w'); c.px(x + 1, 22, 'w')
+    c.px(13, 23, 'w'); c.px(19, 23, 'w')
+    c.rect(18, 9, 18, 12, 'h'); c.px(17, 10, 'h'); c.px(19, 10, 'h'); c.px(17, 12, 'h'); c.px(19, 12, 'h')   # a stitched cut
+    c.rect(13, 27, 18, 29, 'p'); c.rect(11, 29, 20, 30, 'p'); c.rect(13, 27, 18, 27, 'h')   # neck and collar
+    return c.rows()
+
+
+def bank():
+    """ROCKNIXDS Bank & Trade: a bank's front, a coin in its gable."""
+    c = Canvas()
+    c.poly([(16, 2.2), (29.5, 11), (2.5, 11)], 'l')               # the gable
+    c.poly([(16, 4.4), (25.5, 10), (6.5, 10)], 'b')
+    c.ellipse(16, 8, 2.1, 2.1, 'y'); c.px(15, 7, 'Y')             # the coin
+    c.rect(3, 11, 28, 12, 'w'); c.rect(3, 13, 28, 13, 'm')        # the beam
+    for x in (5, 11, 18, 24):                                     # four columns
+        c.rect(x, 14, x + 2, 23, 'w'); c.rect(x + 2, 14, x + 2, 23, 'l'); c.rect(x, 14, x + 2, 14, 'l'); c.rect(x, 23, x + 2, 23, 'l')
+    c.rect(8, 14, 10, 23, 'B'); c.rect(21, 14, 23, 23, 'B')       # the dark between them
+    c.rect(14, 15, 17, 23, 'n'); c.rect(14, 15, 17, 15, 'B'); c.px(16, 19, 'y')   # the door
+    c.rect(3, 24, 28, 25, 'w'); c.rect(3, 25, 28, 25, 'l')        # steps
+    c.rect(1, 26, 30, 27, 'l'); c.rect(1, 27, 30, 27, 'm')
+    return c.rows()
+
+
 def gear():
     c = Canvas()
     import math
@@ -488,6 +529,9 @@ DRAWN = {
                  'b': rgba('4c8ee0'), 'p': rgba('b07ef0')}, fantasy),
     'phone': ({'g': rgba('b0d459'), 'G': rgba('46514c')}, phone),
     'gear': ({}, gear),
+    'dodakvarter': ({'g': rgba('7fae4e'), 'G': rgba('a8d477'), 'h': rgba('4f7f3a'), 'r': rgba('d8322f'), 'R': rgba('ff8a7a'),
+                     'y': rgba('e8d44a'), 'p': rgba('5a4a78')}, zombie),
+    'bank': ({'b': rgba('3d6fb8'), 'B': rgba('24476f'), 'n': rgba('1f3d6e'), 'y': rgba('f2c94c'), 'Y': rgba('fff0a8')}, bank),
     'apps': ({'r': rgba('e25a5a'), 'y': rgba('f2c94c'), 'g': rgba('5bb85b'), 'b': rgba('4c8ee0'), 'p': rgba('b07ef0'),
               'o': rgba('e08a4e'), 'c': rgba('44d4ca')}, apps),
     'console': ({'o': rgba('b0703a'), 'O': rgba('7a4a24'), 'r': rgba('e25a5a')}, console),

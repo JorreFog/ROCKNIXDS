@@ -78,10 +78,10 @@ index 90df9a9b..75714e3d 100644
  			else if (complete || SDL_GetTicks() - firstFrame > 3000)
 diff --git a/es-app/src/rnds/RndsEs.cpp b/es-app/src/rnds/RndsEs.cpp
 new file mode 100644
-index 00000000..0ce8df9d
+index 00000000..b4487728
 --- /dev/null
 +++ b/es-app/src/rnds/RndsEs.cpp
-@@ -0,0 +1,1229 @@
+@@ -0,0 +1,1298 @@
 +#include "rnds/RndsEs.h"
 +#include "rnds/RndsUI.h"
 +
@@ -125,12 +125,40 @@ index 00000000..0ce8df9d
 +#include <set>
 +#include <sstream>
 +#include <thread>
++#include <nanosvg/nanosvg.h>
++#include <nanosvg/nanosvgrast.h>
 +
 +namespace rnds
 +{
 +	bool isRndsTheme(const std::shared_ptr<ThemeData>& theme) { return theme != nullptr && theme->hasView("rnds"); }
 +
 +	// ---- images: ES's decoder (FreeImage), rows flipped to top-down ----------------------------------------------------
++	// An .svg is drawn by nanosvg, as ES's own image views draw it, to fit 512x512: ROCKNIX's pictures for its Tools
++	// (File Manager, the emulators' own menus...) are SVG files, and every cartridge in that list was empty without it.
++	static Bitmap svgDecode(std::vector<unsigned char>& data)
++	{
++		Bitmap b;
++		data.push_back(0);		// nsvgParse wants a string it may write into, with its end
++		NSVGimage* img = nsvgParse((char*)data.data(), "px", 96);
++		if (!img)
++			return b;
++		if (img->width > 0 && img->height > 0)
++		{
++			float k = std::min(512.0f / img->width, 512.0f / img->height);
++			int w = std::max(1, (int)std::lround(img->width * k)), h = std::max(1, (int)std::lround(img->height * k));
++			NSVGrasterizer* rast = nsvgCreateRasterizer();
++			if (rast)
++			{
++				b.w = w; b.h = h;
++				b.px.assign((size_t)w * h * 4, 0);
++				nsvgRasterize(rast, img, 0, 0, k, b.px.data(), w, h, w * 4);
++				nsvgDeleteRasterizer(rast);
++			}
++		}
++		nsvgDelete(img);
++		return b;
++	}
++
 +	static Bitmap esDecode(const std::string& path)
 +	{
 +		Bitmap b;
@@ -140,6 +168,8 @@ index 00000000..0ce8df9d
 +		std::vector<unsigned char> data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
 +		if (data.empty())
 +			return b;
++		if (Utils::String::toLower(Utils::FileSystem::getExtension(path)) == ".svg")
++			return svgDecode(data);
 +		size_t w = 0, h = 0;
 +		MaxSizeInfo cap(1280, 1280);	// box art and screenshots are shown far smaller
 +		unsigned char* px = ImageIO::loadFromMemoryRGBA32(data.data(), data.size(), w, h, &cap);
@@ -265,7 +295,7 @@ index 00000000..0ce8df9d
 +	};
 +
 +	// ---- per-system look: the theme's rnds/systems.cfg ------------------------------------------------------------------
-+	struct SysLook { std::string icon; Color accent; bool hasAccent = false; std::string maker; };
++	struct SysLook { std::string icon; Color accent; bool hasAccent = false; std::string maker; bool app = false; };
 +
 +	// ---- RetroAchievements progress, fetched in the background for the selected game -----------------------------------
 +	class RaProgress
@@ -529,7 +559,7 @@ index 00000000..0ce8df9d
 +			std::string ln;
 +			while (std::getline(f, ln))
 +			{
-+				// <system>[,<system>...]  <icon file>  <#accent>  [maker...]
++				// <system>[,<system>...]  <icon file>  <#accent>  [maker...] [[app]]
 +				if (ln.empty() || ln[0] == '#')
 +					continue;
 +				std::istringstream is(ln);
@@ -554,6 +584,13 @@ index 00000000..0ce8df9d
 +				{
 +					look.accent = Color::hex((uint32_t)strtoul(accent.c_str() + 1, nullptr, 16));
 +					look.hasAccent = true;
++				}
++				// "[app]" after the maker: the system is one app with a tile of its own on the shelf (ROCKNIXDS's game and
++				// its bank), and A on the tile starts it
++				if (maker.size() >= 5 && maker.compare(maker.size() - 5, 5, "[app]") == 0)
++				{
++					look.app = true;
++					maker = Utils::String::trim(maker.substr(0, maker.size() - 5));
 +				}
 +				look.maker = maker;
 +				for (auto& n : Utils::String::split(names, ','))
@@ -593,6 +630,9 @@ index 00000000..0ce8df9d
 +			else snprintf(b, sizeof b, "%ldm", m);
 +			return b;
 +		}
++
++		// a game that was never started has no "last played", or ES's default for it ("0")
++		static bool wasPlayed(const std::string& stamp) { return !stamp.empty() && Utils::Time::stringToTime(stamp) > 0; }
 +
 +		static std::string relDay(const std::string& stamp)
 +		{
@@ -700,11 +740,37 @@ index 00000000..0ce8df9d
 +				{
 +					if (!first) first = f;
 +					std::string last = f->getMetadata(MetaDataId::LastPlayed);
-+					if (!last.empty() && last > bestDate) { bestDate = last; best = f; }
++					if (wasPlayed(last) && last > bestDate) { bestDate = last; best = f; }
 +				}
 +			FileData* r = best ? best : first;
 +			resumeCache[s] = r;
 +			return r;
++		}
++
++		// systems.cfg's line for a system: by its name, its theme folder, then by kind ("*portable", "*collection"...),
++		// then "*"; a system matched only by kind takes the accent of its maker ("@Sega") when there is one
++		SysLook lookOf(SystemData* s, const std::string& maker)
++		{
++			SysLook look;
++			if (s == nullptr)
++				return look;
++			bool named = true;
++			auto it = looks.find(Utils::String::toLower(s->getName()));
++			if (it == looks.end()) it = looks.find(Utils::String::toLower(s->getThemeFolder()));
++			if (it == looks.end())
++			{
++				named = false;
++				std::string kind = s->isCollection() ? "collection" : Utils::String::toLower(s->getSystemMetadata().hardwareType);
++				it = looks.find("*" + kind);
++				if (it == looks.end()) it = looks.find("*");
++			}
++			if (it != looks.end()) look = it->second;
++			if (!named)
++			{
++				auto mk = looks.find("@" + Utils::String::toLower(maker));
++				if (mk != looks.end() && mk->second.hasAccent) { look.accent = mk->second.accent; look.hasAccent = true; }
++			}
++			return look;
 +		}
 +
 +		// ---- Source ----
@@ -720,27 +786,24 @@ index 00000000..0ce8df9d
 +			r.name = s->getFullName();
 +			// ES names its own collections in lower case ("favorites"); the other names are capitalised
 +			if (s->isCollection() && !r.name.empty() && r.name[0] >= 'a' && r.name[0] <= 'z') r.name[0] -= 32;
-+			r.maker = s->getSystemMetadata().manufacturer;
-+			// systems.cfg: the system's name, its theme folder, then by kind ("*portable", "*collection"...), then "*";
-+			// a system matched only by kind takes the accent of its maker ("@Sega") when there is one
-+			SysLook look;
-+			bool named = true;
-+			auto it = looks.find(Utils::String::toLower(s->getName()));
-+			if (it == looks.end()) it = looks.find(Utils::String::toLower(s->getThemeFolder()));
-+			if (it == looks.end())
++			// ROCKNIX writes an icon of its own menu font before some makers ("\uF013 System" for Tools and the Music Player):
++			// the theme's font has no private-use glyphs, and drew an empty box there
++			r.maker.clear();
++			const std::string& mk0 = s->getSystemMetadata().manufacturer;
++			for (size_t k = 0; k < mk0.size();)
 +			{
-+				named = false;
-+				std::string kind = s->isCollection() ? "collection" : Utils::String::toLower(s->getSystemMetadata().hardwareType);
-+				it = looks.find("*" + kind);
-+				if (it == looks.end()) it = looks.find("*");
++				unsigned char c0 = (unsigned char)mk0[k];
++				if ((c0 == 0xEE || c0 == 0xEF) && k + 2 < mk0.size())
++				{
++					unsigned cp = ((c0 & 0x0Fu) << 12) | (((unsigned char)mk0[k + 1] & 0x3Fu) << 6) | ((unsigned char)mk0[k + 2] & 0x3Fu);
++					if (cp >= 0xE000 && cp <= 0xF8FF) { k += 3; continue; }
++				}
++				r.maker += mk0[k++];
 +			}
-+			if (it != looks.end()) look = it->second;
-+			if (!named)
-+			{
-+				auto mk = looks.find("@" + Utils::String::toLower(r.maker));
-+				if (mk != looks.end() && mk->second.hasAccent) { look.accent = mk->second.accent; look.hasAccent = true; }
-+			}
++			r.maker = Utils::String::trim(r.maker);
++			SysLook look = lookOf(s, r.maker);
 +			r.icon = look.icon;
++			r.app = look.app;
 +			r.accent = look.hasAccent ? look.accent : Color::hex(0x3d8ec4);
 +			if (r.maker.empty()) r.maker = !look.maker.empty() ? look.maker : (s->isCollection() ? "Collection" : "");
 +			GameCountInfo* gc = s->getGameCountInfo();
@@ -757,7 +820,7 @@ index 00000000..0ce8df9d
 +			if (res)
 +			{
 +				r.hasResume = true;
-+				r.resumeEyebrow = res->getMetadata(MetaDataId::LastPlayed).empty() ? "Not played yet" : "Last played";
++				r.resumeEyebrow = wasPlayed(res->getMetadata(MetaDataId::LastPlayed)) ? "Last played" : "Not played yet";
 +				r.resumeTitle = cleanTitle(res->getName());
 +				r.resumeBox = res->getThumbnailPath(true);
 +				r.resumeCart = mediaPath(res, MetaDataId::Cartridge);
@@ -843,6 +906,12 @@ index 00000000..0ce8df9d
 +			r.cart = mediaPath(f, MetaDataId::Cartridge);
 +			r.label = mediaPath(f, MetaDataId::BoxBack);
 +			r.rom = romIconOf(f);
++			// its own system's icon (a favourite keeps its system's), for a cartridge with no art
++			{
++				FileData* src = f->getSourceFileData();
++				SystemData* own = src ? src->getSystem() : f->getSystem();
++				r.icon = lookOf(own, own ? own->getSystemMetadata().manufacturer : std::string()).icon;
++			}
 +			r.fav = f->getFavorite();
 +
 +			int id = atoi(f->getMetadata(MetaDataId::CheevosId).c_str());
@@ -2601,10 +2670,10 @@ index 00000000..90e55347
 +}
 diff --git a/es-app/src/rnds/RndsUI.cpp b/es-app/src/rnds/RndsUI.cpp
 new file mode 100644
-index 00000000..0f8bbdd3
+index 00000000..6ad71c6b
 --- /dev/null
 +++ b/es-app/src/rnds/RndsUI.cpp
-@@ -0,0 +1,2090 @@
+@@ -0,0 +1,2125 @@
 +#include "RndsUI.h"
 +
 +#include <algorithm>
@@ -3127,8 +3196,8 @@ index 00000000..0f8bbdd3
 +
 +		// what goes on a cartridge's label: the real card's label art (its scan), else the label art the media tool
 +		// made from the cover, else the cover without its NINTENDO DS strip
-+		struct CartArt { std::string scan, label, box, rom; };
-+		static CartArt artOf(const GameInfo& g) { return CartArt{ g.cart, g.label, g.box, g.rom }; }
++		struct CartArt { std::string scan, label, box, rom, icon; };
++		static CartArt artOf(const GameInfo& g) { return CartArt{ g.cart, g.label, g.box, g.rom, g.icon }; }
 +		static Bitmap labelArt(const CartArt& a)
 +		{
 +			if (!a.scan.empty())
@@ -3167,11 +3236,12 @@ index 00000000..0f8bbdd3
 +			}
 +			char k[48];
 +			snprintf(k, sizeof k, "cart:%dx%d:", dw, dh);
-+			std::string key = std::string(k) + art0.scan + "|" + art0.label + "|" + art0.box;
++			std::string key = std::string(k) + art0.scan + "|" + art0.label + "|" + art0.box + "|" + art0.icon;
 +			if (auto e = find(key)) return e->sp;
 +			std::shared_ptr<const Bitmap> shellRef = shell;
 +			float sc = s;
-+			request(key, G_CART, true, [art0, shellRef, sc, dw, dh](float&, float&) -> Bitmap
++			uint32_t plain = P.cartLabel.rgba8();
++			request(key, G_CART, true, [art0, shellRef, sc, dw, dh, plain](float&, float&) -> Bitmap
 +			{
 +				const Bitmap& shellCopy = *shellRef;
 +				// the canvas is 100x104 CSS px; bake it at device resolution, then resample to the drawn size
@@ -3180,6 +3250,14 @@ index 00000000..0f8bbdd3
 +				master.w = mw; master.h = mh;
 +				master.px.assign((size_t)mw * mh * 4, 0);
 +				Bitmap art = labelArt(art0);
++				// no art (a tool or an app without a picture, a game nobody scraped, a picture that doesn't decode): the
++				// host's icon for it on a plain label, as the ROM icons are, and never an empty cartridge
++				if (art.empty() && !art0.icon.empty())
++				{
++					Bitmap ic = decodeFile(art0.icon);
++					if (!ic.empty())
++						return iconCart(ic, shellCopy, sc, dw, dh, plain);
++				}
 +				if (!art.empty())
 +				{
 +					// the shell's whole label (x 4..96, y 4..90): the art is all there is on it, no header or margin
@@ -3196,10 +3274,45 @@ index 00000000..0f8bbdd3
 +			return Sprite();
 +		}
 +
-+		// the job for a cartridge with a DS ROM's own icon, dw x dh device px: the label plain in the palette's colour,
-+		// the icon on it at the largest whole multiple of its 32 px that fits the label window (nearest neighbour, and
-+		// uploaded unsmoothed: pixel art), the shell over them as the label art's cartridges have it. Empty when the ROM
-+		// has no icon
++		// a cartridge with a pixel icon instead of label art, dw x dh device px: the label plain in the palette's colour,
++		// the icon on it at the largest whole multiple of its size that fits the label window (nearest neighbour: pixel
++		// art), the shell over them as the label art's cartridges have it
++		static Bitmap iconCart(const Bitmap& icon, const Bitmap& sh, float sc, int dw, int dh, uint32_t label)
++		{
++			Bitmap out;
++			out.w = dw; out.h = dh;
++			out.px.assign((size_t)dw * dh * 4, 0);
++			// the shell's label window (x 4..96, y 4..90 of its 100x104), at the drawn size
++			float fx = dw / 100.0f, fy = dh / 104.0f;
++			int wx = (int)std::lround(4 * fx), wy = (int)std::lround(4 * fy);
++			int ww = (int)std::lround(96 * fx) - wx, wh = (int)std::lround(90 * fy) - wy;
++			for (int y = wy; y < wy + wh; y++)
++				for (int x = wx; x < wx + ww; x++)
++				{
++					uint8_t* p = &out.px[((size_t)y * dw + x) * 4];
++					p[0] = (uint8_t)(label >> 24); p[1] = (uint8_t)(label >> 16); p[2] = (uint8_t)(label >> 8); p[3] = 255;
++				}
++			int side = std::max(1, std::max(icon.w, icon.h));
++			int k = std::max(1, std::min(ww, wh) / side);
++			int iw = icon.w * k, ih = icon.h * k;
++			if (iw > ww || ih > wh)		// an icon larger than the window: fitted into it
++			{
++				float f = std::min((float)ww / icon.w, (float)wh / icon.h);
++				iw = std::max(1, (int)(icon.w * f)); ih = std::max(1, (int)(icon.h * f));
++				blit(out, resize(icon, iw, ih), wx + (ww - iw) / 2, wy + (wh - ih) / 2);
++			}
++			else
++				blit(out, resizeNearest(icon, iw, ih), wx + (ww - iw) / 2, wy + (wh - ih) / 2);
++			if (!sh.empty())
++			{
++				int mw = (int)std::lround(100 * sc), mh = (int)std::lround(104 * sc);
++				Bitmap m = mw == sh.w && mh == sh.h ? sh : resizeNearest(sh, mw, mh);
++				blit(out, dw == mw && dh == mh ? m : resize(m, dw, dh), 0, 0);
++			}
++			return out;
++		}
++
++		// the job for a cartridge with a DS ROM's own icon (uploaded unsmoothed). Empty when the ROM has no icon
 +		std::function<Bitmap(float&, float&)> romCart(const std::string& rom, int dw, int dh)
 +		{
 +			std::shared_ptr<const Bitmap> shellRef = shell;
@@ -3209,29 +3322,7 @@ index 00000000..0f8bbdd3
 +			{
 +				Bitmap icon = romIcon(rom);
 +				if (icon.empty()) return Bitmap();
-+				Bitmap out;
-+				out.w = dw; out.h = dh;
-+				out.px.assign((size_t)dw * dh * 4, 0);
-+				// the shell's label window (x 4..96, y 4..90 of its 100x104), at the drawn size
-+				float fx = dw / 100.0f, fy = dh / 104.0f;
-+				int wx = (int)std::lround(4 * fx), wy = (int)std::lround(4 * fy);
-+				int ww = (int)std::lround(96 * fx) - wx, wh = (int)std::lround(90 * fy) - wy;
-+				for (int y = wy; y < wy + wh; y++)
-+					for (int x = wx; x < wx + ww; x++)
-+					{
-+						uint8_t* p = &out.px[((size_t)y * dw + x) * 4];
-+						p[0] = (uint8_t)(label >> 24); p[1] = (uint8_t)(label >> 16); p[2] = (uint8_t)(label >> 8); p[3] = 255;
-+					}
-+				int k = std::max(1, std::min(ww, wh) / 32);
-+				blit(out, resizeNearest(icon, 32 * k, 32 * k), wx + (ww - 32 * k) / 2, wy + (wh - 32 * k) / 2);
-+				const Bitmap& sh = *shellRef;
-+				if (!sh.empty())
-+				{
-+					int mw = (int)std::lround(100 * sc), mh = (int)std::lround(104 * sc);
-+					Bitmap m = mw == sh.w && mh == sh.h ? sh : resizeNearest(sh, mw, mh);
-+					blit(out, dw == mw && dh == mh ? m : resize(m, dw, dh), 0, 0);
-+				}
-+				return out;
++				return iconCart(icon, *shellRef, sc, dw, dh, label);
 +			};
 +		}
 +
@@ -3474,6 +3565,13 @@ index 00000000..0f8bbdd3
 +			if (ui->mView == HOME)
 +			{
 +				if (sysCount() == 0) return;
++				// an app's tile starts the app: its entry's ready screen, as X (Resume) opens a system's last game. B there
++				// is its library, as after Resume
++				if (sys(ui->mSys).app)
++				{
++					resume();
++					if (ui->mView == LAUNCH) return;
++				}
 +				int g = src->openLibrary(ui->mSys);
 +				gameCache.clear();
 +				ui->mGame = g < 0 ? 0 : g;
@@ -3621,7 +3719,7 @@ index 00000000..0f8bbdd3
 +			if (v == HOME)
 +			{
 +				g.left = Face{ "Y", "Fav", sys(ui->mSys).fav ? 1 : 0, ACT_FAV };
-+				g.right = Face{ "X", "Resume", 0, ACT_RESUME };
++				g.right = Face{ "X", sys(ui->mSys).app ? "Start" : "Resume", 0, ACT_RESUME };	// an app has nothing to resume
 +			}
 +			else if (v == LIBRARY)
 +			{
@@ -4019,13 +4117,14 @@ index 00000000..0f8bbdd3
 +				Sprite ic = icon(sy.icon);
 +				if (ic.valid()) be->draw(ic.tex, std::round(X(280)), std::round(X(y0 + 8 + b)), std::round(X(80)), std::round(X(80)), Color(1, 1, 1, 1));
 +
-+				// stats
++				// stats; an app's tile has its time alone (one entry, started or not, is nothing to count)
 +				std::string vals[3] = { std::to_string(sy.games), std::to_string(sy.played), sy.time };
-+				std::string labs[3] = { "Games", "Played", "Time" };
++				std::string labs[3] = { sy.games == 1 ? "Game" : "Games", "Played", "Time" };
 +				TStyle tb = ts(true, 28), tl = ts(false, 17, 1.36f, true);
-+				float colW[3], total3 = 36;
++				int c0 = sy.app ? 2 : 0;
++				float colW[3], total3 = 18.0f * (2 - c0);
 +				TextLine lb[3], ll[3];
-+				for (int i = 0; i < 3; i++)
++				for (int i = c0; i < 3; i++)
 +				{
 +					lb[i] = line(vals[i], tb);
 +					ll[i] = layoutLine(utf8to32(labs[i]), tstyle(tl));
@@ -4033,7 +4132,7 @@ index 00000000..0f8bbdd3
 +					total3 += colW[i];
 +				}
 +				float x = 320 - total3 / 2, sy0 = y0 + 106;
-+				for (int i = 0; i < 3; i++)
++				for (int i = c0; i < 3; i++)
 +				{
 +					drawLine(lb[i], tb, x + (colW[i] - lb[i].width) / 2, sy0, 28, INK);
 +					drawLine(ll[i], tl, x + (colW[i] - ll[i].width) / 2, sy0 + 31, lineHeight(tl), MUTED);
@@ -4048,7 +4147,7 @@ index 00000000..0f8bbdd3
 +					float cw = chipWidth(sy);
 +					float cx = 320 - cw / 2, cy = y0 + 168;
 +					drawBox(chipBox(), cx, cy, cw, 74);
-+					Sprite c = cart(CartArt{ sy.resumeCart, sy.resumeLabel, sy.resumeBox, "" }, 54, 56);
++					Sprite c = cart(CartArt{ sy.resumeCart, sy.resumeLabel, sy.resumeBox, "", sy.icon }, 54, 56);
 +					drawSprite(c, cx + 11, cy + 9);
 +					float tx = cx + 11 + 54 + 10, ty = cy + 13.5f;
 +					drawLine(le, te, tx, ty, lineHeight(te), MUTED);
@@ -4064,7 +4163,7 @@ index 00000000..0f8bbdd3
 +					if (!ny.hasResume) continue;
 +					BoxCss b = chipBox(); b.async = true;
 +					box(b, chipWidth(ny), 74);
-+					cart(CartArt{ ny.resumeCart, ny.resumeLabel, ny.resumeBox, "" }, 54, 56);
++					cart(CartArt{ ny.resumeCart, ny.resumeLabel, ny.resumeBox, "", ny.icon }, 54, 56);
 +				}
 +			}
 +			else if (ui->mView == LIBRARY && count() == 0)
@@ -4194,24 +4293,29 @@ index 00000000..0f8bbdd3
 +
 +			if (v != LAUNCH)
 +			{
-+				// shoulders
++				// shoulders: the names either side. A shelf or a list of one has no other side (both said its own name):
++				// the rule alone
++				bool sides = n > 1;
 +				float kl = kbdW("L"), kr = kbdW("R");
-+				drawBox(kbdBox(), 18, 21.5f + rb, kl, 23);
-+				drawText("L", tKbd(), 24, 23.5f + rb, P.kbdInk);
 +				std::string prev, next;
-+				if (n > 0 && v == HOME) { prev = sys((ui->mSys - 1 + n) % n).name; next = sys((ui->mSys + 1) % n).name; }
-+				else if (n > 0) { prev = game((ui->mGame - 1 + n) % n).title; next = game((ui->mGame + 1) % n).title; }
++				if (sides && v == HOME) { prev = sys((ui->mSys - 1 + n) % n).name; next = sys((ui->mSys + 1) % n).name; }
++				else if (sides) { prev = game((ui->mGame - 1 + n) % n).title; next = game((ui->mGame + 1) % n).title; }
 +				TStyle tsh = ts(false, 20);
 +				TextLine lp = layoutEllipsis(utf8to32(prev), tstyle(tsh), 180), ln = layoutEllipsis(utf8to32(next), tstyle(tsh), 180);
 +				// a game list's shoulders are its touch arrows too: ◀ and ▶ between the button and the name, a flex item
 +				// more (8 px apart), so a name of the full 180 px still ends short of the rule
-+				bool arrows = v == LIBRARY && n > 0;
++				bool arrows = v == LIBRARY && sides;
 +				float aw = arrows ? arrowDims().w / s + 8 : 0;
-+				drawLine(lp, tsh, 18 + kl + 8 + aw, 21 + rb, 24, INK);
 +				drawBox(ruleBox(), 284, 31.5f + rb, 72, 3);
-+				drawBox(kbdBox(), 622 - kr, 21.5f + rb, kr, 23);
-+				drawText("R", tKbd(), 622 - kr + 6, 23.5f + rb, P.kbdInk);
-+				drawLine(ln, tsh, 622 - kr - 8 - aw - ln.width, 21 + rb, 24, INK);
++				if (sides || n == 0)
++				{
++					drawBox(kbdBox(), 18, 21.5f + rb, kl, 23);
++					drawText("L", tKbd(), 24, 23.5f + rb, P.kbdInk);
++					drawLine(lp, tsh, 18 + kl + 8 + aw, 21 + rb, 24, INK);
++					drawBox(kbdBox(), 622 - kr, 21.5f + rb, kr, 23);
++					drawText("R", tKbd(), 622 - kr + 6, 23.5f + rb, P.kbdInk);
++					drawLine(ln, tsh, 622 - kr - 8 - aw - ln.width, 21 + rb, 24, INK);
++				}
 +				if (arrows)
 +				{
 +					drawArrow(false, 18 + kl + 8, 33 + rb, pressedArrow == 0);
@@ -4697,10 +4801,10 @@ index 00000000..0f8bbdd3
 +}
 diff --git a/es-app/src/rnds/RndsUI.h b/es-app/src/rnds/RndsUI.h
 new file mode 100644
-index 00000000..b9b1b595
+index 00000000..31e138fa
 --- /dev/null
 +++ b/es-app/src/rnds/RndsUI.h
-@@ -0,0 +1,181 @@
+@@ -0,0 +1,184 @@
 +#pragma once
 +// ROCKNIXDS rnds engine: the ROCKNIXDS menu mockup (mockup/index.html) as a native two-screen UI. Three views: home
 +// (the system shelf), library (a system's games as cartridges) and the ready screen. Layout, colours, fonts and
@@ -4730,6 +4834,7 @@ index 00000000..b9b1b595
 +		int games = 0, played = 0;
 +		std::string time;		// "86h 12m"
 +		bool fav = false;
++		bool app = false;			// the system is one app (the theme's systems.cfg says "[app]"): A on its tile starts it
 +		bool hasResume = false;		// a game to show on the "last played" chip
 +		std::string resumeEyebrow;	// "Last played"
 +		std::string resumeTitle;
@@ -4749,6 +4854,8 @@ index 00000000..b9b1b595
 +		std::string label;		// label art made from the cover (the media tool's "boxback"), when there is no scan
 +		std::string rom;		// a DS ROM (.nds, .zip) whose own icon goes on the bottom screen's cartridge instead
 +								// of the art above (the host's opt-in setting; the art when the ROM has no icon)
++		std::string icon;		// what a cartridge with none of the art above shows on a plain label instead of
++								// staying empty: a 32x32 pixel icon, its system's (a tool, an app, a game nobody scraped)
 +		int achA = 0, achB = 0;	// unlocked / total
 +		std::string achLabel;	// "28 / 50 achievements" (lower case; drawn upper)
 +		bool fav = false;

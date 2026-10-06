@@ -224,6 +224,7 @@ if [ $UNINSTALL = 1 ]; then
         fi
     fi
     rm -f /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
+    rm -f /storage/.config/emulationstation/es_systems_rocknixds.cfg
     rm -f /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh /storage/.config/autostart/rocknixds-menu-power \
           /storage/.config/emulationstation/scripts/start/rocknixds-menu-power.sh
     rm -f /storage/.config/emulationstation/scripts/start/rocknixds-media.sh \
@@ -399,6 +400,9 @@ if [ $THEME_ON = 1 ]; then
     mkdir -p /storage/.config/emulationstation/scripts/theme-changed
     cp "$SRC/dii-ess-aye/device/theme-changed.sh" /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
     chmod +x /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
+    # ROCKNIXDS's own apps (Döda Kvarter, ROCKNIXDS Bank) as systems of one entry each: a tile each on the menu's shelf,
+    # not two lines in Ports. ES leaves a system without a file out, so a tile shows once its app is installed.
+    cp "$SRC/dii-ess-aye/device/es_systems_rocknixds.cfg" /storage/.config/emulationstation/es_systems_rocknixds.cfg
     # the theme's own enable script: launcher bind mount, sway config, ThemeSet/menu settings
     # (ES is stopped; the flag stops it from restarting ES itself, we do that at the end)
     touch /tmp/has-restarted-for-theme

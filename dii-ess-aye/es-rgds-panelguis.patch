@@ -18,6 +18,9 @@ still sized against the whole canvas:
   (ROCKNIXDS issue 35). The values now get as much room as the labels, and at least what a date and the rating stars
   take, from the result list's share (at most 45% of the window). A label that doesn't fit is shortened with "...",
   never the date. The column only grows: where 24% is enough (a big screen), the layout is stock.
+- A message box with an icon (GuiMsgBox) measured its text at the box's whole width, though the icon's column takes
+  part of it: a message of several lines (the notice after a game that stopped responding) wrapped once more than the
+  box was made for, and its first and last lines ran over the box's edges. The text is measured at the width it gets.
 
 diff --git a/es-app/src/components/ScraperSearchComponent.cpp b/es-app/src/components/ScraperSearchComponent.cpp
 index 280412b6..eae19125 100644
@@ -183,3 +186,18 @@ index 9a21a260..d2934d26 100644
  	animateTo(
  		Vector2f((Renderer::getScreenWidth() - getSize().x()) / 2, Renderer::getScreenHeight()),
  		Vector2f((Renderer::getScreenWidth() - getSize().x()) / 2, Renderer::getScreenHeight() - WINDOW_HEIGHT),
+diff --git a/es-core/src/guis/GuiMsgBox.cpp b/es-core/src/guis/GuiMsgBox.cpp
+index 956f5e7a..54adc207 100644
+--- a/es-core/src/guis/GuiMsgBox.cpp
++++ b/es-core/src/guis/GuiMsgBox.cpp
+@@ -137,7 +137,9 @@ GuiMsgBox::GuiMsgBox(Window* window, const std::string& text,
+ 	}
+ 	
+ 	// now that we know width, we can find height
+-	mMsg->setSize(width, 0); // mMsg->getSize.y() now returns the proper length
++	// ROCKNIXDS: at the width the text gets, which is what the icon's column leaves of it. Measured at the whole width, a
++	// message of several lines wrapped once more than the box was made for, and ran over its top and bottom edges.
++	mMsg->setSize(mImage != nullptr ? width - mImage->getSize().x() : width, 0); // mMsg->getSize.y() now returns the proper length
+ 	
+ 	float msgHeight = Math::max(Font::get(FONT_SIZE_LARGE)->getHeight(), mMsg->getSize().y()*1.225f);
+ 	
