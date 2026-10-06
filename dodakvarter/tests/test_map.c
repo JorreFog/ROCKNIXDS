@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
         barriers_open = 1;
         CHECK(G->nprops < MAX_PROPS, "seed %d: %d props, the most there can be", seed, G->nprops);
         flood(sz->cx, sz->cy);
-        int power = 0, pap = 0, perks = 0, walls = 0;
+        int power = 0, pap = 0, perks = 0, walls = 0, gnomes = 0;
         for (int i = 0; i < G->nit; i++) {
             Inter *it = &G->it[i];
             switch (it->type) {
@@ -123,6 +123,11 @@ int main(int argc, char **argv) {
             case IT_WALLBUY: walls++; CHECK(usable(it), "seed %d: wall buy %d unreachable", seed, it->a); break;
             case IT_BOX: CHECK(usable(it), "seed %d: a box spot is unreachable", seed); break;
             case IT_BARRIER: CHECK(it->cost >= 750 && it->cost <= 2000, "seed %d: barrier cost %d", seed, it->cost); break;
+            case IT_GNOME:
+                gnomes++;
+                CHECK(usable(it), "seed %d: a tomte can't be reached", seed);
+                CHECK(G->t[it->ty][it->tx].zone != G->start_zone, "seed %d: a tomte in the start district", seed);
+                break;
             case IT_TRAP:
                 CHECK(usable(it), "seed %d: an elstängsel's cabinet is unreachable", seed);
                 CHECK(it->a >= 0 && it->a < G->nit && G->it[it->a].type == IT_BARRIER, "seed %d: an elstängsel without its gap", seed);
@@ -131,6 +136,7 @@ int main(int argc, char **argv) {
             }
         }
         CHECK(power == 1, "seed %d: %d power switches", seed, power);
+        CHECK(gnomes == 3, "seed %d: %d tomtar hidden, not three", seed, gnomes);
         CHECK(pap == 1, "seed %d: %d Pack-a-Punch machines", seed, pap);
         CHECK(perks == PK_COUNT, "seed %d: %d perk machines", seed, perks);
         CHECK(G->nbox_spots >= 2, "seed %d: %d box spots", seed, G->nbox_spots);

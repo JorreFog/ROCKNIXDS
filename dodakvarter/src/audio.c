@@ -194,20 +194,39 @@ static const Ev OVER_SONG[] = {          /* (original) a slow chorale: Am, F, Dm
     {4.5f,1.5f,52},{4.5f,1.5f,56},{4.5f,1.5f,59},{4.5f,1.5f,71},
     {6.0f,3.4f,45},{6.0f,3.4f,57},{6.0f,3.4f,60},{6.0f,3.4f,64},{6.0f,3.4f,69},
 };
+/* the tomtar's song: "Broder Jakob" (traditional), in A minor as Mahler had it, slow, a canon of three voices */
+static const int8_t JAKOB[][2] = {        /* MIDI note, length in eighths */
+    {69,2},{71,2},{72,2},{69,2}, {69,2},{71,2},{72,2},{69,2}, {72,2},{74,2},{76,4}, {72,2},{74,2},{76,4},
+    {76,1},{77,1},{76,1},{74,1},{72,2},{69,2}, {76,1},{77,1},{76,1},{74,1},{72,2},{69,2}, {69,2},{64,2},{69,4}, {69,2},{64,2},{69,4},
+};
+static Ev SONG[3 * ARRAY_LEN(JAKOB) * 2]; static int nsong;
+static void song_build(void) {
+    const float eighth = 0.36f;
+    for (int v = 0; v < 3; v++) {                         /* each voice twice through, two bars after the last */
+        float t = v * 16 * eighth;
+        for (int rep = 0; rep < 2; rep++)
+            for (int i = 0; i < (int)ARRAY_LEN(JAKOB); i++) {
+                SONG[nsong++] = (Ev){ t, JAKOB[i][1] * eighth * 1.1f, (int8_t)(JAKOB[i][0] - (v == 1 ? 12 : 0)) };
+                t += JAKOB[i][1] * eighth;
+            }
+    }
+    for (int i = 1; i < nsong; i++) { Ev e = SONG[i]; int k = i; while (k > 0 && SONG[k - 1].t > e.t) { SONG[k] = SONG[k - 1]; k--; } SONG[k] = e; }
+}
 typedef struct { float ph, f, env, t, len, vel; int on; } MV;
-static MV mv[8];
+#define NMV 12
+static MV mv[NMV];
 static float song_t; static int song_ev;
 static void song_tick(int16_t *out, int frames, const Ev *ev, int n, float period, int organ, float gain, int vol) {
     for (int i = 0; i < frames; i++) {
         while (song_ev < n && ev[song_ev].t <= song_t) {    /* notes starting now take a free voice */
             MV *v = &mv[0];
-            for (int k = 0; k < 8; k++) if (!mv[k].on) { v = &mv[k]; break; }
+            for (int k = 0; k < NMV; k++) if (!mv[k].on) { v = &mv[k]; break; }
             v->on = 1; v->f = midi(ev[song_ev].note); v->t = 0; v->len = ev[song_ev].len; v->env = organ ? 0 : 1; v->ph = 0;
             v->vel = organ && ev[song_ev].note >= 69 ? 0.9f : 0.6f;   /* (the tune over the chords) */
             song_ev++;
         }
         float s = 0;
-        for (int k = 0; k < 8; k++) {
+        for (int k = 0; k < NMV; k++) {
             MV *v = &mv[k];
             if (!v->on) continue;
             v->t += 1.0f / RATE;
@@ -243,10 +262,11 @@ static void music_tick(int16_t *out, int frames) {
     int want = __atomic_load_n(&want_music, __ATOMIC_RELAXED), vol = __atomic_load_n(&master, __ATOMIC_RELAXED);
     if (mus != want) {
         mus = want; mus_note = 0; mus_left = 0; mus_env = 0;
-        song_t = 0; song_ev = 0; for (int k = 0; k < 8; k++) if (want != MUS_NONE) mv[k].on = 0;   /* (stopping lets notes ring out) */
+        song_t = 0; song_ev = 0; for (int k = 0; k < NMV; k++) if (want != MUS_NONE) mv[k].on = 0;   /* (stopping lets notes ring out) */
     }
     if (mus == MUS_BOX) { song_tick(out, frames, BOX_SONG, ARRAY_LEN(BOX_SONG), 3.6f, 0, 2.0f, vol); return; }
     if (mus == MUS_GAMEOVER) { song_tick(out, frames, OVER_SONG, ARRAY_LEN(OVER_SONG), 0, 1, 1.0f, vol); return; }
+    if (mus == MUS_SONG) { song_tick(out, frames, SONG, nsong, 0, 0, 1.4f, vol); return; }
     if (mus == MUS_NONE) { song_tick(out, frames, 0, 0, 0, 0, 0.8f, vol); return; }    /* the last notes ring out */
     if (mus != MUS_TITLE) return;
     const int eighth = RATE * 3 / 10 / 2;      /* slow and sad: 100 bpm in quarters */
@@ -371,12 +391,12 @@ static void mix(int16_t *out, int frames) {
 }
 
 void audio_init(void) {
-    synth_all();
+    synth_all(); song_build();
     ready = plat_audio_start(RATE, mix) == 0;
     plat_log("audio: %s", ready ? "on" : "off");
 }
 /* tests/sounds.c: the mixer without a sound card, run by the caller */
-void audio_offline(void) { synth_all(); ready = 1; }
+void audio_offline(void) { synth_all(); song_build(); ready = 1; }
 void audio_render(int16_t *out, int frames) { mix(out, frames); }
 void audio_set_volume(int v) { __atomic_store_n(&master, CLAMP(v, 0, 100), __ATOMIC_RELAXED); }
 

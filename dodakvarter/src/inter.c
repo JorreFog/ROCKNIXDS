@@ -18,6 +18,7 @@ static int target(float *outd) {
         if (it->type == IT_BOX && (G->box_spots[G->box_at] != i || G->box_moving)) continue;
         if (it->type == IT_LOOT && (it->prop < 0 || G->props[it->prop].loot != 1)) continue;
         if (it->type == IT_WINDOW && it->state >= 6) continue;
+        if (it->type == IT_GNOME && it->state) continue;
         if (it->type == IT_PERK && it->a == PK_KANELBULLE && p->bulle_used >= 3) continue;
         float r2 = it->type == IT_BARRIER ? 30 * 30 : best;
         float d = dist2f(p->x, p->y, it->x, it->y);
@@ -255,6 +256,22 @@ static void use_inter(int i) {
         prop_lights();
         break;
     case IT_LOOT: loot_container(it); break;
+    case IT_GNOME: {                                       /* one more found: a squeak; all three: the song */
+        if (it->state) return;
+        it->state = 1;
+        int found = 0; for (int k = 0; k < G->nit; k++) found += G->it[k].type == IT_GNOME && G->it[k].state;
+        sfx_at(SFX_BEEP, it->x, it->y, 0.8f); sfx_at(SFX_PICKUP, it->x, it->y, 0.5f);
+        spawn_parts(PT_GLOW, it->x, it->y - 8, 8, 0xffe080, 40);
+        char b[8]; snprintf(b, sizeof b, "%d/3", found); float_text(it->x, it->y - 18, 0xffe080, b);
+        if (found >= 3 && !G->song) {
+            G->song = 1;
+            music_play(MUS_SONG);
+            banner(0xffe080, "\xe2\x99\xaa Broder Jakob \xe2\x99\xaa", tr("you found all three tomtar"));
+            item_drop_weapon(weapon_make(box_roll(), RAR_EPIC), p->x + 10, p->y + 4);   /* and a present */
+            add_kr(1000, 0);
+        }
+        break;
+    }
     case IT_TRAP:
         if (it->state) return;
         if (!G->power_on) { msg(0xa0a0a0, "%s", tr("Needs power")); sfx(SFX_DENY, 0.5f, 0); return; }
@@ -322,6 +339,7 @@ const char *inter_prompt(int i, int *ok) {
             *ok = p->kr >= cost;
         }
         break;
+    case IT_GNOME: return 0;                               /* (no word about them) */
     case IT_TRAP:
         if (it->state == 1) { snprintf(b, sizeof b, "%s: %s", tr("Elstängsel"), tr("on")); *ok = 0; break; }
         if (it->state == 2) { snprintf(b, sizeof b, "%s (%s %.0f s)", tr("Elstängsel"), tr("charging"), ceilf(it->t)); *ok = 0; break; }

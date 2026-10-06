@@ -63,6 +63,15 @@ int main(int argc, char **argv) {
     }
     game_new(seed, season);
     Player *p = &G->p;
+    if (!strcmp(name, "gnome")) {                          /* next to a trädgårdstomte (the first found, the next not) */
+        Inter *g[3]; int n = 0;
+        for (int i = 0; i < G->nit && n < 3; i++) if (G->it[i].type == IT_GNOME) g[n++] = &G->it[i];
+        if (n) { p->x = g[0]->x + 18; p->y = g[0]->y + 10; G->camx = p->x - top.w / 2; G->camy = p->y - top.h / 2; }
+        G->round = 4; G->rstate = RS_ACTIVE; G->banner_t = 0; p->aim = PI_F;
+        ticks(2, &in); A.state = ST_PLAY;
+        app_render(&top, &bot); shot(out);
+        return 0;
+    }
     if (!strcmp(name, "trap")) {                           /* an elstängsel on, zombies walking into it */
         Inter *trap = 0;
         for (uint64_t sd = seed; !trap && sd < seed + 40; sd++) {

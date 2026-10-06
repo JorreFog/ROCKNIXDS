@@ -54,6 +54,7 @@ int main(int argc, char **argv) {
     quiet(); music_play(MUS_TITLE); take(dir, "music-title", 24, 0);
     music_play(MUS_NONE); quiet(); music_play(MUS_BOX); take(dir, "music-box", 3.6f, 0);
     music_play(MUS_NONE); quiet(); music_play(MUS_GAMEOVER); take(dir, "music-gameover", 10, 0);
+    music_play(MUS_NONE); quiet(); music_play(MUS_SONG); take(dir, "music-tomtar", 30, 0);
     music_play(MUS_NONE); quiet();
     static const char *amb[] = { 0, "ambience-autumn-rain", "ambience-winter-wind", "ambience-midsummer-night" };
     for (int k = AMB_RAIN; k <= AMB_SUMMER; k++) { audio_ambience(k); take(dir, amb[k], 12, 4); audio_ambience(AMB_NONE); take(dir, "ambience-fade", 1.5f, 0); }

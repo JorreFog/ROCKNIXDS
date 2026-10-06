@@ -97,6 +97,7 @@ most). You spend them on:
 - **Elstängsel** (1000 kr, needs the power), the trap: a cabinet by one or two of the gaps between districts. It
   shocks everything that crosses the gap for 25 s (you too, if you stand in it); those kills count but pay nothing,
   as in Call of Duty. Then it charges for a minute.
+- **A song**: as on every Call of Duty map, one is hidden in every town. Three garden gnomes might know more.
 - **The power**: find the switchgear (Elcentral), usually far from the start. Then the perk machines and Smedjan
   work, and the lights come on across the town in a ring spreading from the switch: street lamps, shop windows,
   the windows of the houses.

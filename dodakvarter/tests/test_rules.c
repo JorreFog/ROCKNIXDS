@@ -3,6 +3,7 @@
 //     you if you stand in it, then charges for a minute
 //   - a zombie in a window swipes at whoever stands at the gap, and can be shot through the boards
 //   - pulling the trigger on a gun that has run dry brings out one that hasn't
+//   - finding the three trädgårdstomtar plays the song and leaves a present
 #include "../src/game.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -88,6 +89,22 @@ int main(void) {
         p->w[1] = weapon_make(W_PIST88, RAR_COMMON); p->cur = 0; p->fired_this_press = 0; p->reloading = 0; p->fire_cd = 0;
         weapon_fire();
         CHECK(p->cur == 1, "a dry gun didn't hand over to the one with ammo");
+    }
+    /* the three trädgårdstomtar: the song, and a present */
+    {
+        Player *p = &G->p; calm(); G->over = 0; p->downed = 0;
+        int n = 0, kr = p->kr; Inter *gn[3];
+        for (int i = 0; i < G->nit && n < 3; i++) if (G->it[i].type == IT_GNOME) gn[n++] = &G->it[i];
+        CHECK(n == 3, "%d tomtar in the town, not three", n);
+        Input use; memset(&use, 0, sizeof use); use.held = BIT(btn_use());
+        for (int k = 0; k < n; k++) {
+            CHECK(!G->song, "the song before the %d. tomte", k + 1);
+            p->x = gn[k]->x; p->y = gn[k]->y + 6;
+            game_update(&use, &none, 1.0f / 60); game_update(&none, &none, 1.0f / 60);
+            CHECK(gn[k]->state == 1, "tomte %d wasn't found standing on it", k + 1);
+        }
+        int weapons = 0; for (int i = 0; i < MAX_ITEMS; i++) weapons += G->items[i].alive && G->items[i].kind == IK_WEAPON && G->items[i].w.rar == RAR_EPIC;
+        CHECK(G->song && weapons >= 1 && p->kr >= kr + 1000, "three tomtar: song %d, %d epic weapons dropped, %d kr (from %d)", G->song, weapons, p->kr, kr);
     }
     printf("rules: %d failures\n", fails);
     return fails ? 1 : 0;

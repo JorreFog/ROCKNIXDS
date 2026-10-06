@@ -944,6 +944,18 @@ static int place_trap(const Port *p) {
     }
     return 0;
 }
+/* a trädgårdstomte hidden in district z, off the paths, where it can be reached (it doesn't block) */
+static int place_gnome(int z) {
+    Zone *zn = &G->zones[z];
+    for (int tries = 0; tries < 300; tries++) {
+        int tx = zn->x + 1 + rng_int(R, MAX(1, zn->w - 2)), ty = zn->y + 1 + rng_int(R, MAX(1, zn->h - 2));
+        if (!free_rect(tx, ty, 1, 1, TF_SOLID | TF_INTER | TF_WATER | TF_RESERVED | TF_PATH) || !seen_rect(tx, ty, 1, 1)) continue;
+        if (abs(tx - zn->cx) + abs(ty - zn->cy) < 4) continue;                /* not in plain sight */
+        int ii = add_inter(IT_GNOME, tx, ty, 1, 1, tx * TS + TS / 2.0f, ty * TS + TS - 2);
+        return ii >= 0;
+    }
+    return 0;
+}
 /* the preferred zone, else any other open-able zone (the nearest first) */
 static int place_machine_somewhere(int type, int z, int a_arg, int w, int h) {
     if (place_machine(type, z, a_arg, w, h)) return 1;
@@ -1257,6 +1269,15 @@ void map_generate(uint64_t seed, int season) {
         if (place_machine(IT_BOX, z, 0, 2, 1)) n++;
     }
     place_wallbuys();
+    /* three trädgårdstomtar hidden around the town, in gardens first */
+    for (int pass = 0, n = 0; pass < 2 && n < 3; pass++)
+        for (int k = 0; k < G->nzones && n < 3; k++) {
+            int z = order[(k + 3) % G->nzones], t = G->zones[z].type;
+            int garden = t == Z_VILLA || t == Z_ALLOT || t == Z_PARK || t == Z_GARDEN || t == Z_CHURCH;
+            if (z == G->start_zone || (pass == 0 && !garden)) continue;
+            int have = 0; for (int i = 0; i < G->nit; i++) if (G->it[i].type == IT_GNOME && tile_at(G->it[i].tx, G->it[i].ty)->zone == z) have = 1;
+            if (!have && place_gnome(z)) n++;
+        }
     /* an elstängsel or two at gaps between districts (not the start's, when there's a choice) */
     for (int want = G->nzones >= 14 ? 2 : 1, tries = 0; want > 0 && tries < nports * 3; tries++) {
         Port *p = &ports[rng_int(R, nports)];

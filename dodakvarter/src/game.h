@@ -112,7 +112,7 @@ typedef struct {
     uint16_t inter;
 } Prop;
 
-enum { IT_BARRIER, IT_WALLBUY, IT_BOX, IT_PERK, IT_PAP, IT_POWER, IT_WINDOW, IT_LOOT, IT_ARMORY, IT_TRAP, IT_COUNT };
+enum { IT_BARRIER, IT_WALLBUY, IT_BOX, IT_PERK, IT_PAP, IT_POWER, IT_WINDOW, IT_LOOT, IT_ARMORY, IT_TRAP, IT_GNOME, IT_COUNT };
 #define TRAP_COST 1000                  /* the elstängsel: on for 25 s, then 60 s to charge again */
 #define TRAP_ON 25.0f
 #define TRAP_WAIT 60.0f
@@ -251,6 +251,7 @@ typedef struct {
     int power_on; float power_t;
     int wave_on; float wave_x, wave_y, wave_r;   /* the power coming on: a ring of light spreading from the switch */
     int over; float over_t;
+    int song;                           /* the three trädgårdstomtar were found: the song played */
     int god;                            /* tests: DK_DEBUG_GOD */
     /* actors */
     Player p;
@@ -423,7 +424,7 @@ enum {
     SFX_MENU_MOVE, SFX_MENU_OK, SFX_MENU_BACK, SFX_PERK, SFX_PAP, SFX_POWER, SFX_DOOR, SFX_SPLAT, SFX_THROW,
     SFX_BEEP, SFX_GULP, SFX_STEP, SFX_KABOOM, SFX_COUNT
 };
-enum { MUS_NONE, MUS_TITLE, MUS_BOX, MUS_GAMEOVER };
+enum { MUS_NONE, MUS_TITLE, MUS_BOX, MUS_GAMEOVER, MUS_SONG };
 
 /* lang.c */
 enum { LANG_EN, LANG_SV };

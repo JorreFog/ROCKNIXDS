@@ -6,6 +6,7 @@ static const char *SV[][2] = {
     {"PLAY", "SPELA"}, {"HIGH SCORES", "TOPPLISTA"}, {"SETTINGS", "INSTÄLLNINGAR"}, {"HOW TO PLAY", "SÅ SPELAR DU"},
     {"QUIT", "AVSLUTA"}, {"RESUME", "FORTSÄTT"}, {"QUIT RUN", "AVSLUTA RUNDAN"}, {"BACK", "TILLBAKA"},
     {"Effects", "Effekter"}, {"Auto", "Auto"}, {"Full", "Fullt"}, {"Light", "Lätt"}, {" (light now)", " (lätt nu)"},
+    {"you found all three tomtar", "du hittade alla tre tomtarna"},
     {"Elstängsel", "Elstängsel"}, {"on", "på"}, {"charging", "laddar"},
     {"TODAY'S TOWN", "DAGENS STAD"}, {"best today", "bäst i dag"}, {"the same town for everyone today", "samma stad för alla i dag"},
     {"STATISTICS", "STATISTIK"}, {"Runs", "Spel"}, {"Zombies killed", "Döda zombier"}, {"Rounds survived", "Överlevda rundor"},

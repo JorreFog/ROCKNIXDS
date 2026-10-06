@@ -746,6 +746,18 @@ void sign_board_small(Surf *s, int cx, int y, const char *txt, uint32_t bg, uint
     text(s, FONT_SMALL, cx - tw / 2, y + 2, fg, txt);
 }
 
+static void gnome_draw(Surf *s, Inter *it, int x, int y) {               /* trädgårdstomte: red cap, white beard */
+    int found = it->state != 0;
+    ellipse_blend(s, x, y, 4, 1, 0x000000, 90);
+    rectf(s, x - 2, y - 3, 2, 3, 0x5a3a24); rectf(s, x + 1, y - 3, 2, 3, 0x5a3a24);        /* boots */
+    rectf(s, x - 3, y - 8, 7, 5, 0x2a5aa8);                                                 /* the coat */
+    hline(s, x - 3, x + 3, y - 4, 0x3a2a1a);                                                /* the belt */
+    rectf(s, x - 2, y - 11, 5, 3, 0xf2f0ea); pset(s, x, y - 8, 0xf2f0ea);                   /* the beard */
+    pset(s, x - 1, y - 12, 0xe8b090); pset(s, x + 1, y - 12, 0xe8b090); pset(s, x, y - 12, 0xd88a6a);   /* the face */
+    uint32_t cap = found ? ((int)(G->time * 6) & 1 ? 0xffe080 : 0xff6040) : 0xd02a20;
+    hline(s, x - 3, x + 3, y - 13, cap); hline(s, x - 2, x + 2, y - 14, cap); hline(s, x - 1, x + 1, y - 15, cap); pset(s, x + 1, y - 16, cap);
+    if (WIN) pset(s, x, y - 16, 0xeef2f5);
+}
 static void trap_draw(Surf *s, Inter *it, int x, int y) {               /* the elstängsel's cabinet: a lever, a lamp */
     int x0 = x - 6, y0 = y - 20;
     rect_blend(s, x0 + 1, y - 2, 12, 3, 0x000000, 90);
@@ -809,6 +821,7 @@ void inter_draw(Surf *s, Inter *it, int sx, int sy) {
     case IT_PAP: pap_draw(s, it, sx + it->tw * TS / 2, sy + it->th * TS); break;
     case IT_POWER: power_draw(s, it, sx + it->tw * TS / 2, sy + it->th * TS); break;
     case IT_TRAP: trap_draw(s, it, sx + it->tw * TS / 2, sy + it->th * TS); break;
+    case IT_GNOME: gnome_draw(s, it, sx + TS / 2, sy + TS - 2); break;
     case IT_BOX: box_draw(s, it, sx + it->tw * TS / 2, sy + it->th * TS); break;
     case IT_WALLBUY: {                                                       /* a chalk outline of the weapon */
         if (it->a >= 0) {
