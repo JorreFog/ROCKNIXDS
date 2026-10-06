@@ -20,10 +20,16 @@ is a new town with loot that gets better as the rounds get harder.
   <img src="docs/img/scores.png" width="260" alt="The high score list in Swedish, a star by today's town">
 </p>
 <p align="center">
-  <img src="docs/img/boss-draugen.png" width="200" alt="Round 20: Draugen, the dead Viking chieftain, leaping at you with his axe raised, where he will land marked red; his health bar across the top">
-  <img src="docs/img/boss-troll.png" width="200" alt="Round 40: Bergatrollet, the mountain troll, with a boulder over its head">
-  <img src="docs/img/boss-nacken.png" width="200" alt="Round 60: Näcken fiddling in his pool, fans of glowing notes flying">
-  <img src="docs/img/boss-lindorm.png" width="200" alt="Round 80: Lindormen, the lindworm, its long scaled body behind it, venom pooling">
+  <img src="docs/img/boss-draugen.png" width="200" alt="Draugen, the dead Viking chieftain, leaping at you with his axe raised, where he will land marked red; his health bar across the top">
+  <img src="docs/img/boss-troll.png" width="200" alt="Bergatrollet, the mountain troll, with a boulder over its head">
+  <img src="docs/img/boss-nacken.png" width="200" alt="Näcken fiddling in his pool, fans of glowing notes flying">
+  <img src="docs/img/boss-lindorm.png" width="200" alt="Lindormen, the lindworm, its long scaled body behind it, venom pooling">
+</p>
+<p align="center">
+  <img src="docs/img/boss-gloson.png" width="200" alt="Gloson, the ghost sow, pawing the ground, the lane she will charge down marked">
+  <img src="docs/img/boss-haxan.png" width="200" alt="Häxan, the Easter witch on her broomstick, green curses flying at you">
+  <img src="docs/img/boss-skogsra.png" width="200" alt="Skogsrået, the lady of the forest, pointing; roots tearing up along the ground toward you">
+  <img src="docs/img/boss-varulv.png" width="200" alt="Varulven, the werewolf, in mid-pounce, where it will come down marked red">
 </p>
 
 It runs natively: a C program that draws every pixel itself and puts both screens straight onto the panels through
@@ -131,20 +137,26 @@ cloud you shouldn't stand in.
 
 **The bosses.** Every twentieth round one of the old stories comes up out of the ground of the suburb, its name and a
 health bar across the top of the screen, its own music, and a marker on the map (an arrow at the screen's edge when
-it's out of sight). They are far bigger than the dead and drawn in more detail, and each has its own moves:
+it's out of sight). There are eight, and they come in an order drawn for the town (the same town, the same order: a
+daily town's is everyone's). They are far bigger than the dead and drawn in more detail, and each has its own moves:
 
-| Round | Boss | Moves |
-|---|---|---|
-| 20 | **Draugen**, the dead Viking chieftain | cleaves with his Dane axe; leaps onto you (a shockwave where he lands); blows his war horn and the dead rise around him |
-| 40 | **Bergatrollet**, the mountain troll | smashes with its tree-trunk club; pounds the ground three times (three rings of shock); throws boulders (where they'll land is marked) |
-| 60 | **Näcken**, the fiddler in the water | plays: fans of glowing notes sweeping across you; beckons: you are drawn to him; sinks into his pool and comes up again beside you |
-| 80 | **Lindormen**, the lindworm | bites; spits venom that pools on the ground; burrows under the asphalt and bursts up beneath you (a mound runs at you first) |
+| Boss | Moves |
+|---|---|
+| **Draugen**, the dead Viking chieftain | cleaves with his Dane axe; leaps onto you (a shockwave where he lands); blows his war horn and the dead rise around him |
+| **Bergatrollet**, the mountain troll | smashes with its tree-trunk club; pounds the ground three times (three rings of shock); throws boulders (where they'll land is marked) |
+| **Näcken**, the fiddler in the water | plays: fans of glowing notes sweeping across you; beckons: you are drawn to him; sinks into his pool and comes up again beside you |
+| **Lindormen**, the lindworm | bites; spits venom that pools on the ground; burrows under the asphalt and bursts up beneath you (a mound runs at you first) |
+| **Gloson**, the ghost sow | gores with her tusks; charges down a lane she marks first (into a wall, and she's dazed); her razor bristles fly out in a ring |
+| **Häxan**, the Easter witch on her way to Blåkulla | flies over the houses on her broomstick; curses that turn after you; a flask of brew that burns where it breaks; swoops down past you |
+| **Skogsrået**, the lady of the forest | roots tear along the ground at you; thorns come up where you stand and hold you fast; she becomes a tree and is somewhere else, with likenesses of herself |
+| **Varulven**, the werewolf | pounces, and again, and again; rakes with its claws; howls, and wolves come out of the dark |
 
-It comes up where you'll see it, greets you (a roar, a shockwave you only see; Näcken plays), and comes for you. Felled,
-its fall is slowed down a moment, and each goes its own way: Draugen to frost and dust, the troll to stone that
-crumbles, Näcken down into his pool, the lindworm thrashing in its venom.
+It comes up where you'll see it (the witch comes down out of the sky), greets you (a roar, a shockwave you only see;
+Näcken plays, the witch cackles), and comes for you. Felled, its fall is slowed down a moment, and each goes its own
+way: Draugen to frost and dust, the troll to stone that crumbles, Näcken down into his pool, the lindworm thrashing in
+its venom, the ghost sow to light, the witch off her broom, Skogsrået to wood and leaves, the werewolf with a last howl.
 
-Then round again (100, 120, ...), stronger each time. At half health a boss is enraged (a red wave goes out from it): faster, and quicker to strike.
+After the eighth, the same again (from round 180), stronger each time. At half health a boss is enraged (a red wave goes out from it): faster, and quicker to strike.
 Insta-Kill doesn't kill them, Kaboom only takes a tenth, firecrackers don't fool them, the elstängsel only burns them,
 and the wonder weapons, blasts and fire do a third to a half of their damage (as in Call of Duty).
 A boss round has half the usual zombies, and ends when the boss is down; it leaves a legendary weapon, a Max Ammo and

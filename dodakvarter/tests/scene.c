@@ -78,12 +78,15 @@ int main(int argc, char **argv) {
         G->god = 1;
         round_start(20);
         int n = getenv("DK_SCENE_TICKS") ? atoi(getenv("DK_SCENE_TICKS")) : 400;
-        /* or: until a hazard of the kind DK_SCENE_HZ is about, and DK_SCENE_HZ_AFTER ticks more (its moves, pictured) */
+        /* or: until a hazard of the kind DK_SCENE_HZ is about, or the boss is doing DK_SCENE_ST, and DK_SCENE_HZ_AFTER
+           ticks more (its moves, pictured) */
         int hz = getenv("DK_SCENE_HZ") ? atoi(getenv("DK_SCENE_HZ")) : -1, after = getenv("DK_SCENE_HZ_AFTER") ? atoi(getenv("DK_SCENE_HZ_AFTER")) : 10;
-        if (hz >= 0) n = 60 * 120;
+        int st = getenv("DK_SCENE_ST") ? atoi(getenv("DK_SCENE_ST")) : -1;
+        if (hz >= 0 || st >= 0) n = 60 * 120;
         for (int k = 0, seen = 0; k < n; k++) {
             G->spawn_cd = 1e9f;                             /* (only the boss) */
             Input none; memset(&none, 0, sizeof none); game_update(&none, &none, 1.0f / 60);
+            if (st >= 0 && G->boss.on && G->z[G->boss.zi].state == ZS_CHASE && G->boss.st == st) seen = 1;
             if (hz >= 0 && !seen) for (int i = 0; i < MAX_HAZARDS; i++) seen |= G->hz[i].alive && G->hz[i].kind == hz;
             if (seen && after-- <= 0) break;
         }

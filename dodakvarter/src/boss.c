@@ -29,10 +29,10 @@ static const struct {
     { "Bergatrollet", "the mountain troll", 1.2f, 26, 15, 54, 0xffb030, 0xc0a060 },
     { "Näcken", "the fiddler in the water", 0.85f, 26, 11, 46, 0xd8ff60, 0x60c8a0 },
     { "Lindormen", "the lindworm", 1.1f, 46, 12, 18, 0xff4020, 0x70b040 },
-    { "Gloson", "the glowing sow", 1.0f, 40, 14, 34, 0xff50d0, 0xd8b0e0 },
-    { "Häxan", "on her way to Blåkulla", 0.8f, 54, 11, 40, 0x70ff60, 0x60c060 },
+    { "Gloson", "the glowing sow", 1.0f, 40, 14, 30, 0xff50d0, 0xd8b0e0 },
+    { "Häxan", "on her way to Blåkulla", 0.8f, 54, 11, 44, 0x70ff60, 0x60c060 },
     { "Skogsrået", "the lady of the forest", 0.9f, 30, 11, 50, 0x60fff0, 0x50a080 },
-    { "Varulven", "the man who became a wolf", 1.0f, 40, 12, 50, 0xfff040, 0x8a7a60 },
+    { "Varulven", "the man who became a wolf", 1.0f, 40, 12, 48, 0xfff040, 0x8a7a60 },
 };
 const char *boss_name(int kind) { return kind >= 0 && kind < BOSS_COUNT ? BD[kind].name : "?"; }
 static const char *const SHORT[BOSS_COUNT] = { "draugen", "troll", "nacken", "lindorm", "gloson", "haxan", "skogsra", "varulv" };
@@ -723,7 +723,7 @@ static void haxan(Zombie *z, Boss *b, float pd, float dt) {
             b->n = 1;
             float tx = p->x + p->vx * 0.45f, ty = p->y + p->vy * 0.45f, d = sqrtf(dist2f(z->x, z->y, tx, ty));
             Hazard *h = hz_new(HZ_POTION, tx, ty);
-            if (h) { h->x0 = z->x; h->y0 = z->y; h->z = b->h + 20; h->dur = 0.6f + d / 500; h->r = 18; h->dmg = 20; }
+            if (h) { h->x0 = z->x + cosf(b->face) * 22; h->y0 = z->y; h->z = b->h + 27; h->dur = 0.6f + d / 500; h->r = 18; h->dmg = 20; }   /* (from her hand) */
             sfx_at(SFX_SWOOSH, z->x, z->y, 0.7f);
         }
         if (b->t <= 0) { set(b, B_CHASE, 0); b->cd[1] = b->enraged ? 4.5f : 6.5f; }
@@ -1100,7 +1100,7 @@ void boss_killed(Zombie *z) {
 float boss_hit_radius(const Zombie *z, float *cy) {
     int k = z->variant;
     if (k == BOSS_LINDORM) { *cy = 8; return BD[k].r; }
-    if (k == BOSS_HAXAN) { *cy = G->boss.h + 18; return BD[k].r; }   /* (up on her broom) */
+    if (k == BOSS_HAXAN) { *cy = G->boss.h + 22; return BD[k].r; }   /* (up on her broom) */
     *cy = BD[k].h * 0.45f;
     return BD[k].r;
 }
@@ -1370,6 +1370,7 @@ void boss_lights(void) {
         float hy = z->variant == BOSS_LINDORM ? z->y - 10 : z->y - BD[z->variant].h * 0.8f - b->h;
         render_add_light(z->x, hy, z->variant == BOSS_TROLL ? 40 : 34, BD[z->variant].eye, 0.55f);
         if (z->variant == BOSS_NACKEN) render_add_light(z->x, z->y, 50, 0x3a8ac8, 0.45f);
+        if (z->variant == BOSS_HAXAN && b->st == B_CAST) render_add_light(z->x + cosf(b->face) * 14, z->y - b->h - 41, 30, 0x60ff40, 0.6f);   /* (her spell, in her hand) */
     }
     for (int i = 0; i < MAX_HAZARDS; i++) {
         Hazard *h = &G->hz[i];
@@ -1378,7 +1379,10 @@ void boss_lights(void) {
         else if (h->kind == HZ_POOL) render_add_light(h->x, h->y, 30, 0x60d040, 0.35f);
         else if (h->kind == HZ_BREW) render_add_light(h->x, h->y, 30, 0xa040ff, 0.35f);
         else if (h->kind == HZ_BOLT) render_add_light(h->x, h->y - 18, 20, 0x60ff40, 0.5f);
-        else if (h->kind == HZ_RING && h->a > 0.5f) render_add_light(h->x, h->y, h->r, h->a > 1.5f ? 0xff4020 : 0x6ab8ff, 0.3f);
+        else if (h->kind == HZ_RING && h->a > 0.5f) {
+            static const uint32_t lc[5] = { 0, 0x6ab8ff, 0xff4020, 0x60ff40, 0xff60d0 };
+            render_add_light(h->x, h->y, h->r, lc[CLAMP((int)(h->a + 0.5f), 1, 4)], 0.3f);
+        }
     }
 }
 
@@ -1404,14 +1408,24 @@ static void telegraphs(Surf *s) {
     }
     if (z && b->kind == BOSS_VARULV && b->st == B_AIR)      /* where it will come down */
         ground_ring(s, (int)(b->tx - cx), (int)(b->ty - cy), 18, 0xff3020, 140 + (int)(80 * sinf(G->time * 18)), 2);
-    if (z && b->kind == BOSS_GLOSON && b->st == B_LEAP) {   /* her lane: two dashed lines, and faintly between them */
-        float len = sqrtf(dist2f(z->x, z->y, b->tx, b->ty)), ux = cosf(b->ang), uy = sinf(b->ang), nx = -uy * 11, ny = ux * 11 * 0.8f;
-        int a = 120 + (int)(80 * sinf(G->time * 16));
-        for (float d = 10; d < len; d += 3) {
+    if (z && b->kind == BOSS_GLOSON && b->st == B_LEAP) {   /* her lane: its edges, faintly between them, and arrows down it */
+        float len = sqrtf(dist2f(z->x, z->y, b->tx, b->ty)), ux = cosf(b->ang), uy = sinf(b->ang), nx = -uy, ny = ux * 0.8f;
+        int a = 150 + (int)(70 * sinf(G->time * 16));
+        for (float d = 10; d < len; d += 1.5f) {
             float x = z->x + ux * d - cx, y = z->y + uy * d - cy;
-            if (((int)(d / 6)) & 1) { pblend(s, (int)(x + nx), (int)(y + ny), 0xff4080, a); pblend(s, (int)(x - nx), (int)(y - ny), 0xff4080, a); }
-            pblend(s, (int)x, (int)y, 0xff4080, a / 4);
+            for (int side = -1; side <= 1; side += 2) {
+                pblend(s, (int)(x + nx * 11 * side), (int)(y + ny * 11 * side), 0xff5090, a);
+                pblend(s, (int)(x + nx * 10 * side), (int)(y + ny * 10 * side), 0xff5090, a / 2);
+            }
+            for (int w = -8; w <= 8; w += 4) pblend(s, (int)(x + nx * w), (int)(y + ny * w), 0xff5090, 28);
         }
+        float run = fmodf(G->time * 90, 28);                /* (the arrows run the way she will) */
+        for (float d = 20 + run; d < len - 4; d += 28)
+            for (int j = 0; j <= 6; j++)
+                for (int side = -1; side <= 1; side += 2) {
+                    float x = z->x + ux * (d - j) + nx * j * side - cx, y = z->y + uy * (d - j) + ny * j * side - cy;
+                    pblend(s, (int)x, (int)y, 0xffa0c8, a);
+                }
     }
     for (int i = 0; i < MAX_HAZARDS; i++) {
         Hazard *h = &G->hz[i];
@@ -1420,10 +1434,11 @@ static void telegraphs(Surf *s) {
         float k = h->dur > 0 ? MIN(1.0f, h->t / h->dur) : 1;
         if (h->kind == HZ_RING) {                           /* the shockwave: a bright edge, a fainter one inside */
             float rad = h->r * k;
-            int kind = (int)(h->a + 0.5f);                  /* (0 dust, 1 water, 2 a rage) */
-            uint32_t c = kind == 2 ? 0xff5030 : kind == 1 ? 0x9ad8ff : 0xf0e0c0;
-            ground_ring(s, x, y, rad, c, (int)(240 * (1 - k * 0.5f)), 3);
-            ground_ring(s, x, y, rad * 0.82f, kind == 2 ? 0xa01808 : kind == 1 ? 0x4a88d8 : 0xa08060, (int)(150 * (1 - k)), 2);
+            int kind = (int)(h->a + 0.5f);                  /* (0 dust, 1 water, 2 a rage, 3 witchcraft and the forest, 4 the ghost sow) */
+            static const uint32_t edge[5] = { 0xf0e0c0, 0x9ad8ff, 0xff5030, 0xa0ff70, 0xffb0f0 }, inner[5] = { 0xa08060, 0x4a88d8, 0xa01808, 0x2a8a20, 0xa04090 };
+            kind = CLAMP(kind, 0, 4);
+            ground_ring(s, x, y, rad, edge[kind], (int)(240 * (1 - k * 0.5f)), 3);
+            ground_ring(s, x, y, rad * 0.82f, inner[kind], (int)(150 * (1 - k)), 2);
         } else if (h->kind == HZ_ROCK || h->kind == HZ_VENOM || h->kind == HZ_POTION)   /* where it will land */
             ground_ring(s, x, y, h->r, h->kind == HZ_ROCK ? 0xff4020 : h->kind == HZ_POTION ? 0xc060ff : 0x80e040, 120 + (int)(120 * k), 2);
         else if (h->kind == HZ_ROOT && h->t >= 0 && h->t < 0.3f) {   /* the ground cracks where a root will come */

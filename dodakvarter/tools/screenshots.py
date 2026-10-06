@@ -61,6 +61,10 @@ def main():
         "boss-troll": render("boss", season=0, DK_DEBUG_BOSS="1", DK_SCENE_TICKS="850"),
         "boss-nacken": render("boss", season=2, DK_DEBUG_BOSS="2", DK_SCENE_TICKS="650"),
         "boss-lindorm": render("boss", season=0, DK_DEBUG_BOSS="3", DK_SCENE_TICKS="625"),
+        "boss-gloson": render("boss", season=1, DK_DEBUG_BOSS="4", DK_SCENE_ST="4", DK_SCENE_HZ_AFTER="30"),
+        "boss-haxan": render("boss", season=2, DK_DEBUG_BOSS="5", DK_SCENE_HZ="8", DK_SCENE_HZ_AFTER="30"),
+        "boss-skogsra": render("boss", season=2, DK_DEBUG_BOSS="6", DK_SCENE_HZ="11", DK_SCENE_HZ_AFTER="40"),
+        "boss-varulv": render("boss", season=0, DK_DEBUG_BOSS="7", DK_SCENE_ST="5", DK_SCENE_HZ_AFTER="12"),
     }
     for k, v in shots.items():
         (v if k == "plus" else x2(v)).save(os.path.join(img, k + ".png"), optimize=True)
