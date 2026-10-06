@@ -47,13 +47,6 @@ app in `/storage/.config/rocknixds/bank` and its entry in **Ports > ROCKNIXDS Ba
 `sh install-bank.sh --uninstall` removes it (the bank itself stays). Without network:
 `BANK_TARBALL=/path/to/rocknixds-bank-<version>-aarch64.tar.gz sh install-bank.sh`.
 
-## Terms of use
-
-The first time it starts (and again whenever they change), the app shows its [terms of use](../LEGAL.md) and asks you
-to read them to the end and accept them: use only saves from cartridges you own, never pirated copies, and trade only
-Pokémon from your own games. ROCKNIXDS does not support piracy. Not accepting closes the app. The terms are in the
-menu (**Menu → Terms of use**) to read again at any time.
-
 ## Use
 
 **Close the game first.** Emulators write their own copy of the save when they quit, over whatever changed meanwhile.

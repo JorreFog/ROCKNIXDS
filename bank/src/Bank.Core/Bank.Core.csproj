@@ -8,10 +8,6 @@
     <PackageReference Include="PKHeX.Core" Version="26.8.26" />
   </ItemGroup>
   <ItemGroup>
-    <!-- the terms of use, one text for the repository and the app: shown and accepted at the first start -->
-    <EmbeddedResource Include="..\..\..\LEGAL.md" LogicalName="LEGAL.md" />
-  </ItemGroup>
-  <ItemGroup>
     <InternalsVisibleTo Include="Bank.Tests" />
   </ItemGroup>
 </Project>

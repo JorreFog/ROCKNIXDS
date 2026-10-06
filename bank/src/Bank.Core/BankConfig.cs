@@ -47,10 +47,6 @@ public sealed class BankConfig
     /// <summary>auto (follows the ROCKNIXDS Pixel theme), dark or light.</summary>
     public string Palette { get; set; } = "auto";
 
-    /// <summary>The version of the terms of use (LEGAL.md) accepted on this handheld, and when; 0: not yet.</summary>
-    public int TermsAccepted { get; set; }
-    public string TermsAcceptedAt { get; set; } = "";
-
     /// <summary>The save that was open last; it opens again at the next start.</summary>
     public string LastSave { get; set; } = "";
 

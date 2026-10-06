@@ -4,7 +4,7 @@
 
 These terms cover ROCKNIXDS (the frontend, SuperDrastic/libdsflip and the other tools in this repository) and
 ROCKNIXDS Bank & Trade (the app in `bank/`). They are written in plain English. Please read them before you use
-ROCKNIXDS; the Bank & Trade app asks you to accept them before it starts.
+ROCKNIXDS.
 
 ## 1. In short
 
@@ -127,8 +127,7 @@ the law anyway; they add no restriction on your rights under those licences.
 - If a provision of these terms is invalid or unenforceable, the rest of the terms stay in force, and the invalid
   provision is to be read as the closest valid provision to what it intended.
 - If you are under 18, please read these terms with a parent or guardian.
-- These terms may be updated. The version and date are at the top; the Bank & Trade app asks you to accept a new
-  version before you continue.
+- These terms may be updated. The version and date are at the top.
 - These terms are not legal advice. If you are unsure about the law where you live, ask a qualified professional.
 
 ## 11. Contact
