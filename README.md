@@ -37,6 +37,11 @@ Anbernic RG DS and RG DS Plus on ROCKNIX.</b></p>
 </p>
 <p align="center"><sub>Pokémon HeartGold at 2× internal resolution (captured from the panels' scanout buffers).</sub></p>
 
+<p align="center">
+  <a href="https://discord.gg/uMPB63kF"><img src="1.6%20artwork/02-discord.png" width="640" alt="Join the ROCKNIXDS Discord: discord.gg/uMPB63kF"></a>
+</p>
+<p align="center"><b>Questions, bug reports, setups: join the <a href="https://discord.gg/uMPB63kF">ROCKNIXDS Discord</a>.</b></p>
+
 > [!NOTE]
 > ROCKNIXDS is a vibecoded — and fairly sloppily vibecoded — project. It does things great, but it also contains flaws. It is meant to push this community of retro handhelds forward by providing new ways of doing things with the help of AI. GammaOS has been a huge inspiration for this, and what the GammaOS developer is doing is probably the greatest thing that has ever happened to the retro community that we all are a part of. I think he deserves every penny he receives through his Patreon, and I myself will continue to subscribe to it. If this project can help GammaOS improve in any way, then I am very happy. I would always recommend people use software that is created by humans first and foremost. AI should not be used to replace anything; it is only a tool that can help development and make it faster. All the love to GammaOS and its creator.
 >
