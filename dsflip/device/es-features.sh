@@ -4,10 +4,10 @@
 # (nds.power_profile: balanced, performance or battery; unset = balanced; session.sh) and its "share performance
 # logs" option (nds.share_performance_logs: 1 uploads a performance log on quit, 0 does not, unset asks). Its "3D renderer"
 # option (nds.renderer: superdrastic = Gengis Engine, SuperDrastic's own hi-res rasterizer, DSFLIP_RAST=1 in session.sh;
-# drastic = DraStic's; unset, the menu's Auto, is Gengis Engine since 1.5.13), its "3D resolution" (nds.resolution3d: 2x; DSFLIP_RAST_SCALE, Gengis Engine only;
-# unset is the menu's Auto, and Gengis Engine keeps its own scale) and its "3D texture filter" (nds.texture_filter:
-# nearest, bilinear, sharp; DSFLIP_RAST_TEXFILTER, only used with Gengis Engine) are their own options, siblings of
-# share performance logs. 3x is not offered. 1.5.6 saved nds.resolution3d=3x; that line is removed so the menu shows Auto.
+# drastic = DraStic's; unset, the menu's Auto, is Gengis Engine since 1.5.13), its "3D resolution" (nds.resolution3d: 2x,
+# 3x since 1.6; DSFLIP_RAST_SCALE, Gengis Engine only; unset is the menu's Auto, and Gengis Engine keeps its own scale)
+# and its "3D texture filter" (nds.texture_filter: nearest, bilinear, sharp; DSFLIP_RAST_TEXFILTER, only used with
+# Gengis Engine) are their own options, siblings of share performance logs.
 # 1.5.13's "wfc dns" option (nds.wfc_dns: Wi-Fi online play through a Nintendo WFC replacement server) is no
 # longer offered: online play is parked for 1.6, and SuperDrastic only turns its Wi-Fi hook on with the DSFLIP_WFC
 # environment switch now. strip_ours still takes the option out of a copy that has it.
@@ -92,6 +92,7 @@ add_ours() {
             print fi "</feature>"
             print fi "<feature name=\"3D resolution\" value=\"resolution3d\">"
             print ind "<choice name=\"2x\" value=\"2x\" />"
+            print ind "<choice name=\"3x (smoother edges, more CPU)\" value=\"3x\" />"
             print fi "</feature>"
             print fi "<feature name=\"3D texture filter\" value=\"texture_filter\">"
             print ind "<choice name=\"nearest (DS)\" value=\"nearest\" />"
@@ -129,20 +130,6 @@ replace_esf() {  # replace_esf <what to log once replaced>
     else mv -f "$ESF" "$ESF.rocknixds-broken"; echo "es-features: $ESF does not parse, nor would the new one: moved aside (.rocknixds-broken), ES reads ROCKNIX's copy"; fi
     return 1
 }
-
-# 1.5.6 wrote nds.resolution3d=3x (and the same per game). EmulationStation would keep showing that value
-# after the choice is gone. Drop those lines; 2x stays. Auto is an empty value, which ES already lists.
-drop_unreleased_3x() {
-    [ -f "$SYSCFG" ] || return 0
-    awk '
-        /^nds\.resolution3d=3x$/ { next }
-        /^nds\[.*\]\.resolution3d=3x$/ { next }
-        { print }
-    ' "$SYSCFG" > "$SYSCFG.new"
-    if cmp -s "$SYSCFG.new" "$SYSCFG"; then rm -f "$SYSCFG.new"
-    else mv "$SYSCFG.new" "$SYSCFG"; echo "es-features: removed 3D resolution 3x from $SYSCFG"; fi
-}
-drop_unreleased_3x
 
 # uninstall: take our options back out, including a 1.5.5 file whose 3D options were nested, without leaving
 # a stray </feature> that would hide every system's options

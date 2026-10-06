@@ -172,6 +172,17 @@ stuck_report() {
   # DSFLIP_* already in the environment (tests, systemctl set-environment) win over the profile.
   PROF=$(grep -F "nds[\"$GAME\"].power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$PROF" ] || PROF=$(grep "^nds.power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  # 3D resolution (ES: the game's or DS system's "3D resolution", nds.resolution3d; Gengis Engine only, read with the
+  # renderer below): 3x draws the 3D at three times the DS's size and brings it down to the 2x frame (smoother edges,
+  # the same layout). It costs CPU, so the power profile is performance unless this game has its own set: HeartGold
+  # walking held 59.8-60.2 fps at 1992 MHz in the 3x test build; the balanced profile's 1416 MHz cap would not.
+  RES=$(grep -F "nds[\"$GAME\"].resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ -n "$RES" ] || RES=$(grep "^nds.resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  RND=$(grep -F "nds[\"$GAME\"].renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ -n "$RND" ] || RND=$(grep "^nds.renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  if [ "$RES" = 3x ] && [ "$RND" != drastic ] && [ "${DSFLIP_RAST:-1}" != 0 ] && ! grep -qF "nds[\"$GAME\"].power_profile=" $CFG 2>/dev/null; then
+    PROF=performance
+  fi
   case "$PROF" in
     performance) Q=1 QW=0 CMAX= ;;
     battery) Q=3 QW=20 CMAX=1104000 ;;
@@ -199,24 +210,15 @@ stuck_report() {
   # 3D renderer (ES: the game's or DS system's "3D renderer"): superdrastic = Gengis Engine, SuperDrastic's own
   # rasterizer for DraStic's hi-res 3D (DSFLIP_RAST=1), drastic = DraStic's own. Auto (unset, the menu's default) is
   # Gengis Engine since 1.5.13: the same picture as DraStic's renderer pixel for pixel with ~12% less CPU (1.5.9), and
-  # the README asked every new player to switch it on by hand. A player who chose DraStic keeps it. "3D resolution"
-  # (nds.resolution3d) and "3D texture filter" apply to Gengis Engine; DraStic's renderer ignores both. The menu lists
-  # Auto (unset) and 2x. Unset leaves the scale to Gengis Engine. 3x is not offered, and a 1.5.6 value of 3x is ignored.
+  # the README asked every new player to switch it on by hand. A player who chose DraStic keeps it. "3D texture filter"
+  # and "3D resolution" (above) apply to Gengis Engine; DraStic's renderer ignores them.
   # DSFLIP_RAST=0 in the environment (tests, systemctl set-environment) forces DraStic's renderer whatever the setting.
-  RND=$(grep -F "nds[\"$GAME\"].renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  [ -n "$RND" ] || RND=$(grep "^nds.renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   case "$RND" in drastic) ;; superdrastic|""|auto) export DSFLIP_RAST=${DSFLIP_RAST:-1} ;; esac
   [ "$DSFLIP_RAST" = 0 ] && unset DSFLIP_RAST
+  case "$RES" in 3x|3) [ -n "$DSFLIP_RAST" ] && export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-3} ;; 2x|2) [ -n "$DSFLIP_RAST" ] && export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-2} ;; esac
   TF=$(grep -F "nds[\"$GAME\"].texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$TF" ] || TF=$(grep "^nds.texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   case "$TF" in bilinear) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-1} ;; sharp) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-2} ;; esac
-  if [ -n "$DSFLIP_RAST" ]; then
-    RES=$(grep -F "nds[\"$GAME\"].resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-    [ -n "$RES" ] || RES=$(grep "^nds.resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-    case "$RES" in
-      2x|2) export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-2} ;;
-    esac
-  fi
   if [ -n "$DSFLIP_RAST" ]; then echo "3D renderer: Gengis Engine (${RND:-Auto}; scale ${DSFLIP_RAST_SCALE:-2}, texture filter ${DSFLIP_RAST_TEXFILTER:-0})"; else echo "3D renderer: DraStic"; fi
   # Wi-Fi online play is parked for 1.6 (it doesn't get past the game's own Wi-Fi setup yet): ES no longer offers
   # "wfc dns" and libdsflip ignores nds.wfc_dns. Only the test switch turns it on (systemctl set-environment
