@@ -385,7 +385,7 @@ static void new_run(uint64_t seed, int daily) {
     int season = S.season && !daily ? S.season - 1 : (int)((seed * 0x9E3779B97F4A7C15ull >> 40) % SEASON_COUNT);   /* a seed is a whole run */
     game_new(seed, season);
     G->daily = daily;
-    A.state = ST_PLAY; A.t = 0; A.last_rstate = G->rstate; A.counted = 0;
+    A.state = ST_PLAY; A.t = 0; A.last_rstate = G->rstate; A.counted = 0; A.then = 0;
     music_play(MUS_NONE);
 }
 void app_new_run(void) { new_run(A.seed_override ? A.seed_override : ((uint64_t)time(0) * 2654435761u) ^ (uint64_t)clock(), 0); }
@@ -393,6 +393,16 @@ static void continue_run(void) {
     if (run_load()) { refresh_save_info(); return; }
     A.state = ST_PAUSE; A.sel = 0; A.t = 0; A.last_rstate = G->rstate; A.counted = 0;   /* back where you left it, paused */
     music_play(MUS_NONE);
+}
+static void end_run(void);
+/* NEW RUN or TODAY'S TOWN over a saved run: that run is given up as from the pause menu (counted: its game over, a
+   high score if it earned one), then the chosen one starts. 0 when it couldn't be read (nothing to count) */
+static int give_up_saved(int then) {
+    if (run_load()) { refresh_save_info(); return 0; }
+    A.counted = 0; A.then = then;
+    G->over = 1; end_run();
+    music_play(MUS_GAMEOVER);
+    return 1;
 }
 /* a run is going on (playing, paused, or in a menu opened from the pause) */
 int app_run_in_progress(void) {
@@ -453,8 +463,9 @@ void app_update(const Input *in, const Input *prev, float dt) {
             sfx(SFX_MENU_OK, 0.6f, 0);
             switch (acts[A.sel]) {
             case T_CONTINUE: continue_run(); break;
-            case T_PLAY: case T_NEW: app_new_run(); break;
-            case T_DAILY: { int d = today(); new_run(daily_seed(d), d); break; }
+            case T_PLAY: app_new_run(); break;
+            case T_NEW: if (!give_up_saved(T_NEW)) app_new_run(); break;
+            case T_DAILY: { if (A.has_save && give_up_saved(T_DAILY)) break; int d = today(); new_run(daily_seed(d), d); break; }
             case T_SCORES: A.state = ST_SCORES; A.rank = -1; A.page = 0; break;
             case T_SETTINGS: A.state = ST_SETTINGS; A.settings_from = ST_TITLE; A.sel = 0; break;
             case T_HOWTO: A.state = ST_HOWTO; A.page = 0; break;
@@ -486,7 +497,7 @@ void app_update(const Input *in, const Input *prev, float dt) {
             else if (A.sel == 3) {                           /* save and quit: the run waits on the title */
                 run_save(); refresh_save_info();
                 A.state = ST_TITLE; A.sel = 0; A.t = 0; music_play(MUS_TITLE);
-            } else { G->over = 1; end_run(); }
+            } else { G->over = 1; end_run(); music_play(MUS_GAMEOVER); }
         }
         break;
     }
@@ -548,7 +559,13 @@ void app_update(const Input *in, const Input *prev, float dt) {
         if (left || right) { A.page = !A.page; sfx(SFX_MENU_MOVE, 0.5f, 0); break; }
         if (touch_down(in, prev) && in->ty[1] > A.bot_h - 24) { A.page = !A.page; sfx(SFX_MENU_MOVE, 0.5f, 0); break; }
         if (A.t > 0.3f && (ok_pressed(in, prev) || back_pressed(in, prev) || touch_down(in, prev))) {
-            A.state = ST_TITLE; A.sel = 0; A.rank = -1; sfx(SFX_MENU_BACK, 0.5f, 0);
+            A.rank = -1;
+            if (A.then) {                                   /* a saved run given up on the title: now the new one */
+                int t = A.then; A.then = 0;
+                if (t == T_DAILY) { int d = today(); new_run(daily_seed(d), d); } else app_new_run();
+                break;
+            }
+            A.state = ST_TITLE; A.sel = 0; sfx(SFX_MENU_BACK, 0.5f, 0);
             music_play(MUS_TITLE);
         }
         break;

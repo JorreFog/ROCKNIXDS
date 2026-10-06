@@ -16,6 +16,7 @@ typedef struct {
     int counted;                        /* the run in G is over and counted: no save left, stats and score kept */
     int unnamed;                        /* its high score waits for initials (kept with the letters so far on quitting) */
     int confirm;                        /* NEW RUN or TODAY'S TOWN pressed once: again, and the saved run goes */
+    int then;                           /* the run chosen on the title, to start after the saved one's game over */
 } App;
 extern App A;
 

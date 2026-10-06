@@ -58,7 +58,8 @@ Quitting never loses a run: *Save and quit* in the pause menu, ROCKNIX's exit ho
 keep it in `run.sav`, and the title offers *Continue* (back where you were, paused). The run is also
 kept after every round, so even a flat battery costs one round at most. A run that ends (or *Give up*) is gone, and
 counted the moment it ends: quitting right after dying keeps its score (with the initials chosen so far). *New run*
-and *Today's town* ask for a second press while a run is saved, since they give it up.
+and *Today's town* ask for a second press while a run is saved: that gives the saved run up as *Give up* does (its
+game over, a high score if it earned one), and then the new run starts.
 
 ## How it works
 

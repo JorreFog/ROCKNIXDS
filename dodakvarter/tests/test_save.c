@@ -87,7 +87,8 @@ int main(void) {
         app_update(&none, &none, 1.0f / 60);
         CHECK(ST.runs == runs + 1, "the run was counted twice");
     }
-    /* the title: NEW RUN asks once more before it gives up a saved run */
+    /* the title: NEW RUN asks once more before it gives up a saved run; then that run is counted (its game over, a
+       high score if it earned one) and the new one starts */
     {
         Input none, down, ok; memset(&none, 0, sizeof none); memset(&down, 0, sizeof down); memset(&ok, 0, sizeof ok);
         down.held = BIT(B_DOWN); ok.held = BIT(btn_fire());
@@ -99,9 +100,13 @@ int main(void) {
         app_update(&down, &none, 1.0f / 60);                /* NEW RUN */
         app_update(&ok, &none, 1.0f / 60);
         CHECK(A.state == ST_TITLE && run_saved(), "NEW RUN gave up the saved run at the first press");
+        int runs = ST.runs;
         app_update(&none, &none, 1.0f / 60);
         app_update(&ok, &none, 1.0f / 60);
-        CHECK(A.state == ST_PLAY && !run_saved(), "NEW RUN didn't start at the second press (state %d)", A.state);
+        CHECK(A.state == ST_GAMEOVER && !run_saved() && ST.runs == runs + 1, "NEW RUN's second press didn't give up the saved run (state %d, %d runs, was %d)", A.state, ST.runs, runs);
+        for (int k = 0; k < 900 && A.state != ST_PLAY; k++) app_update(k & 1 ? &ok : &none, &none, 1.0f / 60);   /* the game over, the scores */
+        CHECK(A.state == ST_PLAY && G->round == 1 && !G->over && !A.unnamed, "no new run after the given-up one (state %d, round %d)", A.state, G->round);
+        CHECK(ST.runs == runs + 1, "the given-up run was counted %d times", ST.runs - runs);
         G->over = 1; app_update(&none, &none, 1.0f / 60); A.unnamed = 0;   /* (that one ends here) */
     }
     run_save();
@@ -115,7 +120,8 @@ int main(void) {
     CHECK(run_peek(town, sizeof town, &round) != 0, "a damaged save was offered");
     run_discard();
     CHECK(access(p, F_OK) != 0, "run.sav is still there after the run ended");
-    rmdir(dir);
+    char rm[640]; snprintf(rm, sizeof rm, "rm -rf '%s'", dir);
+    if (system(rm)) printf("(couldn't remove %s)\n", dir);
     printf("save: %d failures\n", fails);
     return fails ? 1 : 0;
 }

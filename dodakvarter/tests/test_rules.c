@@ -26,6 +26,9 @@ static Zombie *zombie_at(float x, float y, int state) {
 }
 
 int main(void) {
+    char dir[] = "/tmp/dk-test-rules-XXXXXX";                 /* (its log, not in the player's data) */
+    if (!mkdtemp(dir)) { perror("mkdtemp"); return 1; }
+    setenv("DK_DATA", dir, 1);
     G = calloc(1, sizeof *G); G->view_w = 320; G->view_h = 240;
     fire.held = BIT(B_A);
     int seed = 1;
@@ -146,6 +149,8 @@ int main(void) {
         }
         G->god = 0;
     }
+    char rm[640]; snprintf(rm, sizeof rm, "rm -rf '%s'", dir);
+    if (system(rm)) printf("(couldn't remove %s)\n", dir);
     printf("rules: %d failures\n", fails);
     return fails ? 1 : 0;
 }

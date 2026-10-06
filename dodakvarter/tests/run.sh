@@ -50,11 +50,13 @@ echo "late game: ok"
 # may take two and a half minutes, the one still going when it stops included (its rounds take a minute or so)
 echo "== stalled rounds"
 for s in $(seq 201 216); do
-    DK_DATA=$T/st$s ./build/dk-fast --backend headless --seed $s --season $((s % 3)) --start --bot --frames ${STALL_FRAMES:-21600} >/dev/null 2>&1 &
+    ( DK_DATA=$T/st$s ./build/dk-fast --backend headless --seed $s --season $((s % 3)) --start --bot --frames ${STALL_FRAMES:-21600} \
+        >/dev/null 2>&1 || echo "exit $?" > $T/st$s.failed ) &
     [ $((s % 4)) -eq 0 ] && wait
 done
 wait
 for s in $(seq 201 216); do
+    [ -f $T/st$s.failed ] && { echo "seed $s: $(cat $T/st$s.failed)"; exit 1; }
     awk -v seed=$s '/^round [0-9]+: [0-9]+ s/ { r = $2 + 0; t = $3 + 0; if (r == pr + 1 && t - pt > worst) { worst = t - pt; wr = pr } pr = r; pt = t }
         /^quit during round [0-9]+ at [0-9]+ s/ { if ($6 - pt > worst) { worst = $6 - pt; wr = pr } }
         END { if (worst > 150) { printf "seed %d: round %d took %d s\n", seed, wr, worst; exit 1 } }' $T/st$s/dodakvarter.log || exit 1
@@ -75,15 +77,17 @@ echo "== monkey"
 for s in 1 2 3 4; do
     ( for pass in 1 2; do
         DK_DATA=$T/mk$s ASAN_OPTIONS=detect_leaks=0 ./build/dk-test --backend headless --monkey $((s * 10 + pass)) \
-            --frames ${MONKEY_FRAMES:-12000} >/dev/null 2>>$T/mkerr$s || echo "exit $?" >> $T/mkerr$s
+            --seed $((s * 10 + pass)) --frames ${MONKEY_FRAMES:-12000} >/dev/null 2>>$T/mkerr$s || echo "exit $?" >> $T/mkerr$s
     done ) &
 done
 wait
 for s in 1 2 3 4; do
     grep -q "runtime error\|AddressSanitizer\|^exit" $T/mkerr$s && { echo "monkey $s:"; cat $T/mkerr$s; exit 1; }
-    echo "monkey $s: ok ($(grep -c 'game over' $T/mk$s/dodakvarter.log) runs ended, $(grep -c 'continuing' $T/mk$s/dodakvarter.log) continued)"
+    logs="$T/mk$s/dodakvarter.log.1 $T/mk$s/dodakvarter.log"   # (each start keeps the one before as .1)
+    echo "monkey $s: ok ($(cat $logs | grep -c 'game over') runs ended, $(cat $logs | grep -c 'continuing') continued)"
 done
 echo "== sounds"
-./build/sounds $T/sounds | tail -n1
+./build/sounds $T/sounds > $T/sounds.txt || { cat $T/sounds.txt; exit 1; }
+grep "long" $T/sounds.txt || true; tail -n1 $T/sounds.txt
 rm -rf "$T"
 echo "all tests passed"
