@@ -24,7 +24,7 @@ if [ ! -d ref ]; then
         git show "$DK:$f" > "ref/dk-art/$(basename "$f")"
     done
 fi
-for s in hero whats_new perf res3x bank doda discord thanks; do
+for s in hero whats_new perf res3x bank doda discord contributors thanks; do
     echo "$s"
     python3 "$s.py"
 done

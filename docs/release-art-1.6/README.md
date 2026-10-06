@@ -14,6 +14,7 @@ lays them out for the GitHub release.
 | `bank-trade.png` | `bank.py` | Two handhelds trading over Wi-Fi with the Bank's own screenshots, and what the app does |
 | `doda-kvarter.png` | `doda.py` | 90s box art: the title screen on a CRT with a VHS overlay, chrome lettering, a sticker, a Win95 window, and the game's own sprites (from its `art/*.txt`) walking the street |
 | `discord.png` | `discord.py` | Join the Discord. The invite is set in DejaVu Sans Mono: the pixel font's B looks like an 8 |
+| `special-thanks.png` | `contributors.py` | Everyone who opened an issue on GitHub, by name: issues, comments, what they found, how many are fixed or built in 1.6. The avatars are pixel identicons made from each name |
 | `thanks.png` | `thanks.py` | The page's sign-off |
 
 `lib.py` holds the drawing helpers (panels, dithered gradients, the handheld, the pixel text). The logo is the standard one, `logo/rocknixds-logo.svg`, drawn smooth by Chromium (`svg2png.mjs`), with text beside it in its typeface, Unbounded. Until the
