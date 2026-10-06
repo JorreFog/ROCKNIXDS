@@ -18,7 +18,7 @@ static Voice voices[NVOICES];
 typedef struct { int id; float vol, pan, rate; } Cmd;
 static Cmd ring[256];
 static volatile unsigned rhead, rtail;
-static volatile int master = 80, want_music = MUS_NONE;
+static int master = 80, want_music = MUS_NONE;      /* set by the game, read by the mixer: atomics */
 static int ready;
 
 /* ---------------------------------------------------------------- synthesis helpers */
@@ -182,7 +182,8 @@ static float mus_ph, mus_env, mus_freq, mus_bass_ph, mus_bass_f;
 static int mus_beat;
 
 static void music_tick(int16_t *out, int frames) {
-    if (mus != want_music) { mus = want_music; mus_note = 0; mus_left = 0; mus_env = 0; }
+    int want = __atomic_load_n(&want_music, __ATOMIC_RELAXED), vol = __atomic_load_n(&master, __ATOMIC_RELAXED);
+    if (mus != want) { mus = want; mus_note = 0; mus_left = 0; mus_env = 0; }
     if (mus != MUS_TITLE) return;
     const int eighth = RATE * 3 / 10 / 2;      /* slow and sad: 100 bpm in quarters */
     for (int i = 0; i < frames; i++) {
@@ -202,7 +203,7 @@ static void music_tick(int16_t *out, int frames) {
         float w = 2 * PI_F * mus_ph;
         float v = (sinf(w) + 0.35f * sinf(w * 2) * mus_env + 0.15f * sinf(w * 3) * mus_env * mus_env) * mus_env * 0.16f;
         v += sinf(2 * PI_F * mus_bass_ph) * 0.07f;
-        int s = (int)(v * 32767 * master / 100);
+        int s = (int)(v * 32767 * vol / 100);
         out[i * 2] = (int16_t)CLAMP(out[i * 2] + s, -32768, 32767);
         out[i * 2 + 1] = (int16_t)CLAMP(out[i * 2 + 1] + s, -32768, 32767);
     }
@@ -224,7 +225,7 @@ static void mix(int16_t *out, int frames) {
         }
         v->s = &snd[c.id]; v->pos = 0; v->rate = c.rate; v->vol = c.vol; v->pan = c.pan; v->active = 1;
     }
-    float m = master / 100.0f;
+    float m = __atomic_load_n(&master, __ATOMIC_RELAXED) / 100.0f;
     for (int k = 0; k < NVOICES; k++) {
         Voice *v = &voices[k];
         if (!v->active) continue;
@@ -246,7 +247,7 @@ void audio_init(void) {
     ready = plat_audio_start(RATE, mix) == 0;
     plat_log("audio: %s", ready ? "on" : "off");
 }
-void audio_set_volume(int v) { master = CLAMP(v, 0, 100); }
+void audio_set_volume(int v) { __atomic_store_n(&master, CLAMP(v, 0, 100), __ATOMIC_RELAXED); }
 
 void sfx(int id, float vol, float pan) {
     if (!ready || master == 0) return;
@@ -264,7 +265,7 @@ void sfx_at(int id, float x, float y, float vol) {
     if (k <= 0.02f) return;
     sfx(id, vol * k, clampf(dx / 200.0f, -0.8f, 0.8f));
 }
-void music_play(int track) { want_music = S.music ? track : MUS_NONE; }
+void music_play(int track) { __atomic_store_n(&want_music, S.music ? track : MUS_NONE, __ATOMIC_RELAXED); }
 
 /* tests: render the mixer's output without a device */
 void audio_render_test(int16_t *out, int frames);
