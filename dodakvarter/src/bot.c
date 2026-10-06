@@ -108,10 +108,10 @@ void bot_input(Input *in) {
     Zombie *tgt = 0; float td = 1e9f; int crowd = 0;
     for (int i = 0; i < MAX_ZOMBIES; i++) {
         Zombie *z = &G->z[i];
-        if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE || z->state == ZS_WINDOW) continue;
+        if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE) continue;
         float d = sqrtf(dist2f(z->x, z->y, p->x, p->y));
         if (d < 70) crowd++;
-        if (d < td && d < 240 && line_clear(p->x, p->y - 8, z->x, z->y - 8)) { td = d; tgt = z; }
+        if (d < td && d < 240 && shot_clear(p->x, p->y - 8, z->x, z->y - 8)) { td = d; tgt = z; }
     }
     if (tgt) {
         in->mouse = 1; in->mx = tgt->x - G->camx; in->my = tgt->y - 8 - G->camy;

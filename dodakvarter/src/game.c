@@ -123,6 +123,13 @@ int move_actor(float *x, float *y, float dx, float dy, float r) {
     return hit;
 }
 
+/* a body r wide could walk the straight line between two points (nothing solid on the way) */
+int walk_clear(float x0, float y0, float x1, float y1, float r) {
+    float dx = x1 - x0, dy = y1 - y0, d = sqrtf(dx * dx + dy * dy);
+    int n = (int)(d / 4) + 1;
+    for (int i = 0; i <= n; i++) if (blocked(x0 + dx * i / n, y0 + dy * i / n, r)) return 0;
+    return 1;
+}
 /* nothing opaque between two points (bullets, sight, light) */
 int line_clear(float x0, float y0, float x1, float y1) {
     float dx = x1 - x0, dy = y1 - y0, d = sqrtf(dx * dx + dy * dy);
@@ -130,6 +137,20 @@ int line_clear(float x0, float y0, float x1, float y1) {
     for (int i = 1; i < n; i++) {
         float t = (float)i / n;
         if (opaque_at((int)floorf((x0 + dx * t) / TS), (int)floorf((y0 + dy * t) / TS))) return 0;
+    }
+    return 1;
+}
+
+/* a boarded window: shots go through the gaps (and hit whoever is pulling the boards off) */
+int window_tile(int tx, int ty) { Tile *t = tile_at(tx, ty); return t && t->inter && G->it[t->inter - 1].type == IT_WINDOW; }
+/* nothing a bullet stops at between two points */
+int shot_clear(float x0, float y0, float x1, float y1) {
+    float dx = x1 - x0, dy = y1 - y0, d = sqrtf(dx * dx + dy * dy);
+    int n = (int)(d / 6) + 1;
+    for (int i = 1; i < n; i++) {
+        float t = (float)i / n;
+        int tx = (int)floorf((x0 + dx * t) / TS), ty = (int)floorf((y0 + dy * t) / TS);
+        if (opaque_at(tx, ty) && !window_tile(tx, ty)) return 0;
     }
     return 1;
 }
@@ -159,12 +180,12 @@ static float aim_assist(float aim) {
     float range = 230;
     for (int i = 0; i < MAX_ZOMBIES; i++) {
         Zombie *z = &G->z[i];
-        if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE || z->state == ZS_WINDOW) continue;
+        if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE) continue;
         float dx = z->x - p->x, dy = (z->y - 6) - (p->y - 6), d = sqrtf(dx * dx + dy * dy);
         if (d > range || d < 1) continue;
         float a = atan2f(dy, dx), da = fabsf(angdiff(a, aim));
         if (da > cone) continue;
-        if (!line_clear(p->x, p->y - 6, z->x, z->y - 6)) continue;
+        if (!shot_clear(p->x, p->y - 6, z->x, z->y - 6)) continue;
         float score = da / cone + d / range * 0.8f;
         if (score < best) { best = score; out = a; }
     }
@@ -174,6 +195,9 @@ static float aim_assist(float aim) {
 static void player_down(void) {
     Player *p = &G->p;
     p->downs++;
+    int near = 0; for (int i = 0; i < MAX_ZOMBIES; i++) if (G->z[i].alive && G->z[i].state != ZS_DEAD && dist2f(G->z[i].x, G->z[i].y, p->x, p->y) < 40 * 40) near++;
+    plat_log("%s in round %d at %.0f s: %d kills, %d zombies within 40 px, %.0f/%.0f armour", (p->perks & (1u << PK_KANELBULLE)) ? "down" : "game over",
+             G->round, G->time, p->kills, near, p->ar[0].def >= 0 ? p->ar[0].ap : 0, p->ar[1].def >= 0 ? p->ar[1].ap : 0);
     if (p->perks & (1u << PK_KANELBULLE)) {               /* solo Quick Revive: you get back up, without your perks */
         if ((p->perks & (1u << PK_KAVIAR)) && p->nslots == 3) {   /* Mule Kick's third gun goes with it */
             if (p->w[2].def >= 0) item_drop_weapon(p->w[2], p->x + 6, p->y + 4);

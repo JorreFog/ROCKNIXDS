@@ -172,6 +172,7 @@ typedef struct {
     float cx, cy;                       /* moose: charge direction */
     int crit_kill;
     float stuck_t, lastx, lasty;
+    float swipe;                        /* in a window: a swipe through the gap, winding up */
     const Img *rimg; int16_t rx, ry, rclip; uint8_t rflip;   /* how it was last drawn (its eyes glow on top) */
 } Zombie;
 
@@ -311,7 +312,10 @@ void float_text(float x, float y, uint32_t col, const char *s);
 void shake(float amount);
 float player_speed(void);
 int line_clear(float x0, float y0, float x1, float y1);
+int window_tile(int tx, int ty);
+int shot_clear(float x0, float y0, float x1, float y1);
 int move_actor(float *x, float *y, float dx, float dy, float r);
+int walk_clear(float x0, float y0, float x1, float y1, float r);
 void player_hurt(float dmg, float fx, float fy);
 int btn_fire(void);
 int btn_use(void);

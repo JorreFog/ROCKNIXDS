@@ -132,6 +132,10 @@ void spawn_zombie(int type) {
 
 /* ---------------------------------------------------------------- rounds */
 void round_start(int n) {
+    int open = 0; for (int z = 0; z < G->nzones; z++) open += G->zones[z].open;
+    plat_log("round %d: %.0f s, %d kills, %d kr (%d earned), hp %.0f, %d perks, %s, %d zones open, power %s", n, G->time, G->p.kills,
+             G->p.kr, G->p.kr_total, G->p.hp, G->p.nperks, G->p.w[G->p.cur].def >= 0 ? weapon_name(&G->p.w[G->p.cur]) : "-",
+             open, G->power_on ? "on" : "off");
     G->round = n; G->rstate = RS_ACTIVE; G->rtime = 0; G->spawned = 0; G->special = 0; G->drops_round = 0;
     G->p.repair_kr = 0;
     G->spawn_cd = 2.0f;
@@ -156,6 +160,17 @@ void round_start(int n) {
 
 void round_update(float dt) {
     G->rtime += dt;
+    static float zlog_t;
+    if (getenv("DK_DEBUG_ZLOG") && (zlog_t += dt) > 10) {          /* where everyone is, every 10 s */
+        zlog_t = 0;
+        plat_log("t %.0f round %d state %d: to_spawn %d spawned %d alive %d, player %.0f,%.0f", G->time, G->round, G->rstate,
+                 G->to_spawn, G->spawned, zombies_alive(), G->p.x, G->p.y);
+        for (int i = 0; i < MAX_ZOMBIES; i++) if (G->z[i].alive && G->z[i].state != ZS_DEAD) {
+            Zombie *z = &G->z[i]; int tx = (int)(z->x / TS), ty = (int)((z->y - 2) / TS);
+            int f = tx >= 0 && ty >= 0 && tx < G->w && ty < G->h ? G->flow[ty][tx] : -1;
+            plat_log("  z%d type %d state %d at %.0f,%.0f (tile %d,%d flow %d) hp %.0f window %d", i, z->type, z->state, z->x, z->y, tx, ty, f, z->hp, z->window);
+        }
+    }
     if (G->round_flash > 0) G->round_flash -= dt;
     if (G->rstate == RS_BREAK) {
         if (G->rtime >= 10.0f) round_start(G->round + 1);   /* ten seconds between rounds */
@@ -207,7 +222,7 @@ static void steer(Zombie *z, float *dx, float *dy) {
     uint16_t (*field)[MAPW_MAX] = G->flow;
     if (G->lure_on && z->type != ZT_MOOSE) { tx = G->lure_x; ty = G->lure_y; field = G->lureflow; }
     float ddx = tx - z->x, ddy = ty - z->y, d = sqrtf(ddx * ddx + ddy * ddy);
-    if (d < 90 && line_clear(z->x, z->y - 4, tx, ty - 4)) { *dx = ddx / (d + 0.01f); *dy = ddy / (d + 0.01f); return; }
+    if (d < 90 && walk_clear(z->x, z->y, tx, ty, 4)) { *dx = ddx / (d + 0.01f); *dy = ddy / (d + 0.01f); return; }
     int cx = (int)(z->x / TS), cy = (int)((z->y - 2) / TS);
     if (cx < 0 || cy < 0 || cx >= G->w || cy >= G->h) { *dx = ddx / (d + 0.01f); *dy = ddy / (d + 0.01f); return; }
     uint16_t best = field[cy][cx]; int bx = cx, by = cy;
@@ -241,6 +256,20 @@ static void zombie_update(Zombie *z, float dt) {
         return;
     case ZS_WINDOW: {                                       /* pull the boards off, then climb out */
         Inter *it = &G->it[z->window];
+        /* whoever stands right at the gap gets a swipe through it, as in Call of Duty */
+        if (z->atk_cd > 0) z->atk_cd -= dt;
+        if (z->swipe > 0) {
+            z->swipe -= dt;
+            if (z->swipe <= 0) {
+                if (!p->downed && dist2f(p->x, p->y, it->x, it->y) < 20 * 20) player_hurt(50, z->x, z->y);
+                z->atk_cd = 1.3f;
+            }
+            return;
+        }
+        if (it->state < 6 && z->atk_cd <= 0 && !p->downed && dist2f(p->x, p->y, it->x, it->y) < 15 * 15) {
+            z->swipe = 0.4f; sfx_at(SFX_ZATTACK, z->x, z->y, 0.5f);
+            return;
+        }
         z->t += dt;
         if (it->state > 0) {
             if (z->t > 1.0f) { z->t = 0; it->state--; sfx_at(SFX_BOARD_BREAK, z->x, z->y, 0.6f); spawn_parts(PT_WOOD, z->x, z->y + 4, 4, 0x8a6a3a, 50); }
@@ -316,8 +345,8 @@ static void zombie_update(Zombie *z, float dt) {
     /* stuck far away for long: it comes back somewhere else (Black Ops does this too) */
     z->stuck_t += dt;
     if (z->stuck_t > 5) {
-        if (dist2f(z->x, z->y, z->lastx, z->lasty) < 12 * 12 && pd > 160) {
-            z->alive = 0; G->spawned--;
+        if (dist2f(z->x, z->y, z->lastx, z->lasty) < 12 * 12 && (pd > 160 || (pd > 30 && !walk_clear(z->x, z->y, p->x, p->y, 4)))) {
+            z->alive = 0; G->spawned--;                      /* back into the pool: it comes again from a spawn */
         }
         z->stuck_t = 0; z->lastx = z->x; z->lasty = z->y;
     }

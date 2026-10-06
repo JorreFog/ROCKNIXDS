@@ -185,6 +185,8 @@ static void draw_zombie(Surf *s, Zombie *z) {
         Surf c = *s; surf_clip(&c, ox, oy, im->w, im->h - 4);
         blit(&c, im, ox, oy + 2, 0);
         z->rimg = im; z->rx = (int16_t)ox; z->ry = (int16_t)(oy + 2); z->rflip = 0; z->rclip = (int16_t)(oy + im->h - 4);
+        if (z->swipe > 0 && z->swipe < 0.15f)               /* the claws, out through the gap */
+            for (int k = -1; k <= 1; k++) line(s, sx - 2 + k * 3, sy, sx + 1 + k * 3, sy + 6, 0xe8e8e8);
         return;
     }
     if (z->state == ZS_RISE) {                              /* climbing up out of the ground */

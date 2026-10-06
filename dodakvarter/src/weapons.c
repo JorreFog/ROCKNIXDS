@@ -124,7 +124,10 @@ static Zombie *ray_hit(float x0, float y0, float dx, float dy, float maxd, float
 
 /* how far a ray goes before a wall */
 static float ray_wall(float x0, float y0, float dx, float dy, float maxd) {
-    for (float t = 2; t < maxd; t += 3) if (opaque_at((int)floorf((x0 + dx * t) / TS), (int)floorf((y0 + dy * t) / TS))) return t;
+    for (float t = 2; t < maxd; t += 3) {
+        int tx = (int)floorf((x0 + dx * t) / TS), ty = (int)floorf((y0 + dy * t) / TS);
+        if (opaque_at(tx, ty) && !window_tile(tx, ty)) return t;
+    }
     return maxd;
 }
 
@@ -173,7 +176,7 @@ static void chain_lightning(float x, float y, float ang, const Weapon *w) {   /*
             float dx = z->x - cx, dy = z->y - 8 - cy, d = sqrtf(dx * dx + dy * dy);
             if (d > (j == 0 ? range : 70)) continue;
             if (j == 0 && (dx * dirx + dy * diry) / (d + 0.01f) < 0.7f) continue;
-            if (!line_clear(cx, cy, z->x, z->y - 8)) continue;
+            if (!shot_clear(cx, cy, z->x, z->y - 8)) continue;
             if (d < bd) { bd = d; best = z; }
         }
         if (!best) break;
@@ -195,7 +198,7 @@ static void frost_cone(float x, float y, float ang, const Weapon *w) {     /* Sn
         float dx = z->x - x, dy = z->y - 8 - y, d = sqrtf(dx * dx + dy * dy);
         if (d > range) continue;
         if (fabsf(angdiff(atan2f(dy, dx), ang)) > 0.4f) continue;
-        if (!line_clear(x, y, z->x, z->y - 8)) continue;
+        if (!shot_clear(x, y, z->x, z->y - 8)) continue;
         z->slow = MAX(z->slow, 2.5f);
         damage_zombie(z, dmg, 0, 0, dx / (d + 1) * 6, dy / (d + 1) * 6);
     }

@@ -322,8 +322,8 @@ void title_top(Surf *s) {
 
 /* ---------------------------------------------------------------- the state machine (main.c calls) */
 static void start_run(void) {
-    int season = S.season ? S.season - 1 : (int)(time(0) % SEASON_COUNT);
     uint64_t seed = A.seed_override ? A.seed_override : ((uint64_t)time(0) * 2654435761u) ^ (uint64_t)clock();
+    int season = S.season ? S.season - 1 : (int)((seed * 0x9E3779B97F4A7C15ull >> 40) % SEASON_COUNT);   /* a seed is a whole run */
     game_new(seed, season);
     A.state = ST_PLAY; A.t = 0;
     music_play(MUS_NONE);
