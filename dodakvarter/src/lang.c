@@ -24,7 +24,7 @@ static const char *SV[][2] = {
     {"Picked up", "Tog"}, {"Empty", "Tomt"}, {"Reloading", "Laddar om"}, {"No ammo", "Slut på ammo"},
     {"Box moved", "Lådan flyttade"}, {"New high score!", "Nytt rekord!"}, {"Enter your initials", "Skriv dina initialer"},
     {"Press A", "Tryck A"}, {"Press START", "Tryck START"}, {"Downed!", "Nere!"}, {"Revived", "Uppe igen"},
-    {"Health", "Hälsa"}, {"Armour", "Skydd"}, {"Bag", "Väska"}, {"Perks", "Förmåner"}, {"Map", "Karta"},
+    {"Health", "Hälsa"}, {"Armour", "Skydd"}, {"Bag", "Väska"}, {"Perks", "Förmåner"}, {"Map", "Karta"}, {"Weapon", "Vapen"},
     {"Grenades", "Granater"}, {"Head", "Huvud"}, {"Body", "Kropp"}, {"none", "inget"}, {"Swap", "Byt"},
     {"Use", "Använd"}, {"New round", "Ny runda"}, {"Zone opened", "Nytt område"}, {"no scores yet", "inga rekord än"},
     {"Survive as many rounds as you can.", "Överlev så många rundor du kan."},

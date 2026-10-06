@@ -86,7 +86,8 @@ most). You spend them on:
   reserve, a little faster and through one more zombie, and a new name (Ak 5 becomes Ragnarök, the Strålpistol
   Norrskenet).
 - **The power**: find the switchgear (Elcentral), usually far from the start. Then the perk machines and Smedjan
-  work, the street lamps light up and the windows come on.
+  work, and the lights come on across the town in a ring spreading from the switch: street lamps, shop windows,
+  the windows of the houses.
 
 **Power-ups** drop from the dead (3% a kill, plus one each time your total earnings pass a mark that moves further
 away every time; four a round at most): Fullt förråd (Max Ammo), Instadöd (Insta-Kill), Dubbla kronor (Double
@@ -131,9 +132,10 @@ winter snow, or the bright midsummer night), made of districts:
 
 Every district is walled off (hedges, fences, stone walls, forest) and joined to its neighbours through gaps with a
 barricade in them; there are always loops to lead a horde around. The dead come through boarded windows and
-stairwell doors (they pull the boards off; you nail them back for money), up through manholes, graves and the
-ground. Each town has five spots for the box, seven perk machines, Smedjan, the power switch and the wall buys, all
-placed where you can reach them (tests/test_map.c checks a thousand towns).
+stairwell doors (they pull the boards off; you nail them back for money, but stand right at the gap and they swipe
+at you through it; shoot or knife them through the boards), up through manholes, graves and the ground. Each town
+has five spots for the box, seven perk machines, Smedjan, the power switch and the wall buys, all placed where you
+can reach them (tests/test_map.c checks 500 towns on every run).
 
 ## Inside
 

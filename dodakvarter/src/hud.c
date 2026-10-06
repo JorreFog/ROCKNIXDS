@@ -48,7 +48,7 @@ static void weapon_card(Surf *s) {
     Player *p = &G->p;
     int x = ox + 4, y = oy + 22, w = 158, h = 74;
     r_weapon = (Rect){ x, y, w, h };
-    panel(s, x, y, w, h, tr("Fire"));
+    panel(s, x, y, w, h, tr("Weapon"));
     Weapon *wp = &p->w[p->cur];
     if (wp->def < 0) { text(s, FONT_NORMAL, x + 8, y + 10, DIM, tr("Knife")); return; }
     const WeaponDef *d = &WEAPONS[wp->def];
