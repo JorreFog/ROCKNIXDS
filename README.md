@@ -107,11 +107,14 @@ One release for both handhelds; the full notes are [v1.6-plus.md](docs/releases/
 - **Clean starts and quits:** plain black between the menu and the game, no terminal cursor, no leftover frame; the
   menu shows once it draws again.
 - **RetroAchievements without network** keeps the saved login and retries in the background.
-- **The menu's memory** is logged (`es-mem.log`) and capped: freed image memory goes back to the system, and the menu
-  restarts by itself before it could take the handheld's memory. Two quick launches start the game once.
+- **The menu's memory:** ROCKNIXDS Pixel no longer grows while a menu is open over a game list (the likely cause of
+  a 713 MB menu), and its picture cache has a size limit. Freed image memory goes back to the system, the memory is
+  logged (`es-mem.log`), and the menu restarts by itself before it could take the handheld's memory. Two quick
+  launches start the game once.
 - **From the reports:** the options file is checked before it is replaced (#36, #37); zipped games get their
   RetroAchievements id (#31); the in-game menu's *Blow* follows `drastic.cfg`'s binding (#26); the pixel font's 5, 2,
-  Z and B (#34).
+  Z and B (#34); *View Game Media*, the Save State Manager and *Manual Scrape* fit the bottom screen (#32, #34, #35);
+  touch on the Pixel game list: drag or tap its progress bar, tap the ◀ ▶ arrows (#27).
 - **Online play is parked:** the 1.5.13 test builds' *wfc dns* option is gone until it works.
 
 ### New in 1.5

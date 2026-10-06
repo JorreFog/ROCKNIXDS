@@ -179,6 +179,14 @@ resume state the player had. What the steps below add is what to look at on the 
 ## C. The menu's memory, and the double launch (1.6 task 3)
 
 **What was found.**
+- **The likely cause: ROCKNIXDS Pixel under a menu.**
+  - ES keeps drawing the game list under its menus (game options, settings, a scrape) but updates only the menu.
+  - The theme's engine took its decode worker's finished pictures only when updated, and forgot a picture's request
+    as soon as the worker had made it.
+  - So under a menu, every frame asked for the same pictures again, and every finished picture woke ES for another
+    frame and was kept.
+  - On a PC, 120 such frames grew the heap by 43 MB at 640x480 and 111 MB at 1024x768, and it doesn't stop while
+    the menu stays up.
 - The lead in the hand-off (`reloadAllGames` after every game) doesn't apply. `ViewController::doLaunchGame` returns
   true only for `windows_installers`, so DS games never trigger that reload.
 - The rnds engine's texture cache was bounded by count per group (400/200/120/90/8), not by bytes.
@@ -194,7 +202,14 @@ resume state the player had. What the steps below add is what to look at on the 
 - `es-rgds-memory.patch`: two malloc arenas and a fixed 256 KB mmap threshold, so big buffers return to the system
   when freed (`MALLOC_ARENA_MAX` / `MALLOC_MMAP_THRESHOLD_` in the environment still win). `malloc_trim(0)` runs
   right before each game.
-- `es-rgds-rnds.patch`: the texture cache also has a byte budget (see the patch header for the numbers).
+- `es-rgds-rnds.patch`:
+  - Finished pictures are taken in when drawing too, and a request stands until its picture is taken: under a menu
+    the memory stays flat (the PC test above).
+  - The worker's queue keeps the newest 64 requests.
+  - The texture cache drops its least recently used pictures past 20 MB at 640x480, scaled by the panel's area (51 MB
+    on the Plus). Normal browsing of a 740-game library needs 11 MB (28 MB on the Plus); only box art in many sizes
+    reached the old count limits' 32 MB (81 MB).
+  - The first time the budget applies, ES's log says `rnds: texture cache at its budget: ...`.
 - `es-memwatch.sh` (started by `start_es_rgds.sh`, ends with ES's unit):
   - Every 30 s it reads ES's memory. It writes `/storage/.config/emulationstation/es-mem.log` on a change of 16 MB or
     more, and at least once an hour: heap, mapped files, shared/GPU memory, and what the system has available.
@@ -204,22 +219,27 @@ resume state the player had. What the steps below add is what to look at on the 
 **On the device:**
 1. After boot and a few minutes of browsing, `cat /storage/.config/emulationstation/es-mem.log` has a line like
    `pid N rss 180 MB (heap ..., files ..., shared/GPU ...)`.
-2. **Browse hard:**
+2. **A menu over a game list** (the likely cause):
+   - Restart ES, open a big ROCKNIXDS Pixel game list at once (its pictures still loading), and open the game options
+     (or START's menu) over it. Leave it 2 minutes.
+   - Then `grep VmRSS /proc/$(pidof emulationstation)/status`, and again after 2 more minutes: the same within a few
+     MB. Before 1.6 it climbed for as long as the menu stayed up.
+3. **Browse hard:**
    - Hold right in the largest library for a minute, flip systems, open the game options a few times.
    - Run 10 games (start/quit), then leave the menu idle for 10 minutes.
    - Note es-mem.log's lines. Expected: growth that levels off, under ~300 MB on the Plus.
    - If it keeps climbing, the split (heap vs shared/GPU) says where. Send es-mem.log and `grep -i rnds
      /var/log/es_log.txt`.
-3. **The valve:**
+4. **The valve:**
    - `systemctl set-environment ROCKNIXDS_ES_MEMLIMIT_MB=120; systemctl restart essway.service`.
    - Within a minute ES restarts by itself, and es-mem.log says `over 120 MB with no game running: restarting it`
      with the status line.
    - It must not happen during a game: start one before the minute is up, and the restart waits until after the
      game.
    - Then `systemctl unset-environment ROCKNIXDS_ES_MEMLIMIT_MB; systemctl restart essway.service`.
-4. The double launch: section B, step 4.
+5. The double launch: section B, step 4.
 
-**Acceptance:** es-mem.log is written; step 2 levels off; the valve restarts ES only outside games.
+**Acceptance:** es-mem.log is written; steps 2 and 3 level off; the valve restarts ES only outside games.
 
 ## D. The open issues (1.6 task 4)
 
@@ -229,7 +249,7 @@ needed), #33 (the RG DS untested) and #37 (fixed in 1.5.7; 1.6 adds the parse ch
 | # | What changed | Lines | Device check |
 |---|---|---|---|
 | 26 | The in-game menu's *Blow* presses the fake microphone through whatever `drastic.cfg` binds it to (the key, or the joystick button when only that set has it). The real-mic tuning still needs a person: section 3 | both (library) | Section 3 steps 1-4. Then *Quick settings > Microphone > Blow* by the first candle in Phantom Hourglass, with the keyboard binding removed from `drastic.cfg` (`controls_a[CONTROL_INDEX_FAKE_MICROPHONE] = 65535`) and a joystick button bound in `controls_b`: the candle goes out |
-| 27 | Item 7 (touch): ISSUE27_TODO | both (ES) | ISSUE27_CHECK |
+| 27 | Item 7 (touch): Item 7 (touch), in `es-rgds-rnds.patch`: the game list's progress rail takes a tap (the cursor jumps there) and a drag (it follows the finger), with the game's first letter in a bubble over the thumb while dragging; ◀ ▶ arrows by the shoulder names, whose tap zones now take a finger (half the row each). No stock ES file changed (ES's mouse capture brings the finger's moves to the view). Items 1, 3b, 4 and 6 were fixed in 1.5.2 and wait for the reporter's re-test. Checked with the engine's harness at both sizes: [640](1.6-prep/img/rnds-27-drag-640.png), [1024](1.6-prep/img/rnds-27-drag-1024.png). The home screen's rail doesn't take a drag (that would need an ES hunk) | both (ES) | A game list with 50+ games: put a finger on the progress bar and slide: the reel follows, a letter bubble rides over the thumb, nothing overlaps; lift: the game under the finger stays selected. Tap the bar near an end: the cursor jumps there. Tap ◀ / ▶ (or the names): one game back / forward, the arrow blue while held. A swipe on the reel still moves one game |
 | 30 | Fixed in 1.5.2 (`es-rgds-help.patch`); the reporter never answered | both | ES's on-screen keyboard (any text field): the help line fits the bottom panel on both handhelds |
 | 31 | `rocknixds-media.py`'s background RetroAchievements id hashes the first `.nds` in a `.zip` (else its first file) the way rcheevos does; `.7z` is skipped with a log line. Checked on the host: a synthetic ROM, plain and zipped (deflated and stored), gives rcheevos' own hash | both | A zipped DS game with achievements: after the menu's background job (or `rocknixds-media.py --local --auto`), its gamelist entry has a `cheevosId` and the Pixel library shows its achievement count |
 | 32, 34, 35 | `es-rgds-panelguis.patch` (ES): *View Game Media* (its pictures, the zoom view and *View fullscreen video*), the Save State Manager and *Manual scrape* are one panel wide, on the bottom panel. The zoom view opens with the whole picture fitted, L/R zoom, the D-pad moves it, and it never leaves the panel. From *View Game Media* it had always been empty: it was given the entry's number instead of its picture (an upstream bug). *Manual scrape*'s details column grows from the result list's share (24% to 45% of the window), so the values and the date fit; values longer than about 10 letters still end in "...". #34's other half, the Pixel font's 2/5/S, Z and B/G, has been on this line since 1.5.13 beta 1. Checked on a PC at 1920x480 and 3072x768 with Pixel dark: before and after in [1.6-prep/img](1.6-prep/img) (`es-32-*`, `es-34-*`, `es-35-*`) | both (ES) | 1. A scraped game with a picture and a video: *View Game Media* and *View fullscreen video* (game options) stay on the bottom panel. A on a picture shows all of it there; L/R zoom and the D-pad moves it, and nothing reaches the top panel. 2. *Game settings > Show savestate manager: Always*, then start a GBA game (RetroArch): the title, START NEW GAME and the slots are all on the bottom panel (START NEW GAME is shortened to "START NEW ..." at 640 px, as on any 4:3 screen). 3. *Scrape* on a game: the publisher, genre and the whole date are inside the window. `grim` grabs ES's screens to compare with the pictures |
@@ -287,11 +307,11 @@ The 1.6 work above went into both lines. They still differ where they did before
 - **RG DS Plus line only:**
   - panel-size handling (`session.sh`'s `BIG`: shader GPU clock, the battery profile up to 1416 MHz, the latch
     margin) and the CPU placement (`DSFLIP_PIN`);
-  - the 2048x768 splash, mako notifications, `input-rocknixds.conf`, `tools/threadsample.sh`;
-  - `es-rgds-dsfirst.patch` (not in `build-es.sh`'s list; it goes with the rnds patch, section C).
+  - the 2048x768 splash, mako notifications, `input-rocknixds.conf`, `tools/threadsample.sh`.
 - **The same on both:**
   - SuperDrastic `0.5.0-beta.1-rocknixds.5`;
-  - the EmulationStation binary and all its patches;
+  - the EmulationStation binary and all its patches (`es-rgds-dsfirst.patch` is gone: its collection names are in
+    the rnds patch, the rest was superseded by `es-rgds-emptylibrary.patch`);
   - the Pixel theme, its font included;
   - the 1.6 changes to `session.sh`, `restore.sh`, `es-features.sh` and `es-memwatch.sh`;
   - `docs/1.6-prep`'s scripts.
