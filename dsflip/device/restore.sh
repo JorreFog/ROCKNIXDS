@@ -55,6 +55,12 @@ vt_back() {
     chvt "${VT:-1}"
     if wait_outputs; then
         S=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
+        # sway's input devices come back with the display, but only once something makes its libinput look. After
+        # a game sway had none (swaymsg -t get_inputs: 0) until a touch or a button: the menu had no keyboard focus,
+        # so SDL dropped the first gamepad press in it, and that press was what woke sway (an RG DS Plus, 2026-10-06:
+        # the first press after a game was ignored in 6 of 9 tries; ES never got it). A udev "change" for one input
+        # device is read by libinput, which then adds its devices: all 8 back within half a second.
+        udevadm trigger --action=change /sys/class/input/event0 2>/dev/null
         # RG DS: the window is resized to the 1920 canvas (sway allows it past the 1280 desktop).
         # Plus: ES's --resolution made the window 3072x768, and it comes back from the VT switch one panel wide
         # (1024x768, the bottom panel black: seen on an RG DS Plus, 1.5.13). A plain resize to 3072 is clamped to the
