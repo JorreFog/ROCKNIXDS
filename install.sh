@@ -11,6 +11,7 @@
 #   --no-canvas     skip the second theme, canvas-ds (a ~180 MB download, once)
 #   --no-dsflip     skip libdsflip (keep the stock DraStic display path)
 #   --no-hires      don't switch on hires 3D for Nintendo DS
+#   --no-game       skip Döda Kvarter (the zombie roguelike made for both screens: its own tile in the menu, or Ports)
 #   --uninstall     undo what this installer changed, leaving settings made since the install alone
 #   --restore-files with --uninstall: put back whole config files from the install-time backups instead
 #   --version       print the ROCKNIXDS version this installer belongs to
@@ -45,7 +46,7 @@ WORK=/storage/.rgds-install
 ESF=/storage/.config/emulationstation/es_features.cfg
 VERSION_FILE=/storage/.config/rocknixds-version
 
-WITH_60HZ=0 THEME_ON=1 CANVAS_ON=1 DSFLIP_ON=1 HIRES_ON=1 UNINSTALL=0 RESTORE_FILES=0
+WITH_60HZ=0 THEME_ON=1 CANVAS_ON=1 DSFLIP_ON=1 HIRES_ON=1 GAME_ON=1 UNINSTALL=0 RESTORE_FILES=0
 for a in "$@"; do
     case $a in
     --with-60hz) WITH_60HZ=1 ;;
@@ -53,6 +54,7 @@ for a in "$@"; do
     --no-canvas) CANVAS_ON=0 ;;
     --no-dsflip) DSFLIP_ON=0 ;;
     --no-hires) HIRES_ON=0 ;;
+    --no-game) GAME_ON=0 ;;
     --uninstall) UNINSTALL=1 ;;
     --restore-files) RESTORE_FILES=1 ;;
     --version) echo "ROCKNIXDS installer ${RGDS_VERSION:-$(cat $VERSION_FILE 2>/dev/null || echo unknown)} ($REPO $BRANCH)"; exit 0 ;;
@@ -274,6 +276,13 @@ if [ $UNINSTALL = 1 ]; then
     rm -f /storage/.config/system.d/rocknixds-update-check.service /storage/.config/system.d/rocknixds-update-check.timer \
           /storage/.config/system.d/timers.target.wants/rocknixds-update-check.timer
     rmdir /storage/.config/system.d/timers.target.wants 2>/dev/null; systemctl daemon-reload
+    # Döda Kvarter: its Ports entry and pictures (the game itself, and its own tile's folder in apps/, go with
+    # /storage/.config/rocknixds)
+    systemctl stop dodakvarter-game.service dodakvarter-selftest.service 2>/dev/null || true
+    if [ -f /storage/.config/rocknixds/dodakvarter/gamelist.py ]; then
+        python3 /storage/.config/rocknixds/dodakvarter/gamelist.py remove /storage/roms/ports 2>/dev/null || true
+    fi
+    rm -f "/storage/roms/ports/Doda Kvarter.sh" /storage/roms/ports/images/dodakvarter-*.png
     rm -rf /storage/.config/rocknixds
     [ -f $SYSCFG ] && sed -i '/^rocknixds\./d' $SYSCFG      # the update channel and the media and update switches
     [ -e $ES_THEMES/canvas-ds/.rocknixds-commit ] && rm -rf $ES_THEMES/canvas-ds      # the one this installer downloaded
@@ -580,6 +589,39 @@ if [ $WITH_60HZ = 1 ]; then
     say "Retuning both panels to 60.000 Hz"
     sh "$SRC/dii-ess-aye/device/apply-60hz-dtb.sh" || say "60 Hz step skipped (see message above)"
     NEED_REBOOT=1
+fi
+
+# ---- Döda Kvarter: a game made for both screens -----------------------------------------------------------
+# A zombie roguelike in a Swedish suburb at night (dodakvarter/): the top screen is the game, the bottom one the
+# inventory, health, ammo and the map. It draws straight onto both panels like the DS games, in a session unit of
+# its own (dodakvarter-game), and shows up on a tile of its own in the menu (or in Ports). Its high scores and settings stay in
+# /storage/.config/rocknixds/dodakvarter/data across updates.
+if [ $GAME_ON = 1 ] && [ -f "$SRC/dodakvarter/bin/dodakvarter-aarch64" ]; then
+    systemctl stop dodakvarter-game.service 2>/dev/null || true
+    DK=/storage/.config/rocknixds/dodakvarter
+    mkdir -p $DK/data
+    cp "$SRC/dodakvarter/bin/dodakvarter-aarch64" $DK/dodakvarter
+    for f in launch.sh session.sh restore.sh selftest.sh gamelist.py; do cp "$SRC/dodakvarter/device/$f" $DK/; done
+    chmod +x $DK/dodakvarter $DK/launch.sh $DK/session.sh $DK/restore.sh $DK/selftest.sh
+    # Its entry in the menu: a tile of its own on the shelf where this ROCKNIXDS lists it as a system
+    # (es_systems_rocknixds.cfg, installed with the theme from 1.6 on; the tile's icon is the theme's), else a line in
+    # Ports as in 0.1. An entry left in the other place by an earlier install goes.
+    if [ -f /storage/.config/emulationstation/es_systems_rocknixds.cfg ]; then
+        DKE=/storage/.config/rocknixds/apps/dodakvarter DKOLD=/storage/roms/ports
+        say "Installing Döda Kvarter (its own tile in the menu)"
+    else
+        DKE=/storage/roms/ports DKOLD=/storage/.config/rocknixds/apps/dodakvarter
+        say "Installing Döda Kvarter (Ports)"
+    fi
+    if [ -f "$DKOLD/Doda Kvarter.sh" ]; then
+        python3 $DK/gamelist.py remove "$DKOLD" 2>/dev/null || true
+        rm -f "$DKOLD/Doda Kvarter.sh" "$DKOLD"/images/dodakvarter-*.png
+    fi
+    mkdir -p "$DKE/images"
+    cp "$SRC/dodakvarter/device/Doda Kvarter.sh" "$DKE/Doda Kvarter.sh"
+    chmod +x "$DKE/Doda Kvarter.sh"
+    cp "$SRC"/dodakvarter/device/media/dodakvarter-*.png "$DKE/images/"
+    python3 $DK/gamelist.py add "$DKE" || say "Döda Kvarter: the menu's list wasn't updated (see above)"
 fi
 
 # ---- lockdown and updates ------------------------------------------------------------------------------
