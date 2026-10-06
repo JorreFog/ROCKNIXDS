@@ -32,7 +32,10 @@ while :; do
             say "pid $P rss $((rss / 1024)) MB (heap $((anon / 1024)), files $((file / 1024)), shared/GPU $((shmem / 1024))), system available $((avail / 1024)) MB, uptime ${now} s"
             last=$rss lastt=$now
         fi
-        if [ $LIMIT -gt 0 ] && [ $rss -gt $LIMIT ] && ! systemctl is-active -q dsflip-game; then
+        # no game of any kind: a DS game runs in its own unit, every other emulator (RetroArch...) inside ES's, which a
+        # restart would kill with it; ES's API says 200 while one runs (201: none; no answer: ES is too far gone to ask)
+        if [ $LIMIT -gt 0 ] && [ $rss -gt $LIMIT ] && ! systemctl is-active -q dsflip-game &&
+           [ "$(curl -s -m 2 -o /dev/null -w '%{http_code}' localhost:1234/runningGame 2>/dev/null)" != 200 ]; then
             say "ES at $((rss / 1024)) MB, over $((LIMIT / 1024)) MB with no game running: restarting it"
             grep -E '^(Vm|Rss|Threads)' /proc/$P/status | tr '\n' ' ' | sed 's/^/  /' >> $LOG; echo >> $LOG
             sync

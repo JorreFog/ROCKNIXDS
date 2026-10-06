@@ -25,15 +25,17 @@ cleanup() {
 }
 trap cleanup EXIT; trap 'exit 1' HUP INT TERM
 [ -f "$RSTATE" ] && mv "$RSTATE" "$RSTATE.freeze-repro"
-touch /tmp/rocknixds-testing /tmp/rocknixds-testing-resume   # a test launch (no play stats), resume on all the same
+touch /tmp/rocknixds-testing /tmp/rocknixds-testing-resume   # test launches, resume on all the same (session.sh
+                                                            # skips its own stats; ES still counts each as a play)
 [ "$MODE" = old ] && systemctl set-environment DSFLIP_SPREAD_THREADS=0
 systemctl set-environment DSFLIP_STALL_QUIT=0               # keep a stalled DraStic alive for the backtraces
 log() { echo "$*" | tee -a $REP; }
 idle() { i=0; while ! curl -s -m 1 localhost:1234/isIdle | grep -q true && [ $i -lt 60 ]; do sleep 0.5; i=$((i+1)); done; }
-launch() {
+launch() {           # until libdsflip's verdict (/tmp/dsflip-state): from then on dsflip.log is this game's
     idle
+    rm -f /tmp/dsflip-state
     curl -s -m 5 -X POST --data-binary "$ROM" -o /dev/null localhost:1234/launch
-    i=0; while ! systemctl is-active -q dsflip-game && [ $i -lt 150 ]; do sleep 0.1; i=$((i+1)); done
+    i=0; while [ ! -s /tmp/dsflip-state ] && [ $i -lt 200 ]; do sleep 0.1; i=$((i+1)); done
 }
 gone() { i=0; while systemctl is-active -q dsflip-game && [ $i -lt 200 ]; do sleep 0.1; i=$((i+1)); done; }
 dump() {
@@ -52,7 +54,7 @@ dump() {
     grep -a 'CPU placement\|power profile\|resuming' $D/last-session.log | tail -n 5 >> $REP
 }
 log "freeze-repro: $GAME, $RUNS runs, mode $MODE (ROCKNIXDS $(cat /storage/.config/rocknixds-version 2>/dev/null), libdsflip $(head -c 200 $D/dsflip.log | sed -n 's/.*libdsflip //p' | head -n1))"
-stalls=0
+stalls=0 ends=0 noload=0
 for r in $(seq 1 $RUNS); do
     rm -f "$RSTATE"
     launch; sleep 25
@@ -60,9 +62,16 @@ for r in $(seq 1 $RUNS); do
     [ -f "$RSTATE" ] || { log "run $r: no resume state was saved (resume on quit off for this game?): stopping"; break; }
     for n in $NETS; do ip route add unreachable $n 2>/dev/null; done
     launch
-    n=0 zero=0 stalled=0
+    touch /tmp/dsflip-hold          # a game wedged whole (libdsflip's threads too) is for this script to catch and dump
+    n=0 zero=0 stalled=0 ended=0 PT= hb=0 hbt=
     while [ $n -lt 40 ]; do
         sleep 1; n=$((n+1))
+        P=$(pidof drastic || pidof drastic.real); [ -n "$P" ] || { ended=1; break; }
+        # libdsflip's presenter wakes 20 times a second whatever the game does: its CPU time standing still is a wedge
+        [ -n "$PT" ] || for t in /proc/$P/task/[0-9]*; do [ "$(cat $t/comm 2>/dev/null)" = dsf-present ] && PT=${t##*/}; done
+        cpu=; [ -n "$PT" ] && read cpu _ < /proc/$P/task/$PT/schedstat 2>/dev/null
+        if [ -n "$cpu" ] && [ "$cpu" = "$hbt" ]; then hb=$((hb+1)); else hb=0; hbt=$cpu; fi
+        [ $hb -ge 10 ] && { log "run $r: libdsflip's presenter hasn't run for 10 s: the whole game is wedged"; stalled=1; break; }
         l=$(grep -a 'present/s' $D/dsflip.log | tail -n1 | cut -c10-30)
         case "$l" in *"present/s=0.0"*) zero=$((zero+1)) ;; *) zero=0 ;; esac
         grep -aq '^\[stall\] no frame' $D/dsflip.log && stalled=1
@@ -71,8 +80,15 @@ for r in $(seq 1 $RUNS); do
         [ $stalled = 1 ] && break
     done
     resumed=$(grep -ac '^\[resume\] resumed\|loading the resume state' $D/dsflip.log)
-    if [ $stalled = 1 ]; then stalls=$((stalls+1)); dump $r; else log "run $r: ran 40 s after the resume load (resume lines: $resumed), $(grep -a 'present/s' $D/dsflip.log | tail -n1 | cut -c10-30)"; fi
+    if [ $stalled = 1 ]; then stalls=$((stalls+1)); dump $r
+    elif [ $ended = 1 ]; then
+        ends=$((ends+1)); log "run $r: DraStic ended $n s in, before the 40 s were up (resume lines: $resumed): a crash, or a stop from outside"
+        tail -n 8 $D/last-session.log >> $REP; grep -a '^\[stall\]\|^\[resume\]' $D/dsflip.log | tail -n 20 >> $REP
+    elif [ "$resumed" = 0 ]; then
+        noload=$((noload+1)); log "run $r: no resume load seen in dsflip.log, so this run didn't test the freeze"
+    else log "run $r: ran 40 s after the resume load (resume lines: $resumed), $(grep -a 'present/s' $D/dsflip.log | tail -n1 | cut -c10-30)"; fi
+    rm -f /tmp/dsflip-hold
     for n in $NETS; do ip route del unreachable $n 2>/dev/null; done
     P=$(pidof drastic || pidof drastic.real); [ -n "$P" ] && kill -9 $P; gone
 done
-log "freeze-repro: $stalls of $RUNS runs stalled (mode $MODE). Report: $REP"
+log "freeze-repro: $stalls of $RUNS runs stalled, $ends ended early, $noload without a resume load (mode $MODE). Report: $REP"
