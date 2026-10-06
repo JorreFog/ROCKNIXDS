@@ -25,16 +25,20 @@ index 218e787a..0bbc370f 100644
      ${CMAKE_CURRENT_SOURCE_DIR}/src/views/gamelist/IGameListView.cpp
      ${CMAKE_CURRENT_SOURCE_DIR}/src/views/gamelist/ISimpleGameListView.cpp
 diff --git a/es-app/src/guis/GuiMenu.cpp b/es-app/src/guis/GuiMenu.cpp
-index 03dcb641..96c06a97 100644
+index 03dcb641..ab755254 100644
 --- a/es-app/src/guis/GuiMenu.cpp
 +++ b/es-app/src/guis/GuiMenu.cpp
-@@ -5265,6 +5265,10 @@ void GuiMenu::openUISettings()
+@@ -5265,6 +5265,14 @@ void GuiMenu::openUISettings()
  	if (Utils::Platform::queryBatteryInformation().hasBattery)
  		s->addOptionList(_("SHOW BATTERY STATUS"), { { _("NO"), "" },{ _("ICON"), "icon" },{ _("ICON AND TEXT"), "text" } }, "ShowBattery", true);
  
-+	// ROCKNIXDS Pixel (the rnds engine): its top screen rises a little on every move and its picture bobs
++	// ROCKNIXDS Pixel (the rnds engine): its top screen rises a little on every move and its picture bobs; a DS game's
++	// cartridge on the bottom screen can show the ROM's own icon instead of the art (issue #44)
 +	if (Utils::String::startsWith(Settings::getInstance()->getString("ThemeSet"), "rocknixds-pixel"))
++	{
 +		s->addSwitch(_("STILL TOP SCREEN (NO RISE OR BOB)"), "RndsStillTopScreen", true);
++		s->addSwitch(_("ROM ICON ON CARTRIDGES (DS)"), "RndsRomIcon", true);
++	}
 +
  	s->addGroup(_("GAMELIST OPTIONS"));
  #if defined(ROCKNIX)
@@ -74,10 +78,10 @@ index 90df9a9b..75714e3d 100644
  			else if (complete || SDL_GetTicks() - firstFrame > 3000)
 diff --git a/es-app/src/rnds/RndsEs.cpp b/es-app/src/rnds/RndsEs.cpp
 new file mode 100644
-index 00000000..0cdb517e
+index 00000000..235f35f6
 --- /dev/null
 +++ b/es-app/src/rnds/RndsEs.cpp
-@@ -0,0 +1,1164 @@
+@@ -0,0 +1,1211 @@
 +#include "rnds/RndsEs.h"
 +#include "rnds/RndsUI.h"
 +
@@ -105,6 +109,7 @@ index 00000000..0cdb517e
 +#include "utils/FileSystemUtil.h"
 +#include "utils/StringUtil.h"
 +#include "utils/TimeUtil.h"
++#include "utils/ZipFile.h"
 +#include "watchers/BatteryLevelWatcher.h"
 +#include "watchers/NetworkStateWatcher.h"
 +#include "watchers/WatchersManager.h"
@@ -146,6 +151,27 @@ index 00000000..0cdb517e
 +			memcpy(&b.px[y * w * 4], px + (h - 1 - y) * w * 4, w * 4);
 +		delete[] px;
 +		return b;
++	}
++
++	// ---- zip archives: es-core's reader (a zipped DS ROM's icon, rnds::romIcon) ----------------------------------------
++	static bool esZipRead(const std::string& path, const std::function<int(const std::vector<ZipMember>&)>& pick,
++		const std::function<bool(const uint8_t*, size_t)>& sink)
++	{
++		Utils::Zip::ZipFile zip;
++		if (!zip.load(path))
++			return false;
++		std::vector<ZipMember> members;
++		for (auto& i : zip.infolist())
++			members.push_back(ZipMember{ i.filename, (uint64_t)i.file_size });
++		int at = pick(members);
++		if (at < 0 || at >= (int)members.size())
++			return true;
++		// miniz stops the member when the callback takes fewer bytes than it was given
++		zip.readBuffered(members[at].name, [](void* opaque, uint64_t, const void* buf, size_t n) -> size_t
++		{
++			return (*(const std::function<bool(const uint8_t*, size_t)>*)opaque)((const uint8_t*)buf, n) ? n : 0;
++		}, (void*)&sink);
++		return true;
 +	}
 +
 +	// ---- GL backend ---------------------------------------------------------------------------------------------------
@@ -373,6 +399,7 @@ index 00000000..0cdb517e
 +		struct Held { bool on = false; UI::Button button = UI::LEFT; int device = 0, type = 0, id = 0; Uint32 since = 0, last = 0; } held;
 +		Uint32 lastUpdate = 0;	// a held direction keeps frames coming: a longer gap means a menu was on top and got the release
 +		Uint32 lastScrollSound = 0;
++		bool romIcons = false;				// the Pixel setting "ROM icon on cartridges" as the engine last saw it
 +		int launchedCheevos = 0;
 +
 +		// worker
@@ -388,6 +415,7 @@ index 00000000..0cdb517e
 +		Impl(Window* w) : window(w)
 +		{
 +			setDecoder(esDecode);
++			setZipReader(esZipRead);
 +			releaser = std::make_shared<TextureReleaser>();
 +			releaser->drop = [this] { if (ui) ui->dropTextures(); };
 +			ResourceManager::getInstance()->addReloadable(releaser);
@@ -645,6 +673,20 @@ index 00000000..0cdb517e
 +			return a + " · " + b;
 +		}
 +
++		// the ROM whose own icon goes on the bottom screen's cartridge, with the Pixel setting on: a DS game's .nds or
++		// .zip (in a collection too); other archives and other systems keep the art
++		std::string romIconOf(FileData* f)
++		{
++			if (!romIcons)
++				return "";
++			FileData* src = f->getSourceFileData();
++			SystemData* s = src ? src->getSystem() : nullptr;
++			if (s == nullptr || !(s->hasPlatformId(PlatformIds::NINTENDO_DS) || s->getName() == "nds"))
++				return "";
++			std::string path = src->getPath(), ext = Utils::String::toLower(Utils::FileSystem::getExtension(path));
++			return ext == ".nds" || ext == ".zip" ? path : "";
++		}
++
 +		FileData* resumeOf(SystemData* s)
 +		{
 +			auto it = resumeCache.find(s);
@@ -800,6 +842,7 @@ index 00000000..0cdb517e
 +			r.box = f->getThumbnailPath(true);
 +			r.cart = mediaPath(f, MetaDataId::Cartridge);
 +			r.label = mediaPath(f, MetaDataId::BoxBack);
++			r.rom = romIconOf(f);
 +			r.fav = f->getFavorite();
 +
 +			int id = atoi(f->getMetadata(MetaDataId::CheevosId).c_str());
@@ -1198,6 +1241,14 @@ index 00000000..0cdb517e
 +			return;
 +		if (d->pendingRefresh.exchange(false))
 +			d->ui->dataChanged();
++		// the Pixel setting "ROM icon on cartridges" changed (in the menu, which the engine doesn't update under): the
++		// games are read again
++		bool romIcons = Settings::getInstance()->getBool("RndsRomIcon");
++		if (romIcons != d->romIcons)
++		{
++			d->romIcons = romIcons;
++			d->ui->dataChanged();
++		}
 +		Uint32 now = SDL_GetTicks();
 +		auto& h = d->held;
 +		if (h.on && now - d->lastUpdate > 250) h.on = false;
@@ -1314,10 +1365,10 @@ index 00000000..f47b0348
 +}
 diff --git a/es-app/src/rnds/RndsRaster.cpp b/es-app/src/rnds/RndsRaster.cpp
 new file mode 100644
-index 00000000..8286fdcc
+index 00000000..c9e2bf52
 --- /dev/null
 +++ b/es-app/src/rnds/RndsRaster.cpp
-@@ -0,0 +1,873 @@
+@@ -0,0 +1,1012 @@
 +#include "RndsRaster.h"
 +
 +#include <ft2build.h>
@@ -1325,9 +1376,12 @@ index 00000000..8286fdcc
 +#include FT_OUTLINE_H
 +#include FT_ADVANCES_H
 +#include <algorithm>
++#include <cctype>
 +#include <cmath>
 +#include <cstdio>
 +#include <cstring>
++#include <deque>
++#include <map>
 +#include <mutex>
 +
 +namespace rnds
@@ -2190,13 +2244,149 @@ index 00000000..8286fdcc
 +			}
 +		}
 +	}
++
++	// ---- a DS ROM's own icon ------------------------------------------------------------------------------------------
++
++	static ZipReader sZipReader = nullptr;
++	void setZipReader(ZipReader reader) { sZipReader = reader; }
++
++	static uint32_t le32(const uint8_t* p) { return p[0] | (p[1] << 8) | (p[2] << 16) | ((uint32_t)p[3] << 24); }
++
++	static const size_t NDS_BANNER_AT = 0x68;		// the header's u32: where the banner is
++	static const size_t NDS_HEADER = 0x200;			// a banner can't start inside the header
++	static const size_t NDS_BANNER = 0x240;			// version, CRCs, the icon's tiles and palette
++	static const uint64_t ZIP_REACH = 32u << 20;	// how far into a zipped ROM the banner is looked for
++
++	Bitmap ndsBannerIcon(const uint8_t* b)
++	{
++		Bitmap out;
++		unsigned version = b[0] | (b[1] << 8);
++		if (version != 1 && version != 2 && version != 3 && version != 0x103)
++			return out;
++		uint8_t pal[16][4];
++		for (int i = 0; i < 16; i++)
++		{
++			unsigned c = b[0x220 + 2 * i] | (b[0x221 + 2 * i] << 8);	// BGR555
++			unsigned r = c & 31, g = (c >> 5) & 31, bl = (c >> 10) & 31;
++			pal[i][0] = (uint8_t)((r << 3) | (r >> 2)); pal[i][1] = (uint8_t)((g << 3) | (g >> 2)); pal[i][2] = (uint8_t)((bl << 3) | (bl >> 2));
++			pal[i][3] = i == 0 ? 0 : 255;
++		}
++		pal[0][0] = pal[0][1] = pal[0][2] = 0;
++		out.w = out.h = 32;
++		out.px.assign(32 * 32 * 4, 0);
++		for (int t = 0; t < 16; t++)		// tile t = ty * 4 + tx
++			for (int y = 0; y < 8; y++)
++				for (int x = 0; x < 8; x++)
++				{
++					uint8_t v = b[0x20 + t * 32 + y * 4 + x / 2];
++					memcpy(&out.px[(((t / 4) * 8 + y) * 32 + (t % 4) * 8 + x) * 4], pal[x & 1 ? v >> 4 : v & 15], 4);
++				}
++		return out;
++	}
++
++	// the header's banner offset, then the banner, from a ROM read in order (a zip member streams)
++	struct BannerGrab
++	{
++		uint64_t size = 0, pos = 0, at = 0;	// the ROM's size; bytes seen; the banner's offset (0 until the header is in)
++		uint64_t reach = ~0ull;
++		std::vector<uint8_t> head, banner;
++		bool failed = false;
++		bool done() const { return banner.size() == NDS_BANNER; }
++		// false: enough (or nothing to find)
++		bool feed(const uint8_t* p, size_t n)
++		{
++			for (size_t i = 0; i < n && !failed && !done(); )
++			{
++				uint64_t o = pos + i;
++				if (head.size() < NDS_BANNER_AT + 4)
++				{
++					head.push_back(p[i++]);
++					if (head.size() == NDS_BANNER_AT + 4)
++					{
++						at = le32(&head[NDS_BANNER_AT]);
++						failed = at < NDS_HEADER || at + NDS_BANNER > size || at > reach;
++					}
++					continue;
++				}
++				if (o < at) { i += (size_t)std::min<uint64_t>(at - o, n - i); continue; }	// skip to the banner
++				size_t k = std::min(n - i, NDS_BANNER - banner.size());
++				banner.insert(banner.end(), p + i, p + i + k);
++				i += k;
++			}
++			pos += n;
++			return !failed && !done();
++		}
++	};
++
++	static bool endsWithNoCase(const std::string& s, const char* suffix)
++	{
++		size_t n = strlen(suffix);
++		if (s.size() < n) return false;
++		for (size_t i = 0; i < n; i++)
++			if (tolower((unsigned char)s[s.size() - n + i]) != suffix[i]) return false;
++		return true;
++	}
++
++	static Bitmap readRomIcon(const std::string& path)
++	{
++		if (endsWithNoCase(path, ".nds"))
++		{
++			FILE* f = fopen(path.c_str(), "rb");
++			if (!f) return Bitmap();
++			uint8_t head[NDS_BANNER_AT + 4], banner[NDS_BANNER];
++			bool ok = fread(head, 1, sizeof head, f) == sizeof head && fseek(f, 0, SEEK_END) == 0;
++			long size = ok ? ftell(f) : -1;
++			uint64_t at = ok ? le32(&head[NDS_BANNER_AT]) : 0;
++			ok = ok && size > 0 && at >= NDS_HEADER && at + NDS_BANNER <= (uint64_t)size &&
++				fseek(f, (long)at, SEEK_SET) == 0 && fread(banner, 1, sizeof banner, f) == sizeof banner;
++			fclose(f);
++			return ok ? ndsBannerIcon(banner) : Bitmap();
++		}
++		if (!endsWithNoCase(path, ".zip") || !sZipReader)
++			return Bitmap();
++		BannerGrab g;
++		g.reach = ZIP_REACH;
++		sZipReader(path, [&g](const std::vector<ZipMember>& ms) -> int
++		{
++			int first = -1;
++			for (int i = 0; i < (int)ms.size(); i++)
++			{
++				if (!ms[i].name.empty() && ms[i].name.back() == '/') continue;	// a folder
++				if (endsWithNoCase(ms[i].name, ".nds")) { g.size = ms[i].size; return i; }
++				if (first < 0) first = i;
++			}
++			if (first >= 0) g.size = ms[first].size;
++			return first;
++		}, [&g](const uint8_t* p, size_t n) { return g.feed(p, n); });
++		return g.done() ? ndsBannerIcon(g.banner.data()) : Bitmap();
++	}
++
++	Bitmap romIcon(const std::string& path)
++	{
++		static std::mutex lock;
++		static std::map<std::string, Bitmap> memo;	// 4 KB an icon (and nothing for a ROM without one)
++		static std::deque<std::string> order;
++		{
++			std::lock_guard<std::mutex> l(lock);
++			auto it = memo.find(path);
++			if (it != memo.end()) return it->second;
++		}
++		Bitmap b = readRomIcon(path);
++		std::lock_guard<std::mutex> l(lock);
++		if (memo.emplace(path, b).second)
++		{
++			order.push_back(path);
++			if (order.size() > 512) { memo.erase(order.front()); order.pop_front(); }
++		}
++		return b;
++	}
 +}
 diff --git a/es-app/src/rnds/RndsRaster.h b/es-app/src/rnds/RndsRaster.h
 new file mode 100644
-index 00000000..026769b4
+index 00000000..90e55347
 --- /dev/null
 +++ b/es-app/src/rnds/RndsRaster.h
-@@ -0,0 +1,175 @@
+@@ -0,0 +1,192 @@
 +#pragma once
 +// ROCKNIXDS rnds engine: CPU rasterizer for the pieces the mockup is drawn from. Boxes are painted the way CSS paints a
 +// box (outer box-shadows, background colour, hard-stop gradient bands and the dither tile, inset box-shadows, border),
@@ -2204,6 +2394,7 @@ index 00000000..026769b4
 +// are decoded and fitted (cover / contain). Everything here is plain C++ and FreeType, so the same code runs in ES and
 +// in the host test harness that compares the engine's frames with the mockup rendered by Chromium.
 +#include <cstdint>
++#include <functional>
 +#include <memory>
 +#include <string>
 +#include <unordered_map>
@@ -2371,13 +2562,29 @@ index 00000000..026769b4
 +	Bitmap cardLabelArt(const Bitmap& scan);
 +	// a DS box cover without the case's white NINTENDO DS strip down its left edge
 +	Bitmap coverWithoutStrip(const Bitmap& box);
++
++	// ---- a DS ROM's own icon ----------------------------------------------------------------------------------------
++	// The 32x32 icon in a DS ROM's banner (the DS menu's picture of the game), RGBA8 with palette index 0 transparent:
++	// from a .nds, or from a .zip's first .nds (else its first file) through the host's zip reader. Empty when there
++	// is none: no banner, a banner offset inside the header or past the end (or, in a zip, more than 32 MB in), a banner
++	// version other than 1, 2, 3 or 0x103, another kind of file. Remembered per path (the last 512).
++	Bitmap romIcon(const std::string& path);
++	// the icon from a banner's first 0x240 bytes: version, CRCs, the 4x4 tiles of 8x8 4bpp pixels at 0x20 (low nibble
++	// first), the 16 BGR555 colours at 0x220
++	Bitmap ndsBannerIcon(const uint8_t* banner);
++	// the host's zip archives (ES: es-core's Utils::Zip::ZipFile): pick chooses a member from the list (its index, -1
++	// for none), sink takes that member's bytes in order until it returns false; false when the archive can't be read
++	struct ZipMember { std::string name; uint64_t size = 0; };
++	typedef bool (*ZipReader)(const std::string& zip, const std::function<int(const std::vector<ZipMember>&)>& pick,
++		const std::function<bool(const uint8_t*, size_t)>& sink);
++	void setZipReader(ZipReader reader);
 +}
 diff --git a/es-app/src/rnds/RndsUI.cpp b/es-app/src/rnds/RndsUI.cpp
 new file mode 100644
-index 00000000..18700aee
+index 00000000..9ddc2189
 --- /dev/null
 +++ b/es-app/src/rnds/RndsUI.cpp
-@@ -0,0 +1,2010 @@
+@@ -0,0 +1,2069 @@
 +#include "RndsUI.h"
 +
 +#include <algorithm>
@@ -2440,6 +2647,7 @@ index 00000000..18700aee
 +		Color favBorder, favBand, favBody, favInk;
 +		Color glint, floor;							// the box art's shine and its shadow on the sheet
 +		Color slotDark, slotLip;					// the console slot the cartridge goes into
++		Color cartLabel;							// the label under a DS ROM's own icon (GameInfo::rom)
 +	};
 +
 +	static Pal darkPal()
@@ -2463,6 +2671,7 @@ index 00000000..18700aee
 +		p.favBorder = p.red; p.favBand = Color::hex(0x5a2430); p.favBody = Color::hex(0x2a1016); p.favInk = Color::hex(0xff8a96);
 +		p.glint = Color(1, 1, 1, 0.28f); p.floor = Color(0, 0, 0, 0.35f);
 +		p.slotDark = Color::hex(0x05080b); p.slotLip = Color::hex(0x3a4654);
++		p.cartLabel = Color::hex(0xe7eef6);
 +		return p;
 +	}
 +
@@ -2488,6 +2697,7 @@ index 00000000..18700aee
 +		p.favBorder = p.red; p.favBand = Color::hex(0xfff2f3); p.favBody = Color::hex(0xffdfe3); p.favInk = Color::hex(0xc8283a);
 +		p.glint = Color(1, 1, 1, 0.45f); p.floor = Color(sh.r, sh.g, sh.b, 0.2f);
 +		p.slotDark = Color::hex(0x1d2733); p.slotLip = Color::hex(0x8d9bab);
++		p.cartLabel = Color::hex(0xffffff);
 +		return p;
 +	}
 +
@@ -2896,8 +3106,8 @@ index 00000000..18700aee
 +
 +		// what goes on a cartridge's label: the real card's label art (its scan), else the label art the media tool
 +		// made from the cover, else the cover without its NINTENDO DS strip
-+		struct CartArt { std::string scan, label, box; };
-+		static CartArt artOf(const GameInfo& g) { return CartArt{ g.cart, g.label, g.box }; }
++		struct CartArt { std::string scan, label, box, rom; };
++		static CartArt artOf(const GameInfo& g) { return CartArt{ g.cart, g.label, g.box, g.rom }; }
 +		static Bitmap labelArt(const CartArt& a)
 +		{
 +			if (!a.scan.empty())
@@ -2917,6 +3127,23 @@ index 00000000..18700aee
 +		Sprite cart(const CartArt& art0, float cw, float ch)
 +		{
 +			int dw = (int)std::lround(X(cw)), dh = (int)std::lround(X(ch));
++			// or the DS ROM's own icon on it (the host's opt-in): read on the worker; a ROM without one leaves an empty
++			// entry, and the label art is drawn instead
++			if (!art0.rom.empty())
++			{
++				char rk[48];
++				snprintf(rk, sizeof rk, "romcart:%dx%d:", dw, dh);
++				std::string rkey = std::string(rk) + art0.rom;
++				if (auto e = find(rkey))
++				{
++					if (e->sp.valid()) return e->sp;
++				}
++				else
++				{
++					request(rkey, G_CART, false, romCart(art0.rom, dw, dh));
++					return Sprite();
++				}
++			}
 +			char k[48];
 +			snprintf(k, sizeof k, "cart:%dx%d:", dw, dh);
 +			std::string key = std::string(k) + art0.scan + "|" + art0.label + "|" + art0.box;
@@ -2946,6 +3173,45 @@ index 00000000..18700aee
 +				return resize(master, dw, dh);
 +			});
 +			return Sprite();
++		}
++
++		// the job for a cartridge with a DS ROM's own icon, dw x dh device px: the label plain in the palette's colour,
++		// the icon on it at the largest whole multiple of its 32 px that fits the label window (nearest neighbour, and
++		// uploaded unsmoothed: pixel art), the shell over them as the label art's cartridges have it. Empty when the ROM
++		// has no icon
++		std::function<Bitmap(float&, float&)> romCart(const std::string& rom, int dw, int dh)
++		{
++			std::shared_ptr<const Bitmap> shellRef = shell;
++			float sc = s;
++			uint32_t label = P.cartLabel.rgba8();
++			return [rom, shellRef, sc, dw, dh, label](float&, float&) -> Bitmap
++			{
++				Bitmap icon = romIcon(rom);
++				if (icon.empty()) return Bitmap();
++				Bitmap out;
++				out.w = dw; out.h = dh;
++				out.px.assign((size_t)dw * dh * 4, 0);
++				// the shell's label window (x 4..96, y 4..90 of its 100x104), at the drawn size
++				float fx = dw / 100.0f, fy = dh / 104.0f;
++				int wx = (int)std::lround(4 * fx), wy = (int)std::lround(4 * fy);
++				int ww = (int)std::lround(96 * fx) - wx, wh = (int)std::lround(90 * fy) - wy;
++				for (int y = wy; y < wy + wh; y++)
++					for (int x = wx; x < wx + ww; x++)
++					{
++						uint8_t* p = &out.px[((size_t)y * dw + x) * 4];
++						p[0] = (uint8_t)(label >> 24); p[1] = (uint8_t)(label >> 16); p[2] = (uint8_t)(label >> 8); p[3] = 255;
++					}
++				int k = std::max(1, std::min(ww, wh) / 32);
++				blit(out, resizeNearest(icon, 32 * k, 32 * k), wx + (ww - 32 * k) / 2, wy + (wh - 32 * k) / 2);
++				const Bitmap& sh = *shellRef;
++				if (!sh.empty())
++				{
++					int mw = (int)std::lround(100 * sc), mh = (int)std::lround(104 * sc);
++					Bitmap m = mw == sh.w && mh == sh.h ? sh : resizeNearest(sh, mw, mh);
++					blit(out, dw == mw && dh == mh ? m : resize(m, dw, dh), 0, 0);
++				}
++				return out;
++			};
 +		}
 +
 +		// the box cover fitted into COVER_W x COVER_H CSS px (its fitted CSS size in the cache entry)
@@ -3748,7 +4014,7 @@ index 00000000..18700aee
 +					float cw = chipWidth(sy);
 +					float cx = 320 - cw / 2, cy = y0 + 168;
 +					drawBox(chipBox(), cx, cy, cw, 74);
-+					Sprite c = cart(CartArt{ sy.resumeCart, sy.resumeLabel, sy.resumeBox }, 54, 56);
++					Sprite c = cart(CartArt{ sy.resumeCart, sy.resumeLabel, sy.resumeBox, "" }, 54, 56);
 +					drawSprite(c, cx + 11, cy + 9);
 +					float tx = cx + 11 + 54 + 10, ty = cy + 13.5f;
 +					drawLine(le, te, tx, ty, lineHeight(te), MUTED);
@@ -3764,7 +4030,7 @@ index 00000000..18700aee
 +					if (!ny.hasResume) continue;
 +					BoxCss b = chipBox(); b.async = true;
 +					box(b, chipWidth(ny), 74);
-+					cart(CartArt{ ny.resumeCart, ny.resumeLabel, ny.resumeBox }, 54, 56);
++					cart(CartArt{ ny.resumeCart, ny.resumeLabel, ny.resumeBox, "" }, 54, 56);
 +				}
 +			}
 +			else if (ui->mView == LIBRARY && count() == 0)
@@ -4390,10 +4656,10 @@ index 00000000..18700aee
 +}
 diff --git a/es-app/src/rnds/RndsUI.h b/es-app/src/rnds/RndsUI.h
 new file mode 100644
-index 00000000..c38ca9d0
+index 00000000..14b913e8
 --- /dev/null
 +++ b/es-app/src/rnds/RndsUI.h
-@@ -0,0 +1,178 @@
+@@ -0,0 +1,180 @@
 +#pragma once
 +// ROCKNIXDS rnds engine: the ROCKNIXDS menu mockup (mockup/index.html) as a native two-screen UI. Three views: home
 +// (the system shelf), library (a system's games as cartridges) and the ready screen. Layout, colours, fonts and
@@ -4440,6 +4706,8 @@ index 00000000..c38ca9d0
 +		std::string box;		// the 2D box cover (top screen)
 +		std::string cart;		// the real cartridge scan (its label art fills the drawn cartridge)
 +		std::string label;		// label art made from the cover (the media tool's "boxback"), when there is no scan
++		std::string rom;		// a DS ROM (.nds, .zip) whose own icon goes on the bottom screen's cartridge instead
++								// of the art above (the host's opt-in setting; the art when the ROM has no icon)
 +		int achA = 0, achB = 0;	// unlocked / total
 +		std::string achLabel;	// "28 / 50 achievements" (lower case; drawn upper)
 +		bool fav = false;
