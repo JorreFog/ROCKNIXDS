@@ -94,6 +94,9 @@ most). You spend them on:
 - **Smedjan**, the Pack-a-Punch (5000 kr, needs the power): twice the damage, half again the magazine and the
   reserve, a little faster and through one more zombie, and a new name (Ak 5 becomes Ragnarök, the Strålpistol
   Norrskenet).
+- **Elstängsel** (1000 kr, needs the power), the trap: a cabinet by one or two of the gaps between districts. It
+  shocks everything that crosses the gap for 25 s (you too, if you stand in it); those kills count but pay nothing,
+  as in Call of Duty. Then it charges for a minute.
 - **The power**: find the switchgear (Elcentral), usually far from the start. Then the perk machines and Smedjan
   work, and the lights come on across the town in a ring spreading from the switch: street lamps, shop windows,
   the windows of the houses.

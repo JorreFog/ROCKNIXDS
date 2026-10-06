@@ -63,6 +63,28 @@ int main(int argc, char **argv) {
     }
     game_new(seed, season);
     Player *p = &G->p;
+    if (!strcmp(name, "trap")) {                           /* an elstängsel on, zombies walking into it */
+        Inter *trap = 0;
+        for (uint64_t sd = seed; !trap && sd < seed + 40; sd++) {
+            if (sd != seed) game_new(sd, season);
+            for (int i = 0; i < G->nit; i++) if (G->it[i].type == IT_TRAP) trap = &G->it[i];
+        }
+        if (trap) {
+            Inter *gap = &G->it[trap->a];
+            gap->state = 1;
+            for (int j = 0; j < gap->th; j++) for (int i = 0; i < gap->tw; i++) { Tile *t = tile_at(gap->tx + i, gap->ty + j); t->f &= (uint8_t)~(TF_SOLID | TF_INTER); t->inter = 0; }
+            G->power_on = 1; world_repaint_rect(0, 0, G->w, G->h); prop_lights();
+            trap->state = 1; trap->t = TRAP_ON;
+            p->x = trap->x + 10; p->y = trap->y + 6; G->camx = (gap->tx + 1) * TS - top.w / 2; G->camy = (gap->ty + 1) * TS - top.h / 2;
+            float gx = (gap->tx + gap->tw / 2.0f) * TS, gy = (gap->ty + gap->th / 2.0f) * TS;
+            for (int k = 0; k < 3; k++) put(ZT_WALKER, gx - p->x + (k - 1) * 30, gy - p->y - 40 + k * 20, k);
+        }
+        G->round = 9; G->rstate = RS_ACTIVE; G->banner_t = 0;
+        p->aim = -PI_F / 2;
+        ticks(getenv("DK_SCENE_TICKS") ? atoi(getenv("DK_SCENE_TICKS")) : 20, &in); A.state = ST_PLAY;
+        app_render(&top, &bot); shot(out);
+        return 0;
+    }
     if (!strcmp(name, "power")) {                          /* the switch thrown, the ring of light on its way */
         for (int i = 0; i < G->nit; i++) if (G->it[i].type == IT_POWER) {
             Inter *it = &G->it[i]; p->x = it->x; p->y = it->y + 4; G->camx = p->x - top.w / 2; G->camy = p->y - top.h / 2;

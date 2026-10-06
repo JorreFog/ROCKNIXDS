@@ -746,6 +746,20 @@ void sign_board_small(Surf *s, int cx, int y, const char *txt, uint32_t bg, uint
     text(s, FONT_SMALL, cx - tw / 2, y + 2, fg, txt);
 }
 
+static void trap_draw(Surf *s, Inter *it, int x, int y) {               /* the elstängsel's cabinet: a lever, a lamp */
+    int x0 = x - 6, y0 = y - 20;
+    rect_blend(s, x0 + 1, y - 2, 12, 3, 0x000000, 90);
+    rectf(s, x0, y0, 12, 19, 0x5a6a5a); rect_line(s, x0, y0, 12, 19, 0x2e3a2e);
+    hline(s, x0 + 1, x0 + 10, y0 + 1, 0x8a9a8a);
+    for (int j = 0; j < 4; j++) hline(s, x0 + 3 - j / 2, x0 + 3 + j / 2, y0 + 3 + j, 0xf0c818);    /* the flash sign */
+    pset(s, x0 + 3, y0 + 5, 0x1a1a1a);
+    int on = it->state == 1;
+    rectf(s, x0 + 7, y0 + 5, 3, 9, 0x2a2e34);
+    rectf(s, x0 + 8, on ? y0 + 4 : y0 + 10, 1, 5, 0xc02020); rectf(s, x0 + 7, on ? y0 + 3 : y0 + 14, 3, 2, 0x1a1a1a);
+    uint32_t lamp = !G->power_on ? 0x302020 : it->state == 0 ? 0x40ff60 : it->state == 1 ? ((int)(G->time * 10) & 1 ? 0xffffa0 : 0x8080ff) : 0xff4040;
+    rectf(s, x0 + 2, y0 + 12, 3, 3, lamp);
+    snow_cap(s, x0, x0 + 11, y0 - 1);
+}
 static void power_draw(Surf *s, Inter *it, int x, int y) {              /* the switchgear with its lever */
     (void)it;
     int x0 = x - 8, y0 = y - 26;
@@ -794,6 +808,7 @@ void inter_draw(Surf *s, Inter *it, int sx, int sy) {
     case IT_PERK: perk_draw(s, it, sx + it->tw * TS / 2, sy + it->th * TS); break;
     case IT_PAP: pap_draw(s, it, sx + it->tw * TS / 2, sy + it->th * TS); break;
     case IT_POWER: power_draw(s, it, sx + it->tw * TS / 2, sy + it->th * TS); break;
+    case IT_TRAP: trap_draw(s, it, sx + it->tw * TS / 2, sy + it->th * TS); break;
     case IT_BOX: box_draw(s, it, sx + it->tw * TS / 2, sy + it->th * TS); break;
     case IT_WALLBUY: {                                                       /* a chalk outline of the weapon */
         if (it->a >= 0) {

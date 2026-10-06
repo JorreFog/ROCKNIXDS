@@ -276,8 +276,9 @@ static void zombie_update(Zombie *z, float dt) {
         z->t += dt;
         if (it->state > 0) {
             if (z->t > 1.0f) { z->t = 0; it->state--; sfx_at(SFX_BOARD_BREAK, z->x, z->y, 0.6f); spawn_parts(PT_WOOD, z->x, z->y + 4, 4, 0x8a6a3a, 50); }
-        } else if (z->t > 0.6f) {
-            z->state = ZS_CHASE; z->y += TS - 2;
+        } else if (z->t > 0.6f) {                           /* out, into the middle of the tile in front */
+            z->state = ZS_CHASE; z->x = it->tx * TS + TS / 2.0f; z->y = (it->ty + 1) * TS + TS / 2.0f;
+            unstick_actor(&z->x, &z->y, 5);
         }
         return;
     }
@@ -340,6 +341,7 @@ static void zombie_update(Zombie *z, float dt) {
     /* knockback decays */
     vx += z->vx; vy += z->vy; z->vx *= 0.8f; z->vy *= 0.8f;
     float r = z->type == ZT_MOOSE ? 9 : z->type == ZT_BRUTE ? 6 : 5;
+    unstick_actor(&z->x, &z->y, r);
     move_actor(&z->x, &z->y, vx * dt, vy * dt, r);
     z->anim += dt * (z->speed / 9.0f) * slow;
     if (fabsf(dx) > fabsf(dy)) z->dir = dx > 0 ? 2 : 3; else z->dir = dy > 0 ? 0 : 1;

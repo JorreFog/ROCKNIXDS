@@ -130,6 +130,18 @@ int move_actor(float *x, float *y, float dx, float dy, float r) {
     return hit;
 }
 
+/* something standing partly in a wall (climbing out of a window, pushed by a blast) is moved to the nearest place
+   it fits, within a tile; 0 if there was none */
+int unstick_actor(float *x, float *y, float r) {
+    if (!blocked(*x, *y, r)) return 1;
+    for (int d = 1; d <= 16; d++)
+        for (int k = 0; k < 8; k++) {
+            static const int o[8][2] = { {0,1},{0,-1},{1,0},{-1,0},{1,1},{-1,1},{1,-1},{-1,-1} };
+            float nx = *x + o[k][0] * d, ny = *y + o[k][1] * d;
+            if (!blocked(nx, ny, r)) { *x = nx; *y = ny; return 1; }
+        }
+    return 0;
+}
 /* a body r wide could walk the straight line between two points (nothing solid on the way) */
 int walk_clear(float x0, float y0, float x1, float y1, float r) {
     float dx = x1 - x0, dy = y1 - y0, d = sqrtf(dx * dx + dy * dy);

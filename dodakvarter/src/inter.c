@@ -121,6 +121,33 @@ static void boxes_tick(float dt) {
 }
 
 /* ---------------------------------------------------------------- using things */
+/* the elstängsel: zombies in the gap die, you get shocked, sparks; then it charges for a minute */
+static void traps_tick(float dt) {
+    for (int i = 0; i < G->nit; i++) {
+        Inter *it = &G->it[i];
+        if (it->type != IT_TRAP || !it->state || it->a < 0) continue;
+        it->t -= dt;
+        if (it->state == 2) { if (it->t <= 0) { it->state = 0; it->t = 0; } continue; }
+        const Inter *b = &G->it[it->a];
+        float x0 = b->tx * TS, y0 = b->ty * TS, x1 = x0 + b->tw * TS, y1 = y0 + b->th * TS, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        for (int k = 0; k < MAX_ZOMBIES; k++) {
+            Zombie *z = &G->z[k];
+            if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE || z->state == ZS_WINDOW) continue;
+            if (z->x < x0 - 3 || z->x > x1 + 3 || z->y < y0 || z->y > y1 + 6) continue;
+            if (z->type == ZT_MOOSE) {                       /* the moose takes it, slowly */
+                float dmg = 2500 * dt;
+                if (z->hp - dmg <= 0) damage_zombie(z, dmg, 0, 0, 0, 0); else { z->hp -= dmg; z->flash = 0.05f; }
+            } else zombie_shocked(z);
+        }
+        Player *p = &G->p;
+        it->t2 -= dt;
+        if (p->x > x0 - 3 && p->x < x1 + 3 && p->y > y0 && p->y < y1 + 6 && it->t2 <= 0) { player_hurt(45, cx, cy); it->t2 = 0.6f; }
+        if (rng_chance(&G->fx, dt * 25)) spawn_parts(PT_ELEC, x0 + rng_float(&G->fx) * (x1 - x0), y0 + 4 + rng_float(&G->fx) * (y1 - y0), 2, 0xc0e0ff, 60);
+        if (rng_chance(&G->fx, dt * 2.5f)) sfx_at(SFX_ZAP, cx, cy, 0.45f);
+        if (it->t <= 0) { it->state = 2; it->t = TRAP_WAIT; }
+    }
+}
+
 static void use_inter(int i) {
     Player *p = &G->p;
     Inter *it = &G->it[i];
@@ -228,6 +255,13 @@ static void use_inter(int i) {
         prop_lights();
         break;
     case IT_LOOT: loot_container(it); break;
+    case IT_TRAP:
+        if (it->state) return;
+        if (!G->power_on) { msg(0xa0a0a0, "%s", tr("Needs power")); sfx(SFX_DENY, 0.5f, 0); return; }
+        if (!pay(it->cost)) return;
+        it->state = 1; it->t = TRAP_ON; it->t2 = 0;
+        sfx_at(SFX_POWER, it->x, it->y, 0.7f); sfx_at(SFX_ZAP, it->x, it->y, 0.9f);
+        break;
     default: break;
     }
 }
@@ -288,6 +322,12 @@ const char *inter_prompt(int i, int *ok) {
             *ok = p->kr >= cost;
         }
         break;
+    case IT_TRAP:
+        if (it->state == 1) { snprintf(b, sizeof b, "%s: %s", tr("Elstängsel"), tr("on")); *ok = 0; break; }
+        if (it->state == 2) { snprintf(b, sizeof b, "%s (%s %.0f s)", tr("Elstängsel"), tr("charging"), ceilf(it->t)); *ok = 0; break; }
+        if (!G->power_on) { snprintf(b, sizeof b, "%s (%s)", tr("Elstängsel"), tr("Needs power")); *ok = 0; break; }
+        fmt_num(n, it->cost); snprintf(b, sizeof b, "%s: %s - %s kr", use_label(), tr("Elstängsel"), n); *ok = p->kr >= it->cost;
+        break;
     case IT_BOX:
         if (it->state == 2) { snprintf(b, sizeof b, "%s: %s %s", use_label(), tr("Take"), WEAPONS[it->b].name); break; }
         if (it->state) return 0;
@@ -323,6 +363,7 @@ int inter_target(void) { return target(0); }
 void inter_update(const Input *in, const Input *prev, float dt) {
     Player *p = &G->p;
     boxes_tick(dt);
+    traps_tick(dt);
     G->prompt[0] = 0;
     if (p->downed || G->over) return;
     int t = target(0);

@@ -1,0 +1,94 @@
+// test_rules: a few of the game's rules played out in a town, each on its own:
+//   - the elstängsel needs the power and 1000 kr, kills what crosses its gap for 25 s without paying for it, shocks
+//     you if you stand in it, then charges for a minute
+//   - a zombie in a window swipes at whoever stands at the gap, and can be shot through the boards
+//   - pulling the trigger on a gun that has run dry brings out one that hasn't
+#include "../src/game.h"
+#include <stdio.h>
+#include <stdlib.h>
+
+static int fails;
+#define CHECK(c, ...) do { if (!(c)) { fails++; printf("FAIL: "); printf(__VA_ARGS__); printf("\n"); } } while (0)
+
+static Input none, fire;
+static void tick(int n, const Input *in) { for (int i = 0; i < n; i++) game_update(in, &none, 1.0f / 60); }
+static void calm(void) { for (int i = 0; i < MAX_ZOMBIES; i++) G->z[i].alive = 0; G->to_spawn = G->spawned = 999; G->spawn_cd = 1e9f; }
+static Zombie *zombie_at(float x, float y, int state) {
+    for (int i = 0; i < MAX_ZOMBIES; i++) if (!G->z[i].alive) {
+        Zombie *z = &G->z[i]; memset(z, 0, sizeof *z);
+        z->alive = 1; z->type = ZT_WALKER; z->state = state; z->x = x; z->y = y; z->hp = z->maxhp = 500; z->speed = 20; z->window = -1;
+        return z;
+    }
+    return 0;
+}
+
+int main(void) {
+    G = calloc(1, sizeof *G); G->view_w = 320; G->view_h = 240;
+    fire.held = BIT(B_A);
+    int seed = 1;
+    Inter *trap = 0;
+    for (; seed < 50 && !trap; seed++) {
+        game_new((uint64_t)seed, seed % SEASON_COUNT);
+        for (int i = 0; i < G->nit; i++) if (G->it[i].type == IT_TRAP) trap = &G->it[i];
+    }
+    CHECK(trap != 0, "no town with an elstängsel in 50");
+    if (trap) {
+        Player *p = &G->p; Inter *gap = &G->it[trap->a];
+        G->round = 5; G->rstate = RS_ACTIVE; calm();
+        /* open its gap as if bought */
+        gap->state = 1;
+        for (int j = 0; j < gap->th; j++) for (int i = 0; i < gap->tw; i++) { Tile *t = tile_at(gap->tx + i, gap->ty + j); t->f &= (uint8_t)~(TF_SOLID | TF_INTER); t->inter = 0; }
+        p->x = trap->x; p->y = trap->y; p->kr = 5000;
+        Input use; memset(&use, 0, sizeof use); use.held = BIT(btn_use());
+        game_update(&use, &none, 1.0f / 60);
+        CHECK(trap->state == 0 && p->kr == 5000, "the elstängsel went on without the power");
+        G->power_on = 1;
+        game_update(&use, &none, 1.0f / 60);
+        CHECK(trap->state == 1 && p->kr == 5000 - TRAP_COST, "the elstängsel didn't go on for %d kr (state %d, %d kr)", TRAP_COST, trap->state, p->kr);
+        float gx = (gap->tx + gap->tw / 2.0f) * TS, gy = (gap->ty + gap->th / 2.0f) * TS + 4;
+        Zombie *z = zombie_at(gx, gy, ZS_CHASE);
+        int kills = p->kills, kr = p->kr;
+        tick(2, &none);
+        CHECK(z->state == ZS_DEAD, "a zombie in the gap lived");
+        CHECK(p->kills == kills + 1 && p->kr == kr, "the trap's kill: %d kills (want %d), %d kr (want %d)", p->kills, kills + 1, p->kr, kr);
+        /* you, in the gap */
+        float hp = p->hp; p->x = gx; p->y = gy; p->invuln = 0;
+        tick(2, &none);
+        CHECK(p->hp < hp || p->downed, "standing in the elstängsel didn't hurt");
+        p->x = trap->x; p->y = trap->y; p->hp = p->maxhp; p->downed = 0; G->over = 0;
+        tick((int)(TRAP_ON * 60) + 10, &none);
+        CHECK(trap->state == 2, "the elstängsel didn't go off after %.0f s", TRAP_ON);
+        z = zombie_at(gx, gy, ZS_CHASE);
+        tick(2, &none);
+        CHECK(z->state != ZS_DEAD, "a zombie died in the gap while it charged");
+        z->alive = 0;
+        tick((int)(TRAP_WAIT * 60) + 10, &none);
+        CHECK(trap->state == 0, "the elstängsel didn't charge in %.0f s", TRAP_WAIT);
+    }
+    /* a zombie in a window */
+    Inter *win = 0;
+    for (int i = 0; i < G->nit && !win; i++) if (G->it[i].type == IT_WINDOW) win = &G->it[i];
+    CHECK(win != 0, "no window");
+    if (win) {
+        Player *p = &G->p; calm(); G->god = 0; G->over = 0; p->downed = 0; p->hp = p->maxhp = 100; p->invuln = 0;
+        Zombie *z = zombie_at(win->tx * TS + TS / 2, win->ty * TS + TS - 2, ZS_WINDOW); z->window = (int)(win - G->it);
+        win->state = 3;                                    /* three boards gone */
+        p->x = win->x; p->y = win->y; p->aim = -PI_F / 2;
+        tick(60, &none);
+        CHECK(p->hp < 100, "standing at a broken window, the zombie in it didn't swipe");
+        float hp0 = z->hp;
+        p->w[0] = weapon_make(W_AK5, RAR_COMMON); p->cur = 0; p->reloading = 0; p->fire_cd = 0; p->swap_t = 0;
+        for (int k = 0; k < 20 && z->alive && z->state != ZS_DEAD; k++) { p->aim = atan2f(z->y - 8 - (p->y - 8), z->x - p->x); weapon_fire(); p->fire_cd = 0; }
+        CHECK(z->state == ZS_DEAD || z->hp < hp0, "shots through the boards didn't hit the zombie in the window");
+    }
+    /* an empty gun */
+    {
+        Player *p = &G->p; calm();
+        p->w[0] = weapon_make(W_AK5, RAR_COMMON); p->w[0].mag = 0; p->w[0].reserve = 0;
+        p->w[1] = weapon_make(W_PIST88, RAR_COMMON); p->cur = 0; p->fired_this_press = 0; p->reloading = 0; p->fire_cd = 0;
+        weapon_fire();
+        CHECK(p->cur == 1, "a dry gun didn't hand over to the one with ammo");
+    }
+    printf("rules: %d failures\n", fails);
+    return fails ? 1 : 0;
+}

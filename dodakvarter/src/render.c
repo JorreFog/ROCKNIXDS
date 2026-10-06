@@ -573,11 +573,33 @@ void render_game(Surf *s) {
         else if (it->type == IT_PAP && powered_at(it->x, it->y)) add_light(x, y - 6, 50, 0xc070ff, 0.8f);
         else if (it->type == IT_BOX && G->box_spots[G->box_at] == i && !G->box_moving) add_light(x, y - 6, 44, 0xffe8a0, 0.7f);
         else if (it->type == IT_POWER && !G->power_on) add_light(x, y - 6, 24, 0xff4040, 0.3f + 0.2f * sinf(G->time * 4));
+        else if (it->type == IT_TRAP && it->state == 1 && it->a >= 0) {          /* the gap crackles */
+            const Inter *b = &G->it[it->a];
+            add_light((b->tx + b->tw / 2.0f) * TS, (b->ty + b->th / 2.0f) * TS, 60, 0x9ab8ff, 0.6f + 0.4f * rng_float(&G->fx));
+        }
     }
     if (G->flash_t > 0) for (size_t i = 0; i < (size_t)lw * lh; i++) { lr[i] = (uint16_t)MIN(1023, lr[i] + 200); lg[i] = (uint16_t)MIN(1023, lg[i] + 200); lb[i] = (uint16_t)MIN(1023, lb[i] + 220); }
     apply_light(s);
     /* ---- what glows ---- */
     for (int i = 0; i < MAX_ZOMBIES; i++) if (G->z[i].alive) zombie_eyes(s, &G->z[i]);
+    for (int i = 0; i < G->nit; i++) {                    /* an elstängsel that's on: arcs across its gap, post to post */
+        Inter *it = &G->it[i];
+        if (it->type != IT_TRAP || it->state != 1 || it->a < 0) continue;
+        const Inter *b = &G->it[it->a];
+        int x0 = b->tx * TS - cx, y0 = b->ty * TS - cy, w = b->tw * TS, h = b->th * TS;
+        int across = solid_at(b->tx, b->ty - 1) && solid_at(b->tx, b->ty + b->th);   /* posts above and below */
+        for (int k = 0; k < 3; k++) {
+            int ax, ay, bx, by;
+            if (across) { ax = bx = x0 + 4 + k * (w - 8) / 2; ay = y0 + 1; by = y0 + h - 1; }
+            else { ay = by = y0 + 3 + k * (h - 6) / 2; ax = x0 + 1; bx = x0 + w - 1; }
+            int px = ax, py = ay;
+            for (int seg = 1; seg <= 5; seg++) {
+                int nx = ax + (bx - ax) * seg / 5 + (seg < 5 ? rng_range(&G->fx, -3, 3) : 0), ny = ay + (by - ay) * seg / 5 + (seg < 5 ? rng_range(&G->fx, -3, 3) : 0);
+                line(s, px, py, nx, ny, 0xffffff); line_blend(s, px + 1, py, nx + 1, ny, 0x8ab0ff, 150);
+                px = nx; py = ny;
+            }
+        }
+    }
     for (int i = 0; i < 64; i++) {
         Tracer *t = &G->tr[i];
         if (!t->alive) continue;

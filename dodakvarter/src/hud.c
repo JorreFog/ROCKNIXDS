@@ -219,6 +219,7 @@ static void minimap(Surf *s) {
         case IT_BARRIER: if (!it->state) { rectf(s, px - 1, py - 1, 2, 2, 0xe07020); } break;
         case IT_PERK: if (it->a != PK_KANELBULLE || G->p.bulle_used < 3) rectf(s, px - 1, py - 1, 3, 3, PERKS[it->a].color2); break;
         case IT_PAP: rectf(s, px - 1, py - 1, 3, 3, 0xc070ff); break;
+        case IT_TRAP: rectf(s, px - 1, py - 1, 2, 2, it->state == 1 ? ((int)(G->time * 8) & 1 ? 0xffffff : 0x8ab0ff) : it->state == 2 ? 0x4a5a8a : 0x8ab0ff); break;
         case IT_POWER: rectf(s, px - 1, py - 1, 3, 3, G->power_on ? 0x40ff60 : ((int)(G->time * 3) & 1 ? 0xffe040 : 0x806010)); break;
         case IT_BOX:
             if (G->box_spots[G->box_at] == i && !G->box_moving) { rectf(s, px - 2, py - 2, 4, 4, 0xffe8a0); pset(s, px - 1, py - 4, 0xd0e8ff); pset(s, px - 1, py - 5, 0xd0e8ff); }

@@ -89,6 +89,17 @@ static void zombie_killed(Zombie *z, int crit, int melee) {
     } else loot_zombie_drop(z->x, z->y);
 }
 
+/* killed by the elstängsel: it counts for the round and the kills, as in Call of Duty it pays nothing and drops nothing */
+void zombie_shocked(Zombie *z) {
+    if (!z->alive || z->state == ZS_DEAD) return;
+    z->state = ZS_DEAD; z->t = 0; z->burn = 1.0f;
+    G->p.kills++;
+    G->stats_zombies_by_type[z->type]++;
+    spawn_parts(PT_ELEC, z->x, z->y - 10, 10, 0xc0e0ff, 90);
+    spawn_parts(PT_SMOKE, z->x, z->y - 8, 4, 0x3a3a40, 10);
+    sfx_at(SFX_ZAP, z->x, z->y, 0.7f);
+}
+
 void damage_zombie(Zombie *z, float dmg, int crit, int melee, float kx, float ky) {
     if (!z->alive || z->state == ZS_DEAD) return;
     if (G->insta_t > 0 && z->type != ZT_MOOSE) dmg = z->hp + 1;   /* Insta-Kill */

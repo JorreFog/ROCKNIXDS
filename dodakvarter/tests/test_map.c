@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static int fails;
+static int fails, with_trap;
 #define CHECK(c, ...) do { if (!(c)) { fails++; printf("FAIL: "); printf(__VA_ARGS__); printf("\n"); } } while (0)
 
 static uint8_t seen[MAPH_MAX][MAPW_MAX];
@@ -123,6 +123,11 @@ int main(int argc, char **argv) {
             case IT_WALLBUY: walls++; CHECK(usable(it), "seed %d: wall buy %d unreachable", seed, it->a); break;
             case IT_BOX: CHECK(usable(it), "seed %d: a box spot is unreachable", seed); break;
             case IT_BARRIER: CHECK(it->cost >= 750 && it->cost <= 2000, "seed %d: barrier cost %d", seed, it->cost); break;
+            case IT_TRAP:
+                CHECK(usable(it), "seed %d: an elstängsel's cabinet is unreachable", seed);
+                CHECK(it->a >= 0 && it->a < G->nit && G->it[it->a].type == IT_BARRIER, "seed %d: an elstängsel without its gap", seed);
+                with_trap += it->a >= 0 && it->a < G->nit && G->it[it->a].type == IT_BARRIER;
+                break;
             }
         }
         CHECK(power == 1, "seed %d: %d power switches", seed, power);
@@ -133,6 +138,7 @@ int main(int argc, char **argv) {
         CHECK(G->w <= MAPW_MAX && G->h <= MAPH_MAX, "seed %d: map %dx%d too big", seed, G->w, G->h);
         if (seed <= 60) paint_checks(seed);
     }
+    CHECK(with_trap >= n * 95 / 100, "only %d of %d towns have an elstängsel", with_trap, n);
     /* Black Ops' rounds (docs/research.md, section A1) */
     static const int counts[] = { 6, 8, 13, 18, 24, 27, 28, 28, 29, 33 };
     for (int r = 1; r <= 10; r++) CHECK(zombies_for_round(r) == counts[r - 1], "round %d: %d zombies, want %d", r, zombies_for_round(r), counts[r - 1]);

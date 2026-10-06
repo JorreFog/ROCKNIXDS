@@ -112,7 +112,10 @@ typedef struct {
     uint16_t inter;
 } Prop;
 
-enum { IT_BARRIER, IT_WALLBUY, IT_BOX, IT_PERK, IT_PAP, IT_POWER, IT_WINDOW, IT_LOOT, IT_ARMORY, IT_COUNT };
+enum { IT_BARRIER, IT_WALLBUY, IT_BOX, IT_PERK, IT_PAP, IT_POWER, IT_WINDOW, IT_LOOT, IT_ARMORY, IT_TRAP, IT_COUNT };
+#define TRAP_COST 1000                  /* the elstängsel: on for 25 s, then 60 s to charge again */
+#define TRAP_ON 25.0f
+#define TRAP_WAIT 60.0f
 typedef struct {
     int type, state;
     int tx, ty, tw, th;                 /* tiles it covers */
@@ -335,6 +338,7 @@ int window_tile(int tx, int ty);
 int shot_clear(float x0, float y0, float x1, float y1);
 int move_actor(float *x, float *y, float dx, float dy, float r);
 int walk_clear(float x0, float y0, float x1, float y1, float r);
+int unstick_actor(float *x, float *y, float r);
 void player_hurt(float dmg, float fx, float fy);
 int btn_fire(void);
 int btn_use(void);
@@ -350,6 +354,7 @@ const char *weapon_name(const Weapon *w);
 void weapon_fire(void);
 void shots_update(float dt);
 void damage_zombie(Zombie *z, float dmg, int crit, int melee, float kx, float ky);
+void zombie_shocked(Zombie *z);         /* killed by a trap: it counts, but pays nothing */
 void explode(float x, float y, float r, float dmg, int from_player);
 void grenades_update(float dt);
 void throw_grenade(int kind);

@@ -105,7 +105,7 @@ static void carve(int x0, int y0, int x1, int y1, int wd, int g, int horiz_first
 }
 
 /* ---------------------------------------------------------------- layout */
-typedef struct { int a, b; int x, y, w, h; int vertical; } Port;   /* gap between zones a and b */
+typedef struct { int a, b; int x, y, w, h; int vertical; int inter; } Port;   /* gap between zones a and b; its barrier */
 static Port ports[48]; static int nports;
 static int cell_zone[6][6];
 static int colx[7], rowy[7];
@@ -921,6 +921,29 @@ static int place_machine(int type, int z, int a_arg, int w, int h) {
     }
     return 0;
 }
+/* the elstängsel: its cabinet a few steps from a gap, in one of the two districts, where it cuts nothing off */
+static int place_trap(const Port *p) {
+    Zone *sz = &G->zones[G->start_zone];
+    float pcx = p->x + p->w / 2.0f, pcy = p->y + p->h / 2.0f;
+    for (int tries = 0; tries < 300; tries++) {
+        int side = rng_int(R, 2), z = side ? p->b : p->a;
+        int tx = (int)pcx - 5 + rng_int(R, 11), ty = (int)pcy - 5 + rng_int(R, 11);
+        float d = fabsf(tx + 0.5f - pcx) + fabsf(ty + 0.5f - pcy);
+        Tile *t = tile_at(tx, ty);
+        if (!t || t->zone != z || d < 2.5f || d > 6) continue;
+        if (!free_rect(tx, ty, 1, 1, TF_SOLID | TF_INTER | TF_WATER | TF_RESERVED)) continue;
+        if (!free_rect(tx, ty + 1, 1, 1, TF_SOLID | TF_INTER | TF_WATER) || !seen_rect(tx, ty, 1, 2)) continue;
+        set_flag(tx, ty, TF_SOLID);
+        int n = bfs(sz->cx, sz->cy, 1);
+        if (n != reach_n - 1) { clr_flag(tx, ty, TF_SOLID); bfs(sz->cx, sz->cy, 1); continue; }
+        reach_n = n;
+        int ii = add_inter(IT_TRAP, tx, ty, 1, 1, tx * TS + TS / 2.0f, (ty + 1) * TS + 6);
+        if (ii < 0) return 0;
+        G->it[ii].a = p->inter; G->it[ii].cost = TRAP_COST;
+        return 1;
+    }
+    return 0;
+}
 /* the preferred zone, else any other open-able zone (the nearest first) */
 static int place_machine_somewhere(int type, int z, int a_arg, int w, int h) {
     if (place_machine(type, z, a_arg, w, h)) return 1;
@@ -1156,6 +1179,7 @@ void map_generate(uint64_t seed, int season) {
         }
         /* the barrier across it */
         int ii = add_inter(IT_BARRIER, p.x, p.y, p.w, p.h, p.x * TS + p.w * TS / 2.0f, p.y * TS + p.h * TS / 2.0f);
+        ports[nports - 1].inter = ii;
         if (ii >= 0) {
             int d = MAX(G->zones[a].dist, G->zones[b].dist);
             G->it[ii].a = a; G->it[ii].b = b;
@@ -1233,6 +1257,13 @@ void map_generate(uint64_t seed, int season) {
         if (place_machine(IT_BOX, z, 0, 2, 1)) n++;
     }
     place_wallbuys();
+    /* an elstängsel or two at gaps between districts (not the start's, when there's a choice) */
+    for (int want = G->nzones >= 14 ? 2 : 1, tries = 0; want > 0 && tries < nports * 3; tries++) {
+        Port *p = &ports[rng_int(R, nports)];
+        if (p->inter < 0 || ((p->a == G->start_zone || p->b == G->start_zone) && tries < nports * 2)) continue;
+        int dup = 0; for (int i = 0; i < G->nit; i++) if (G->it[i].type == IT_TRAP && G->it[i].a == p->inter) dup = 1;
+        if (!dup && place_trap(p)) want--;
+    }
     /* every zone gets at least three ways for zombies to come in */
     for (int z = 0; z < G->nzones; z++) {
         int n = 0;
