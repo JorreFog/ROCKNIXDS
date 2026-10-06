@@ -9,6 +9,7 @@ lays them out for the GitHub release.
 |---|---|---|
 | `hero.png` | `hero.py` | The header: ROCKNIXDS 1.6, the last big update, three handhelds (Döda Kvarter, Pixel's home, Bank & Trade) |
 | `whats-new.png` | `whats_new.py` | Twelve feature cards with pixel icons (`icons.py`), the three new things first |
+| `performance.png` | `perf.py` | ROCKNIXDS against stock ROCKNIX: the 3D stress ramp at 2× (from `docs/img/stress-ramp.svg`) and four measured wins from the README's *What was achieved* |
 | `3x-resolution.png` | `res3x.py` | One small DS-style 3D scene rasterised at 1×, 2× and 3× (box-filtered 3:2 into 2×, as Gengis Engine does), the same crop of each |
 | `bank-trade.png` | `bank.py` | Two handhelds trading over Wi-Fi with the Bank's own screenshots, and what the app does |
 | `doda-kvarter.png` | `doda.py` | 90s box art: the title screen on a CRT with a VHS overlay, chrome lettering, a sticker, a Win95 window, and the game's own sprites (from its `art/*.txt`) walking the street |
