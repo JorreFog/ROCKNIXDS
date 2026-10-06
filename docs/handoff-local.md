@@ -19,7 +19,7 @@ a copy on the device. Logs that matter: `/storage/.config/drastic/dsflip/dsflip.
 game, `.1`-`.3` the ones before), `last-session.log` (the launcher's), `/var/log/es_log.txt` (EmulationStation), and
 new in 1.6 `/storage/.config/emulationstation/es-mem.log`.
 
-Sections A-G are 1.6's; 1-4 below them are 1.5.13's, still to finish on a handheld.
+Sections A-H are 1.6's; 1-4 below them are 1.5.13's, still to finish on a handheld.
 
 ## A. The freeze after a resume load (1.6 task 1)
 
@@ -275,6 +275,30 @@ hand-off (`claude/1-6-prep-work-kwq9lc`, section F) has the checks for 640x480.
     - push it to ES as an unused media field;
     - add a Pixel setting ("Cartridge art: label / ROM icon") read by `artOf()` in `RndsUI.cpp`.
   - Medium-sized (scripts, the rnds engine and a GuiMenu switch). Left for after 1.6's fixes.
+
+## H. Where the two lines still differ
+
+The 1.6 work above went into both lines. They still differ where they did before 1.6:
+- **RG DS line only:**
+  - the performance-log upload: `perf-session.py`, *Share performance logs*, `.github/ingest-perf.py` and the
+    `perf-logs` workflow;
+  - `es-share-logs.sh`, `preload-guard`;
+  - the *3D resolution* option.
+- **RG DS Plus line only:**
+  - panel-size handling (`session.sh`'s `BIG`: shader GPU clock, the battery profile up to 1416 MHz, the latch
+    margin) and the CPU placement (`DSFLIP_PIN`);
+  - the 2048x768 splash, mako notifications, `input-rocknixds.conf`, `tools/threadsample.sh`;
+  - `es-rgds-dsfirst.patch` (not in `build-es.sh`'s list; it goes with the rnds patch, section C).
+- **The same on both:**
+  - SuperDrastic `0.5.0-beta.1-rocknixds.5`;
+  - the EmulationStation binary and all its patches;
+  - the Pixel theme, its font included;
+  - the 1.6 changes to `session.sh`, `restore.sh`, `es-features.sh` and `es-memwatch.sh`;
+  - `docs/1.6-prep`'s scripts.
+- **The owner's call:**
+  - whether the Plus gets the performance logs;
+  - whether the lines merge into one branch. The Plus line's `session.sh` and `install.sh` already handle both
+    panel sizes.
 
 ## Results on an RG DS Plus, 2026-10-05
 
