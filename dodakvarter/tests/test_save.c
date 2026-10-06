@@ -41,11 +41,14 @@ int main(void) {
     G = calloc(1, sizeof *G); G->view_w = 320; G->view_h = 240;
     Game *straight = malloc(sizeof *G), *loaded = malloc(sizeof *G);
 
-    for (int c = 0; c <= SEASON_COUNT; c++) {             /* each season, then a boss fight (the troll, round 40) */
-        int season = c % SEASON_COUNT;
+    for (int c = 0; c <= SEASON_COUNT + 4; c++) {         /* each season, then boss fights: round 40's, and each of the four
+                                                              of the second circle (flying, holding you, likenesses, wolves) */
+        int season = c % SEASON_COUNT, boss = c >= SEASON_COUNT;
         game_new(4242 + c, season);
         G->god = 1;                                        /* (so that the run lasts) */
-        G->p.kr = 20000; round_start(c == SEASON_COUNT ? 40 : 3 + season * 4);
+        int r = boss ? 40 : 3 + season * 4;
+        if (c > SEASON_COUNT) { r = 20; while (boss_kind_for_round(r) != BOSS_GLOSON + c - SEASON_COUNT - 1 && r < 20 * BOSS_COUNT) r += 20; }
+        G->p.kr = 20000; round_start(r);
         play(0, 2340);
         if (season == 1) { G->power_on = 1; world_power_wave(G->p.x, G->p.y); prop_lights(); }   /* saved mid-wave */
         if (season == 2) { bag_add(C_SMALLARE, 1); throw_grenade(C_SMALLARE); }                /* and with a lure out */
@@ -66,7 +69,7 @@ int main(void) {
             while (first < sizeof *G && a[first] == b[first]) first++;
             CHECK(0, "season %d: the loaded run went another way (first difference at byte %zu of %zu)", season, first, sizeof *G);
         }
-        if (c == SEASON_COUNT) {
+        if (boss) {
             int hz = 0; for (int i = 0; i < MAX_HAZARDS; i++) hz += G->hz[i].alive;
             CHECK(G->boss.on, "no boss in the boss fight");
             printf("boss fight: %s at %.0f of %.0f hp, %d hazards: the same after a save and a load\n", boss_name(G->boss.kind),

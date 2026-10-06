@@ -324,7 +324,8 @@ void shots_update(float dt) {
         if (!boom) for (int k = 0; k < MAX_ZOMBIES; k++) {
             Zombie *z = &G->z[k];
             if (!zombie_hittable(z)) continue;
-            float r = z->type == ZT_MOOSE ? 16 : z->type == ZT_BOSS ? 16 : 8, zy = z->type == ZT_BOSS && z->variant != BOSS_LINDORM ? z->y - 18 : z->y - 8;
+            float bcy = 8; if (z->type == ZT_BOSS) boss_hit_radius(z, &bcy);   /* (a boss: the middle of its body, the witch up on her broom) */
+            float r = z->type == ZT_MOOSE ? 16 : z->type == ZT_BOSS ? 16 : 8, zy = z->type == ZT_BOSS ? z->y - bcy : z->y - 8;
             if (dist2f(nx, ny, z->x, zy) < r * r) { boom = 1; if (s->type == PR_PLASMA) damage_zombie(z, s->dmg * vs_boss(z, 0.35f), rng_chance(&G->rng, 0.12f), 0, s->vx * 0.05f, s->vy * 0.05f); break; }
         }
         s->x = nx; s->y = ny;

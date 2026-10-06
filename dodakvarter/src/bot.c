@@ -69,7 +69,8 @@ static int pick_goal(void) {
         case IT_POWER: want = !G->power_on; break;
         case IT_BARRIER: want = !it->state && p->kr >= it->cost + 300 && (G->zones[it->a].open || G->zones[it->b].open); break;
         case IT_PERK: want = (G->power_on || it->a == PK_KANELBULLE) && !(p->perks & (1u << it->a)) && p->nperks < PERK_LIMIT && p->kr >= PERKS[it->a].cost + 200 && !(it->a == PK_KANELBULLE && p->bulle_used >= 3); break;
-        case IT_BOX: want = G->box_spots[G->box_at] == i && !G->box_moving && (it->state == 2 || (it->state == 0 && p->kr >= 1600)); break;
+        case IT_BOX:                                         /* (not with an epic or legendary gun in hand: the box would take it) */
+            want = G->box_spots[G->box_at] == i && !G->box_moving && p->w[p->cur].rar < RAR_EPIC && (it->state == 2 || (it->state == 0 && p->kr >= 1600)); break;
         case IT_PAP: want = G->power_on && ((it->state == 2) || (it->state == 0 && p->kr >= 5600 && p->w[p->cur].def >= 0 && !p->w[p->cur].pap)); break;
         case IT_LOOT: want = it->prop >= 0 && G->props[it->prop].loot == 1 && dist2f(p->x, p->y, it->x, it->y) < 200 * 200; break;
         case IT_WINDOW: want = it->state < 3 && dist2f(p->x, p->y, it->x, it->y) < 120 * 120; break;
@@ -173,7 +174,7 @@ void bot_input(Input *in) {
                 if (it->type == IT_WINDOW || it->type == IT_LOOT) in->held |= BIT(B_B);
                 else if (tap) in->held |= BIT(B_B);
                 if (it->type != IT_WINDOW && it->type != IT_LOOT && it->type != IT_BOX && (frame % 20) == 0) goal = -1;
-                if (it->type == IT_BOX && it->state == 2 && tap) { in->held |= BIT(B_B); }
+                if (it->type == IT_BOX && it->state == 2 && tap && it->c >= p->w[p->cur].rar) { in->held |= BIT(B_B); }   /* (only a gun as good) */
                 if (it->type == IT_WINDOW && it->state >= 6) goal = -1;
                 if (it->type == IT_LOOT && G->props[it->prop].loot != 1) goal = -1;
             }
@@ -192,6 +193,9 @@ void bot_input(Input *in) {
             if (dist2f(it->x, it->y, p->x, p->y) < 14 * 14 && tap && (it->kind == IK_ARMOR ? p->ar[ARMORS[it->ar.def].slot].def < 0 || it->ar.rar > p->ar[ARMORS[it->ar.def].slot].rar : it->w.rar >= RAR_RARE)) in->held |= BIT(B_B);
         }
     }
+    /* never the box with an epic or legendary gun in hand, whatever B was meant for: the box would take the gun */
+    int t = inter_target();
+    if ((in->held & BIT(B_B)) && t >= 0 && G->it[t].type == IT_BOX && p->w[p->cur].rar >= RAR_EPIC) in->held &= ~BIT(B_B);
     (void)goal_item;
 }
 

@@ -219,8 +219,8 @@ typedef struct { int alive; float x, y, r, t, dur; int kind; } Cloud;           
 typedef struct { int alive; float x, y, vy, t; char s[24]; uint32_t col; int screen; } FloatText;
 typedef struct { float x, y, r; uint32_t col; float k; int power; } Light;   /* power: comes on with the power */
 
-/* the bosses (boss.c): one every twentieth round, from the old stories */
-enum { BOSS_DRAUGEN, BOSS_TROLL, BOSS_NACKEN, BOSS_LINDORM, BOSS_COUNT };
+/* the bosses (boss.c): one every twentieth round, from the old stories, in an order drawn for the run */
+enum { BOSS_DRAUGEN, BOSS_TROLL, BOSS_NACKEN, BOSS_LINDORM, BOSS_GLOSON, BOSS_HAXAN, BOSS_SKOGSRA, BOSS_VARULV, BOSS_COUNT };
 #define BOSS_TRAIL 64
 typedef struct {
     int on, kind, zi, pending;          /* a boss is up (or coming): which one, its zombie (shot, burnt, frozen as one) */
@@ -233,10 +233,13 @@ typedef struct {
     float trail[BOSS_TRAIL][2]; int trail_head; float trail_d;   /* the lindworm's path, for its body */
     float face;                         /* the direction it looks (radians) */
     int summoned;                       /* zombies it called up, alive or not */
+    float hold, holdx, holdy;           /* you, held fast by Skogsrået's roots: for how long, where */
+    float frenzy; int chain;            /* the werewolf: faster after its howl; pounces still to come */
 } Boss;
-enum { HZ_RING, HZ_ROCK, HZ_NOTE, HZ_VENOM, HZ_POOL, HZ_CLEAVE, HZ_SPLASH };
+enum { HZ_RING, HZ_ROCK, HZ_NOTE, HZ_VENOM, HZ_POOL, HZ_CLEAVE, HZ_SPLASH,
+       HZ_SPINE, HZ_BOLT, HZ_POTION, HZ_BREW, HZ_ROOT, HZ_SNARE, HZ_DECOY };
 typedef struct { int alive, kind; float x, y, vx, vy, z, t, dur, r, dmg, a; int hit; float x0, y0; } Hazard;
-#define MAX_HAZARDS 96
+#define MAX_HAZARDS 128
 
 enum { SEASON_AUTUMN, SEASON_WINTER, SEASON_SUMMER, SEASON_COUNT };
 enum { RS_INTRO, RS_ACTIVE, RS_BREAK };
@@ -476,6 +479,7 @@ enum {
     SFX_MENU_MOVE, SFX_MENU_OK, SFX_MENU_BACK, SFX_PERK, SFX_PAP, SFX_POWER, SFX_DOOR, SFX_SPLAT, SFX_THROW,
     SFX_BEEP, SFX_GULP, SFX_STEP, SFX_KABOOM, SFX_THUNDER,
     SFX_ROAR, SFX_HORN, SFX_SWOOSH, SFX_SLAM, SFX_FIDDLE, SFX_SPLASH, SFX_HISS, SFX_FANFARE,   /* the bosses */
+    SFX_SQUEAL, SFX_CACKLE, SFX_CREAK, SFX_HOWL,
     SFX_JINGLE, SFX_COUNT = SFX_JINGLE + PK_COUNT          /* each perk machine's jingle */
 };
 enum { MUS_NONE, MUS_TITLE, MUS_BOX, MUS_GAMEOVER, MUS_SONG, MUS_BOSS };

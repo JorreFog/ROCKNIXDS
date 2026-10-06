@@ -49,13 +49,13 @@ echo "late game: ok"
 # the bosses: the bot fights each one (round 20, alone, at 40% of its health, with a legendary Ak 5) under the
 # sanitizers, and must fell it
 echo "== bosses"
-for k in 0 1 2 3; do
+for k in 0 1 2 3 4 5 6 7; do
     ( DK_DATA=$T/boss$k DK_DEBUG_BOSS=$k DK_DEBUG_BOSS_HP=0.4 DK_DEBUG_BOSS_ONLY=1 DK_DEBUG_GUN=3 DK_DEBUG_ROUND=20 DK_DEBUG_KR=60000 DK_DEBUG_POWER=1 DK_DEBUG_OPEN=1 DK_DEBUG_GOD=1 \
         ASAN_OPTIONS=detect_leaks=0 ./build/dk-test --backend headless --seed $((40 + k)) --start --bot --frames ${BOSS_FRAMES:-9000} >/dev/null 2>$T/errboss$k \
         || echo "exit $?" >> $T/errboss$k ) &
 done
 wait
-for k in 0 1 2 3; do
+for k in 0 1 2 3 4 5 6 7; do
     grep -q "runtime error\|AddressSanitizer\|^exit" $T/errboss$k && { cat $T/errboss$k; exit 1; }
     grep "boss .* slain" $T/boss$k/dodakvarter.log || { echo "boss $k wasn't slain:"; grep boss $T/boss$k/dodakvarter.log; exit 1; }
 done

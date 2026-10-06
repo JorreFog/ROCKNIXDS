@@ -10,6 +10,8 @@ static const char *SV[][2] = {
     {"Elstängsel", "Elstängsel"}, {"on", "på"}, {"charging", "laddar"},
     {"the dead chieftain", "den döde hövdingen"}, {"the mountain troll", "trollet från berget"},
     {"the fiddler in the water", "spelmannen i vattnet"}, {"the lindworm", "draken under marken"},
+    {"the glowing sow", "den lysande suggan"}, {"on her way to Blåkulla", "på väg till Blåkulla"},
+    {"the lady of the forest", "skogens fru"}, {"the man who became a wolf", "mannen som blev varg"},
     {"slain", "fälld"}, {"is enraged", "rasar"}, {"enraged", "rasande"}, {"Bosses slain", "Fällda bossar"},
     {"Press again to give up the run in", "Tryck igen för att ge upp spelet i"}, {"round", "runda"},
     {"TODAY'S TOWN", "DAGENS STAD"}, {"best today", "bäst i dag"}, {"the same town for everyone today", "samma stad för alla i dag"},

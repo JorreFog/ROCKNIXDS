@@ -164,15 +164,23 @@ int main(void) {
         }
         G->god = 0;
     }
-    /* the bosses */
-    CHECK(boss_kind_for_round(19) < 0 && boss_kind_for_round(20) == BOSS_DRAUGEN && boss_kind_for_round(40) == BOSS_TROLL &&
-          boss_kind_for_round(60) == BOSS_NACKEN && boss_kind_for_round(80) == BOSS_LINDORM && boss_kind_for_round(100) == BOSS_DRAUGEN &&
-          boss_kind_for_round(30) < 0, "the bosses' rounds");
+    /* the bosses: every twentieth round, all eight in an order drawn for the town, then the same again */
+    {
+        int seen = 0, again = 1, differs = 0, first[BOSS_COUNT];
+        game_new(300, 0);
+        for (int i = 0; i < BOSS_COUNT; i++) { first[i] = boss_kind_for_round(20 * (i + 1)); if (first[i] >= 0) seen |= 1 << first[i]; }
+        for (int i = 0; i < BOSS_COUNT; i++) again &= boss_kind_for_round(20 * (i + 1 + BOSS_COUNT)) == first[i];
+        game_new(301, 0);
+        for (int i = 0; i < BOSS_COUNT; i++) differs |= boss_kind_for_round(20 * (i + 1)) != first[i];
+        CHECK(boss_kind_for_round(19) < 0 && boss_kind_for_round(30) < 0 && seen == (1 << BOSS_COUNT) - 1 && again && differs,
+              "the bosses' rounds: %x seen, again %d, another town's order differs %d", seen, again, differs);
+    }
     for (int k = 0; k < BOSS_COUNT; k++) {
         game_new(300 + (uint64_t)k, k % SEASON_COUNT);
         Player *p = &G->p;
         G->power_on = 1;
-        round_start(20 * (k + 1));
+        int r = 20; while (boss_kind_for_round(r) != k && r < 20 * BOSS_COUNT) r += 20;   /* (its round in this town) */
+        round_start(r);
         for (int t = 0; t < 60 * 8 && !(G->boss.on && G->z[G->boss.zi].state == ZS_CHASE); t++) { G->spawn_cd = 1e9f; game_update(&none, &none, 1.0f / 60); }
         CHECK(G->boss.on, "%s didn't come up in round %d", boss_name(k), G->round);
         if (!G->boss.on) continue;

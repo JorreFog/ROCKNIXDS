@@ -78,9 +78,14 @@ int main(int argc, char **argv) {
         G->god = 1;
         round_start(20);
         int n = getenv("DK_SCENE_TICKS") ? atoi(getenv("DK_SCENE_TICKS")) : 400;
-        for (int k = 0; k < n; k++) {
+        /* or: until a hazard of the kind DK_SCENE_HZ is about, and DK_SCENE_HZ_AFTER ticks more (its moves, pictured) */
+        int hz = getenv("DK_SCENE_HZ") ? atoi(getenv("DK_SCENE_HZ")) : -1, after = getenv("DK_SCENE_HZ_AFTER") ? atoi(getenv("DK_SCENE_HZ_AFTER")) : 10;
+        if (hz >= 0) n = 60 * 120;
+        for (int k = 0, seen = 0; k < n; k++) {
             G->spawn_cd = 1e9f;                             /* (only the boss) */
             Input none; memset(&none, 0, sizeof none); game_update(&none, &none, 1.0f / 60);
+            if (hz >= 0 && !seen) for (int i = 0; i < MAX_HAZARDS; i++) seen |= G->hz[i].alive && G->hz[i].kind == hz;
+            if (seen && after-- <= 0) break;
         }
         if (getenv("DK_SCENE_HP")) { Zombie *z = &G->z[G->boss.zi]; z->hp = z->maxhp * (float)atof(getenv("DK_SCENE_HP")); }
         if (getenv("DK_SCENE_KILL")) {                     /* then felled: DK_SCENE_KILL ticks into its fall */

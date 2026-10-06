@@ -215,6 +215,46 @@ static void synth_all(void) {
             t0 += d;
         }
         finish(SFX_FANFARE, b, n, 0.8f); }
+    /* the four of the second circle: Gloson's squeal (with a ghostly echo), the witch's cackle, the forest creaking,
+       the werewolf's howl */
+    b = buf_new(1.3f, &n); { SVF a = { 0 }, a2 = { 0 }; float ph = 0;
+        for (int i = 0; i < n; i++) {
+            float t = (float)i / RATE, u = MIN(1.0f, t / 0.9f), f = 560 + 620 * sinf(PI_F * u * 0.8f) * (1 - u * 0.4f) + 30 * sinf(2 * PI_F * 11 * t);
+            ph += f / RATE; ph -= floorf(ph);
+            float saw = ph * 2 - 1, x = saw + noise() * 0.35f, e = MIN(1.0f, t / 0.04f) * MAX(0.0f, 1 - t / 0.9f);
+            b[i] = (bandpass(&a, x, 1300 + 400 * u, 0.5f) + bandpass(&a2, x, 2900, 0.7f) * 0.6f) * e;
+        }
+        for (int i = n - 1; i >= (int)(0.13f * RATE); i--) b[i] += b[i - (int)(0.13f * RATE)] * 0.35f;   /* (the echo) */
+        finish(SFX_SQUEAL, b, n, 0.8f); }
+    b = buf_new(1.2f, &n); { SVF a = { 0 }, a2 = { 0 }; float ph = 0;
+        for (int i = 0; i < n; i++) {
+            float t = (float)i / RATE; int k = (int)(t / 0.15f); float tn = t - k * 0.15f;
+            if (k > 6) { b[i] = 0; continue; }
+            float f = (470 - k * 22) * (1 + 0.15f * expf(-tn * 30)), on = tn < 0.1f ? MIN(1.0f, tn / 0.01f) * (1 - tn / 0.1f) : 0;
+            ph += f / RATE; ph -= floorf(ph);
+            float x = (ph < 0.18f ? 1.0f : -0.2f) + noise() * 0.25f;   /* (a pinched, nasal voice) */
+            b[i] = (bandpass(&a, x, 950 - k * 30, 0.35f) + bandpass(&a2, x, 2500, 0.5f) * 0.7f) * on * (k == 6 ? 1.3f : 1);
+        }
+        finish(SFX_CACKLE, b, n, 0.75f); }
+    b = buf_new(1.4f, &n); { SVF a = { 0 }; LP l = { 0 }; float next = 0;
+        for (int i = 0; i < n; i++) {
+            float t = (float)i / RATE, x = 0;
+            if (t >= next) { x = 1; next = t + 1.0f / (38 - 26 * MIN(1.0f, t / 1.1f)) * (0.8f + 0.4f * noise() * noise()); }
+            float wood = bandpass(&a, x * 6 + noise() * 0.02f, 520 + 180 * sinf(t * 5), 0.15f);
+            float nz = noise(), leaves = (nz - lp(&l, nz, 2500)) * 0.25f * (0.5f + 0.5f * sinf(t * 23) * sinf(t * 7));
+            b[i] = (wood + leaves) * MIN(1.0f, t / 0.05f) * MAX(0.0f, 1 - t / 1.4f);
+        }
+        finish(SFX_CREAK, b, n, 0.7f); }
+    b = buf_new(2.0f, &n); { SVF a = { 0 }, a2 = { 0 }; float ph = 0;
+        for (int i = 0; i < n; i++) {
+            float t = (float)i / RATE, f = t < 0.55f ? 260 + 250 * sinf(PI_F / 2 * t / 0.55f) : t < 1.4f ? 510 - (t - 0.55f) * 30 : 485 - (t - 1.4f) * 220;
+            f *= 1 + 0.012f * sinf(2 * PI_F * 5.5f * t) * MIN(1.0f, t / 0.4f);
+            ph += f / RATE; ph -= floorf(ph);
+            float v = sinf(2 * PI_F * ph) + 0.35f * sinf(4 * PI_F * ph) + 0.15f * (ph * 2 - 1) + noise() * 0.08f;
+            float e = MIN(1.0f, t / 0.15f) * (t > 1.45f ? MAX(0.0f, 1 - (t - 1.45f) / 0.5f) : 1);
+            b[i] = (bandpass(&a, v, 700 + 300 * MIN(1.0f, t / 0.55f), 0.6f) * 1.2f + bandpass(&a2, v, 1600, 0.8f) * 0.4f + v * 0.3f) * e;
+        }
+        finish(SFX_HOWL, b, n, 0.85f); }
     /* reload: click, slide, click */
     b = buf_new(0.5f, &n); { LP l = { 0 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE; float x = noise(); float c1 = env(t, 0.0005f, 0.006f), c2 = t > 0.18f ? env(t - 0.18f, 0.02f, 0.05f) * 0.4f : 0, c3 = t > 0.36f ? env(t - 0.36f, 0.0005f, 0.008f) : 0; b[i] = (x - lp(&l, x, 1500)) * (c1 + c3) + x * c2 * 0.5f; } finish(SFX_RELOAD, b, n, 0.6f); }
     b = buf_new(0.05f, &n); for (int i = 0; i < n; i++) b[i] = noise() * env((float)i / RATE, 0.0005f, 0.004f); finish(SFX_EMPTY, b, n, 0.5f);

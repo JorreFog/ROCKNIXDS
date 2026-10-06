@@ -351,7 +351,7 @@ static void player_update(const Input *in, const Input *prev, float dt) {
     for (int i = 0; i < MAX_ZOMBIES; i++) {
         Zombie *z = &G->z[i];
         if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE || z->state == ZS_WINDOW) continue;
-        float zr = z->type == ZT_MOOSE ? 14 : z->type == ZT_BOSS ? (G->boss.hidden ? 0 : 11) : z->type == ZT_BRUTE ? 8 : 6;
+        float zr = z->type == ZT_MOOSE ? 14 : z->type == ZT_BOSS ? (G->boss.hidden || z->variant == BOSS_HAXAN ? 0 : 11) : z->type == ZT_BRUTE ? 8 : 6;   /* (the witch is up in the air) */
         if (zr <= 0) continue;
         float dx = p->x - z->x, dy = p->y - z->y, d = sqrtf(dx * dx + dy * dy), md = 5 + zr;
         if (d < md && d > 0.01f) {
