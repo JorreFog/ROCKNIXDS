@@ -65,7 +65,8 @@ most). You spend them on:
 - **Barricades** between districts (750–2000 kr, more the further from the start): police barriers, a construction
   fence, a wrecked car. Districts are walled off from each other; buying your way through opens the town.
 - **Wall buys**, chalk outlines of guns on the walls: Pist 88 500, Revolver 900, Kpist m/45 1000, Ak 5 1200,
-  Hagelgevär 1500, Ak 4 1800 kr; ammo for half the price (4500 once upgraded). Also the Yxa (axe: a one-hit knife
+  Hagelgevär 1500, Ak 4 1800 kr; ammo for half the price (4500 once upgraded). A gun that has run dry hands
+  over to one that hasn't when you pull the trigger. Also the Yxa (axe: a one-hit knife
   for a long time) for 3000 and grenades for 250.
 - **Lådan**, the Mystery Box (950 kr): a random weapon you don't have, often a good one, from all twelve, including
   the wonder weapons (Strålpistol, Åskvigg, Snöblåsare). After four pulls a **Dalahäst** may come out instead of a gun:

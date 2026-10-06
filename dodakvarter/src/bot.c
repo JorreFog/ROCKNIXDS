@@ -73,7 +73,16 @@ static int pick_goal(void) {
         case IT_PAP: want = G->power_on && ((it->state == 2) || (it->state == 0 && p->kr >= 5600 && p->w[p->cur].def >= 0 && !p->w[p->cur].pap)); break;
         case IT_LOOT: want = it->prop >= 0 && G->props[it->prop].loot == 1 && dist2f(p->x, p->y, it->x, it->y) < 200 * 200; break;
         case IT_WINDOW: want = it->state < 3 && dist2f(p->x, p->y, it->x, it->y) < 120 * 120; break;
-        case IT_WALLBUY: want = it->a >= 0 && p->kr >= it->cost + 400 && p->w[1].def < 0; break;
+        case IT_WALLBUY: {                                   /* a gun for the empty slot, or ammo for one we have */
+            int k = -1, dry = 1;
+            for (int j = 0; j < p->nslots; j++) {
+                if (it->a >= 0 && p->w[j].def == it->a) k = j;
+                if (p->w[j].def >= 0 && (p->w[j].mag > 0 || p->w[j].reserve > 0)) dry = 0;
+            }
+            if (k >= 0) want = p->w[k].reserve < weapon_reserve_max(&p->w[k]) / 3 && p->kr >= (p->w[k].pap ? 4500 : it->cost / 2) + 100;
+            else want = it->a >= 0 && p->kr >= it->cost + 400 && (p->w[1].def < 0 || dry);
+            break;
+        }
         }
         if (!want) continue;
         float ux = it->x, uy = it->y;
@@ -135,7 +144,9 @@ void bot_input(Input *in) {
     if (p->hp < p->maxhp * 0.4f && (frame % 30) == 0) {
         for (int i = 0; i < BAG_SLOTS; i++) if (p->bag[i].id == C_FORBAND || p->bag[i].id == C_PLASTER) { p->bag_sel = i; in->held |= BIT(B_L2); break; }
     }
-    if (!tgt || td > 140) {
+    int dry = 1;                                            /* out of ammo: go and get some even with them around */
+    for (int j = 0; j < p->nslots; j++) if (p->w[j].def >= 0 && (p->w[j].mag > 0 || p->w[j].reserve > 0)) dry = 0;
+    if (!tgt || td > 140 || dry) {
         /* a goal: power, doors, perks, the box, loot */
         goal_t -= 1.0f / 60;
         if (goal < 0 || goal_t <= 0) { goal = pick_goal(); goal_t = 3; }

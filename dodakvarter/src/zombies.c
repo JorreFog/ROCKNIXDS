@@ -66,26 +66,28 @@ void flow_update(int force) {
 static int pick_spawn(void) {
     Player *p = &G->p;
     int pz = zone_at(p->x, p->y);
-    float w[MAX_SPAWNS], total = 0;
+    float w[MAX_SPAWNS], total = 0, far_d = 0; int far = -1;
     for (int i = 0; i < G->nspawns; i++) {
         Spawn *s = &G->spawns[i]; w[i] = 0;
         if (!G->zones[s->zone].open) continue;
         float d = sqrtf(dist2f(s->x, s->y, p->x, p->y));
-        if (d < 80) continue;                              /* never right next to you */
         if (s->type == SP_WINDOW) {                        /* a window already has someone in it */
             int busy = 0;
             for (int k = 0; k < MAX_ZOMBIES; k++) if (G->z[k].alive && G->z[k].state == ZS_WINDOW && G->z[k].window == s->inter) busy = 1;
             if (busy) continue;
         }
+        if (d > far_d) { far_d = d; far = i; }
+        if (d < 80) continue;                              /* never right next to you */
         float wt = s->zone == pz ? 4.0f : 1.0f;
         if (d < 260) wt *= 2.0f; else if (d > 520) wt *= 0.3f;
         if (s->type == SP_WINDOW) wt *= 1.5f;
         w[i] = wt; total += wt;
     }
-    if (total <= 0) return -1;
+    if (total <= 0) return far;                            /* standing among all the spawns: the farthest one */
     float r = rng_float(&G->rng) * total;
-    for (int i = 0; i < G->nspawns; i++) { r -= w[i]; if (r <= 0 && w[i] > 0) return i; }
-    return -1;
+    int last = -1;
+    for (int i = 0; i < G->nspawns; i++) if (w[i] > 0) { last = i; r -= w[i]; if (r <= 0) return i; }
+    return last;                                           /* (rounding) */
 }
 
 static Zombie *new_zombie(void) {
@@ -163,8 +165,9 @@ void round_update(float dt) {
     static float zlog_t;
     if (getenv("DK_DEBUG_ZLOG") && (zlog_t += dt) > 10) {          /* where everyone is, every 10 s */
         zlog_t = 0;
-        plat_log("t %.0f round %d state %d: to_spawn %d spawned %d alive %d, player %.0f,%.0f", G->time, G->round, G->rstate,
-                 G->to_spawn, G->spawned, zombies_alive(), G->p.x, G->p.y);
+        Weapon *w0 = &G->p.w[0], *w1 = &G->p.w[1];
+        plat_log("t %.0f round %d state %d: to_spawn %d spawned %d alive %d, player %.0f,%.0f, guns %d:%d/%d %d:%d/%d, %d kr", G->time, G->round,
+                 G->rstate, G->to_spawn, G->spawned, zombies_alive(), G->p.x, G->p.y, w0->def, w0->mag, w0->reserve, w1->def, w1->mag, w1->reserve, G->p.kr);
         for (int i = 0; i < MAX_ZOMBIES; i++) if (G->z[i].alive && G->z[i].state != ZS_DEAD) {
             Zombie *z = &G->z[i]; int tx = (int)(z->x / TS), ty = (int)((z->y - 2) / TS);
             int f = tx >= 0 && ty >= 0 && tx < G->w && ty < G->h ? G->flow[ty][tx] : -1;
@@ -256,6 +259,7 @@ static void zombie_update(Zombie *z, float dt) {
         return;
     case ZS_WINDOW: {                                       /* pull the boards off, then climb out */
         Inter *it = &G->it[z->window];
+        z->vx = z->vy = 0;                                  /* shots don't push it out of the frame */
         /* whoever stands right at the gap gets a swipe through it, as in Call of Duty */
         if (z->atk_cd > 0) z->atk_cd -= dt;
         if (z->swipe > 0) {

@@ -284,7 +284,7 @@ const char *inter_prompt(int i, int *ok) {
             int k = has_weapon(it->a);
             int cost = k >= 0 ? (p->w[k].pap ? 4500 : it->cost / 2) : it->cost;
             fmt_num(n, cost);
-            snprintf(b, sizeof b, "%s: %s %s%s - %s kr", use_label(), tr("Buy"), WEAPONS[it->a].name, k >= 0 ? " ammo" : "", n);
+            snprintf(b, sizeof b, "%s: %s %s%s%s - %s kr", use_label(), tr("Buy"), WEAPONS[it->a].name, k >= 0 ? " " : "", k >= 0 ? tr("ammo") : "", n);
             *ok = p->kr >= cost;
         }
         break;

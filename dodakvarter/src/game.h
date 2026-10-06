@@ -239,6 +239,7 @@ typedef struct {
     int power_on; float power_t;
     int wave_on; float wave_x, wave_y, wave_r;   /* the power coming on: a ring of light spreading from the switch */
     int over; float over_t;
+    int god;                            /* tests: DK_DEBUG_GOD */
     /* actors */
     Player p;
     Zombie z[MAX_ZOMBIES];

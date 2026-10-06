@@ -217,7 +217,7 @@ static void player_down(void) {
 
 void player_hurt(float dmg, float fx, float fy) {
     Player *p = &G->p;
-    if (p->invuln > 0 || p->downed || G->over) return;
+    if (p->invuln > 0 || p->downed || G->over || G->god) return;
     /* armour takes its share first: the vest more than the helmet */
     float share[2] = { 0.3f, 0.6f };
     for (int k = 0; k < 2; k++) {
@@ -446,8 +446,9 @@ void game_new(uint64_t seed, int season) {
     G->moose_next = rng_range(&G->rng, 9, 11);
     banner(0xd02020, G->town, G->zones[G->start_zone].name);
     /* test hooks: DK_DEBUG_ROUND=N starts there, DK_DEBUG_KR=N with that much money, DK_DEBUG_POWER=1 powered,
-     * DK_DEBUG_OPEN=1 every barrier gone */
+     * DK_DEBUG_OPEN=1 every barrier gone, DK_DEBUG_GOD=1 nothing hurts (long runs deep in the rounds) */
     const char *e;
+    G->god = getenv("DK_DEBUG_GOD") != 0;
     if ((e = getenv("DK_DEBUG_KR"))) p->kr = atoi(e);
     if (getenv("DK_DEBUG_POWER")) { G->power_on = 1; world_power_wave(G->p.x, G->p.y); prop_lights(); }
     if (getenv("DK_DEBUG_OPEN"))

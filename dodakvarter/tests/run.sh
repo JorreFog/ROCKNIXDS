@@ -30,8 +30,8 @@ for s in 1 2 3 4 5 6; do
     r=$(grep -o 'round [0-9]*' $T/$s/dodakvarter.log | tail -n1)
     echo "seed $s, season $season: ok ($r)"
 done
-# a run that starts deep (round 25, everything open, the power on, money) for the late-game systems
-DK_DATA=$T/late DK_DEBUG_ROUND=25 DK_DEBUG_KR=60000 DK_DEBUG_POWER=1 DK_DEBUG_OPEN=1 ASAN_OPTIONS=detect_leaks=0 \
+# a run that starts deep (round 25, everything open, the power coming on, money, nothing hurts) for the late game
+DK_DATA=$T/late DK_DEBUG_ROUND=25 DK_DEBUG_KR=60000 DK_DEBUG_POWER=1 DK_DEBUG_OPEN=1 DK_DEBUG_GOD=1 ASAN_OPTIONS=detect_leaks=0 \
     ./build/dk-test --backend headless --seed 77 --start --bot --frames 5400 >/dev/null 2>$T/errlate || { cat $T/errlate; exit 1; }
 grep -q "runtime error\|AddressSanitizer" $T/errlate && { cat $T/errlate; exit 1; }
 echo "late game: ok"

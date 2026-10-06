@@ -21,7 +21,7 @@ static const char *SV[][2] = {
     {"POWER ON", "STRÖMMEN ÄR PÅ"}, {"MAX AMMO", "FULLT FÖRRÅD"}, {"INSTA-KILL", "INSTADÖD"},
     {"DOUBLE POINTS", "DUBBLA KRONOR"}, {"KABOOM", "KABOOM"}, {"CARPENTER", "SNICKARE"}, {"FIRE SALE", "REA"},
     {"WOLF NIGHT", "VARGNATT"}, {"THE MOOSE IS HERE", "ÄLGEN ÄR HÄR"}, {"Bag full", "Väskan är full"},
-    {"Picked up", "Tog"}, {"Empty", "Tomt"}, {"Reloading", "Laddar om"}, {"No ammo", "Slut på ammo"},
+    {"Picked up", "Tog"}, {"Empty", "Tomt"}, {"Reloading", "Laddar om"}, {"No ammo", "Slut på ammo"}, {"ammo", "ammunition"},
     {"Box moved", "Lådan flyttade"}, {"New high score!", "Nytt rekord!"}, {"Enter your initials", "Skriv dina initialer"},
     {"Press A", "Tryck A"}, {"Press START", "Tryck START"}, {"Downed!", "Nere!"}, {"Revived", "Uppe igen"},
     {"Health", "Hälsa"}, {"Armour", "Skydd"}, {"Bag", "Väska"}, {"Perks", "Förmåner"}, {"Map", "Karta"}, {"Weapon", "Vapen"},

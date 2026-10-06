@@ -7,7 +7,8 @@
 
 typedef struct { uint32_t cp; const char *rows; } GlyphSrc;   /* rows separated by '/', all the same width */
 
-/* 5x7 font: rows 0-6 are the body (caps sit on row 6), rows 7-8 the descenders */
+/* 5x7 font: rows 0-6 are the body (caps sit on row 6), rows 7-8 the descenders; a glyph starting with '^' begins
+   two rows higher (the marks over Å, Ä, Ö) */
 static const GlyphSrc NORMAL_SRC[] = {
     {' ', "..../..../..../..../..../..../...."},
     {'A', ".###./#...#/#...#/#####/#...#/#...#/#...#"},
@@ -36,11 +37,12 @@ static const GlyphSrc NORMAL_SRC[] = {
     {'X', "#...#/#...#/.#.#./..#../.#.#./#...#/#...#"},
     {'Y', "#...#/#...#/.#.#./..#../..#../..#../..#.."},
     {'Z', "#####/....#/...#./..#../.#.../#..../#####"},
-    {0xC5 /* Å */, "..#../.#.#./.###./#...#/#####/#...#/#...#"},
-    {0xC4 /* Ä */, "#...#/.###./#...#/#...#/#####/#...#/#...#"},
-    {0xD6 /* Ö */, "#...#/.###./#...#/#...#/#...#/#...#/.###."},
-    {0xC9 /* É */, "...#./..#../#####/#..../####./#..../#####"},
-    {0xDC /* Ü */, "#...#/...../#...#/#...#/#...#/#...#/.###."},
+    /* the capitals with marks are full height, the marks above the cap line ('^': two rows up) */
+    {0xC5 /* Å */, "^..#../.#.#./.###./#...#/#...#/#####/#...#/#...#/#...#"},
+    {0xC4 /* Ä */, "^.#.#./...../.###./#...#/#...#/#####/#...#/#...#/#...#"},
+    {0xD6 /* Ö */, "^.#.#./...../.###./#...#/#...#/#...#/#...#/#...#/.###."},
+    {0xC9 /* É */, "^...#./..#../#####/#..../#..../####./#..../#..../#####"},
+    {0xDC /* Ü */, "^.#.#./...../#...#/#...#/#...#/#...#/#...#/#...#/.###."},
     {'a', "...../...../.###./....#/.####/#...#/.####"},
     {'b', "#..../#..../####./#...#/#...#/#...#/####."},
     {'c', "...../...../.###./#..../#..../#...#/.###."},
@@ -142,7 +144,7 @@ static const GlyphSrc SMALL_SRC[] = {
     {0x2665 /* ♥ */, ".../#.#/###/.#./..."},
 };
 
-typedef struct { uint32_t cp; uint8_t w, h; uint16_t rows[9]; } Glyph;
+typedef struct { uint32_t cp; uint8_t w, h; int8_t oy; uint16_t rows[9]; } Glyph;
 typedef struct { Glyph *g; int n; int line_h, cell_h, space_w; Glyph *ascii[128]; } Font;
 static Font fonts[2];
 
@@ -151,6 +153,7 @@ static void build(Font *f, const GlyphSrc *src, int n, int line_h, int cell_h) {
     for (int i = 0; i < n; i++) {
         Glyph *g = &f->g[i]; g->cp = src[i].cp;
         const char *p = src[i].rows; int row = 0, col = 0, w = 0;
+        if (*p == '^') { g->oy = -2; p++; }
         for (; *p && row < 9; p++) {
             if (*p == '/') { if (col > w) w = col; row++; col = 0; continue; }
             if (*p == '#') g->rows[row] |= (uint16_t)(1u << col);
@@ -218,8 +221,8 @@ static int draw(Surf *sf, int font, int x, int y, int k, uint32_t c, const char 
             uint16_t bits = g->rows[r]; if (!bits) continue;
             for (int col = 0; col < g->w; col++)
                 if (bits & (1u << col)) {
-                    if (k == 1) pset(sf, x + col, y + r, c);
-                    else rectf(sf, x + col * k, y + r * k, k, k, c);
+                    if (k == 1) pset(sf, x + col, y + r + g->oy, c);
+                    else rectf(sf, x + col * k, y + (r + g->oy) * k, k, k, c);
                 }
         }
         x += (g->w + 1) * k;

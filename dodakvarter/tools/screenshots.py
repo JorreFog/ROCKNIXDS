@@ -48,7 +48,7 @@ def main():
     horde = render("horde", season=1)
     x2(top(horde)).save(os.path.join(media, "dodakvarter-image.png"), optimize=True)
     x2(top(title)).save(os.path.join(media, "dodakvarter-thumb.png"), optimize=True)
-    x2(top(title).crop((60, 22, 260, 96))).save(os.path.join(media, "dodakvarter-marquee.png"), optimize=True)
+    x2(top(title).crop((60, 14, 260, 96))).save(os.path.join(media, "dodakvarter-marquee.png"), optimize=True)
     # the README: both screens, as the handheld shows them
     shots = {
         "title": title, "horde-winter": horde, "horde-autumn": render("horde", season=0, seed=9),

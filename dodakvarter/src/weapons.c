@@ -219,7 +219,13 @@ void weapon_fire(void) {
     const WeaponDef *d = &WEAPONS[w->def];
     if (w->mag <= 0) {
         if (w->reserve > 0) { p->reloading = 1; p->reload_len = p->reload_t = weapon_reload(w); sfx(SFX_RELOAD, 0.6f, 0); }
-        else if (!p->fired_this_press) { sfx(SFX_EMPTY, 0.6f, 0); msg(0xff8060, "%s", tr("No ammo")); }
+        else if (!p->fired_this_press) {
+            sfx(SFX_EMPTY, 0.6f, 0); msg(0xff8060, "%s", tr("No ammo"));
+            for (int k = 1; k < p->nslots; k++) {            /* empty: out comes a gun that has some */
+                Weapon *o = &p->w[(p->cur + k) % p->nslots];
+                if (o->def >= 0 && (o->mag > 0 || o->reserve > 0)) { p->cur = (p->cur + k) % p->nslots; p->swap_t = 0.35f; sfx(SFX_SWAP, 0.5f, 0); break; }
+            }
+        }
         p->fired_this_press = 1;
         p->fire_cd = 0.25f;
         return;
