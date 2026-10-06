@@ -1,0 +1,177 @@
+# JorreFog productions: the studio splash. Palette jorrefog: night navy, iron, silver and moonlight, with gold as the
+# one warm accent (the badge's inner line and PRODUCTIONS). Lit from above (the moon). Coordinates are (x,y) from each
+# sprite's top-left.
+#
+# logo_emblem 64x64: the round badge, centred on (31.5,31.5); the ring fills the box and everything outside it is
+#   transparent. A dark iron ring (outline, a silver rim highlight along its top, a bevel catching the light inside
+#   its bottom), a thin gold line inside it, and the night scene within radius ~25.5: a full moon, a spruce forest
+#   across the lower third (a far treeline in the haze, a tall spruce on each side), three fog bands drifting through
+#   it, two star twinkles at (15,14) and (48,16), and in front of it all the monogram JF in silver with a dark
+#   outline and a 1-px drop shadow down-right (the J dropped 4 px below the F, its hook curling left).
+#     moon       centre (31.5,17.5), radius 9: x 23-40, y 9-26 (the F's top bar covers its lower right); the glow
+#                reaches ~8 px further
+#     monogram   letters (silver, without outline): J x 19-30 y 28-51, F x 33-44 y 24-47; with outline and shadow
+#                the pair covers x 18-46, y 23-53
+# logo_wordmark 173x22: JORREFOG in chunky capitals: 1-px outline, a white highlight along the top, pale silver to
+#   steel blue to dark blue downwards, a bevel (left edges lighter, right and bottom edges darker). Letters x (with
+#   their outline), exactly 2 transparent columns apart: J 0-16, O 19-40, R 43-63, R 66-86, E 89-105, F 108-124,
+#   O 127-148, G 151-172. Rows 0 and 21 are outline; the letters are 20 px tall inside it.
+# logo_productions 105x9: PRODUCTIONS in gold (pale yellow, amber e0a040, orange-brown), 7-px letters in a 1-px
+#   outline, exactly 2 transparent columns apart: P 0-7, R 10-17, O 20-27, D 30-37, U 40-47, C 50-57, T 60-67,
+#   I 70-73, O 76-83, N 86-94, S 97-104.
+# logo_spark 7x7: a four-pointed twinkle, white core at (3,3), pale blue arms fading out.
+
+palette jorrefog
+  k 06080e   # outline: the badge, the monogram, the letters
+  n 0b1120   # the monogram's drop shadow
+  N 131e3e   # night sky
+  H 1a2a4e   # sky lower down, the moon's outer glow
+  g 26395f   # moon glow, haze over the treeline
+  h 354d76   # moon glow, innermost; dim stars
+  M fbfaf0   # moon, lit limb (upper left)
+  m e6e6da   # moon
+  o c8cac4   # moon seas, shaded limb (lower right)
+  u a9aeb2   # moon seas, darkest
+  f 060b16   # near spruces
+  F 15233b   # near spruces, moonlit edges
+  G 1a2b4a   # far spruces
+  r 203458   # far spruces, moonlit tips
+  q 34496c   # fog, thinnest
+  v 5b7398   # fog
+  w 8ea5c4   # fog, densest: pale blue-grey
+  i 171c26   # iron, darkest
+  I 252c3a   # iron, dark
+  j 384252   # iron
+  J 525e72   # iron, light
+  K 76849a   # iron, the rim highlight fading down the sides
+  W ffffff   # white: rim highlight, top edges, spark core
+  S dce4f0   # pale silver
+  s a8b6ca   # silver
+  t 74849e   # silver in shadow
+  b a0b4d0   # wordmark: steel
+  c 829abe   # wordmark: steel blue
+  e 506894   # wordmark: blue
+  D 2f4066   # wordmark: dark blue, the letters' feet
+  Y fff0a6   # gold: pale yellow, the top
+  y f6cc6a   # gold: yellow
+  A e0a040   # gold: amber, the middle
+  B be782c   # gold: deep amber
+  C 8e4e1e   # gold: orange-brown, the bottom
+  p d6ecff   # spark: pale blue
+  P 9cc2ee   # spark: blue
+  Q 5a7cb4   # spark: the tips, fading out
+end
+
+sprite logo_emblem 64x64 jorrefog
+.............................kkkkkk.............................
+........................kkkkkWWWWWWkkkkk........................
+.....................kkkWWWWWjjjjjjWWWWWkkk.....................
+..................kkkSSSjjjjjjjjjjjjjjjjSSSkkk..................
+................kkSSSjjjjjjiiiiiiiiiijjjjjjSSSkk................
+...............kSSjjjjjiiiikkkkkkkkkkiiiijjjjjSSk...............
+.............kkSjjjjjiikkkkBBBBBBBBBBkkkkiijjjjjSkk.............
+............kssjjjjiikkBBBBgggghghgggBBBBkkiijjjjssk............
+...........ksjjjjiikkBBHgggghhhhhhhhhgggHBBkkiijjjjsk...........
+..........ksjjjjikkBBHHggghhMMMMMMMMhhgggHHBBkkijjjjsk..........
+.........ksjjjiikBBNHHgghhMMMMMMMMMMmmhgggHHHBBkiijjjsk.........
+........ksjjjikkBNNhHggghMMMMMMMMMMmmmmhggHHhNNBkkijjjsk........
+.......kKjjjikBBNNHHHgghMMMMooommoommmmmhggHHNNNBBkijjjKk.......
+......kKjjjikBNgNNHHHgghMMMoouoomooommmmhhggHHNNNNBkijjjKk......
+......kKjjikBNgSgNHHgghMMMMoouuommommmoomhggHHNNNNNBkijjKk......
+.....kKjjjikBNNgNNHHgghMMMmmooommmooomommhggHHNNgNNBkijjjKk.....
+....kKjjjikBHNHNHNHHgghMMoommmmmmmouoommohhggHHgSgHNBkijjjKk....
+....kKjjikBHHHHHHHHgghhMMooommmmmmmoommmohggHHHHgHHHHBkijjKk....
+...kKjjjikAHHHHHHHHHgghMmouommmmmmmmmmmmohhggHHHHHHHHAkijjjKk...
+...kJIIikAHHHHHHHHHgghhmmmoommmmmmmmmmmoohggHHHHHHHHHHAkiIIJk...
+...kJIIikAHHhHHHHHHHgghmmmooooommmmmmmmoohggHHHgHHHHHHAkiIIJk...
+..kJIIikAHHHHHHHHgHHgghmmmmmmmoommmmmmmoohggHHHHHHHHhHHAkiIIJk..
+..kJIIikAHHHHHHHHHHHgghhmmmoommmmmmmmmoohggHHHHHHHHHHFHAkiIIJk..
+..kJIikAHHHFHHHHHHHHHgghmmmmmmmmkkkkkkkkkkkkkkHHHHHHHFHHAkiIJk..
+.kJIIikAgHgFgHgHgHgHgHgghmmmmmmmkWWWWWWWWWWWWknHgHgFFfgHAkiIIJk.
+.kjIIikAggFfFFggggggggggghmoooomkWSSSSSSSSSSsknggggggFFgAkiIIjk.
+.kjIIikAgFfFgggggggggggggghhooookWSSSSSSSSSSskngggggFffFAkiIIjk.
+.kjIikAggggfFgggggkkkkkkkkkkkkkkkWSSSssssssssknggggFffgggAkiIjk.
+.kjIikAgggFffFggggkWWWWWWWWWWWWkkWSSskkkkkkkkkngggggFfFFgAkiIjk.
+kjIIikAgFFffFgggggkWSSSSSSSSSSskkWSSsknnnnnnnnnggggFffffFAkiIIjk
+kjIIikAgggfffFggggkWSSSSSSSSSSskkWSSskngggggggggggFffffggAkiIIjk
+kjIIikAggFffffFgggkSsssssssSSSskkWSSskngggggggggrgggFffFgAkiIIjk
+kjIIikAgFfffFghghgkkkkkkkkkWSSskkWSSskngrghghghgGghFffffFAkiIIjk
+kjIIikAhrffffFhhhhhnnnnnnnkWSSskkWSSskkkkkkkhhrrGFFfffffGAkiIIjk
+kjIIIkAhFfffffFFrhhrGrrhhhkWSSskkWSSSWWWWWWknhhhGrhFffffFAkIIIjk
+.kIIIkAFfffffFrhGhrGGhhhrhkWSSskkWSSSSSSSSsknhhrGGFffffffAkIIIk.
+.kIIIkAGGfffffFhGrhhGrhhGhkWSSskkWSSSSSSSSsknrrGGFffffffGAkIIIk.
+.kIIIIkAFffffffFGGrrGGrrGhkSsstkkSsssttttttknhhGGrFfffffAkIIIIk.
+.kIIIIkAffffffFGGhGGGGqhqrkSsstkkSsstkkkkkkknrqGqFffffffAkIIIIk.
+.kIIIIkAfffffffFGrhGGvvvvqkSsstkkSsstknnnnnnnwvvFfffffffAkIIIIk.
+..kIIIkAffffffffFGrGqGvwwwkSsstkkSsstknGGGvwvFvvvvFfffffAkIIIk..
+..kIIIIkAfffffFGGGGFGGhqGqkSsstkkSsstknGGGGqGFrqGFfffffAkIIIIk..
+..kIIIIkAffffffFGGGFGGrGGGkSsstkkSsstknGGGGGGFFFFffffffAkIIIIk..
+...kIIIIkAffffffFFkkkkkkGGkSsstkkSsstknGGGGGFfffGFffffAkIIIIk...
+...kIIIIkAffffffGGkSSSSknGkSsstkkSsstknGGGGFffGGFfffffAkIIIIk...
+...kiIIIjkAffffqFqkSsstknGkSsstkkSsstknGGGGqGqFqfqfffAkjIIIik...
+....kiIIjkAfffqvvvkSsstknGkSsstkkSsstknGqGwvvvvvvvvffAkjIIik....
+....kiIIIjkyfqfqGqkstttkkkkstttkkttttknvwvvvvvvvvqfqykjIIIik....
+.....kiiiijkyfffFfkttttssssttttkkkkkkknGqGqGqfqfqffykjiiiik.....
+......kiiijkyfffffkkttttttttttkknnnnnnnFGGGFfffffffykjiiik......
+......kiiiijkyfffffkkttttttttkknnFFFffffFFFfffffffykjiiiik......
+.......kiiiijkyyfqfqkkttttttkknnfqfqfqfqfqfqfqfqyykjiiiik.......
+........kiiiijkkyvvvwkkkkkkkknnffvvvvvwvvvvvvvvykkjiiiik........
+.........kiiiijjkyywwfnnnnnnnnffffffffvvvvvffyykjjiiiik.........
+..........kiiiiijkkyyffffffffffffffffffffffyykkjiiiiik..........
+...........kiiiiijjkkyyffffffffffffffffffyykkjjiiiiik...........
+............kiiiiiiJJkkyyyyffffffffffyyyykkJJiiiiiik............
+.............kkiiiiiiJJkkkkyyyyyyyyyykkkkJJiiiiiikk.............
+...............kiiiiiiiJJJJkkkkkkkkkkJJJJiiiiiiik...............
+................kkiiiiiiiiiJJJJJJJJJJiiiiiiiiikk................
+..................kkkiiiiiiiiiiiiiiiiiiiiiikkk..................
+.....................kkkiiiiiiiiiiiiiiiikkk.....................
+........................kkkkkiiiiiikkkkk........................
+.............................kkkkkk.............................
+end
+
+sprite logo_wordmark 173x22 jorrefog
+.....kkkkkkkkkkk......kkkkkkkkkkkkkkkk......kkkkkkkkkkkkkkkkk......kkkkkkkkkkkkkkkkk......kkkkkkkkkkkkkkk....kkkkkkkkkkkkkkk......kkkkkkkkkkkkkkkk........kkkkkkkkkkkkkkkk...
+....kkWWWWWWWWWkk....kkWWWWWWWWWWWWWWkk....kkWWWWWWWWWWWWWWWkk....kkWWWWWWWWWWWWWWWkk....kkWWWWWWWWWWWWWkk..kkWWWWWWWWWWWWWkk....kkWWWWWWWWWWWWWWkk......kkWWWWWWWWWWWWWWkk..
+....kWSSSSSSSSSWk...kkWSSSSSSSSSSSSSSWkk...kWSSSSSSSSSSSSSSSWkk...kWSSSSSSSSSSSSSSSWkk...kWSSSSSSSSSSSSSWk..kWSSSSSSSSSSSSSWk...kkWSSSSSSSSSSSSSSWkk....kkWSSSSSSSSSSSSSSWkk.
+....kSSSSSSSSSSbk..kkWSSSSSSSSSSSSSSSSWkk..kWSSSSSSSSSSSSSSSSWkk..kWSSSSSSSSSSSSSSSSWkk..kWSSSSSSSSSSSSSbk..kWSSSSSSSSSSSSSbk..kkWSSSSSSSSSSSSSSSSWkk..kkWSSSSSSSSSSSSSSSSWkk
+....kkSbbbbSSSSbk..kWSSSSSbbbbbbbbSSSSSWk..kWSSSSbbbbbbbbSSSSSWk..kWSSSSbbbbbbbbSSSSSWk..kWSSSSbbbbbbbbbkk..kWSSSSbbbbbbbbbkk..kWSSSSSbbbbbbbbSSSSSWk..kWSSSSSbbbbbbbbSSSSSWk
+.....kkkkkkWSSSbk..kWSSSSbkkkkkkkkSSSSSbk..kWSSSbkkkkkkkkSSSSSbk..kWSSSbkkkkkkkkSSSSSbk..kWSSSbkkkkkkkkkk...kWSSSbkkkkkkkkkk...kWSSSSbkkkkkkkkSSSSSbk..kWSSSSbkkkkkkkkSbbbbbk
+..........kSbbbck..kSbbbckk......kkSbbbck..kSbbbck......kkSbbbck..kSbbbck......kkSbbbck..kSbbbck............kSbbbck............kSbbbckk......kkSbbbck..kSbbbckk......kkkkkkkk
+..........kSbbbck..kSbbbck........kSbbbck..kSbbbck......kkSbbbck..kSbbbck......kkSbbbck..kSbbbck............kSbbbck............kSbbbck........kSbbbck..kSbbbck...............
+..........kSbbbck..kSbbbck........kSbbbck..kSbbbckkkkkkkkSbbbbck..kSbbbckkkkkkkkSbbbbck..kSbbbckkkkkkkk.....kSbbbckkkkkkkk.....kSbbbck........kSbbbck..kSbbbck...............
+..........kSbbbck..kSbbbck........kSbbbck..kSbbbbSSSSSSSSbbbbbck..kSbbbbSSSSSSSSbbbbbck..kSbbbbSSSSSSSkk....kSbbbbSSSSSSSkk....kSbbbck........kSbbbck..kSbbbck..kkkkkkkkkkkkk
+..........kbcccek..kbcccek........kbcccek..kbccccccccccccccccekk..kbccccccccccccccccekk..kbcccccccccccbk....kbcccccccccccbk....kbcccek........kbcccek..kbcccek..kbbbbbbbbbbbk
+..........kbcccek..kbcccek........kbcccek..kbcccccccccccccccekk...kbcccccccccccccccekk...kbcccccccccccek....kbcccccccccccek....kbcccek........kbcccek..kbcccek..kbcccccccccek
+.kkkkk....kbcccek..kbcccek........kbcccek..kbcccceeeeccccceekk....kbcccceeeeccccceekk....kbcccceeeeeeekk....kbcccceeeeeeekk....kbcccek........kbcccek..kbcccek..kbcccccccccek
+kkbbbkk...kbcccek..kbcccek........kbcccek..kbcccekkkkbcccekkk.....kbcccekkkkbcccekkk.....kbcccekkkkkkkk.....kbcccekkkkkkkk.....kbcccek........kbcccek..kbcccek..kceeeeeccccek
+kceeeck...kceeeDk..kceeeDk........kceeeDk..kceeeDk..keeeeeckk.....kceeeDk..keeeeeckk.....kceeeDk............kceeeDk............kceeeDk........kceeeDk..kceeeDk..kkkkkkkceeeDk
+kceeeDkk.kkceeeDk..kceeeDkk......kkceeeDk..kceeeDk..kkeeeeeck.....kceeeDk..kkeeeeeck.....kceeeDk............kceeeDk............kceeeDkk......kkceeeDk..kceeeDkk......kkceeeDk
+kceeeeckkkceeeeDk..kceeeeckkkkkkkkceeeeDk..kceeeDk...kkceeeDkk....kceeeDk...kkceeeDkk....kceeeDkkkkkkkkkk...kceeeDk............kceeeeckkkkkkkkceeeeDk..kceeeeckkkkkkkkceeeeDk
+keeeeeeccceeeeeDk..keeeeeecccccccceeeeeDk..kceeeDk....keeeeeckk...kceeeDk....keeeeeckk...kceeeeccccccccckk..kceeeDk............keeeeeecccccccceeeeeDk..keeeeeecccccccceeeeeDk
+kkeeeeeeeeeeeeeDk..kkeeeeeeeeeeeeeeeeeDkk..kceeeDk....kkeeeeeckk..kceeeDk....kkeeeeeckk..kceeeeeeeeeeeeeck..kceeeDk............kkeeeeeeeeeeeeeeeeeDkk..kkeeeeeeeeeeeeeeeeeDkk
+.kkDDDDDDDDDDDDkk...kkDDDDDDDDDDDDDDDDkk...kDDDDDk.....kkDDDDDek..kDDDDDk.....kkDDDDDek..kDDDDDDDDDDDDDDDk..kDDDDDk.............kkDDDDDDDDDDDDDDDDkk....kkDDDDDDDDDDDDDDDDkk.
+..kkDDDDDDDDDDkk.....kkDDDDDDDDDDDDDDkk....kkDDDkk......kkDDDDkk..kkDDDkk......kkDDDDkk..kkDDDDDDDDDDDDDkk..kkDDDkk..............kkDDDDDDDDDDDDDDkk......kkDDDDDDDDDDDDDDkk..
+...kkkkkkkkkkkk.......kkkkkkkkkkkkkkkk......kkkkk........kkkkkk....kkkkk........kkkkkk....kkkkkkkkkkkkkkk....kkkkk................kkkkkkkkkkkkkkkk........kkkkkkkkkkkkkkkk...
+end
+
+sprite logo_productions 105x9 jorrefog
+kkkkkkk...kkkkkkk....kkkkkk...kkkkkkk...kkkkkkkk...kkkkkkk..kkkkkkkk..kkkk...kkkkkk...kkkk.kkkk...kkkkkkk
+kYYYYYkk..kYYYYYkk..kkYYYYkk..kYYYYYkk..kYYkkYYk..kkYYYYYk..kYYYYYYk..kYYk..kkYYYYkk..kYYkkkYYk..kkYYYYYk
+kyAkkyAk..kyAkkyAk..kyAkkyAk..kyAkkyAk..kyAkkyAk..kyAkkkkk..kkkyAkkk..kyAk..kyAkkyAk..kyyAkkyAk..kyAkkkkk
+kyAkkyAk..kyAkkyAk..kyAkkyAk..kyAkkyAk..kyAkkyAk..kyAk........kyAk....kyAk..kyAkkyAk..kyyyAkyAk..kyAkkkk.
+kAAAABkk..kAAAABkk..kABkkABk..kABkkABk..kABkkABk..kABk........kABk....kABk..kABkkABk..kABkAAABk..kkAAABkk
+kABkkkk...kABkABkk..kABkkABk..kABkkABk..kABkkABk..kABk........kABk....kABk..kABkkABk..kABkkAABk...kkkkABk
+kBCk......kBCkkBCk..kBCkkBCk..kBCkkBCk..kBCkkBCk..kBCkkkkk....kBCk....kBCk..kBCkkBCk..kBCkkkBCk..kkkkkBCk
+kCCk......kCCkkCCk..kkCCCCkk..kCCCCCkk..kkCCCCkk..kkCCCCCk....kCCk....kCCk..kkCCCCkk..kCCk.kCCk..kCCCCCkk
+kkkk......kkkkkkkk...kkkkkk...kkkkkkk....kkkkkk....kkkkkkk....kkkk....kkkk...kkkkkk...kkkk.kkkk..kkkkkkk.
+end
+
+sprite logo_spark 7x7 jorrefog
+...Q...
+...P...
+..pWp..
+QPWWWPQ
+..pWp..
+...P...
+...Q...
+end
