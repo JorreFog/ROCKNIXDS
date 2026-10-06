@@ -144,8 +144,11 @@ int main(void) {
             CHECK(sfx_asked[SFX_JINGLE + m->a] == before, "%s played its jingle without the power", PERKS[m->a].name);
             G->power_on = 1;
             for (int s = 0; s < 120; s++) { calm(); tick(60, &none); p->x = m->x; p->y = m->y + 14; }
-            int n = sfx_asked[SFX_JINGLE + m->a] - before;
+            int n = sfx_asked[SFX_JINGLE + m->a] - before, notes = 0;
             CHECK(n >= 1 && n <= 8, "%s played its jingle %d times in two minutes", PERKS[m->a].name, n);
+            for (int s = 0; s < 60 && !notes; s++) { calm(); tick(60, &none); p->x = m->x; p->y = m->y + 14;
+                for (int i = 0; i < MAX_TEXTS; i++) notes += G->ft[i].alive && !strcmp(G->ft[i].s, "\xe2\x99\xaa"); }
+            CHECK(notes, "no note rose from %s while its jingle played", PERKS[m->a].name);
         }
         G->god = 0;
     }

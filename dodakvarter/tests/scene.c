@@ -73,6 +73,23 @@ int main(int argc, char **argv) {
         app_render(&top, &bot); shot(out);
         return 0;
     }
+    if (!strcmp(name, "jingle")) {                         /* by a perk machine (the power on) as its jingle plays */
+        Inter *m = 0;
+        for (int i = 0; i < G->nit && !m; i++) if (G->it[i].type == IT_PERK && G->it[i].a != PK_KANELBULLE) m = &G->it[i];
+        if (m) { p->x = m->x + 16; p->y = m->y + 16; }
+        G->power_on = 1; world_power_wave(p->x, p->y); prop_lights();
+        G->round = 3; G->rstate = RS_ACTIVE; G->banner_t = 0; p->aim = PI_F;
+        for (int k = 0; k < 7200; k++) {                   /* until a note rises, and a little more */
+            for (int i = 0; i < MAX_ZOMBIES; i++) G->z[i].alive = 0;
+            G->spawn_cd = 1e9f; p->x = m ? m->x + 16 : p->x; p->y = m ? m->y + 16 : p->y;
+            ticks(1, &in);
+            int note = 0; for (int i = 0; i < MAX_TEXTS; i++) note |= G->ft[i].alive && G->ft[i].t < 0.6f;
+            if (note) break;
+        }
+        A.state = ST_PLAY;
+        app_render(&top, &bot); shot(out);
+        return 0;
+    }
     if (!strcmp(name, "trap")) {                           /* an elstängsel on, zombies walking into it */
         Inter *trap = 0;
         for (uint64_t sd = seed; !trap && sd < seed + 40; sd++) {

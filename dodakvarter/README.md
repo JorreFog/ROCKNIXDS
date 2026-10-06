@@ -89,7 +89,7 @@ most). You spend them on:
   the wonder weapons (Strålpistol, Åskvigg, Snöblåsare). After four pulls a **Dalahäst** may come out instead of a gun:
   your money back, and the box flies to another spot (its beam of light shows where). The odds are Black Ops' bear's.
 - **Perks**, at vending machines once the power is on, four at most, lost when you go down. Stand by one and
-  now and then it plays its jingle (a little tune of its own each, made up for the game):
+  now and then it plays its jingle (a little tune of its own each, made up for the game) and a note rises from it:
 
   | Perk | kr | Does (Black Ops' perk) |
   |---|---|---|

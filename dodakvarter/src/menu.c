@@ -391,6 +391,7 @@ static void new_run(uint64_t seed, int daily) {
 void app_new_run(void) { new_run(A.seed_override ? A.seed_override : ((uint64_t)time(0) * 2654435761u) ^ (uint64_t)clock(), 0); }
 static void continue_run(void) {
     if (run_load()) { refresh_save_info(); return; }
+    plat_log("continuing the run in %s, round %d", G->town, G->round);
     A.state = ST_PAUSE; A.sel = 0; A.t = 0; A.last_rstate = G->rstate; A.counted = 0;   /* back where you left it, paused */
     music_play(MUS_NONE);
 }
@@ -399,6 +400,7 @@ static void end_run(void);
    high score if it earned one), then the chosen one starts. 0 when it couldn't be read (nothing to count) */
 static int give_up_saved(int then) {
     if (run_load()) { refresh_save_info(); return 0; }
+    plat_log("gave up the saved run in %s, round %d", G->town, G->round);
     A.counted = 0; A.then = then;
     G->over = 1; end_run();
     music_play(MUS_GAMEOVER);

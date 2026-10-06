@@ -84,7 +84,7 @@ wait
 for s in 1 2 3 4; do
     grep -q "runtime error\|AddressSanitizer\|^exit" $T/mkerr$s && { echo "monkey $s:"; cat $T/mkerr$s; exit 1; }
     logs="$T/mk$s/dodakvarter.log.1 $T/mk$s/dodakvarter.log"   # (each start keeps the one before as .1)
-    echo "monkey $s: ok ($(cat $logs | grep -c 'game over') runs ended, $(cat $logs | grep -c 'continuing') continued)"
+    echo "monkey $s: ok ($(cat $logs | grep -c 'game over') runs ended, $(cat $logs | grep -c 'continuing') continued, $(cat $logs | grep -c 'gave up the saved') given up on the title)"
 done
 echo "== sounds"
 ./build/sounds $T/sounds > $T/sounds.txt || { cat $T/sounds.txt; exit 1; }

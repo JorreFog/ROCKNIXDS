@@ -211,6 +211,5 @@ int run_load(void) {
     for (int i = 0; i < MAX_ZOMBIES; i++) G->z[i].rimg = 0;
     world_paint();                                      /* the town as it is now, power and all */
     if (G->wave_on) world_power_wave_resume();          /* the lamps still follow the ring */
-    plat_log("continuing the run in %s, round %d", G->town, G->round);
     return 0;
 }

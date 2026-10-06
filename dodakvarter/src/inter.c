@@ -390,6 +390,7 @@ static void jingles_tick(float dt) {
         if (it->type != IT_PERK || (!G->power_on && it->a != PK_KANELBULLE)) continue;
         if (dist2f(it->x, it->y, G->p.x, G->p.y) > 120 * 120 || hash3(slot, i, 0x6A) % 4) continue;
         sfx_at(SFX_JINGLE + it->a, it->x, it->y, 0.6f);
+        float_text(it->x, it->y - 36, 0xfff0b0, "\xe2\x99\xaa");     /* ♪ (to be seen with the sound off too) */
         break;
     }
 }
