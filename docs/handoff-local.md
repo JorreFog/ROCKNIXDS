@@ -68,10 +68,11 @@ needed a hard reset.
      stopped responding (no picture for 20 seconds) and was closed*.
 2. **The exit hotkey always ends the game** (`resume.c` `on_usr1`, `quit_watch`). It quits at once, without the
    resume state, in three cases:
-   - a second press a second or more after the first;
+   - a second press: during the save (as in 1.5), or a second or more after a request DraStic hasn't taken;
    - a stalled game;
    - DraStic not taking the save within 3 s (5 s while the in-game menu, which closes itself for it, is up).
-   A key repeat within a second still saves.
+   A repeat within a second of a request DraStic hasn't taken yet is ignored. In a running game it takes the request
+   at its next frame, so a second press lands during the save and quits without the resume state.
 3. **New threads start on every CPU** (`dsflip.c` `pthread_create`): no thread inherits the main thread's
    confinement. `DSFLIP_SPREAD_THREADS=0` gives the old behaviour.
 4. **RetroAchievements** (`ra.c`):
@@ -85,8 +86,9 @@ needed a hard reset.
    DraStic is killed and the menu comes back with a notice. The loop doesn't count time while the handheld sleeps.
    Host check: a stand-in process was killed at 17 s with its presenter blocked, and left alone for 22 s while it ran.
 
-**Reproduce it** (over ssh; RG DS Plus first):
-- `sh docs/1.6-prep/freeze-repro.sh "black version 2" 10 old`, then the same with `new`. Each run:
+**Reproduce it** (over ssh; RG DS Plus first). The scripts run on the handheld: copy them over first
+(`scp docs/1.6-prep/*.sh root@<handheld>:/storage/`) and run them from there.
+- `sh /storage/freeze-repro.sh "black version 2" 10 old`, then the same with `new`. Each run:
   1. plays 25 s and quits with the hotkey's SIGUSR1 (a resume state is saved);
   2. starts the game again with RetroAchievements unreachable;
   3. watches 40 s.
@@ -99,7 +101,10 @@ needed a hard reset.
 - If `new` stalls too, the dump and backtraces are the next step: send them over.
 - Any game works, but Black 2 is the one that froze.
 
-**On the device:**
+**On the device:** steps 2-5 also run unattended: `sh /storage/stall-checks.sh <rom-substring>` (about 5 minutes,
+ES up, no game running). It prints one PASS/FAIL/SKIP line per check and writes the log lines behind them to
+`/storage/stall-checks-<date>.txt`. It skips the resume checks when the game has *resume on quit* off. It puts back a
+resume state the player had. What the steps below add is what to look at on the screens.
 1. Install the branch:
    - RG DS Plus: `RGDS_BRANCH=claude/1-6-prep-work-kwq9lc-plus`.
    - RG DS: `RGDS_BRANCH=claude/1-6-prep-work-kwq9lc`.
@@ -117,11 +122,12 @@ needed a hard reset.
    - Then run `systemctl unset-environment DSFLIP_STALL_TEST`.
 4. **Normal quits still save.** Play a game 30 s, press the exit hotkey once, then start the game again: it resumes
    (`[resume] resumed`).
-   - Press the hotkey twice quickly (within a second, e.g. a held key): it still saves.
+   - Press the hotkey, then again at once (while it saves): the game ends at once, without a resume state, and the
+     next start doesn't resume.
    - In DraStic's own menu (from the in-game menu's *DraStic menu*), press the hotkey: the game ends within ~3 s
-     (no resume state, as before; the log says why).
+     (without a resume state; the log says why).
 5. **Wedged process, from outside.** Start a game, then over ssh run `kill -STOP $(pidof drastic)`.
-   - Within ~16 s `last-session.log` says `libdsflip's presenter hasn't run for 15 s: DraStic is wedged, killing it`.
+   - Within 15-25 s `last-session.log` says `libdsflip's presenter hasn't run for 15 s: DraStic is wedged, killing it`.
    - The menu comes back with *The game stopped responding and was closed*.
 6. **RetroAchievements without network**, done with the RA routes blocked as in `ra-offline-repro.sh`:
    - `dsflip.log` has `[ra] login2: no connection to RetroAchievements (...) (curl 6)` (or 7, or 28) and

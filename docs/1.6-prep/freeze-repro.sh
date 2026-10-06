@@ -8,8 +8,8 @@
 # is ended. The RG DS Plus's CPU placement (session.sh, DSFLIP_PIN) is on, as in a normal session.
 #   old: DSFLIP_SPREAD_THREADS=0, new threads inherit their creator's CPUs (the behaviour up to 1.5.13)
 #   new: the 1.6 default, new threads start on every CPU
-# Report: /storage/freeze-repro-<date>.txt. Restores the routes and the test flags on exit; the resume state it made is
-# deleted (the game's own saves are not touched).
+# Report: /storage/freeze-repro-<date>.txt. Restores the routes and the test flags on exit; the resume states it made
+# are deleted, and one the player had for the game is put back (the game's own saves are not touched).
 D=/storage/.config/drastic/dsflip
 ROM=$(ls /storage/roms/nds/*.nds /storage/roms/nds/*.zip 2>/dev/null | grep -i -- "$1" | head -n1); [ -n "$ROM" ] || { echo "no rom matching $1"; exit 1; }
 RUNS=${2:-5}; MODE=${3:-new}
@@ -21,8 +21,10 @@ cleanup() {
     for n in $NETS; do ip route del unreachable $n 2>/dev/null; done
     systemctl unset-environment DSFLIP_SPREAD_THREADS DSFLIP_STALL_QUIT 2>/dev/null
     rm -f /tmp/rocknixds-testing /tmp/rocknixds-testing-resume "$RSTATE"
+    [ -f "$RSTATE.freeze-repro" ] && mv "$RSTATE.freeze-repro" "$RSTATE"
 }
 trap cleanup EXIT; trap 'exit 1' HUP INT TERM
+[ -f "$RSTATE" ] && mv "$RSTATE" "$RSTATE.freeze-repro"
 touch /tmp/rocknixds-testing /tmp/rocknixds-testing-resume   # a test launch (no play stats), resume on all the same
 [ "$MODE" = old ] && systemctl set-environment DSFLIP_SPREAD_THREADS=0
 systemctl set-environment DSFLIP_STALL_QUIT=0               # keep a stalled DraStic alive for the backtraces
