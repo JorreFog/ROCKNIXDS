@@ -2,7 +2,8 @@
 
 Every number is from the README's "What was achieved" table and docs/img/stress-ramp.svg (the stress ROM, one
 level per 300 frames, DraStic at 2x internal resolution, the same handheld): stock ROCKNIX (sway + GL) against
-libdsflip, both with DraStic's own renderer. Gengis Engine, 1.6's default, comes on top of that and is only quoted."""
+libdsflip, both with DraStic's own renderer. The last tile is Gengis Engine against DraStic's renderer on ROCKNIXDS
+(docs/releases/v1.5.9.md: the stress test's heaviest scene, RG DS Plus at 1104 MHz), not against stock."""
 from lib import *
 
 # stress-ramp.svg's polylines, back to fps (y = 330 at 35 fps, 53.7 px per 5 fps)
@@ -81,7 +82,7 @@ TILES = [
     ("2.3x", "more 3D at a locked 60 fps", "1344 polygons. Stock held about 580"),
     ("40x", "fewer dropped frames", "HeartGold: 5.2 a second on stock, 0.13 now"),
     ("0.3 ms", "display work per frame", "3.6 ms on stock (GL upload and sway)"),
-    ("60.000 Hz", "panels: every frame shown once", "Stock's 60.10 Hz repeats one every 10 s"),
+    ("51 fps", "Gengis Engine, the heaviest 3D", "DraStic's renderer: 33 (Plus, 1104 MHz)"),
 ]
 tx, tw, th = 410, W - 410 - 16, 62
 for k, (big, l1, l2) in enumerate(TILES):
@@ -91,6 +92,7 @@ for k, (big, l1, l2) in enumerate(TILES):
     a.text(tx + 10, y + 32, l1, 12, INK, medium=True)
     a.text(tx + 10, y + 45, l2, 12, INK3)
 
-a.text(16, H - 20, "Both lines use DraStic's own renderer. Gengis Engine, 1.6's default, takes about 12% more CPU work "
-       "off on top.", 12, INK3)
+foot = "Chart and top 3 tiles: vs stock, both with DraStic's renderer. Bottom: Gengis Engine vs DraStic's."
+assert a.tlen(foot, 12) <= W - 32, a.tlen(foot, 12)
+a.text(16, H - 20, foot, 12, INK3)
 a.render(os.path.join(OUT, "performance.png"))
