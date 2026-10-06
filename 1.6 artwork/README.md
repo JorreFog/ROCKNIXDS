@@ -24,5 +24,14 @@ Also here, not on the release page: two Döda Kvarter gameplay GIFs, real play a
 | `doda-kvarter-horde.gif` | A horde on round 14, a winter night, Double Points |
 | `doda-kvarter-boss.gif` | Round 20: Draugen's title card, then his charges |
 
+And the Discord server's icon, in `discord/`, from the standard logo (512x512 PNG for Discord, SVG to scale):
+
+| File | What it shows |
+|---|---|
+| `discord/discord-icon-mark.png` | The two screens and DS: clear even at Discord's smallest sizes (recommended) |
+| `discord/discord-icon-full.png` | The whole stacked logo, ROCKNIX above DS |
+
+Discord crops the icon to a circle; both are drawn to fit inside it (`docs/release-art-1.6/discord_icon.py`).
+
 Don't edit these by hand: [`docs/release-art-1.6/build.sh`](../docs/release-art-1.6/) makes the pictures and
 `docs/release-art-1.6/gameplay.sh` the clips, straight into this folder.
