@@ -239,14 +239,14 @@ static void settings_change(int i, int d) {
 static const char *HOWTO_EN[] = {
     "SURVIVE\n\nThe dead come in rounds, more and tougher each time. Survive as many rounds as you can: that is your score.\n\nEvery hit is +10 kr, a kill +60, a critical +100, the knife +130.\n\nQuitting keeps the run: Continue it from the title.",
     "SPEND YOUR KRONOR\n\nClear barriers to open new districts. Chalk outlines on walls are guns for sale. Lådan (the Mystery Box, 950 kr) gives a random weapon, until the Dalahäst carries it away.",
-    "THE POWER\n\nFind the Elcentral and switch the power on. Then the perk machines and Smedjan (5 000 kr: Pack-a-Punch) work, and the street lamps light up.",
+    "THE POWER\n\nFind the Elcentral and switch the power on. Then the perk machines and Smedjan (5 000 kr: Pack-a-Punch) work, the street lamps light up, and the elstängsel by a gap between districts (1 000 kr) shocks whatever crosses it.",
     "PERKS (max 4)\n\nJulmust 2 500: 250 health. Snabbkaffe 3 000: fast reloads. Salmiak 2 000: fire faster, hit harder. Kanelbulle 500: get back up. Blåbärssoppa 2 000: run. Lingondricka 2 000: shock on reload. Kaviar 4 000: a third gun.",
     "LOOT\n\nSearch bins, cars, mailboxes and sheds. Rarity: grey, green, blue, purple, gold. It gets better every round. Helmets and vests take hits for you. Wolves come on Vargnatt, and the moose... runs.",
 };
 static const char *HOWTO_SV[] = {
     "ÖVERLEV\n\nDe döda kommer i rundor, fler och starkare varje gång. Överlev så många rundor du kan: det är din poäng.\n\nVarje träff ger +10 kr, att döda +60, en kritisk träff +100, kniven +130.\n\nAvslutar du sparas spelet: fortsätt från titelskärmen.",
     "SPENDERA KRONOR\n\nRöj barrikader för att öppna nya kvarter. Kritkonturer på väggarna är vapen till salu. Lådan (950 kr) ger ett slumpvapen, tills Dalahästen bär iväg den.",
-    "STRÖMMEN\n\nHitta elcentralen och slå på strömmen. Då fungerar automaterna och Smedjan (5 000 kr: uppgradera vapnet), och gatlyktorna tänds.",
+    "STRÖMMEN\n\nHitta elcentralen och slå på strömmen. Då fungerar automaterna och Smedjan (5 000 kr: uppgradera vapnet), gatlyktorna tänds, och elstängslet vid en passage mellan kvarteren (1 000 kr) ger alla som går igenom en stöt.",
     "FÖRMÅNER (max 4)\n\nJulmust 2 500: 250 hälsa. Snabbkaffe 3 000: snabb omladdning. Salmiak 2 000: skjut snabbare, hårdare. Kanelbulle 500: res dig igen. Blåbärssoppa 2 000: spring. Lingondricka 2 000: stöt vid omladdning. Kaviar 4 000: ett tredje vapen.",
     "BYTE\n\nSök i soptunnor, bilar, brevlådor och bodar. Sällsynthet: grå, grön, blå, lila, guld. Det blir bättre varje runda. Hjälmar och västar tar träffar åt dig. Vargarna kommer på Vargnatt, och älgen... springer.",
 };
