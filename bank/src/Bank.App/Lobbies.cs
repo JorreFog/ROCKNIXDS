@@ -296,7 +296,7 @@ public sealed class LobbyHostScreen(App app, HostedLobby lobby, string? lastVisi
     private void Start()
     {
         _host?.Dispose();
-        _host = new TradeHost(App.Cfg, code => lobby.Listing(code));
+        _host = new TradeHost(App.Cfg, App.Identity, code => lobby.Listing(code));
         _host.Start();
     }
 
@@ -329,8 +329,15 @@ public sealed class LobbyHostScreen(App app, HostedLobby lobby, string? lastVisi
             }
             return;
         }
+        if (_host?.Pending is { } req)
+        {
+            // someone asks to join: A lets them in, B refuses
+            if (e.Pressed(Btn.A)) _ = req.LetIn();
+            else if (e.Pressed(Btn.B)) _ = req.Refuse();
+            return;
+        }
         if (e.Pressed(Btn.B)) App.Pop();
-        else if (e.Pressed(Btn.X) && !lobby.Open) Start();
+        else if (e.Pressed(Btn.X) && !lobby.Open) _host?.NewCode();
         else if (e.Kind == InputKind.Quit) App.QuitRequested = true;
     }
 
@@ -338,7 +345,12 @@ public sealed class LobbyHostScreen(App app, HostedLobby lobby, string? lastVisi
 
     public override void DrawTop(Canvas c)
     {
-        Views.Header(c, App, lobby.Open ? "Your lobby is open" : "Your lobby (with a code)");
+        if (_host?.Pending is { } req)
+        {
+            DrawRequest(c, req);
+            return;
+        }
+        Views.Header(c, App, lobby.Open ? "Your lobby is open" : "Your lobby (with a code)", $"ID {App.Identity.Id}");
         var p = c.P;
         var s = MonSummary.From(lobby.Pk);
         c.Panel(32, 56, 250, 200, false);
@@ -380,23 +392,125 @@ public sealed class LobbyHostScreen(App app, HostedLobby lobby, string? lastVisi
         }
     }
 
+    private void DrawRequest(Canvas c, JoinRequest req)
+    {
+        Views.Header(c, App, $"{req.Name} wants to join", $"ID {req.Id}");
+        var p = c.P;
+        var trust = App.Trainers.TrustOf(req.Key, req.Name);
+        c.Text(req.Name, 320, 60, 30, p.Ink, Align.Center, bold: true, maxW: 600);
+        c.Text($"{App.Trainers.Describe(req.Key, req.Name)} · {req.Address}", 320, 102, 17,
+            trust switch { Trust.Known => p.Good, Trust.Impostor => p.Bad, _ => p.Muted }, Align.Center, maxW: 600);
+        c.Text("Check number", 320, 150, 18, p.Muted, Align.Center);
+        c.Text(req.CheckNumber, 320, 176, 80, p.Ink, Align.Center, bold: true);
+        c.Paragraph($"{req.Name}'s screen shows a check number too. If you're together, compare them: the same number means " +
+                    "you're connected to each other with nobody in between. Let in only someone you want to trade with.",
+            60, 290, 520, 17, p.Muted);
+    }
+
     public override void DrawBottom(Canvas c)
     {
         var p = c.P;
         _hit.Clear();
+        if (_host?.Pending is { } req)
+        {
+            c.Text($"Let {req.Name} into your lobby?", 320, 60, 22, p.Ink, Align.Center, bold: true, maxW: 600);
+            _hit.Add((c.Button("A  Let in", 40, 200, 270, 64, true, p.Good), () => _ = req.LetIn()));
+            _hit.Add((c.Button("B  Refuse", 330, 200, 270, 64, false), () => _ = req.Refuse()));
+            c.Paragraph($"Refused handhelds can't ask again in this lobby. Unanswered requests are refused after {TradeHost.RequestTimeout.TotalSeconds:0} seconds.",
+                40, 300, 560, 15, p.Muted);
+            return;
+        }
         c.Paragraph($"Your lobby is in the list of every handheld on this network that opens Trade > Join. When someone joins, " +
                     $"{MonSummary.From(lobby.Pk).Title} is offered to them straight away; you still see their offer, checked, and " +
                     "nothing is traded until you both accept.", 32, 28, 576, 17, p.Ink);
         c.Paragraph(lobby.Open
-                ? "Open lobby: anyone here can join without a code (a listing is visible to everyone on the network)."
-                : $"Joining needs the code. After {TradeHost.MaxAttempts} wrong codes the lobby closes.",
+                ? "Open lobby: no code to type. Whoever wants to join asks first: you see their name and their handheld's ID, and decide."
+                : $"Joining needs the code. An address that tries {TradeHost.MaxWrongPerAddress} wrong codes is shut out; after " +
+                  $"{TradeHost.MaxWrongPerCode} in all, the code changes by itself.",
             32, 196, 576, 15, p.Muted);
         if (!lobby.Open)
-            _hit.Add((c.Button("New code", 32, 330, 270, 56, false), Start));
+            _hit.Add((c.Button("New code", 32, 330, 270, 56, false), () => _host?.NewCode()));
         _hit.Add((c.Button("Close the lobby", lobby.Open ? 185 : 338, 330, 270, 56, false), App.Pop));
         float x = 8;
         if (!lobby.Open)
             x += c.Hint("X", "New code", x, 446);
         c.Hint("B", "Close", x, 446);
+    }
+}
+
+/// <summary>
+/// Connected and proven: waiting for the host to let us in. A room with a code lets in at once; an open lobby's host
+/// sees who's asking, and the same check number as this screen.
+/// </summary>
+public sealed class AdmissionScreen(App app, SecureChannel channel, string hostName, LobbyListing? lobby, Action admitted) : Screen(app)
+{
+    private readonly CancellationTokenSource _cts = new();
+    private Task? _wait;
+    private bool _done;
+
+    public override void Enter() => _wait ??= TradeClient.WaitForAdmissionAsync(channel, _cts.Token);
+
+    public override void Update()
+    {
+        if (_done || _wait is not { IsCompleted: true } w)
+            return;
+        _done = true;
+        if (w.IsCompletedSuccessfully)
+        {
+            admitted();
+            var session = new TradeSession(channel, App.Cfg, isHost: false);
+            App.Trade = new TradeController(App, session) { JoinedLobby = lobby };
+            App.PopToRoot();
+            App.ShowToast(lobby is { Want: > 0 }
+                ? $"Connected. The lobby wants {lobby.WantName}: offer one with A (yours are framed in green)."
+                : "Connected. Pick a Pokémon to offer with A.");
+            return;
+        }
+        channel.Dispose();
+        App.Pop();
+        var why = w.Exception?.InnerException is TradeRefusedException r ? r.Message : "The host closed the connection.";
+        App.Message($"{hostName} didn't let you in", why);
+    }
+
+    private void Cancel()
+    {
+        if (_done)
+            return;
+        _done = true;
+        _cts.Cancel();
+        channel.Dispose();
+        App.Pop();
+    }
+
+    public override void Handle(InputEvent e)
+    {
+        if (e.Pressed(Btn.B) || e.Kind == InputKind.TouchUp)
+            Cancel();
+        else if (e.Kind == InputKind.Quit)
+            App.QuitRequested = true;
+    }
+
+    public override bool Animating => true;
+
+    public override void DrawTop(Canvas c)
+    {
+        Views.Header(c, App, $"Joining {hostName}", $"ID {Fingerprint.Short(channel.PeerKey)}");
+        var p = c.P;
+        c.Text($"Waiting for {hostName} to let you in...", 320, 70, 22, p.Ink, Align.Center, bold: true, maxW: 600);
+        c.Text("Check number", 320, 140, 18, p.Muted, Align.Center);
+        c.Text(channel.CheckNumber, 320, 166, 80, p.Ink, Align.Center, bold: true);
+        c.Paragraph($"{hostName}'s screen shows the same number. If you're together, compare them: a different number means " +
+                    "someone is in between, so go back.", 60, 290, 520, 17, p.Muted);
+        c.Text(App.Trainers.Describe(channel.PeerKey, hostName), 320, 400, 16,
+            App.Trainers.TrustOf(channel.PeerKey, hostName) == Trust.Impostor ? p.Bad : p.Muted, Align.Center);
+        int dots = (int)(App.Now / 400 % 4);
+        for (int i = 0; i < 3; i++)
+            c.Fill(296 + i * 18, 450, 10, 10, i < dots ? p.Edge : p.Rule);
+    }
+
+    public override void DrawBottom(Canvas c)
+    {
+        c.Button("Cancel", 220, 200, 200, 56, true);
+        c.Hint("B", "Cancel", 8, 446);
     }
 }

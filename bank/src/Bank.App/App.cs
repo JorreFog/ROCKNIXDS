@@ -43,6 +43,14 @@ public sealed class App
 
     public TradeController? Trade { get; set; }
 
+    /// <summary>This handheld's identity key for trading (made on first use).</summary>
+    public DeviceIdentity Identity => _identity ??= DeviceIdentity.LoadOrCreate(Cfg.IdentityPath);
+    private DeviceIdentity? _identity;
+
+    /// <summary>The handhelds traded with before.</summary>
+    public TrainerBook Trainers => _trainers ??= new TrainerBook(Cfg.TrainersPath);
+    private TrainerBook? _trainers;
+
     // modal
     public Dialog? Dialog { get; private set; }
 
@@ -67,6 +75,8 @@ public sealed class App
 
     public void Load()
     {
+        _ = Identity; // made (or read) now, off the main thread
+        _ = Trainers;
         Bank = BankStore.Open(Cfg);
         Mover = new Mover(Cfg, Bank, History);
         foreach (var n in Bank.LoadNotes)
@@ -494,6 +504,8 @@ public sealed class TradeController(App app, TradeSession session)
         if (Session.Result is { } r)
         {
             Session.Result = null;
+            if (r.Problem is null)
+                app.Trainers.RecordTrade(Session.PartnerKey, Session.PartnerName);
             app.Push(new TradeDoneScreen(app, r));
         }
         if (Session.Phase == TradePhase.Closed)

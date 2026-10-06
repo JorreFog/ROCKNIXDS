@@ -113,19 +113,6 @@ public static class Program
         throw new FileNotFoundException("the app's assets folder (fonts/, sprites/) wasn't found; pass --assets DIR");
     }
 
-    [DllImport("libc", EntryPoint = "setenv")]
-    private static extern int setenv([MarshalAs(UnmanagedType.LPUTF8Str)] string name, [MarshalAs(UnmanagedType.LPUTF8Str)] string value, int overwrite);
-
-    /// <summary>Sets a variable native code sees: .NET's own Environment.SetEnvironmentVariable doesn't reach getenv().</summary>
-    private static void SetNativeEnv(string name, string value)
-    {
-        Environment.SetEnvironmentVariable(name, value);
-        if (!OperatingSystem.IsWindows())
-        {
-            try { setenv(name, value, 1); } catch (Exception) { /* not a libc platform */ }
-        }
-    }
-
     private static readonly string[] FallbackFonts =
     [
         "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
@@ -142,11 +129,12 @@ public static class Program
         bool headless = script is not null;
         if (headless)
         {
-            SetNativeEnv("SDL_VIDEODRIVER", "offscreen");
+            Sdl.SetHint("SDL_VIDEODRIVER", "offscreen"); // a hint, not an environment variable: see below
             layoutMode ??= "side";
         }
-        SetNativeEnv("SDL_VIDEO_WAYLAND_WMCLASS", AppId); // the window's app_id under sway (SDL reads it with getenv)
-        SetNativeEnv("SDL_VIDEO_X11_WMCLASS", AppId);
+        // The window's app_id under sway is the executable's name, rocknixds-bank (the launcher also exports
+        // SDL_VIDEO_WAYLAND_WMCLASS). The environment is never changed from in here: setenv() races with the runtime's
+        // threads reading it, which crashed the arm64 build.
 
         var input = new Input(cfg.SwapAB);
         bool evdev = !headless && cfg.PadDevice.Length > 0 && input.StartEvdev(cfg.PadDevice);

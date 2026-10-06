@@ -12,7 +12,8 @@ namespace Rocknixds.Bank.Trade;
 /// </summary>
 public sealed class SecureChannel : IDisposable
 {
-    public const int ProtocolVersion = 1;
+    /// <summary>2: both handhelds sign the handshake with their identity keys.</summary>
+    public const int ProtocolVersion = 2;
     /// <summary>Before the code is proven a frame is a few hundred bytes of JSON: nobody gets to make us allocate more.</summary>
     private const int MaxHandshakeFrame = 4096;
     /// <summary>After it: a Pokémon file is under 400 bytes, so 64 KiB is a generous bound.</summary>
@@ -41,44 +42,74 @@ public sealed class SecureChannel : IDisposable
         RemoteAddress = remote;
     }
 
-    /// <summary>The joining side's handshake. Throws <see cref="WrongCodeException"/> when the codes differ.</summary>
-    public static async Task<SecureChannel> ConnectAsync(Stream stream, string code, string remote, CancellationToken ct = default)
+    /// <summary>The partner's identity key (its handheld's), proven in the handshake.</summary>
+    public byte[] PeerKey { get; private init; } = [];
+
+    /// <summary>On the host: the name the joiner signed into its handshake.</summary>
+    public string PeerName { get; private init; } = "";
+
+    /// <summary>A 4-digit number both handhelds derive from the session's key: the same on both screens, or someone
+    /// is in between.</summary>
+    public string CheckNumber { get; private init; } = "";
+
+    /// <summary>
+    /// The joining side's handshake. Throws <see cref="WrongCodeException"/> when the codes differ, and
+    /// <see cref="ImpostorException"/> when the host can't prove it holds <paramref name="expectHost"/> (the key its
+    /// lobby listing was signed with), or any key at all.
+    /// </summary>
+    public static async Task<SecureChannel> ConnectAsync(Stream stream, string code, string remote, DeviceIdentity me, string myName,
+        byte[]? expectHost = null, CancellationToken ct = default)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(HandshakeTimeout);
         var t = timeout.Token;
 
         var spake = new Spake2(isClient: true, code);
-        await WriteJsonAsync(stream, new HandshakeMsg { T = "spake", App = "rocknixds-bank", Proto = ProtocolVersion, Msg = spake.Message }, t);
+        await WriteJsonAsync(stream, new HandshakeMsg { T = "spake", App = "rocknixds-bank", Proto = ProtocolVersion, Msg = spake.Message,
+            Id = me.PublicKey }, t);
         var reply = await ReadJsonAsync(stream, t);
         if (reply.T == "refused")
             throw new TradeRefusedException(TextGuard.Clean(reply.Text, 160) is { Length: > 0 } why ? $"The host refused: {why}" : "The host refused the connection.");
-        if (reply.T != "spake" || reply.Msg is null || reply.Confirm is null)
-            throw new IOException("unexpected handshake reply");
         if (reply.Proto != ProtocolVersion)
             throw new TradeRefusedException("The other handheld runs a different version of ROCKNIXDS Bank. Update both.");
+        if (reply.T != "spake" || reply.Msg is null || reply.Confirm is null || reply.Id is null || reply.Sig is null)
+            throw new IOException("unexpected handshake reply");
 
         var keys = Keys.Derive(spake.Finish(reply.Msg));
         if (!CryptographicOperations.FixedTimeEquals(reply.Confirm, Confirm(keys.ConfirmServer, "server")))
             throw new WrongCodeException();
-        await WriteJsonAsync(stream, new HandshakeMsg { T = "confirm", Confirm = Confirm(keys.ConfirmClient, "client") }, t);
-        return new SecureChannel(stream, keys.ClientToServer, keys.ServerToClient, isClient: true, remote);
+        var th = Transcript(spake.Message, reply.Msg, me.PublicKey, reply.Id);
+        if (!DeviceIdentity.Verify(reply.Id, Signed("server", th, reply.Confirm, ""), reply.Sig))
+            throw new ImpostorException("The host couldn't prove which handheld it is.");
+        if (expectHost is not null && !CryptographicOperations.FixedTimeEquals(expectHost, reply.Id))
+            throw new ImpostorException("This isn't the handheld that listed the lobby: someone may be imitating it.");
+
+        var name = TextGuard.Clean(myName, 24);
+        var confirm = Confirm(keys.ConfirmClient, "client");
+        await WriteJsonAsync(stream, new HandshakeMsg { T = "confirm", Confirm = confirm, Name = name,
+            Sig = me.Sign(Signed("client", th, confirm, name)) }, t);
+        return new SecureChannel(stream, keys.ClientToServer, keys.ServerToClient, isClient: true, remote)
+        {
+            PeerKey = reply.Id,
+            CheckNumber = keys.CheckNumber,
+        };
     }
 
     /// <summary>
     /// The host's handshake with one incoming connection. <paramref name="reserveAttempt"/> is asked before the host
     /// reveals anything that depends on the code (its key confirmation): every connection that gets that far is one guess
     /// at the code, whether it then confirms, sends garbage, hangs up or just goes quiet. Returning false refuses it.
+    /// The joiner must sign the handshake with its own identity key, which the host gets as <see cref="PeerKey"/>.
     /// </summary>
-    public static async Task<SecureChannel> AcceptAsync(Stream stream, string code, string remote, CancellationToken ct = default,
-        Func<bool>? reserveAttempt = null)
+    public static async Task<SecureChannel> AcceptAsync(Stream stream, string code, string remote, DeviceIdentity me,
+        CancellationToken ct = default, Func<bool>? reserveAttempt = null)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(HandshakeTimeout);
         var t = timeout.Token;
 
         var hello = await ReadJsonAsync(stream, t);
-        if (hello.T != "spake" || hello.App != "rocknixds-bank" || hello.Msg is null)
+        if (hello.T != "spake" || hello.App != "rocknixds-bank")
             throw new IOException("not a ROCKNIXDS Bank client");
         if (hello.Proto != ProtocolVersion)
         {
@@ -86,13 +117,15 @@ public sealed class SecureChannel : IDisposable
                 Text = "The host runs a different version of ROCKNIXDS Bank. Update both." }, t);
             throw new TradeRefusedException("A partner with a different version tried to connect.");
         }
+        if (hello.Msg is null || hello.Id is not { Length: >= 32 and <= 200 })
+            throw new IOException("incomplete handshake");
         // a well-formed message counts as an attempt from here on, valid group element or not: a real client never
         // sends a bad one, and an attacker shouldn't get free modular exponentiations
         if (reserveAttempt is not null && !reserveAttempt())
         {
             await WriteJsonAsync(stream, new HandshakeMsg { T = "refused", Proto = ProtocolVersion,
-                Text = "Too many wrong codes: this trade room is closed." }, t);
-            throw new TradeRefusedException("A connection was refused: the room has no attempts left.");
+                Text = "Too many wrong codes from here: ask the host for the code again." }, t);
+            throw new TradeRefusedException("A connection was refused: no attempts left for it.");
         }
         var spake = new Spake2(isClient: false, code);
         Keys keys;
@@ -104,22 +137,52 @@ public sealed class SecureChannel : IDisposable
         {
             throw new WrongCodeException();
         }
+        var th = Transcript(hello.Msg, spake.Message, hello.Id, me.PublicKey);
+        string name;
         try
         {
+            var serverConfirm = Confirm(keys.ConfirmServer, "server");
             await WriteJsonAsync(stream, new HandshakeMsg { T = "spake", Proto = ProtocolVersion, Msg = spake.Message,
-                Confirm = Confirm(keys.ConfirmServer, "server") }, t);
+                Confirm = serverConfirm, Id = me.PublicKey, Sig = me.Sign(Signed("server", th, serverConfirm, "")) }, t);
             var confirm = await ReadJsonAsync(stream, t);
             if (confirm.T != "confirm" || confirm.Confirm is null ||
                 !CryptographicOperations.FixedTimeEquals(confirm.Confirm, Confirm(keys.ConfirmClient, "client")))
                 throw new WrongCodeException();
+            name = confirm.Name ?? "";
+            if (TextGuard.Clean(name, 24) != name || !DeviceIdentity.Verify(hello.Id, Signed("client", th, confirm.Confirm, name), confirm.Sig))
+                throw new WrongCodeException(); // knows the code but can't sign for its own key: no better than a wrong guess
         }
         catch (Exception ex) when (ex is not WrongCodeException && !ct.IsCancellationRequested)
         {
             // hung up, timed out, garbage: after our confirmation went out, all of these are a failed guess
             throw new WrongCodeException();
         }
-        return new SecureChannel(stream, keys.ServerToClient, keys.ClientToServer, isClient: false, remote);
+        return new SecureChannel(stream, keys.ServerToClient, keys.ClientToServer, isClient: false, remote)
+        {
+            PeerKey = hello.Id,
+            PeerName = name,
+            CheckNumber = keys.CheckNumber,
+        };
     }
+
+    /// <summary>The handshake as both sides saw it: both key-exchange messages and both identity keys.</summary>
+    private static byte[] Transcript(byte[] t, byte[] s, byte[] clientKey, byte[] serverKey)
+    {
+        using var h = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        foreach (var part in new[] { "rocknixds-bank handshake v2"u8.ToArray(), t, s, clientKey, serverKey })
+        {
+            Span<byte> len = stackalloc byte[4];
+            BinaryPrimitives.WriteInt32BigEndian(len, part.Length);
+            h.AppendData(len);
+            h.AppendData(part);
+        }
+        return h.GetHashAndReset();
+    }
+
+    /// <summary>What each side signs: its role, the transcript, its key confirmation (which only the session's key
+    /// makes), and for the joiner its name.</summary>
+    private static byte[] Signed(string role, byte[] transcript, byte[] confirm, string name) =>
+        [.. Encoding.ASCII.GetBytes("rnbank sign " + role), .. transcript, .. confirm, .. Encoding.UTF8.GetBytes(name)];
 
     public async Task SendAsync(byte[] plaintext, CancellationToken ct = default)
     {
@@ -206,12 +269,13 @@ public sealed class SecureChannel : IDisposable
         _receive.Dispose();
     }
 
-    private sealed record Keys(byte[] ClientToServer, byte[] ServerToClient, byte[] ConfirmClient, byte[] ConfirmServer)
+    private sealed record Keys(byte[] ClientToServer, byte[] ServerToClient, byte[] ConfirmClient, byte[] ConfirmServer, string CheckNumber)
     {
         public static Keys Derive(byte[] secret)
         {
-            var okm = HKDF.DeriveKey(HashAlgorithmName.SHA256, secret, 128, info: Encoding.ASCII.GetBytes("rocknixds-bank session keys v1"));
-            return new Keys(okm[..32], okm[32..64], okm[64..96], okm[96..]);
+            var okm = HKDF.DeriveKey(HashAlgorithmName.SHA256, secret, 132, info: Encoding.ASCII.GetBytes("rocknixds-bank session keys v2"));
+            var check = BinaryPrimitives.ReadUInt32BigEndian(okm.AsSpan(128)) % 10000;
+            return new Keys(okm[..32], okm[32..64], okm[64..96], okm[96..128], check.ToString("D4"));
         }
     }
 }
@@ -219,6 +283,9 @@ public sealed class SecureChannel : IDisposable
 public sealed class WrongCodeException() : Exception("The code doesn't match. Check it and try again.");
 
 public sealed class TradeRefusedException(string message) : Exception(message);
+
+/// <summary>The other side isn't the handheld it claims to be.</summary>
+public sealed class ImpostorException(string message) : Exception(message);
 
 internal sealed class HandshakeMsg
 {
@@ -228,6 +295,10 @@ internal sealed class HandshakeMsg
     public byte[]? Msg { get; set; }
     public byte[]? Confirm { get; set; }
     public string? Text { get; set; }
+    /// <summary>v2: the sender's identity key, its signature, and (joiner) its name.</summary>
+    public byte[]? Id { get; set; }
+    public byte[]? Sig { get; set; }
+    public string? Name { get; set; }
 }
 
 /// <summary>One message of a trade, inside the encrypted channel.</summary>

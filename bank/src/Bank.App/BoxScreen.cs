@@ -237,6 +237,21 @@ public sealed class BoxScreen(App app) : Screen(app)
             App.ShowToast($"{s.PartnerName} just changed their offer: check it, then accept.", true);
             return;
         }
+        if (App.Trade?.JoinedLobby is { } joined && !joined.Advertises(s.Theirs.Pk))
+        {
+            // the host signed a listing for something else: a bait and switch, or a host that moved on; either way, say so
+            App.Confirm("Not what the lobby listed",
+                $"{s.PartnerName}'s lobby listed {joined.OfferName} Lv {joined.Level}{(joined.Shiny ? " (shiny)" : "")}, but offers {s.Theirs.Summary.Title} Lv {s.Theirs.Summary.Level}. Accept {s.Theirs.Summary.Title} anyway?",
+                "Accept anyway", () => AcceptChecked(s));
+            return;
+        }
+        AcceptChecked(s);
+    }
+
+    private void AcceptChecked(TradeSession s)
+    {
+        if (s.Theirs is null)
+            return;
         var v = s.Theirs.Verdict;
         if (v is null)
         {
@@ -603,7 +618,7 @@ public sealed class BoxScreen(App app) : Screen(app)
     {
         var s = Session!;
         var p = c.P;
-        Views.Header(c, App, $"Trading with {s.PartnerName}", s.PartnerAddress);
+        Views.Header(c, App, $"Trading with {s.PartnerName}", $"ID {s.PartnerId} · {App.Trainers.Describe(s.PartnerKey, s.PartnerName)}");
         if (App.Trade!.ShowPartnerReport && s.Theirs is not null)
         {
             DrawReport(c, s.Theirs.Pk, s.Theirs.Verdict);

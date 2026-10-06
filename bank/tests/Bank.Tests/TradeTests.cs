@@ -86,6 +86,9 @@ internal sealed class MemoryStorage(PKM mine) : ITradeStorage
 
 public class TradeTests
 {
+    internal static readonly DeviceIdentity HostId = DeviceIdentity.Ephemeral();
+    internal static readonly DeviceIdentity JoinId = DeviceIdentity.Ephemeral();
+
     internal static async Task<(SecureChannel Host, SecureChannel Client)> Pair(string hostCode = "ABCDEF", string clientCode = "ABCDEF")
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -94,11 +97,11 @@ public class TradeTests
         var accept = Task.Run(async () =>
         {
             var c = await listener.AcceptTcpClientAsync();
-            return await SecureChannel.AcceptAsync(c.GetStream(), hostCode, "test");
+            return await SecureChannel.AcceptAsync(c.GetStream(), hostCode, "test", HostId);
         });
         try
         {
-            var client = await TradeClient.ConnectAsync("127.0.0.1", port, clientCode);
+            var client = await TradeClient.ConnectAsync("127.0.0.1", port, clientCode, JoinId, "Joiner");
             return (await accept, client);
         }
         finally
@@ -116,9 +119,9 @@ public class TradeTests
         var accept = Task.Run(async () =>
         {
             var c = await listener.AcceptTcpClientAsync();
-            return await SecureChannel.AcceptAsync(c.GetStream(), "ABCDEF", "test");
+            return await SecureChannel.AcceptAsync(c.GetStream(), "ABCDEF", "test", HostId);
         });
-        await Assert.ThrowsAsync<WrongCodeException>(() => TradeClient.ConnectAsync("127.0.0.1", port, "ABCDEG"));
+        await Assert.ThrowsAsync<WrongCodeException>(() => TradeClient.ConnectAsync("127.0.0.1", port, "ABCDEG", JoinId, "Joiner"));
         await Assert.ThrowsAsync<WrongCodeException>(() => accept);
         listener.Stop();
     }
@@ -298,23 +301,24 @@ public class TradeTests
     }
 
     [Fact]
-    public async Task HostClosesAfterTooManyWrongCodes()
+    public async Task AnAddressIsShutOutAfterThreeWrongCodesButTheRoomStays()
     {
         var cfg = Cfg("Host");
-        cfg.TradePort = 47000 + Random.Shared.Next(1000);
-        using var host = new TradeHost(cfg);
+        cfg.TradePort = 0;
+        using var host = new TradeHost(cfg, HostId);
         host.Start();
-        Assert.False(host.Failed, host.Status);
-        for (int i = 0; i < TradeHost.MaxWrongCodes; i++)
-        {
-            var wrong = host.Code == "AAAAAA" ? "BBBBBB" : "AAAAAA";
-            await Assert.ThrowsAnyAsync<Exception>(() => TradeClient.ConnectAsync("127.0.0.1", host.Port, wrong));
-        }
-        var until = DateTime.UtcNow.AddSeconds(10);
-        while (!host.Failed && DateTime.UtcNow < until)
-            await Task.Delay(20);
-        Assert.True(host.Failed);
-        await Assert.ThrowsAnyAsync<Exception>(() => TradeClient.ConnectAsync("127.0.0.1", host.Port, host.Code));
+        var wrong = host.Code == "AAAAAA" ? "CCCCCC" : "AAAAAA";
+        for (int i = 0; i < TradeHost.MaxWrongPerAddress; i++)
+            await Assert.ThrowsAsync<WrongCodeException>(() => TradeClient.ConnectAsync("127.0.0.1", host.Port, wrong, JoinId, "Joiner"));
+        await Task.Delay(200);
+        // that address can't try again, not even with the right code...
+        await Assert.ThrowsAnyAsync<Exception>(() => TradeClient.ConnectAsync("127.0.0.1", host.Port, host.Code, JoinId, "Joiner"));
+        Assert.False(host.Failed);
+        // ...but the room is still open for the partner, elsewhere
+        using var ch = await TradeClient.ConnectFromAsync(IPAddress.Parse("127.0.0.2"), "127.0.0.1", host.Port, host.Code, JoinId, "Joiner");
+        await TradeClient.WaitForAdmissionAsync(ch);
+        Assert.NotNull(host.Channel);
+        host.Channel!.Dispose();
     }
 
     [Fact]
@@ -326,7 +330,7 @@ public class TradeTests
         cfg.TradePort = 46000 + Random.Shared.Next(1000);
         using var finder = new RoomFinder();
         finder.Start(cfg.TradePort);
-        using var host = new TradeHost(cfg);
+        using var host = new TradeHost(cfg, HostId);
         host.Start();
         var until = DateTime.UtcNow.AddSeconds(8);
         while (finder.Rooms.Count == 0 && DateTime.UtcNow < until)
@@ -341,9 +345,15 @@ public class TradeTests
     {
         var cfg = Cfg("Host");
         cfg.TradePort = 48000 + Random.Shared.Next(1000);
-        using var host = new TradeHost(cfg);
+        using var host = new TradeHost(cfg, HostId);
         host.Start();
-        using var ch = await TradeClient.ConnectAsync("127.0.0.1", host.Port, ShareCode.Pretty(host.Code).ToLowerInvariant());
+        using var ch = await TradeClient.ConnectAsync("127.0.0.1", host.Port, ShareCode.Pretty(host.Code).ToLowerInvariant(), JoinId, "Joiner",
+            expectHost: HostId.PublicKey);
+        await TradeClient.WaitForAdmissionAsync(ch);
+        Assert.Equal(JoinId.PublicKey, host.Channel!.PeerKey);   // each side knows the other's handheld
+        Assert.Equal(HostId.PublicKey, ch.PeerKey);
+        Assert.Equal("Joiner", host.Channel.PeerName);
+        Assert.Equal(ch.CheckNumber, host.Channel.CheckNumber); // and both screens show the same check number
         var until = DateTime.UtcNow.AddSeconds(10);
         while (host.Channel is null && DateTime.UtcNow < until)
             await Task.Delay(20);

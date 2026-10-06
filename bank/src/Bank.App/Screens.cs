@@ -678,9 +678,25 @@ public sealed class TradeHostScreen(App app) : Screen(app)
     private void Start()
     {
         _host?.Dispose();
-        _host = new TradeHost(App.Cfg);
+        _host = new TradeHost(App.Cfg, App.Identity);
         _host.Start();
-        // scripted runs (two instances trading for the screenshots): tell the joining script the code
+        WriteCodeFile();
+    }
+
+    private void NewCode()
+    {
+        _host?.NewCode();
+        WriteCodeFile();
+    }
+
+    private string? _codeWritten;
+
+    // scripted runs (two instances trading for the screenshots): tell the joining script the code
+    private void WriteCodeFile()
+    {
+        if (_host is null || _codeWritten == _host.Code)
+            return;
+        _codeWritten = _host.Code;
         if (Environment.GetEnvironmentVariable("ROCKNIXDS_BANK_CODE_FILE") is { Length: > 0 } codeFile)
             File.WriteAllText(codeFile, _host.Code);
     }
@@ -693,6 +709,7 @@ public sealed class TradeHostScreen(App app) : Screen(app)
 
     public override void Update()
     {
+        WriteCodeFile();
         if (_host?.Channel is { } ch)
         {
             var session = new TradeSession(ch, App.Cfg, isHost: true);
@@ -715,7 +732,7 @@ public sealed class TradeHostScreen(App app) : Screen(app)
             return;
         }
         if (e.Pressed(Btn.B)) App.Pop();
-        else if (e.Pressed(Btn.X)) Start();
+        else if (e.Pressed(Btn.X)) NewCode();
         else if (e.Kind == InputKind.Quit) App.QuitRequested = true;
     }
 
@@ -723,7 +740,7 @@ public sealed class TradeHostScreen(App app) : Screen(app)
 
     public override void DrawTop(Canvas c)
     {
-        Views.Header(c, App, "Trade room open");
+        Views.Header(c, App, "Trade room open", $"ID {App.Identity.Id}");
         var p = c.P;
         if (_host is null)
             return;
@@ -759,8 +776,10 @@ public sealed class TradeHostScreen(App app) : Screen(app)
         c.Paragraph("On the other handheld: Trade > Join a trade room. This room shows up in its list; pick it and type the code. " +
                     "Not in the list (another network, a VPN)? Type the address instead.", 32, 32, 576, 18, p.Ink);
         c.Paragraph("Only someone with the code can connect, and the code can't be worked out from the network traffic. " +
-                    $"After {TradeHost.MaxWrongCodes} wrong codes the room closes.", 32, 180, 576, 15, p.Muted);
-        _hit.Add((c.Button("New code", 32, 330, 270, 56, false), Start));
+                    $"An address that tries {TradeHost.MaxWrongPerAddress} wrong codes is shut out, and after {TradeHost.MaxWrongPerCode} " +
+                    $"wrong codes in all the code changes by itself. Your handheld's ID, which your partner sees next to your name: " +
+                    $"{App.Identity.Id}.", 32, 170, 576, 15, p.Muted);
+        _hit.Add((c.Button("New code", 32, 330, 270, 56, false), NewCode));
         _hit.Add((c.Button("Close the room", 338, 330, 270, 56, false), App.Pop));
         float x = 8;
         x += c.Hint("X", "New code", x, 446);
@@ -821,10 +840,22 @@ public sealed class TradeJoinScreen(App app) : Screen(app)
         if (i < rooms.Count)
         {
             var r = rooms[i];
-            if (r.Lobby is { Open: true, Code: { } code } open)
-                Connect(r.Address, r.Port, code, open);
+            void Go()
+            {
+                if (r.Lobby is { Open: true, Code: { } code } open)
+                    Connect(r.Address, r.Port, code, open, r.Key, r.Name);
+                else
+                    AskCode(r.Address, r.Port, r.Name, r.Lobby, r.Key);
+            }
+            var warning = r.Imitated
+                ? $"Two handhelds on this network announce {r.Name} with the same ID: one of them is copying the other. Joining checks which one is real, so a copy can't get in your way; go ahead only if you expected this room."
+                : App.Trainers.TrustOf(r.Key, r.Name) == Trust.Impostor
+                    ? $"You traded with a handheld called {r.Name} before, and this isn't it (its ID is {r.Id}). It may be someone using the same name."
+                    : null;
+            if (warning is null)
+                Go();
             else
-                AskCode(r.Address, r.Port, r.Name, r.Lobby);
+                App.Confirm("Careful", warning, "Join anyway", Go);
         }
         else
         {
@@ -833,7 +864,7 @@ public sealed class TradeJoinScreen(App app) : Screen(app)
                 var (host, port) = ParseAddress(addr, App.Cfg.TradePort);
                 App.Cfg.LastTradeAddress = addr;
                 App.TrySaveConfig();
-                AskCode(host, port, host, null);
+                AskCode(host, port, host, null, null);
             }));
         }
     }
@@ -847,25 +878,23 @@ public sealed class TradeJoinScreen(App app) : Screen(app)
         return (a, defaultPort);
     }
 
-    private void AskCode(string host, int port, string name, LobbyListing? lobby) =>
-        App.Push(new KeyboardScreen(App, $"Code for {name}", KeyboardScreen.Kind.Code, "", ShareCode.Length, code => Connect(host, port, code, lobby)));
+    private void AskCode(string host, int port, string name, LobbyListing? lobby, byte[]? key) =>
+        App.Push(new KeyboardScreen(App, $"Code for {name}", KeyboardScreen.Kind.Code, "", ShareCode.Length,
+            code => Connect(host, port, code, lobby, key, name)));
 
-    private void Connect(string host, int port, string code, LobbyListing? lobby)
+    /// <summary>Connects; <paramref name="key"/> is the ID the room was announced with, which the host must prove it
+    /// holds (null for a typed address: then whatever answers there is shown with its own ID).</summary>
+    private void Connect(string host, int port, string code, LobbyListing? lobby, byte[]? key, string name)
     {
         _error = null;
-        App.Run($"Connecting to {host}...", () => TradeClient.ConnectAsync(host, port, code).GetAwaiter().GetResult(), ch =>
-        {
-            _finder.Dispose();
-            var session = new TradeSession(ch, App.Cfg, isHost: false);
-            App.Trade = new TradeController(App, session) { JoinedLobby = lobby };
-            App.PopToRoot();
-            App.ShowToast(lobby is { Want: > 0 }
-                ? $"Connected. The lobby wants {lobby.WantName}: offer one with A (yours are framed in green)."
-                : "Connected. Pick a Pokémon to offer with A.");
-        }, ex =>
+        App.Run($"Connecting to {name}...",
+            () => TradeClient.ConnectAsync(host, port, code, App.Identity, App.Cfg.EffectiveTrainerName, key).GetAwaiter().GetResult(),
+            ch => App.Push(new AdmissionScreen(App, ch, name, lobby, () => _finder.Dispose())),
+            ex =>
         {
             _error = ex switch
             {
+                ImpostorException imp => imp.Message,
                 WrongCodeException => "Wrong code. Check it on the host's screen and try again.",
                 TradeRefusedException r => r.Message,
                 IOException io => io.Message,
@@ -937,10 +966,11 @@ public sealed class TradeJoinScreen(App app) : Screen(app)
             c.Text(l.Want != 0 && _owned.Contains(l.Want) ? "You have one" : l.Want == 0 ? "" : "You have none", 483, 270, 15,
                 l.Want != 0 && _owned.Contains(l.Want) ? p.Good : p.Muted, Align.Center);
             c.Paragraph(l.Open
-                    ? "Open lobby: A joins straight away. The listing is the host's word for it: once you're in, its real offer is checked, and nothing is traded until you both accept."
+                    ? "Open lobby: A asks to join, and its host decides. The listing is signed by the host's handheld, which must prove it's the one when you connect; its real offer is checked against it, and nothing is traded until you both accept."
                     : "This lobby needs its host's code to join.",
                 32, 316, 576, 15, p.Muted);
-            c.Text($"{room.Address}{(room.Port == App.Cfg.TradePort ? "" : $":{room.Port}")}", 32, 420, 15, p.Muted);
+            c.Text($"{room.Address}{(room.Port == App.Cfg.TradePort ? "" : $":{room.Port}")} · ID {room.Id} · {App.Trainers.Describe(room.Key, room.Name)}",
+                32, 420, 15, room.Imitated || App.Trainers.TrustOf(room.Key, room.Name) == Trust.Impostor ? p.Bad : p.Muted, maxW: 576);
             return;
         }
         c.Paragraph("Lobbies list a Pokémon their host trades away and what they want for it: open ones are joined with one tap. " +
@@ -950,6 +980,21 @@ public sealed class TradeJoinScreen(App app) : Screen(app)
             c.Paragraph(err, 32, 230, 576, 16, p.Bad);
         var ips = Network.LocalAddresses();
         c.Text("This handheld: " + (ips.Count > 0 ? ips[0] : "no network"), 32, 420, 16, ips.Count > 0 ? p.Muted : p.Bad);
+    }
+
+    /// <summary>"Jorre · ID 4F2A-9C1B · Known · 3 trades", red when it's a copy or not who it claims to be.</summary>
+    private void TrustLine(Canvas c, FoundRoom r, float x, float y, float maxW, string prefix = "")
+    {
+        var p = c.P;
+        var trust = App.Trainers.TrustOf(r.Key, r.Name);
+        string label = r.Imitated ? "copied ID!" : trust switch
+        {
+            Trust.Known => App.Trainers.Describe(r.Key, r.Name),
+            Trust.Impostor => "not who you traded with!",
+            _ => "new",
+        };
+        var col = r.Imitated || trust == Trust.Impostor ? p.Bad : trust == Trust.Known ? p.Good : p.Muted;
+        c.Text($"{prefix}{r.Name} · ID {r.Id} · {label}", x, y, 13, col, maxW: maxW);
     }
 
     public override void DrawBottom(Canvas c)
@@ -983,7 +1028,7 @@ public sealed class TradeJoinScreen(App app) : Screen(app)
                 if (l.Want != 0)
                     c.Mon(l.Want, 0, 0, false, false, 282, y + 3, 52, 52, 1);
                 c.Text(l.Want == 0 ? "Any Pokémon" : l.WantName, l.Want == 0 ? 286 : 338, y + 7, 17, p.Ink, bold: true, maxW: 150);
-                c.Text(rooms[i].Name, 68, y + 33, 13, p.Muted, maxW: 200);
+                TrustLine(c, rooms[i], 68, y + 33, 200);
                 float tx = 604;
                 tx -= c.Measure(l.Open ? "Open" : "Code", 12, true) + 10;
                 c.Tag(l.Open ? "Open" : "Code", tx, y + 8, l.Open ? p.Good : p.Muted, 12);
@@ -997,7 +1042,7 @@ public sealed class TradeJoinScreen(App app) : Screen(app)
             {
                 c.Icon(Icons.Lock, 26, y + 20, 3, p.Muted);
                 c.Text(rooms[i].Name, 68, y + 8, 18, p.Ink, bold: true, maxW: 380);
-                c.Text($"Private room · {rooms[i].Address}{(rooms[i].Port == App.Cfg.TradePort ? "" : $":{rooms[i].Port}")}", 68, y + 33, 13, p.Muted);
+                TrustLine(c, rooms[i], 68, y + 33, 520, "Private room · ");
             }
             else
             {

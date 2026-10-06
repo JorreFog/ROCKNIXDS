@@ -80,6 +80,14 @@ public sealed class BankConfig
     public string ImportFolder => Path.Combine(DataFolder, "import");
     [JsonIgnore]
     public string ExportFolder => Path.Combine(DataFolder, "export");
+    /// <summary>This handheld's identity key for trading: next to the settings, out of the shared roms folder.</summary>
+    [JsonIgnore]
+    public string IdentityPath => Path.Combine(Path.GetDirectoryName(Path.GetFullPath(ConfigPath))!, "bank-identity.key");
+
+    /// <summary>The handhelds traded with before (trust on first use).</summary>
+    [JsonIgnore]
+    public string TrainersPath => Path.Combine(DataFolder, "trainers.json");
+
     [JsonIgnore]
     public string HistoryPath => Path.Combine(DataFolder, "history.log");
 

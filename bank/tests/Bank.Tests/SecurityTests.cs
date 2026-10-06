@@ -50,6 +50,7 @@ public class SecurityTests
     private static byte[] Hello(string guess) => JsonSerializer.SerializeToUtf8Bytes(new HandshakeMsg
     {
         T = "spake", App = "rocknixds-bank", Proto = SecureChannel.ProtocolVersion, Msg = new Spake2(true, guess).Message,
+        Id = TradeTests.JoinId.PublicKey,
     }, TradeJson.Default.HandshakeMsg);
 
     private static async Task Until(Func<bool> done, int seconds = 10)
@@ -60,18 +61,18 @@ public class SecurityTests
     }
 
     [Fact]
-    public async Task GuessersWhoGoQuietStillUseUpTheRoom()
+    public async Task GuessersWhoGoQuietStillCount()
     {
         // The host's key confirmation lets a client test one guess. Going quiet afterwards (instead of sending a wrong
-        // confirmation or hanging up) must still count, or the 5-guess limit means nothing.
+        // confirmation or hanging up) must still count, or the guess limits mean nothing.
         var old = SecureChannel.HandshakeTimeout;
         SecureChannel.HandshakeTimeout = TimeSpan.FromMilliseconds(600);
         try
         {
-            using var host = new TradeHost(HostCfg());
+            using var host = new TradeHost(HostCfg(), TradeTests.HostId);
             host.Start();
             var wrong = host.Code == "AAAAAA" ? "CCCCCC" : "AAAAAA";
-            for (int i = 0; i < TradeHost.MaxAttempts; i++)
+            for (int i = 0; i < TradeHost.MaxWrongPerAddress; i++)
             {
                 using var c = new TcpClient();
                 await c.ConnectAsync(IPAddress.Loopback, host.Port);
@@ -81,9 +82,11 @@ public class SecurityTests
                 Assert.Equal("spake", reply!.T);           // the guess can be checked now...
                 Assert.Null(await ReadFrame(s));            // ...and saying nothing ends in the host hanging up
             }
-            await Until(() => host.Failed);
-            Assert.True(host.Failed, host.Status);
-            await Assert.ThrowsAnyAsync<Exception>(() => TradeClient.ConnectAsync("127.0.0.1", host.Port, host.Code));
+            await Task.Delay(200);
+            // every quiet guess counted: this address is shut out, even with the right code
+            await Assert.ThrowsAnyAsync<Exception>(() => TradeClient.ConnectAsync("127.0.0.1", host.Port, host.Code, TradeTests.JoinId, "J"));
+            Assert.Contains("can't try again", host.Status);
+            Assert.False(host.Failed);
         }
         finally
         {
@@ -94,7 +97,7 @@ public class SecurityTests
     [Fact]
     public async Task IdleConnectionsDontKeepThePartnerOut()
     {
-        using var host = new TradeHost(HostCfg());
+        using var host = new TradeHost(HostCfg(), TradeTests.HostId);
         host.Start();
         // someone at another address opens connections and says nothing
         var idle = new List<TcpClient>();
@@ -112,7 +115,8 @@ public class SecurityTests
 
         // the partner gets in anyway, long before the idle ones time out
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        using var ch = await TradeClient.ConnectAsync("127.0.0.1", host.Port, host.Code);
+        using var ch = await TradeClient.ConnectAsync("127.0.0.1", host.Port, host.Code, TradeTests.JoinId, "J");
+        await TradeClient.WaitForAdmissionAsync(ch);
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(3), sw.Elapsed.ToString());
         await Until(() => host.Channel is not null);
         Assert.NotNull(host.Channel);
@@ -124,7 +128,7 @@ public class SecurityTests
     [Fact]
     public async Task AnOversizedFrameBeforeTheCodeIsProvenIsDropped()
     {
-        using var host = new TradeHost(HostCfg());
+        using var host = new TradeHost(HostCfg(), TradeTests.HostId);
         host.Start();
         using (var c = new TcpClient())
         {
@@ -136,7 +140,8 @@ public class SecurityTests
             Assert.Null(await ReadFrame(s)); // hung up on, without reading it
         }
         Assert.False(host.Failed); // and it cost no attempt: the partner still gets in
-        using var ch = await TradeClient.ConnectAsync("127.0.0.1", host.Port, host.Code);
+        using var ch = await TradeClient.ConnectAsync("127.0.0.1", host.Port, host.Code, TradeTests.JoinId, "J");
+        await TradeClient.WaitForAdmissionAsync(ch);
         await Until(() => host.Channel is not null);
         host.Channel?.Dispose();
     }

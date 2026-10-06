@@ -71,37 +71,40 @@ public class LobbyTests
         var cfg = TradeTests.Cfg("Lobby host");
         cfg.TradePort = 0;
         var pk = Fixtures.Make(Species.Kadabra, GameVersion.HG);
-        using var host = new TradeHost(cfg, code => LobbyListing.For(pk, (ushort)Species.Mareep, true, code));
+        using var host = new TradeHost(cfg, TradeTests.HostId, code => LobbyListing.For(pk, (ushort)Species.Mareep, true, code));
         host.Start();
         var wrong = host.Code == "AAAAAA" ? "CCCCCC" : "AAAAAA";
-        for (int i = 0; i < TradeHost.MaxAttempts + 2; i++)
-            await Assert.ThrowsAsync<WrongCodeException>(() => TradeClient.ConnectAsync("127.0.0.1", host.Port, wrong));
+        for (int i = 0; i < TradeHost.MaxWrongPerAddress + 2; i++)
+            await Assert.ThrowsAsync<WrongCodeException>(() => TradeClient.ConnectAsync("127.0.0.1", host.Port, wrong, TradeTests.JoinId, "J"));
         Assert.False(host.Failed);
-        // the code it lists works
-        using var ch = await TradeClient.ConnectAsync("127.0.0.1", host.Port, host.Lobby!.Code!);
+        // the code it lists works, and the host is asked
+        using var ch = await TradeClient.ConnectAsync("127.0.0.1", host.Port, host.Lobby!.Code!, TradeTests.JoinId, "Ash", TradeTests.HostId.PublicKey);
+        var wait = TradeClient.WaitForAdmissionAsync(ch);
         var until = DateTime.UtcNow.AddSeconds(5);
-        while (host.Channel is null && DateTime.UtcNow < until)
+        while (host.Pending is null && DateTime.UtcNow < until)
             await Task.Delay(20);
+        Assert.Equal("Ash", host.Pending!.Name);
+        await host.Pending.LetIn();
+        await wait;
         Assert.NotNull(host.Channel);
         host.Channel!.Dispose();
     }
 
     [Fact]
-    public async Task AClosedLobbyStillLocksAfterWrongCodes()
+    public async Task AClosedLobbyShutsOutGuessers()
     {
         var cfg = TradeTests.Cfg("Lobby host");
         cfg.TradePort = 0;
         var pk = Fixtures.Make(Species.Kadabra, GameVersion.HG);
-        using var host = new TradeHost(cfg, code => LobbyListing.For(pk, 0, false, code));
+        using var host = new TradeHost(cfg, TradeTests.HostId, code => LobbyListing.For(pk, 0, false, code));
         host.Start();
         Assert.Null(host.Lobby!.Code);
         var wrong = host.Code == "AAAAAA" ? "CCCCCC" : "AAAAAA";
-        for (int i = 0; i < TradeHost.MaxAttempts; i++)
-            await Assert.ThrowsAnyAsync<Exception>(() => TradeClient.ConnectAsync("127.0.0.1", host.Port, wrong));
-        var until = DateTime.UtcNow.AddSeconds(5);
-        while (!host.Failed && DateTime.UtcNow < until)
-            await Task.Delay(20);
-        Assert.True(host.Failed);
+        for (int i = 0; i < TradeHost.MaxWrongPerAddress; i++)
+            await Assert.ThrowsAnyAsync<Exception>(() => TradeClient.ConnectAsync("127.0.0.1", host.Port, wrong, TradeTests.JoinId, "J"));
+        await Task.Delay(200);
+        await Assert.ThrowsAnyAsync<Exception>(() => TradeClient.ConnectAsync("127.0.0.1", host.Port, host.Code, TradeTests.JoinId, "J"));
+        Assert.False(host.Failed);
     }
 
     [Fact]
@@ -114,7 +117,7 @@ public class LobbyTests
         var pk = Fixtures.Make(Species.Kadabra, GameVersion.HG);
         using var finder = new RoomFinder();
         finder.Start(cfg.TradePort);
-        using var host = new TradeHost(cfg, code => LobbyListing.For(pk, (ushort)Species.Mareep, true, code));
+        using var host = new TradeHost(cfg, TradeTests.HostId, code => LobbyListing.For(pk, (ushort)Species.Mareep, true, code));
         host.Start();
         var until = DateTime.UtcNow.AddSeconds(8);
         while (finder.Rooms.Count == 0 && DateTime.UtcNow < until)
@@ -128,10 +131,14 @@ public class LobbyTests
         Assert.Equal(host.Code, l.Code);
         // and a joiner gets in with the listed code, nothing typed
         // (over loopback: this test machine's own address may not be a private one, which the host would refuse)
-        using var ch = await TradeClient.ConnectAsync("127.0.0.1", room.Port, l.Code!);
+        Assert.Equal(TradeTests.HostId.PublicKey, room.Key);
+        using var ch = await TradeClient.ConnectAsync("127.0.0.1", room.Port, l.Code!, TradeTests.JoinId, "Ash", expectHost: room.Key);
+        var wait = TradeClient.WaitForAdmissionAsync(ch);
         until = DateTime.UtcNow.AddSeconds(5);
-        while (host.Channel is null && DateTime.UtcNow < until)
+        while (host.Pending is null && DateTime.UtcNow < until)
             await Task.Delay(20);
+        await host.Pending!.LetIn();
+        await wait;
         Assert.NotNull(host.Channel);
         host.Channel!.Dispose();
     }

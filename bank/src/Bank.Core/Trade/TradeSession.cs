@@ -93,6 +93,14 @@ public sealed class TradeSession : IDisposable
     public string PartnerName { get; private set; } = "Partner";
     public string PartnerAddress => _channel.RemoteAddress;
 
+    /// <summary>The partner handheld's identity key, proven in the handshake.</summary>
+    public byte[] PartnerKey => _channel.PeerKey;
+
+    public string PartnerId => Fingerprint.Short(_channel.PeerKey);
+
+    /// <summary>The 4-digit number both screens show for this connection.</summary>
+    public string CheckNumber => _channel.CheckNumber;
+
     public TradeOffer? Mine { get; private set; }
     public TradeOffer? Theirs { get; private set; }
     public bool IAccepted { get; private set; }

@@ -22,7 +22,7 @@ the same conversions between generations and the same legality analysis.
   game asks first, or is refused altogether (a setting).
 - **Trades between two handhelds** over Wi-Fi, peer to peer. A host can open a **lobby**: it lists a Pokémon to trade
   away and the species wanted for it, and every handheld on the network sees it in its Join list (an open lobby is
-  joined with one tap). Or a **private room**: the host shows its address and a 6-character code, the partner types
+  you ask to join with one tap, and its host lets you in). Or a **private room**: the host shows its address and a 6-character code, the partner types
   it. Both see each other's offer checked for legality before they accept. Trade evolutions happen on arrival
   (Kadabra, Haunter, Onix with a Metal Coat, Karrablast for Shelmet...), and an Everstone stops them, as in the games.
 
@@ -92,7 +92,8 @@ Both handhelds on the same network. There are two ways to meet:
 - **Lobbies.** **Trade > Open a lobby**: choose the Pokémon to trade away, then the species you want for it (type the start
   of its name; or *Any Pokémon* to take offers), then who can join: anyone (*open*) or only with a code. The lobby is
   listed on every handheld on the network that opens **Trade > Join**, with both Pokémon, *Open* or *Code*, and *You have
-  one* when you own the wanted species. An open lobby is joined with A, no code. Once in, the lobby's Pokémon is already
+  one* when you own the wanted species, and the host's ID and whether you know it. An open lobby is joined with A,
+  no code: its host is asked to let you in. Once in, the lobby's Pokémon is already
   offered; the Pokémon of yours it wants are framed in green; both screens say whether the offers match the lobby (what
   it asked for, and whether the host's real offer is the one it listed). The lobby stays open for the next visitor until
   its Pokémon has been traded.
@@ -103,24 +104,40 @@ Then each side picks the Pokémon to offer with A, from the bank or the open gam
 Pokémon you receive goes into your bank; the one you gave leaves its box (the bank, or the game, which is written
 straight away).
 
-A lobby's listing is the host's word for it: anyone on the network can broadcast one. So what counts is the real offer
-once you're in, which is checked like every offer (and against the listing), and nothing changes hands until both
-accept. An open lobby's code travels with its listing: that's what makes it open, so its encryption keeps out
-listeners but not other players, and it has no limit on attempts. A lobby with a code keeps it secret (it is never in
-the listing) and closes after 5 wrong ones, like a private room.
+Every handheld has an **identity** (a key made the first time it trades, kept in `/storage/.config/rocknixds/`) and an
+**ID** made from it, like `4F2A-9C1B`, shown next to its name everywhere. Lobby listings are signed with it, and joining
+checks that the host holds the key its listing was signed with: a copied or rewritten listing can't lure anyone in.
+After a trade, both handhelds remember each other (`trainers.json` in the data folder): the list then says *Known ·
+3 trades*, and warns in red when a handheld uses the name of someone you traded with but isn't their handheld, or when
+two handhelds announce the same ID.
 
-How it's kept safe (`tests/Bank.Tests/SecurityTests.cs` attacks most of these):
+An **open lobby** has no code to type, but nobody walks in: whoever wants to join asks, and the host sees their name,
+their ID and whether they're known, and lets them in (A) or refuses (B). Both screens show the same **check number**;
+if you're together, compare them, and a different number means someone is in between. A refused handheld can't ask
+again in that lobby, its address waits two minutes, and a request nobody answers lapses after a minute.
+
+How it's kept safe (`tests/Bank.Tests/SecurityTests.cs`, `IdentityTests.cs` and `LobbyTests.cs` attack most of these):
 - **The code proves the partner.** The handhelds turn it into a session key with SPAKE2, a password-authenticated key
   exchange: someone listening on the network can't work the code out from what they see. Every connection that gets
-  as far as being able to test a guess counts, however it ends (a wrong answer, hanging up, or going quiet), and the
-  room closes after 5. Everything after that is encrypted and authenticated (AES-256-GCM, a key per direction).
-- **Only the local network.** A room takes connections from private, link-local and VPN (100.64/10, Tailscale)
-  addresses only, never from the internet (a public IPv6 address, a forwarded port), unless `tradeAllowAnyAddress` is
-  set in the settings file. A room is open only while its screen is, and room discovery listens only while the join screen is: otherwise
-  the app listens on nothing.
+  as far as being able to test a guess counts, however it ends. An address gets 3 wrong guesses, then the room ignores
+  it; after 20 wrong guesses in all, the code changes by itself (the host's screen shows the new one). So a code can't
+  be guessed (at most 20 tries at one in 594 million each), and wrong codes can't close a room either. Everything after
+  that is encrypted and authenticated (AES-256-GCM, a key per direction).
+- **Both handhelds prove who they are.** Each signs the handshake with its identity key, so a handheld can't pose as
+  another, and nobody can sit between two handhelds and relay: the joiner checks the host's key against the signed
+  listing it picked (or sees the host's ID for a typed address), the host sees the joiner's ID, and both screens show
+  the same check number.
+- **Listings are signed.** An unsigned or altered listing isn't shown; one copied from another handheld is shown in red
+  and can't be joined (its copier can't prove it's the host). A host's real offer is checked against its own listing:
+  accepting something else than it listed asks first.
+- **Open lobbies are by invitation.** Anyone can ask; only the host lets people in, one request at a time.
+- **Only the local network.** Rooms and lobbies take connections from private, link-local and VPN (100.64/10,
+  Tailscale) addresses only, never from the internet (a public IPv6 address, a forwarded port), unless
+  `tradeAllowAnyAddress` is set in the settings file. A room is open only while its screen is, and discovery listens only
+  while the join screen is: otherwise the app listens on nothing.
 - **Hard to block.** Handshakes run side by side, at most 2 per address and 8 in all, 10 seconds each, and frames
   before the code is proven are at most 4 KB: someone connecting and saying nothing (or a lot) can't keep the partner
-  out. Room announcements on the network are capped and cleaned up, so made-up ones can't flood the list.
+  out. Room announcements are capped (16, two per address) and cleaned up, so made-up ones can't flood the list.
 - **A partner can't hurt your handheld.** Messages are capped (64 KB, and a flood closes the connection); one legality
   check runs at a time; a Pokémon that isn't structurally sound (bad checksum, a species, form, move or item that
   doesn't exist in its format: glitch data that can corrupt an old game's save) is refused before anything else
@@ -134,9 +151,9 @@ How it's kept safe (`tests/Bank.Tests/SecurityTests.cs` attacks most of these):
 - **Legality is checked on the side that receives.** A partner's Pokémon that fails asks before you accept, or is
   refused altogether (a setting). Your own offer shows what the partner's check said.
 
-What it can't do: a modified app on the other side can keep a copy of what it gives (that is its own Pokémon), or
-lie about having received yours (then you still got theirs). And anyone on the network can close a private room (or a lobby with a code) by
-using up its 5 guesses; open a new one for a new code. An open lobby can be joined by anyone on the network, by design.
+What no app can do: stop a modified copy on the other side from keeping a copy of what it gives away (that is its own
+Pokémon), or from claiming it didn't get yours (then you still got theirs). The trainer book is how you learn who
+trades fairly.
 
 ## How it's built
 

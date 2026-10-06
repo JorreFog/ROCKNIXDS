@@ -15,6 +15,7 @@ if [ -z "$WAYLAND_DISPLAY" ]; then
     done
 fi
 export SDL_VIDEODRIVER=${SDL_VIDEODRIVER:-wayland}
+export SDL_VIDEO_WAYLAND_WMCLASS=rocknixds-bank   # the window's app_id, which the app places with swaymsg
 export DOTNET_GCConserveMemory=5   # give memory back between legality checks
 
 # the bottom panel is off under single-screen themes: on while the app runs, as it was afterwards
