@@ -108,13 +108,14 @@ sys.exit(0 if ok(sys.argv[1]) or not ok(sys.argv[2]) else 1)' "$1" "$SYS"
 }
 
 # $ESF.new replaces $ESF only if it parses. If it doesn't, the old file stays if that one parses; if neither does,
-# the old one goes as well and ES reads ROCKNIX's copy: none of our options, but every system's own. 1: not replaced.
+# the old one is moved aside (.rocknixds-broken: a player's own copy isn't lost) and ES reads ROCKNIX's copy: none of
+# our options, but every system's own. 1: not replaced.
 replace_esf() {  # replace_esf <what to log once replaced>
     if parses "$ESF.new"; then mv "$ESF.new" "$ESF"; echo "es-features: $1"; return 0; fi
     rm -f "$ESF.new"
     if [ ! -f "$ESF" ]; then echo "es-features: the new $ESF would not parse, not written: ES reads ROCKNIX's copy"
     elif parses "$ESF"; then echo "es-features: the new $ESF would not parse, the old one is kept"
-    else rm -f "$ESF"; echo "es-features: $ESF does not parse, nor would the new one: removed, ES reads ROCKNIX's copy"; fi
+    else mv -f "$ESF" "$ESF.rocknixds-broken"; echo "es-features: $ESF does not parse, nor would the new one: moved aside (.rocknixds-broken), ES reads ROCKNIX's copy"; fi
     return 1
 }
 
@@ -167,7 +168,7 @@ fi
 if ! add_ours "$SRC" > "$ESF.new"; then
     rm -f "$ESF.new"
     if [ -f "$ESF" ] && ! parses "$ESF"; then        # an empty or cut-short copy has no shader option either
-        rm -f "$ESF"; echo "es-features: no drastic-sa shader option in $SRC, and $ESF does not parse: removed, ES reads ROCKNIX's copy"
+        mv -f "$ESF" "$ESF.rocknixds-broken"; echo "es-features: no drastic-sa shader option in $SRC, and $ESF does not parse: moved aside (.rocknixds-broken), ES reads ROCKNIX's copy"
     else echo "es-features: no drastic-sa shader option in $SRC, left unchanged"; fi
     exit 0
 fi

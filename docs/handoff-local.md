@@ -112,7 +112,10 @@ needed a hard reset.
   2. starts the game again with RetroAchievements unreachable;
   3. watches 40 s.
 - A run that stalls writes libdsflip's `[stall]` thread dump and gdb backtraces of every thread to
-  `/storage/freeze-repro-<date>.txt`.
+  `/storage/freeze-repro-<date>.txt`. So does a game wedged whole (libdsflip's presenter stopped too), which the
+  script watches for itself: it holds `session.sh`'s outside check (`/tmp/dsflip-hold`) while it watches. A game that
+  ends during the 40 s (a crash) is counted apart, with the session log's last lines. So is a run whose resume state
+  never loaded (it didn't test the freeze).
 - Expected if the explanation is right:
   - `old` stalls now and then;
   - in the dump, a `drastic` thread has `allowed 3` and no CPU time, and the main thread waits too;
@@ -123,7 +126,8 @@ needed a hard reset.
 **On the device:** steps 2-5 also run unattended: `sh /storage/stall-checks.sh <rom-substring>` (about 5 minutes,
 ES up, no game running). It prints one PASS/FAIL/SKIP line per check and writes the log lines behind them to
 `/storage/stall-checks-<date>.txt`. It skips the resume checks when the game has *resume on quit* off. It puts back a
-resume state the player had. What the steps below add is what to look at on the screens.
+resume state the player had. ES counts its starts as plays of that game (as `freeze-repro.sh`'s, 2 a run). What the
+steps below add is what to look at on the screens.
 1. Install the branch:
    - RG DS Plus: `RGDS_BRANCH=claude/1-6-prep-work-kwq9lc-plus`.
    - RG DS: `RGDS_BRANCH=claude/1-6-prep-work-kwq9lc`.
@@ -174,6 +178,13 @@ resume state the player had. What the steps below add is what to look at on the 
 - **New tonight, both lines:** a start that comes while the last game's switch back is still waiting (two launch
   requests in a row) stops that switch, and keeps the VT that game recorded as sway's. Before, the pending switch
   could hand the panels back to sway under the new game, or tty12 could be recorded as sway's VT.
+  - The switch back keeps its two marker files until sway has the panels again (it deleted them before switching).
+    That covers its whole run, the 3 s wait for sway's outputs included.
+  - tty12 is never recorded as sway's VT (tty1 is assumed then, with a line in `last-session.log`).
+- During a game `session.sh` checks on DraStic every 50 ms. The Plus's 1.6-prep made it 50 ms so a quit is seen
+  sooner; the RG DS had 0.2 s. That is about 60 short-lived processes a second (grep, awk, sleep): ~10% of a core on
+  a PC. If an RG DS drops more frames in a heavy game than with 1.5.13, compare with `sleep 0.2`, `k -ge 25` and the
+  wedge check every 5th pass in that loop.
 
 **On the device** (the RG DS has never run any of this):
 1. `tools/switchtime.sh` (HeartGold, 4 cycles) on each handheld. `last-session.log` per quit:
@@ -237,7 +248,8 @@ resume state the player had. What the steps below add is what to look at on the 
   - Every 30 s it reads ES's memory. It writes `/storage/.config/emulationstation/es-mem.log` on a change of 16 MB or
     more, and at least once an hour: heap, mapped files, shared/GPU memory, and what the system has available.
   - Over half the RAM (487 MB on the Plus; `ROCKNIXDS_ES_MEMLIMIT_MB`, 0 = never) with no game running, it writes
-    ES's status line and restarts ES.
+    ES's status line and restarts ES. "No game" covers every emulator: no `dsflip-game` unit, and ES's API
+    (`/runningGame`) doesn't report one. RetroArch and the rest run inside ES's unit, which a restart would end.
 
 **On the device:**
 1. After boot and a few minutes of browsing, `cat /storage/.config/emulationstation/es-mem.log` has a line like
@@ -257,8 +269,8 @@ resume state the player had. What the steps below add is what to look at on the 
    - `systemctl set-environment ROCKNIXDS_ES_MEMLIMIT_MB=120; systemctl restart essway.service`.
    - Within a minute ES restarts by itself, and es-mem.log says `over 120 MB with no game running: restarting it`
      with the status line.
-   - It must not happen during a game: start one before the minute is up, and the restart waits until after the
-     game.
+   - It must not happen during a game: start one before the minute is up (a DS game, then a RetroArch one), and
+     the restart waits until after the game.
    - Then `systemctl unset-environment ROCKNIXDS_ES_MEMLIMIT_MB; systemctl restart essway.service`.
 5. The double launch: section B, step 4.
 
@@ -276,7 +288,7 @@ needed), #33 (the RG DS untested) and #37 (fixed in 1.5.7; 1.6 adds the parse ch
 | 30 | Fixed in 1.5.2 (`es-rgds-help.patch`); the reporter never answered | both | ES's on-screen keyboard (any text field): the help line fits the bottom panel on both handhelds |
 | 31 | `rocknixds-media.py`'s background RetroAchievements id hashes the first `.nds` in a `.zip` (else its first file) the way rcheevos does; `.7z` is skipped with a log line. Checked on the host: a synthetic ROM, plain and zipped (deflated and stored), gives rcheevos' own hash | both | A zipped DS game with achievements: after the menu's background job (or `rocknixds-media.py --local --auto`), its gamelist entry has a `cheevosId` and the Pixel library shows its achievement count |
 | 32, 34, 35 | `es-rgds-panelguis.patch` (ES): *View Game Media* (its pictures, the zoom view and *View fullscreen video*), the Save State Manager and *Manual scrape* are one panel wide, on the bottom panel. The zoom view opens with the whole picture fitted, L/R zoom, the D-pad moves it, and it never leaves the panel. From *View Game Media* it had always been empty: it was given the entry's number instead of its picture (an upstream bug). *Manual scrape*'s details column grows from the result list's share (24% to 45% of the window), so the values and the date fit; values longer than about 10 letters still end in "...". #34's other half, the Pixel font's 2/5/S, Z and B/G, has been on this line since 1.5.13 beta 1. Checked on a PC at 1920x480 and 3072x768 with Pixel dark: before and after in [1.6-prep/img](1.6-prep/img) (`es-32-*`, `es-34-*`, `es-35-*`) | both (ES) | 1. A scraped game with a picture and a video: *View Game Media* and *View fullscreen video* (game options) stay on the bottom panel. A on a picture shows all of it there; L/R zoom and the D-pad moves it, and nothing reaches the top panel. 2. *Game settings > Show savestate manager: Always*, then start a GBA game (RetroArch): the title, START NEW GAME and the slots are all on the bottom panel (START NEW GAME is shortened to "START NEW ..." at 640 px, as on any 4:3 screen). 3. *Scrape* on a game: the publisher, genre and the whole date are inside the window. `grim` grabs ES's screens to compare with the pictures |
-| 36, 37 | `es-features.sh`: a new `es_features.cfg` replaces the old one only if it parses with `<features>` as its root; otherwise the old one stays, or both go and ES reads ROCKNIX's copy. The RG DS line's depth-aware repair and its test are on the Plus line now; an option written on one line is no longer dropped. Tests: 74 (RG DS) and 73 (Plus) pass | both | `grep es-features /storage/.config/drastic/dsflip/install.log` (or the installer's output) after an update; the DS's per-system and per-game advanced settings list every DraStic option; Tools and Music Player are not in the per-system list |
+| 36, 37 | `es-features.sh`: a new `es_features.cfg` replaces the old one only if it parses with `<features>` as its root; otherwise the old one stays, or it is moved aside to `es_features.cfg.rocknixds-broken` (a player's own copy isn't lost: Python's parser is stricter than ES's) and ES reads ROCKNIX's copy. The RG DS line's depth-aware repair and its test are on the Plus line now; an option written on one line is no longer dropped. Tests: 74 (RG DS) and 73 (Plus) pass | both | `grep es-features /storage/.config/drastic/dsflip/install.log` (or the installer's output) after an update; the DS's per-system and per-game advanced settings list every DraStic option; Tools and Music Player are not in the per-system list |
 | 42 | Not done: the plan is in section G. It moves the players' save files, so it is the owner's call | | |
 | 43 | Not a bug: ROCKNIX turns front-end music on but ships no music. The README and the release notes now say to copy `.mp3`/`.ogg` files to `roms/music` | both (docs) | Copy one `.ogg` to `/storage/roms/music`, restart ES: it plays in the menu |
 | 44 | `es-rgds-rnds.patch`: *UI settings > ROM icon on cartridges (DS)* (ROCKNIXDS Pixel only, off by default). On, a DS game's cartridges on the bottom screen show the 32x32 icon from its ROM (`.nds`, or the first `.nds` in a `.zip`) instead of the label art, scaled up in whole steps without smoothing. It is read once per ROM, off the UI thread; odd ROMs, `.7z` and other systems keep their art; DSi animated icons show their still frame. Checked with the engine's harness: 20 synthetic ROMs, the setting off byte-identical to before, the sanitizers clean ([640](1.6-prep/img/rnds-44-rom-icon-640.png), [1024](1.6-prep/img/rnds-44-rom-icon-1024.png)) | both (ES) | Turn it on, open the DS game list: each cartridge on the bottom screen shows the game's own icon (the one the DS menu shows), sharp, on a light label, zipped games too, and the top screen is unchanged. Scroll a big list: no stall. Turn it off: the art is back. With a `.7z` game, that game keeps its art |

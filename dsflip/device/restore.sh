@@ -49,7 +49,9 @@ wait_outputs() {                # up to 3 s
 # which kept running and kept its window (es-rgds-keepwindow.patch), carries on; its window is placed again in case
 # sway resized it while the console was away.
 vt_back() {
-    VT=$(cat /tmp/dsflip-vt 2>/dev/null); rm -f /tmp/dsflip-vt /tmp/dsflip-vt-later
+    # /tmp/dsflip-vt(-later) stay until the panels are sway's again: a game started meanwhile (session.sh) sees them,
+    # stops this unit first, and keeps sway's VT instead of recording tty12 or having sway restarted under it
+    VT=$(cat /tmp/dsflip-vt 2>/dev/null)
     chvt "${VT:-1}"
     if wait_outputs; then
         S=$(ls $RT/sway-ipc.*.sock 2>/dev/null | head -n1)
@@ -80,6 +82,7 @@ vt_back() {
         systemctl restart sway.service; wait_outputs
         systemctl is-active -q essway.service || systemctl start essway.service
     fi
+    rm -f /tmp/dsflip-vt /tmp/dsflip-vt-later
 }
 # The display controller stuck in an underrun loop (see session.sh: ~84,000 interrupts/s, 60% of a core, until
 # reboot): count its interrupts for half a second (normal: ~60 per panel per second) and clear it by switching the

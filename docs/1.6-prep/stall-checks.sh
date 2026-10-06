@@ -8,7 +8,8 @@
 #   4. A normal quit still saves and the next start resumes; a second press during the save quits at once.
 #   5. DraStic frozen solid (SIGSTOP: libdsflip's threads too): session.sh ends it 15-25 s later, with its notice.
 # One PASS/FAIL/SKIP line per check; the log lines behind each go to /storage/stall-checks-<date>.txt. The game's own
-# saves are not touched, and a resume state the player had for the game is put back. dsflip.log ends up holding the
+# saves are not touched, and a resume state the player had for the game is put back. ES counts the 6 starts as plays
+# of that game (play count, last played). dsflip.log ends up holding the
 # last check's game. ES shows the notices of checks 1 and 5 once it's done: close them with A.
 D=/storage/.config/drastic/dsflip
 ROM=$(ls /storage/roms/nds/*.nds /storage/roms/nds/*.zip 2>/dev/null | grep -i -- "${1:?usage: stall-checks.sh <rom-substring>}" | head -n1)
@@ -25,7 +26,8 @@ cleanup() {
 }
 trap cleanup EXIT; trap 'exit 1' HUP INT TERM
 [ -f "$RSTATE" ] && mv "$RSTATE" "$RSTATE.stall-checks"
-touch /tmp/rocknixds-testing /tmp/rocknixds-testing-resume   # test launches (no play stats), resume on all the same
+touch /tmp/rocknixds-testing /tmp/rocknixds-testing-resume   # test launches, resume on all the same (session.sh
+                                                            # skips its own stats; ES still counts each as a play)
 log() { echo "$*" | tee -a $REP; }
 lines() { echo "--- $1" >> $REP; grep -a "$2" $D/dsflip.log | cut -c1-200 | head -n 12 >> $REP; }
 session() { tail -n +$((SL + 1)) $SLOG 2>/dev/null; }       # last-session.log since this check's launch

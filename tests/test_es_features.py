@@ -333,12 +333,13 @@ class EsFeaturesTest(unittest.TestCase):
 
     def test_a_copy_that_cannot_be_repaired_goes_so_es_reads_rocknix(self):
         # cut short or emptied (a full card, a crash while something else wrote it): nothing the strip can mend, and
-        # ES would read neither the old copy nor a new one. The copy goes and ES reads ROCKNIX's file.
+        # ES would read neither the old copy nor a new one. The copy is moved aside and ES reads ROCKNIX's file.
         mic = '          <feature name="microphone sensitivity"'
         self.user.write_text(BASE[:BASE.index(mic)])        # a user's own copy: ours go in, and it still doesn't parse
         out = self.run_script()
-        self.assertIn("nor would the new one: removed, ES reads ROCKNIX's copy", out)
+        self.assertIn("nor would the new one: moved aside (.rocknixds-broken), ES reads ROCKNIX's copy", out)
         self.assertFalse(self.user.exists())
+        self.assertEqual(self.user.with_name("es_features.cfg.rocknixds-broken").read_text(), BASE[:BASE.index(mic)])
         self.run_script()
         self.assertFalse(self.user.exists())
         # the installer's copy, emptied or cut inside the shader option (none to add ours to), is rebuilt next boot
@@ -349,8 +350,9 @@ class EsFeaturesTest(unittest.TestCase):
         for broken in ("", good[:good.index("ds-crisp")]):
             self.user.write_text(broken)
             out = self.run_script()
-            self.assertIn("does not parse: removed, ES reads ROCKNIX's copy", out)
+            self.assertIn("does not parse: moved aside (.rocknixds-broken), ES reads ROCKNIX's copy", out)
             self.assertFalse(self.user.exists())
+            self.assertEqual(self.user.with_name("es_features.cfg.rocknixds-broken").read_text(), broken)
             self.run_script()
             self.assertEqual(self.user.read_text(), good)
 

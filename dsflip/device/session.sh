@@ -60,6 +60,7 @@ stuck_report() {
     [ -e /tmp/dsflip-vt-later ] && systemctl stop dsflip-vtback.service 2>/dev/null   # (pending exactly while it exists)
     CUR=$(fgconsole 2>/dev/null)
     if [ "$CUR" = 12 ] && [ -s /tmp/dsflip-vt ]; then echo "$(ms) ms: the last game's switch back was still pending: sway stays on tty$(cat /tmp/dsflip-vt)"
+    elif [ "$CUR" = 12 ]; then echo 1 > /tmp/dsflip-vt; echo "$(ms) ms: on tty12 with no record of sway's VT: assuming tty1"   # never ours
     else echo "${CUR:-1}" > /tmp/dsflip-vt; fi
     rm -f /tmp/dsflip-vt-later
     python3 -c 'import fcntl, os; fcntl.ioctl(os.open("/dev/tty12", os.O_RDWR), 0x4B3A, 0)' 2>/dev/null   # KDSETMODE KD_TEXT
