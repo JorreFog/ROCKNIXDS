@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds the 1.6 release artwork into docs/img/1.6/. Needs python3 with Pillow and numpy.
+# Builds the 1.6 release artwork into docs/img/1.6/. Needs python3 with Pillow and numpy, and node with Playwright.
 #
 # The inputs that aren't on main yet (Döda Kvarter's sprites and screenshots, the Bank's screenshots, 1.6's fixed
 # pixel font) are taken from their branches into ref/ the first time; delete ref/ to take them again.

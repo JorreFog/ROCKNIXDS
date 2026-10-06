@@ -10,15 +10,14 @@ for y in range(276, 372, 6):
     for x in range((y // 6) % 2 * 4, 640, 8):
         a.px(x, y, mix(BG3, TEAL_HI, (y - 276) / 96))
 
-# title
-lw = 0
-f = 32
-tw = a.tlen("ROCKNIX", f, True) + 12 + a.tlen("DS", f, True) + 4
-x0 = int(320 - (tw + 14 + a.tlen("1.6", 48, True)) / 2)
-logo(a, x0, 18, f)
-vx = x0 + int(tw) + 14
-a.text(vx + 2, 6 + 2, "1.6", 48, RED_DK, medium=True)
-a.text(vx, 6, "1.6", 48, INK, medium=True, outline=None)
+# title: the standard logo, and the version in the logo's typeface
+LH = 34
+probe = Art(1, 1)
+vw = logo_text(probe, 0, 0, "1.6", LH)
+lw = int(round(LH * LOGO_ASPECT))
+x0 = int(320 - (lw + 16 + vw) / 2)
+logo(a, x0, 18, LH)
+logo_text(a, x0 + lw + 16, 18 + 3, "1.6", LH - 6, WHITE, shadow=RED_DK, sh=(2, 2))
 a.text(320, 62, "THE LAST BIG UPDATE", 16, BLUE_LT, anchor="ma", medium=True, shadow=BG0)
 a.text(320, 82, "One release for the RG DS and the RG DS Plus", 12, INK2, anchor="ma")
 

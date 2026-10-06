@@ -2,7 +2,7 @@
 
 The pictures in [`docs/img/1.6/`](../img/1.6/), drawn by these scripts in ROCKNIXDS Pixel's palette and pixel font:
 art on a small canvas, scaled up 2× with nearest-neighbour, screenshots pasted at full resolution inside the frames.
-`./build.sh` makes them all (Python 3 with Pillow and numpy); [`../releases/v1.6-page.md`](../releases/v1.6-page.md)
+`./build.sh` makes them all (Python 3 with Pillow and numpy, and Node with Playwright's Chromium for the logo); [`../releases/v1.6-page.md`](../releases/v1.6-page.md)
 lays them out for the GitHub release.
 
 | Picture | Script | What's in it |
@@ -15,6 +15,6 @@ lays them out for the GitHub release.
 | `discord.png` | `discord.py` | Join the Discord. The invite is set in DejaVu Sans Mono: the pixel font's B looks like an 8 |
 | `thanks.png` | `thanks.py` | The page's sign-off |
 
-`lib.py` holds the drawing helpers (panels, dithered gradients, the logo, the handheld, the pixel text). Until the
+`lib.py` holds the drawing helpers (panels, dithered gradients, the handheld, the pixel text). The logo is the standard one, `logo/rocknixds-logo.svg`, drawn smooth by Chromium (`svg2png.mjs`), with text beside it in its typeface, Unbounded. Until the
 Döda Kvarter, Bank and 1.6 branches are merged, `build.sh` takes their screenshots, sprites and 1.6's fixed font
 from those branches into `ref/` (ignored by git).

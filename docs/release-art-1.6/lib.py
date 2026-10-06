@@ -215,18 +215,42 @@ class Art:
 
 # ---- shared pieces ------------------------------------------------------------------------------------------------
 
-def logo(a, x, y, size=16, ds_bg=INK, ds_fg=BG1):
-    """ROCKNIX in the logo's red, the two little screens, DS in a light badge: the theme's header logo."""
-    w = a.text(x, y, "ROCKNIX", size, RED, medium=True)
-    cx = x + int(w) + 2
-    u = max(2, size // 8)
-    a.frame(cx, y + size // 6, u * 3, u * 2 + 1, RED)
-    a.frame(cx, y + size // 6 + u * 2 + 2, u * 3, u * 2 + 1, GREY)
-    bx = cx + u * 3 + 2
-    dw = int(a.tlen("DS", size, True)) + 4
-    a.rrect(bx, y, dw, size + 1, fill=ds_bg, r=1)
-    a.text(bx + 2, y, "DS", size, ds_fg, medium=True)
-    return bx + dw - x
+LOGO_SVG = os.path.join(REPO, "logo/rocknixds-logo.svg")
+LOGO_FONT = os.path.join(REPO, "logo/Unbounded-VF.ttf")
+LOGO_ASPECT = 933.22 / 139.0
+
+
+def logo(a, x, y, h=16):
+    """The standard ROCKNIXDS logo (logo/rocknixds-logo.svg, the dark-background version), h base pixels tall,
+    drawn smooth at the final resolution. Returns its width in base pixels."""
+    png = os.path.join(REF, "rocknixds-logo.png")
+    if not os.path.exists(png):
+        import subprocess
+        os.makedirs(REF, exist_ok=True)
+        subprocess.run(["node", os.path.join(HERE, "svg2png.mjs"), LOGO_SVG, png, "560"], check=True)
+    w = int(round(h * LOGO_ASPECT))
+    a.overlay(Image.open(png), x, y, w, h)
+    return w
+
+
+def logo_text(a, x, y, s, h, c=INK, weight=700, shadow=None, sh=(1, 1)):
+    """Text in the logo's typeface (Unbounded), smooth at the final resolution; h is the cap height in base
+    pixels. Returns the width in base pixels."""
+    k = a.scale
+    f = ImageFont.truetype(LOGO_FONT, int(h * k * 1.4))
+    try:
+        f.set_variation_by_axes([weight])
+    except Exception:
+        pass
+    bb = f.getbbox(s)
+    pad = 2 * k
+    im = Image.new("RGBA", (bb[2] + pad * 2, bb[3] - bb[1] + pad * 2), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    if shadow is not None:
+        d.text((pad + sh[0] * k, pad - bb[1] + sh[1] * k), s, font=f, fill=shadow)
+    d.text((pad, pad - bb[1]), s, font=f, fill=c)
+    a.overlays.append((im, x - 2, y - 2, im.width / k, im.height / k, None))
+    return (bb[2]) / k
 
 
 def handheld(a, x, y, sw, sh, top=None, bottom=None, hinge=6, pad=5, body=BEZEL, screen_bg=BG2,

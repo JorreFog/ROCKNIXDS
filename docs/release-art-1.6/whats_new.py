@@ -27,7 +27,7 @@ a.vgrad(0, 0, W, H, [(0, BG1), (1, BG2)], bands=8)
 a.stars(0, 0, W, 64, 70, seed=6)
 
 # header: the logo's badge and the title
-logo(a, 16, 18, 16)
+logo(a, 16, 20, 20)
 a.text(W - 16, 12, "WHAT'S NEW", 24, INK, anchor="ra", medium=True, shadow=BG0, sh=(2, 2))
 a.text(W - 16, 40, "in version 1.6 · for the RG DS and RG DS Plus", 12, INK2, anchor="ra")
 a.hline(16, 60, W - 32, BEZEL)

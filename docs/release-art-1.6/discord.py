@@ -36,8 +36,8 @@ for i in range(3, 23):
 
 tx = 150
 a.text(tx, 22, "JOIN THE", 16, BLURPLE_LT, medium=True, shadow=BG0)
-lw = logo(a, tx, 42, 32)
-a.text(tx + lw + 10, 42, "DISCORD", 32, WHITE, medium=True, shadow=BLURPLE_DK, sh=(2, 2))
+lw = logo(a, tx, 44, 28)
+logo_text(a, tx + lw + 12, 46, "DISCORD", 22, WHITE, shadow=BLURPLE_DK, sh=(2, 2))
 a.text(tx, 84, "Help with setup, bug reports, your best Döda Kvarter run,", 12, INK)
 a.text(tx, 98, "trades for the Bank, and news about the next fix.", 12, INK)
 

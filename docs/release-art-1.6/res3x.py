@@ -119,7 +119,7 @@ a.stars(0, 0, W, 60, 60, seed=33)
 a.text(16, 12, "3x", 32, BLUE_LT, medium=True, shadow=BG0, sh=(2, 2))
 a.text(62, 12, "INTERNAL RESOLUTION", 16, INK, medium=True, shadow=BG0)
 a.text(62, 32, "Gengis Engine draws the 3D at 768x576, then supersamples it into the panel.", 12, INK2)
-logo(a, W - 16 - 96, 14, 12)
+logo(a, W - 16 - int(12 * LOGO_ASPECT), 12, 12)
 badge(a, W - 16 - 34, 32, "NEW", BLUE)
 
 labels = [("1x", "256x192", "The DS itself", INK3), ("2x", "512x384", "ROCKNIXDS 1.5", INK2),
