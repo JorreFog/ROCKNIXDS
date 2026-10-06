@@ -101,6 +101,9 @@ needed a hard reset.
    does. If its CPU time (`/proc/<pid>/task/<tid>/schedstat`) stands still for 15 s, the whole process is wedged:
    DraStic is killed and the menu comes back with a notice. The loop doesn't count time while the handheld sleeps.
    Host check: a stand-in process was killed at 17 s with its presenter blocked, and left alone for 22 s while it ran.
+   `/tmp/dsflip-hold` holds this check while it exists: `freeze-repro.sh` makes it while gdb has DraStic stopped,
+   and a person debugging can `touch` it too (and remove it after). Host check: a stopped stand-in stayed alive
+   25 s with the file, then was killed 16 s after the file went.
 
 **Reproduce it** (over ssh; RG DS Plus first). The scripts run on the handheld: copy them over first
 (`scp docs/1.6-prep/*.sh root@<handheld>:/storage/`) and run them from there.

@@ -327,6 +327,8 @@ stuck_report() {
       if [ -z "$cpu" ]; then hb=0
       elif [ "$cpu" = "$hbt" ]; then hb=$((hb + 1))
       else hb=0; hbt=$cpu; fi
+      # /tmp/dsflip-hold: someone has DraStic stopped on purpose (freeze-repro.sh's gdb, a person debugging): don't count
+      [ -e /tmp/dsflip-hold ] && hb=0
       if [ $hb -eq 15 ]; then
         echo "$(ms) ms: libdsflip's presenter hasn't run for 15 s: DraStic is wedged, killing it"
         kill -9 $P 2>/dev/null
