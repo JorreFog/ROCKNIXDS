@@ -52,28 +52,36 @@ needed a hard reset.
 - `session.sh`'s safety check (`kill_pending`) only fires when a SIGKILL is pending but undeliverable (state D).
   Nobody had sent a SIGKILL, so it never fired.
 
-**Why DraStic's main thread stopped** (likely, not proven: no backtrace exists from that run):
-- **Not the RetroAchievements failure by itself.**
+**Why DraStic's main thread stopped** (found on an RG DS Plus on 2026-10-06, with backtraces, and reproduced at will):
+- **DraStic starts four of its helper threads before it initialises the locks they wait on.** In DraStic r2.5.2.2
+  (build id `7a5e0e5f...0748`):
+  - at `+0x312ac`, `pthread_create` for the thread that starts at `+0x2fa50` (a screen's lines), then
+    `pthread_mutex_init` twice and `pthread_cond_init` twice for what that thread waits on;
+  - at `+0x597b4`, the same order three times over for the three 3D threads that start at `+0x58e50`.
+  - The 3D thread at `+0x59430`, which hands those three their work, is created after its locks, as it should be.
+- **A helper that is quick is already inside `pthread_cond_wait` when its creator wipes that condition variable.**
+  glibc (2.25 on) keeps a condition variable's waiters in the variable itself, so the `pthread_cond_signal` of the
+  first hand-off finds no waiter and wakes nobody. Whoever handed the work over then waits for the answer for good.
+- **What the player sees:** a game that shows no frame at all, or one that stops at the first frame that needs that
+  helper. The 2026-10-05 freeze fits the second kind (Black 2's first 3D frame came with the resume state, 2 s in);
+  no dump exists from that run.
+- **How often:** 4 of 25 starts of Pokémon HeartGold with `.6` (the 1.6 library before this fix), menu to game, no
+  resume state, RetroAchievements logged in. gdb on each:
+  - three with a 3D helper still in the `pthread_cond_wait` at `+0x58eb8` after its hand-off, the 3D thread waiting
+    for it in the one at `+0x592f8` and the main thread in the one at `+0x596a8`;
+  - one with the lines helper in the one at `+0x2faf0` and the main thread waiting for it in the one at `+0x30d30`.
+- **Not the CPU placement** (the first explanation, which `.4` was built on): in every one of those dumps each thread
+  was allowed on all four CPUs, and the placement hadn't started. Placed too early it made the creator late more
+  often, which is what 68dfccd saw (8 of 9 starts). New threads starting on every CPU (`.4`) is kept: it is right for
+  threads made after the placement, but it was never this freeze's fix.
+- **Not RetroAchievements.**
   - rcheevos calls our login callbacks without its state mutex held.
   - The pop-up is drawn on libdsflip's own thread, with one lock order (ui's `mx`, then `mu`).
-  - HeartGold with RetroAchievements unreachable showed the same pop-up at 60 fps.
   - The empty error text has a plain cause: when curl got no answer, `http_thread` handed rcheevos an empty body, and
     rcheevos uses that body as the message. The token login then deleted the saved token and tried the password,
     which failed the same way.
-  - The other session with the same `[rc] Login failed:` (Platinum, 2026-10-03, in the uploaded logs) ran on after
-    its password login worked.
-- **The signature matches the DraStic deadlock that 68dfccd documented on the Plus line.** There, DraStic's main
-  thread and its 3D helpers waited on each other's condition variables forever, with the helpers at zero CPU time.
-  It happened when the main thread was confined to one CPU while its thread pool made its first hand-offs.
-  - The CPU placement (`session.sh`, `DSFLIP_PIN=1`, Plus only) starts 3 s after two helpers have run and repeats
-    every second for ~10 s. It confines the main thread to CPU 3.
-  - Any thread DraStic creates after that inherits CPU 3 alone, until the next placement pass. Checked on the host
-    under qemu: a thread created from a thread confined to CPU 3 is allowed CPU 3 only.
-  - A resume load (frame 120, ~2 s in) lands in that window. DraStic redoes its video set-up around a state load
-    (new screen textures right after it in the uploaded logs), which is when it would make new helpers.
-  - On the RG DS (no placement), this cannot happen.
 
-**What changed** (SuperDrastic `0.5.0-beta.1-rocknixds.4`/`.5`, both lines; `session.sh`, both lines):
+**What changed** (SuperDrastic `0.5.0-beta.1-rocknixds.4`/`.5`, and `.7` for the fix itself; `session.sh`):
 1. **The stall watch** (`dsflip.c` `stall_watch`, `stall_report`, on the presenter thread). It counts only time
    outside DraStic's own menu (which presents only when it changes), the in-game menu (which holds DraStic on
    purpose) and the quit's save.
@@ -89,8 +97,15 @@ needed a hard reset.
    - DraStic not taking the save within 3 s (5 s while the in-game menu, which closes itself for it, is up).
    A repeat within a second of a request DraStic hasn't taken yet is ignored. In a running game it takes the request
    at its next frame, so a second press lands during the save and quits without the resume state.
-3. **New threads start on every CPU** (`dsflip.c` `pthread_create`): no thread inherits the main thread's
-   confinement. `DSFLIP_SPREAD_THREADS=0` gives the old behaviour.
+3. **DraStic's helpers wait until their locks exist** (`.7`: `dsflip.c` `pthread_create`, `helper_start`,
+   `pthread_cond_init`). The four threads above are started through a door: a helper's first act is to wait until its
+   creator has made its second `pthread_cond_init` call since the `pthread_create`, which is the last of the four
+   initialisations. A door opens by itself after 2 s. `dsflip.log` has a line per helper: `[dsflip] DraStic's helper
+   +0x58e50 waited 180 us for its locks`. `DSFLIP_HELPER_DOOR=0` starts them as DraStic does;
+   `DSFLIP_HELPER_RACE=<ms>` makes the creator sleep that long after each of the four `pthread_create` calls (the
+   freeze at every start without the door, nothing with it).
+   New threads also start on every CPU (`.4`): no thread inherits the main thread's confinement.
+   `DSFLIP_SPREAD_THREADS=0` gives the old behaviour.
 4. **RetroAchievements** (`ra.c`):
    - curl's error and the HTTP status are logged with the API name: `[ra] login2: no connection to
      RetroAchievements (Could not resolve host: ...) (curl 6)`, then `[ra] token login: ... trying again in 15 s`.
@@ -382,6 +397,35 @@ runs):
   frees an array with `delete` (harmless with glibc), a thread race in `FileSystemUtil.cpp`, `Animation` without a
   virtual destructor.
 - **Not covered:** a handheld's decode speed and GPU, a real touchscreen (a mouse stood in), and DraStic itself.
+
+## Results on an RG DS Plus, 2026-10-06
+
+The Plus branch installed from a checkout (`RGDS_SRC`), then the 1.6-plus release tree the same way at the end of
+the day. Games started through ES's API and by injected pad presses (`tools/padkey.py`, `tools/padtouch.py`;
+screenshots with grim under sway and `tools/kmsgrab.py` in a game). What was checked:
+
+- **A, the freeze: cause found and fixed** (section A above has the whole story). 4 of 25 HeartGold starts froze with
+  `.6`; with the forced race 4 of 4 without `.7`'s door and 0 of 6 with it; 40 ordinary starts with `.7`: 0.
+  `stall-checks.sh`: 7 of 7 PASS (check 5, the outside watch, takes about 28 s on the Plus). The two scripts needed
+  the fixes described in A (ES "idle" for real, the notice withheld).
+- **The first press after a game** (new): sway had no input devices back until something made its libinput look.
+  `restore.sh` nudges udev; 7 of 7 first presses registered (6 of 9 were lost before).
+- **The notice dialog** (new): *The game stopped responding ... and was closed* ran over its box: GuiMsgBox's height
+  fix. *Tools* and *Music Player* showed an empty box before "System": the private-use glyph is dropped.
+- **B**, by eye and by log: a game starts to black and comes back to black; the menu returns on both panels. Not run:
+  `switchtime.sh`, B4 (double launch) and B5 (pending switch) as written.
+- **C**: `es-mem.log` is written. The menu-over-list test and the valve (steps 2-4) were not run.
+- **D**: #44 and #27 only as far as the builds run; the rows' device checks were not walked. #36/#37's repair ran at
+  install (the options file was rebuilt with the new "3D resolution").
+- **E**: no *wfc dns* in the Nintendo DS settings (seen while adding *3D resolution* there).
+- **New in 1.6-plus from this day:** the *3D resolution* option (2x, 3x) on the Plus (a 3x launch logs `scale 3` and
+  the performance profile; the menu shows the option); ROCKNIXDS Pixel's app tiles and the cartridge fallback (every
+  Tools cartridge shows ROCKNIX's SVG picture; 80 harness pictures unchanged for the mockup's data); Döda Kvarter (its
+  stutter found and fixed: a 50-100 ms freeze every 3 s from re-opening the input devices; 0 late frames in 4800
+  after; Settings > Buttons) and ROCKNIXDS Bank & Trade (a day of functional tests, see the bank commit) installed and
+  tested on the Plus.
+- **Not done:** the RG DS (non-Plus) port of all of the above; the remaining B/C/D device walks; a person's blow
+  test (#26); the RetroAchievements offline check (A6).
 
 ## Results on an RG DS Plus, 2026-10-05
 
