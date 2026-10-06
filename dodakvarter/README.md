@@ -128,14 +128,14 @@ winter snow, or the bright midsummer night), made of districts:
 | District | What's in it |
 |---|---|
 | Gården | miljonprogram lamellhus around a yard: coloured balconies, the stairwell doors, a playground, the tvättstuga, recycling, bike racks, birches |
-| Torget | the centrum: a row of shops (Livs, Pizzeria, Apotek, Frisör, Konditori, Bibliotek, Vårdcentral...), the tunnelbana entrance with its blue T, a kiosk, a fountain, a bus stop by the road |
+| Torget | the centrum: a row of shops (Livs, Pizzeria, Apotek, Frisör, Konditori, Bibliotek, Vårdcentral...), the tunnelbana entrance with its blue T, a kiosk, Plattan's black and white triangles in the middle, torghandel stalls of fruit under striped awnings, a fountain, a bus stop by the road |
 | Villorna | Falu red (and some yellow) houses with white trim, hedges and picket fences, flagpoles with the flag or the long pennant, trampolines, apple trees, the row of mailboxes, a moose sign |
 | Gamla stan | narrow cobbled gränder between ochre, rust and yellow plastered houses, a little square with its well |
-| Kolonilotterna | allotments: fenced plots, a cottage on each, beds, compost, rain barrels |
-| Parken | a lake with a jetty and a red sauna, glacier-smoothed bedrock, birch, pine and spruce; a midsommarstång in summer, a frozen lake in winter |
+| Kolonilotterna | allotments: fenced plots, a cottage on each, beds, compost, rain barrels; on the common ground the flag, the notice board, wheelbarrows |
+| Parken | a lake with a jetty, lily pads, reeds, a livboj and a red sauna, glacier-smoothed bedrock, birch, pine and spruce; a midsommarstång in summer, a frozen lake in winter |
 | Skolan | a brick school, the schoolyard with a hopscotch, an artificial-turf pitch |
 | Kyrkan | a white church with a green copper spire, a red bell tower, the graveyard (they come up through the graves) |
-| Hamnen | warehouses, shipping containers, the quay and its boats |
+| Hamnen | warehouses, shipping containers, fish crates, the quay with its bollards, lifebuoys and boats |
 | Stationen | the pendeltåg station on the tracks, the bus terminal |
 | Köpcentret | a big-box store and its car park, recycling stations |
 

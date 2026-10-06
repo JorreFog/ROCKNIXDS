@@ -49,112 +49,140 @@ uint32_t ground_color(int g, int season) {
     }
 }
 
+/* the colour of ground g at pixel (x, y) (j: the row inside its tile) */
+static uint32_t ground_px(int g, int x, int y) {
+    int season = G->season, win = season == SEASON_WINTER, j = y % TS, ty = y / TS;
+    uint32_t base = ground_color(g, season);
+    uint32_t h = hash3(x, y, g * 31 + 5), c = base;
+    switch (g) {
+    case G_ASPHALT: case G_PARKING: case G_SCHOOLYARD:
+        c = vary(base, x, y, 1, 4);
+        if (h % 23 == 0) c = shade(base, 300);
+        else if (h % 29 == 0) c = shade(base, 200);
+        if (win && (h % 7 == 0)) c = 0x7d7468;                          /* grit */
+        break;
+    case G_SIDEWALK: {                                                  /* 8x8 concrete slabs */
+        int sx = x / 8, sy = y / 8;
+        c = vary(base, sx, sy, 3, 6);
+        c = vary(c, x, y, 4, 3);
+        if (x % 8 == 0 || y % 8 == 0) c = shade(base, 205);
+        if (win && h % 9 == 0) c = 0x7d7468;
+        break;
+    }
+    case G_PLAZA: {                                                     /* big slabs, offset rows */
+        int row = y / 8, sx = (x + (row & 1) * 6) / 12;
+        c = vary(base, sx, row, 5, 7);
+        c = vary(c, x, y, 6, 2);
+        if ((x + (row & 1) * 6) % 12 == 0 || y % 8 == 0) c = shade(base, 215);
+        break;
+    }
+    case G_COBBLE: {                                                    /* rounded setts in rows */
+        int row = y / 4, sx = (x + (row & 1) * 2) / 4;
+        int lx = (x + (row & 1) * 2) % 4, ly = y % 4;
+        c = vary(base, sx, row, 7, 14);
+        if (ly == 0 || lx == 0) c = shade(base, 150);
+        else if (ly == 1 && lx == 1) c = shade(c, 300);
+        if (win && (lx == 0 || ly == 0) && h % 3 == 0) c = 0xe8eef4;
+        break;
+    }
+    case G_GRASS:
+        if (win) {
+            c = vary(base, x, y, 8, 3);
+            if (h % 41 == 0) c = 0xffffff;
+            else if (h % 13 == 0) c = 0xc8d4e0;
+        } else {
+            c = vary(base, x, y, 9, 6);
+            if (h % 7 == 0) c = shade(base, 300);
+            else if (h % 11 == 0) c = shade(base, 190);
+            if (season == SEASON_AUTUMN && h % 37 == 0) c = (h >> 8) % 3 == 0 ? 0xc8642a : (h >> 8) % 3 == 1 ? 0xd8a83a : 0xa83a2a;
+            if (season == SEASON_SUMMER && h % 97 == 0) c = (h >> 9) % 3 == 0 ? 0xf0f0f0 : (h >> 9) % 3 == 1 ? 0xf0d040 : 0xa070d0;
+        }
+        break;
+    case G_GRAVEL: c = vary(base, x, y, 10, 10); if (h % 5 == 0) c = shade(c, 180); if (h % 17 == 0) c = shade(c, 320); break;
+    case G_SAND: c = vary(base, x, y, 11, 6); if (h % 9 == 0) c = shade(c, 220); break;
+    case G_DIRT: case G_SOIL:
+        c = vary(base, x, y, 12, 7);
+        if (g == G_SOIL && !win && (y % 4 == 0)) c = shade(base, 170);
+        if (g == G_SOIL && !win && (y % 4 == 2) && h % 3 == 0) c = 0x4a7a34;   /* rows of green */
+        break;
+    case G_WATER:
+        if (win) {
+            c = vary(base, x, y, 13, 4);
+            if ((h % 61) == 0) c = 0xe8f4fa;
+            if (((x + y * 3) % 23) == 0 && h % 2) c = shade(base, 180);     /* cracks */
+        } else {
+            c = base;
+            int wave = ((x + (y / 3) * 5 + (int)(hash3(y / 3, 0, 77) % 16)) % 16);
+            if (wave < 3 && y % 3 == 0) c = shade(base, 150);
+            if (h % 53 == 0) c = shade(base, 190);
+        }
+        break;
+    case G_DECK: {                                                      /* planks across */
+        c = vary(base, x / 16, y / 4, 14, 8);
+        if (y % 4 == 3) c = shade(base, 140);
+        if (x % 16 == (y / 4 * 7) % 16) c = shade(base, 160);
+        break;
+    }
+    case G_TURF:
+        c = vary(base, x, y, 15, 3);
+        if (!win && ((x / 8) & 1)) c = shade(c, 235);                   /* mowing stripes */
+        break;
+    case G_FLOOR: c = (x % 8 == 0 || y % 8 == 0) ? 0x707078 : vary(base, x, y, 16, 3); break;
+    case G_RAIL:
+        c = vary(base, x, y, 17, 10);                                    /* ballast */
+        if (h % 4 == 0) c = shade(c, 150);
+        if ((y % 16) == 3 || (y % 16) == 12) c = 0x8a8a92;               /* rails */
+        else if ((y % 16) == 4 || (y % 16) == 13) c = 0x5a5a62;
+        if (x % 6 < 2 && (y % 16) > 1 && (y % 16) < 15 && (y % 16) != 3 && (y % 16) != 12) c = win ? 0x8a7a6a : 0x4a3a2a;   /* sleepers */
+        break;
+    case G_ROCK: {                                                      /* glacier-smoothed granite */
+        c = vary(base, x, y, 18, 6);
+        if (h % 9 == 0) c = 0xa08a84;
+        if (h % 31 == 0) c = 0x5a6a4a;                                   /* lichen */
+        if (win && j < 5 + (int)(hash3(x, ty, 3) % 3)) c = 0xeef2f5;
+        break;
+    }
+    case G_FOREST: {                                                    /* dense spruce seen from above */
+        int cx = (x / 8) * 8 + 4, cy = (y / 8) * 8 + 4;
+        int d = abs(x - cx) + abs(y - cy) + (int)(hash3(x / 8, y / 8, 19) % 3);
+        c = d < 3 ? shade(base, 330) : d < 5 ? shade(base, 260) : d < 7 ? base : shade(base, 150);
+        if (win && d < 3 && h % 2) c = 0xdde6ee;
+        break;
+    }
+    }
+    return c;
+}
+
+/* water and bedrock round their corners where both sides of the corner are something else: the cut-off part is
+   painted as the ground beside it, the edge of what's left gets the shore (or a dark line on the rock) */
+static int corner_cut(int tx, int ty, int g, int i, int j, int *ng) {
+    const int r = 7;
+    int sx = i < TS / 2 ? -1 : 1, sy = j < TS / 2 ? -1 : 1;
+    Tile *h = tile_at(tx + sx, ty), *v = tile_at(tx, ty + sy);
+    if (!h || !v || h->g == g || v->g == g) return 0;
+    float px = sx < 0 ? (r - 0.5f) - i : i - (TS - r - 0.5f), py = sy < 0 ? (r - 0.5f) - j : j - (TS - r - 0.5f);
+    if (px <= 0 || py <= 0 || px * px + py * py <= (float)(r * r)) return 0;
+    if (ng) *ng = v->g;
+    return 1;
+}
+static int rounds(int g) { return g == G_WATER || g == G_ROCK; }
+
 static void paint_ground(int tx, int ty) {
     Tile *t = &G->t[ty][tx];
-    int g = t->g, season = G->season, win = season == SEASON_WINTER;
-    uint32_t base = ground_color(g, season);
-    int ox = tx * TS, oy = ty * TS;
+    int g = t->g, ox = tx * TS, oy = ty * TS, ng;
     for (int j = 0; j < TS; j++)
         for (int i = 0; i < TS; i++) {
             int x = ox + i, y = oy + j;
-            uint32_t h = hash3(x, y, g * 31 + 5), c = base;
-            switch (g) {
-            case G_ASPHALT: case G_PARKING: case G_SCHOOLYARD:
-                c = vary(base, x, y, 1, 4);
-                if (h % 23 == 0) c = shade(base, 300);
-                else if (h % 29 == 0) c = shade(base, 200);
-                if (win && (h % 7 == 0)) c = 0x7d7468;                          /* grit */
-                break;
-            case G_SIDEWALK: {                                                  /* 8x8 concrete slabs */
-                int sx = x / 8, sy = y / 8;
-                c = vary(base, sx, sy, 3, 6);
-                c = vary(c, x, y, 4, 3);
-                if (x % 8 == 0 || y % 8 == 0) c = shade(base, 205);
-                if (win && h % 9 == 0) c = 0x7d7468;
-                break;
-            }
-            case G_PLAZA: {                                                     /* big slabs, offset rows */
-                int row = y / 8, sx = (x + (row & 1) * 6) / 12;
-                c = vary(base, sx, row, 5, 7);
-                c = vary(c, x, y, 6, 2);
-                if ((x + (row & 1) * 6) % 12 == 0 || y % 8 == 0) c = shade(base, 215);
-                break;
-            }
-            case G_COBBLE: {                                                    /* rounded setts in rows */
-                int row = y / 4, sx = (x + (row & 1) * 2) / 4;
-                int lx = (x + (row & 1) * 2) % 4, ly = y % 4;
-                c = vary(base, sx, row, 7, 14);
-                if (ly == 0 || lx == 0) c = shade(base, 150);
-                else if (ly == 1 && lx == 1) c = shade(c, 300);
-                if (win && (lx == 0 || ly == 0) && h % 3 == 0) c = 0xe8eef4;
-                break;
-            }
-            case G_GRASS:
-                if (win) {
-                    c = vary(base, x, y, 8, 3);
-                    if (h % 41 == 0) c = 0xffffff;
-                    else if (h % 13 == 0) c = 0xc8d4e0;
-                } else {
-                    c = vary(base, x, y, 9, 6);
-                    if (h % 7 == 0) c = shade(base, 300);
-                    else if (h % 11 == 0) c = shade(base, 190);
-                    if (season == SEASON_AUTUMN && h % 37 == 0) c = (h >> 8) % 3 == 0 ? 0xc8642a : (h >> 8) % 3 == 1 ? 0xd8a83a : 0xa83a2a;
-                    if (season == SEASON_SUMMER && h % 97 == 0) c = (h >> 9) % 3 == 0 ? 0xf0f0f0 : (h >> 9) % 3 == 1 ? 0xf0d040 : 0xa070d0;
-                }
-                break;
-            case G_GRAVEL: c = vary(base, x, y, 10, 10); if (h % 5 == 0) c = shade(c, 180); if (h % 17 == 0) c = shade(c, 320); break;
-            case G_SAND: c = vary(base, x, y, 11, 6); if (h % 9 == 0) c = shade(c, 220); break;
-            case G_DIRT: case G_SOIL:
-                c = vary(base, x, y, 12, 7);
-                if (g == G_SOIL && !win && (y % 4 == 0)) c = shade(base, 170);
-                if (g == G_SOIL && !win && (y % 4 == 2) && h % 3 == 0) c = 0x4a7a34;   /* rows of green */
-                break;
-            case G_WATER:
-                if (win) {
-                    c = vary(base, x, y, 13, 4);
-                    if ((h % 61) == 0) c = 0xe8f4fa;
-                    if (((x + y * 3) % 23) == 0 && h % 2) c = shade(base, 180);     /* cracks */
-                } else {
-                    c = base;
-                    int wave = ((x + (y / 3) * 5 + (int)(hash3(y / 3, 0, 77) % 16)) % 16);
-                    if (wave < 3 && y % 3 == 0) c = shade(base, 150);
-                    if (h % 53 == 0) c = shade(base, 190);
-                }
-                break;
-            case G_DECK: {                                                      /* planks across */
-                c = vary(base, x / 16, y / 4, 14, 8);
-                if (y % 4 == 3) c = shade(base, 140);
-                if (x % 16 == (y / 4 * 7) % 16) c = shade(base, 160);
-                break;
-            }
-            case G_TURF:
-                c = vary(base, x, y, 15, 3);
-                if (!win && ((x / 8) & 1)) c = shade(c, 235);                   /* mowing stripes */
-                break;
-            case G_FLOOR: c = (x % 8 == 0 || y % 8 == 0) ? 0x707078 : vary(base, x, y, 16, 3); break;
-            case G_RAIL:
-                c = vary(base, x, y, 17, 10);                                    /* ballast */
-                if (h % 4 == 0) c = shade(c, 150);
-                if ((y % 16) == 3 || (y % 16) == 12) c = 0x8a8a92;               /* rails */
-                else if ((y % 16) == 4 || (y % 16) == 13) c = 0x5a5a62;
-                if (x % 6 < 2 && (y % 16) > 1 && (y % 16) < 15 && (y % 16) != 3 && (y % 16) != 12) c = win ? 0x8a7a6a : 0x4a3a2a;   /* sleepers */
-                break;
-            case G_ROCK: {                                                      /* glacier-smoothed granite */
-                c = vary(base, x, y, 18, 6);
-                if (h % 9 == 0) c = 0xa08a84;
-                if (h % 31 == 0) c = 0x5a6a4a;                                   /* lichen */
-                if (win && j < 5 + (int)(hash3(x, ty, 3) % 3)) c = 0xeef2f5;
-                break;
-            }
-            case G_FOREST: {                                                    /* dense spruce seen from above */
-                int cx = (x / 8) * 8 + 4, cy = (y / 8) * 8 + 4;
-                int d = abs(x - cx) + abs(y - cy) + (int)(hash3(x / 8, y / 8, 19) % 3);
-                c = d < 3 ? shade(base, 330) : d < 5 ? shade(base, 260) : d < 7 ? base : shade(base, 150);
-                if (win && d < 3 && h % 2) c = 0xdde6ee;
-                break;
-            }
-            }
-            *wpx(x, y) = c;
+            *wpx(x, y) = rounds(g) && corner_cut(tx, ty, g, i, j, &ng) ? ground_px(ng, x, y) : ground_px(g, x, y);
+        }
+    if (!rounds(g)) return;
+    uint32_t rim = g == G_WATER ? (G->season == SEASON_WINTER ? 0xdde8ee : 0x5a7a8a) : shade(ground_color(G_ROCK, G->season), 150);
+    for (int j = 0; j < TS; j++)                            /* the curve's edge */
+        for (int i = 0; i < TS; i++) {
+            if (corner_cut(tx, ty, g, i, j, 0)) continue;
+            int edge = (i > 0 && corner_cut(tx, ty, g, i - 1, j, 0)) || (i < TS - 1 && corner_cut(tx, ty, g, i + 1, j, 0)) ||
+                       (j > 0 && corner_cut(tx, ty, g, i, j - 1, 0)) || (j < TS - 1 && corner_cut(tx, ty, g, i, j + 1, 0));
+            if (edge) *wpx(ox + i, oy + j) = rim;
         }
 }
 
@@ -173,6 +201,7 @@ static void paint_edges(int tx, int ty) {
             else if (k == 1) { x = ox + s; y = oy + TS - 1; x2 = x; y2 = y - 1; }
             else if (k == 2) { x = ox; y = oy + s; x2 = x + 1; y2 = y; }
             else { x = ox + TS - 1; y = oy + s; x2 = x - 1; y2 = y; }
+            if (rounds(g) && corner_cut(tx, ty, g, x - ox, y - oy, 0)) continue;    /* (a rounded corner: its own edge) */
             if ((g == G_SIDEWALK || g == G_PLAZA) && (ng == G_ASPHALT || ng == G_PARKING)) {
                 wset(x, y, 0xb8b8b4); wset(x2, y2, 0x9a9a96);                       /* the curb */
             } else if (g == G_GRASS && ng != G_FOREST && ng != G_WATER) {
@@ -231,6 +260,34 @@ static void paint_deco(int tx, int ty) {
         for (int k = 0; k < 6; k++) { uint32_t h = hash3(tx, ty, k + 40); pset(&s, ox + h % 16, oy + (h >> 8) % 16, (h >> 16) & 1 ? 0xc8642a : 0xd8a83a); }
         break;
     case D_PUDDLE: ellipse_blend(&s, ox + 8, oy + 9, 6, 3, 0x1a2a3a, 140); break;
+    case D_SERGEL: {                                       /* black and white triangles, as on Plattan */
+        int flip = (tx + ty) & 1;
+        for (int j = 0; j < TS; j++) for (int i = 0; i < TS; i++) {
+            int up = flip ? i > j : i + j < TS - 1;
+            uint32_t c = up ? 0xe2ded4 : 0x2c2c30, h = hash3(ox + i, oy + j, 91);
+            if (h % 5 == 0) c = col_scale(c, up ? 235 : 300);
+            if (win && h % 3 == 0) c = 0xeef2f5;
+            pset(&s, ox + i, oy + j, c);
+        }
+        break;
+    }
+    case D_LILY:                                           /* lily pads (under the ice in winter) */
+        if (win) break;
+        for (int k = 0; k < 3; k++) {
+            uint32_t h = hash3(tx, ty, k + 60);
+            int x = ox + 3 + h % 10, y = oy + 3 + (h >> 8) % 10;
+            circlef(&s, x, y, 2, 0x3a7a3a); pset(&s, x + 1, y - 1, 0x2a5a2a); pset(&s, x + 2, y, G->t[ty][tx].g == G_WATER ? ground_color(G_WATER, G->season) : 0x2a5a2a);
+            if (G->season == SEASON_SUMMER && (h >> 16) % 3 == 0) pset(&s, x - 1, y, 0xf4f0f8);
+        }
+        break;
+    case D_REEDS:                                          /* vass, with a few kaveldun heads */
+        for (int k = 0; k < 9; k++) {
+            uint32_t h = hash3(tx, ty, k + 70);
+            int x = ox + 1 + h % 14, y = oy + 4 + (h >> 8) % 11, hgt = 5 + (h >> 16) % 5;
+            vline(&s, x, y - hgt, y, win ? 0xb8a888 : (h >> 4) & 1 ? 0x5a7a3a : 0x6a8a4a);
+            if ((h >> 20) % 3 == 0) { vline(&s, x, y - hgt - 2, y - hgt, 0x5a3a24); }
+        }
+        break;
     }
 }
 

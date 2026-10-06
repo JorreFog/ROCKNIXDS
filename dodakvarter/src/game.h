@@ -46,7 +46,10 @@ enum {                                  /* tile flags */
 enum {                                  /* flat decorations painted into the ground */
     D_NONE, D_LINE_H, D_LINE_V, D_ZEBRA_H, D_ZEBRA_V, D_MANHOLE, D_DRAIN, D_LEAVES, D_PUDDLE, D_CRACK, D_PARKING_H,
     D_PARKING_V, D_FLOWERS, D_HOPSCOTCH, D_PITCH_LINE_H, D_PITCH_LINE_V, D_PITCH_CIRCLE, D_STAIN, D_BIKE_LANE,
-    D_SNOWPILE, D_ARROW, D_GRAVE_PLOT, D_CURB_H, D_CURB_V, D_COUNT
+    D_SNOWPILE, D_ARROW, D_GRAVE_PLOT, D_CURB_H, D_CURB_V,
+    D_SERGEL,                           /* Plattan's black and white triangles, on a torg */
+    D_LILY, D_REEDS,                    /* lily pads on a pond; reeds along its shore */
+    D_COUNT
 };
 typedef struct {
     uint8_t g, f, zone, deco;
@@ -95,7 +98,12 @@ enum {                                  /* props: drawn standing up, sorted by t
     P_CONTAINER, P_CONTAINER_V, P_PALLETS, P_MAYPOLE, P_SIGN_MOOSE, P_SIGN_T, P_SIGN_BUS, P_ROCK, P_PLANTER,
     P_GOAL, P_LAMP_WALL, P_HYDRANT, P_PHONEBOX, P_STATUE, P_BARREL, P_COMPOST, P_WASHLINE, P_BONFIRE, P_KICKBIKE,
     P_FENCE_H, P_FENCE_V, P_HEDGE_H, P_HEDGE_V, P_WALL_H, P_WALL_V, P_PICKET_H, P_PICKET_V, P_RAILING_H,
-    P_TABLE, P_SANDBOX, P_SNOWMAN, P_BOAT, P_FORKLIFT, P_CRANE_LEG, P_TRUCK, P_TICKET, P_SPRUCE_SMALL, P_COUNT
+    P_TABLE, P_SANDBOX, P_SNOWMAN, P_BOAT, P_FORKLIFT, P_CRANE_LEG, P_TRUCK, P_TICKET, P_SPRUCE_SMALL,
+    P_STALL,                            /* torghandel: fruit and vegetables under a striped awning */
+    P_BUOY,                             /* a livboj on its red post, by water */
+    P_NOTICE,                           /* an anslagstavla, notes pinned on it */
+    P_BOLLARD, P_WHEELBARROW, P_CRATES, /* a pollare on the quay; a skottkärra; stacked fish crates */
+    P_COUNT
 };
 typedef struct {
     int16_t x, y;                       /* pixels: bottom centre */

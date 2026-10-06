@@ -387,6 +387,18 @@ static void gen_torg(Area *a) {
             break;
         }
     }
+    /* Plattan: black and white triangles round the middle of the square */
+    int pw = MIN(9, a->w - 6), ph = MIN(5, a->h - 12);
+    for (int j = 0; j < ph; j++) for (int i = 0; i < pw; i++) {
+        int x = a->hubx - pw / 2 + i, y = a->huby - ph / 2 + j;
+        Tile *t = tile_at(x, y);
+        if (t && t->g == G_PLAZA && !t->deco && !(t->f & (TF_SOLID | TF_INTER))) t->deco = D_SERGEL;
+    }
+    /* torghandel: a couple of stalls of fruit and vegetables */
+    for (int k = 0, n = 0; k < 40 && n < 2; k++) {
+        int tx = a->x + 1 + rng_int(R, MAX(1, a->w - 4)), ty = a->y + 5 + rng_int(R, MAX(1, a->h - 11));
+        if (free_rect(tx - 1, ty - 1, 4, 3, BLOCKERS)) { add_prop(P_STALL, tx * TS + 15, (ty + 1) * TS, 2, 1); n++; }
+    }
     /* a fountain or a statue in the middle */
     for (int k = 0; k < 40; k++) {                      /* near the middle, off the paths */
         int fx = a->hubx - 4 + rng_int(R, 9), fy = a->huby - 3 + rng_int(R, 7);
@@ -571,7 +583,14 @@ static void gen_allot(Area *a) {
             }
             if (rng_chance(R, 0.4f)) add_spawn(SP_GROUND, a->zone, (x + 2) * TS + 8, (y + 3) * TS + 8, -1);
         }
-    if (free_rect(a->x, a->y, 1, 1, TF_SOLID)) {}
+    /* the common ground between the plots: a flagpole, the notice board, wheelbarrows, a bench */
+    for (int k = 0; k < 60; k++) {
+        int tx = a->hubx - 4 + rng_int(R, 9), ty = a->huby - 3 + rng_int(R, 7);
+        if (free_rect(tx - 1, ty - 1, 3, 3, BLOCKERS)) { prop_on(P_FLAGPOLE, tx, ty, 1); break; }
+    }
+    scatter(P_NOTICE, a->x + 1, a->y + 1, a->w - 2, a->h - 2, 1, 1, BLOCKERS);
+    scatter(P_WHEELBARROW, a->x + 1, a->y + 1, a->w - 2, a->h - 2, 2, 1, BLOCKERS);
+    scatter(P_BENCH, a->x + 1, a->y + 1, a->w - 2, a->h - 2, 2, 1, BLOCKERS);
     trees(a->x, a->y, a->w, a->h, 3);
 }
 
@@ -602,6 +621,19 @@ static void gen_park(Area *a, int season) {
             int bi = add_building(tx, ty, 3, 2, 1, BS_SAUNA);
             if (bi >= 0) { G->b[bi].wall = 0x8c2b1e; G->b[bi].roof = 0x3a3a40; G->b[bi].trim = 0xf2f0ea; snprintf(G->b[bi].sign, sizeof G->b[bi].sign, "BASTU"); apron(bi, -1); }
             break;
+        }
+    }
+    /* lily pads on the pond, reeds round it, a livboj on the shore */
+    int buoy = 0;
+    for (int j = ly - 1; j <= ly + lh; j++) for (int i = lx - 1; i <= lx + lw; i++) {
+        Tile *t = tile_at(i, j);
+        if (!t || t->deco) continue;
+        int shore = 0;
+        for (int d = 0; d < 4; d++) { static const int o[4][2] = { {1,0},{-1,0},{0,1},{0,-1} }; if (ground_at(i + o[d][0], j + o[d][1]) == G_WATER) shore = 1; }
+        if (t->g == G_WATER && (t->f & TF_WATER) && rng_chance(R, 0.3f)) t->deco = D_LILY;
+        else if (t->g == G_GRASS && shore && !(t->f & (TF_SOLID | TF_PATH | TF_INTER | TF_RESERVED))) {
+            if (!buoy && free_rect(i, j, 1, 1, BLOCKERS | TF_WATER) && rng_chance(R, 0.15f)) { prop_on(P_BUOY, i, j, 1); buoy = 1; }
+            else if (rng_chance(R, 0.5f)) t->deco = D_REEDS;
         }
     }
     /* bedrock and woods */
@@ -735,6 +767,12 @@ static void gen_harbor(Area *a) {
     scatter(P_PALLETS, a->x, a->y + 6, a->w, a->h - 9, 3, 1, BLOCKERS);
     scatter(P_FORKLIFT, a->x, a->y + 6, a->w, a->h - 9, 1, 1, BLOCKERS);
     for (int i = a->x + 2; i < a->x + a->w - 2; i += 6) prop_on(P_BOAT, i, a->y + a->h - 1, 0);
+    for (int i = a->x + 1; i < a->x + a->w - 1; i += 3 + rng_int(R, 2)) prop_on(P_BOLLARD, i, wy - 1, 0);   /* pollare at the edge (not in the way) */
+    for (int k = 0, n = 0; k < 30 && n < 2; k++) {
+        int tx = a->x + 1 + rng_int(R, a->w - 2);
+        if (free_rect(tx, wy - 2, 1, 1, BLOCKERS)) { prop_on(P_BUOY, tx, wy - 2, 1); n++; }
+    }
+    scatter(P_CRATES, a->x, a->y + 6, a->w, a->h - 9, 3, 1, BLOCKERS);
     path_furniture(a->x, a->y, a->w, a->h, 6);
     add_spawn(SP_MANHOLE, a->zone, a->hubx * TS + 8, (a->y + 7) * TS + 8, -1);
 }

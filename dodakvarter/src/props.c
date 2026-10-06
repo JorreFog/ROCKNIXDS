@@ -19,7 +19,7 @@ int prop_is_tall(int k) {
     case P_PICKET_V: case P_RAILING_H: case P_SANDBOX: case P_BENCH: case P_BIN: case P_RECYCLE: case P_COMPOST:
     case P_PLANTER: case P_BARREL: case P_PALLETS: case P_GRAVE: case P_GOAL: case P_KICKBIKE: case P_TABLE:
     case P_HYDRANT: case P_ROCK: case P_BOAT: case P_BUSH: case P_TRAMPOLINE: case P_CAR: case P_CAR_V:
-    case P_BIKES: case P_CART:
+    case P_BIKES: case P_CART: case P_BOLLARD: case P_WHEELBARROW: case P_CRATES:
         return 0;
     }
     return 1;
@@ -314,6 +314,42 @@ static void ticket(Surf *s, int x, int y) {
     rectf(s, x - 2, y - 9, 5, 2, 0x1a1a1a);
 }
 
+static void stall(Surf *s, int x, int y, uint32_t v) {   /* torghandel */
+    static const uint32_t produce[] = { 0xc83a2a, 0xe08a20, 0x7ab83a, 0xe8c840, 0x7a3a8a, 0x3a8a3a };
+    vline(s, x - 13, y - 22, y - 1, 0x5a4a3a); vline(s, x + 12, y - 22, y - 1, 0x5a4a3a);
+    rectf(s, x - 14, y - 10, 28, 3, 0x9a7a52); rectf(s, x - 13, y - 7, 26, 4, 0x6a5038);    /* the table, its skirt */
+    for (int k = 0; k < 4; k++) {                                          /* crates of fruit */
+        int cx = x - 13 + k * 7;
+        rectf(s, cx, y - 13, 6, 3, 0xb08a5a); hline(s, cx, cx + 5, y - 11, 0x7a5a38);
+        uint32_t c = produce[(v + k * 3) % ARRAY_LEN(produce)];
+        if (WIN) c = 0x8a5a3a;                                              /* (in winter: sacks of potatoes) */
+        for (int i = 0; i < 6; i++) { pset(s, cx + i, y - 14, (i + k) & 1 ? c : col_scale(c, 200)); if (i % 2 == 0) pset(s, cx + i, y - 15, col_scale(c, 300)); }
+    }
+    uint32_t stripe = v & 1 ? 0xc83030 : 0x2a6a3a;
+    for (int i = -15; i <= 15; i++) vline(s, x + i, y - 26, y - 22, ((i + 15) / 3) & 1 ? 0xf0ece0 : stripe);   /* the awning */
+    for (int i = -15; i <= 15; i += 3) pset(s, x + i + 1, y - 21, ((i + 15) / 3) & 1 ? 0xf0ece0 : stripe);  /* its scallops */
+    hline(s, x - 15, x + 15, y - 27, col_scale(stripe, 150));
+    snow_cap(s, x - 15, x + 15, y - 28);
+}
+static void buoy(Surf *s, int x, int y) {                                   /* livboj: orange and white, on a red post */
+    vline(s, x, y - 21, y - 1, 0xa83228); vline(s, x + 1, y - 21, y - 1, 0x7a1e18);
+    for (int a = 0; a < 24; a++) {
+        float t = a * PI_F / 12;
+        uint32_t c = (a / 3) & 1 ? 0xf2f0ea : 0xf07020;
+        pset(s, x + (int)lrintf(cosf(t) * 5), y - 13 + (int)lrintf(sinf(t) * 4), c);
+        pset(s, x + (int)lrintf(cosf(t) * 4), y - 13 + (int)lrintf(sinf(t) * 3), col_scale(c, 210));
+    }
+    snow_cap(s, x - 1, x + 2, y - 22);
+}
+static void notice(Surf *s, int x, int y) {                                 /* anslagstavla */
+    vline(s, x - 7, y - 18, y - 1, 0x5a4a3a); vline(s, x + 7, y - 18, y - 1, 0x5a4a3a);
+    rectf(s, x - 9, y - 21, 19, 12, 0x7a5a3a); rect_line(s, x - 9, y - 21, 19, 12, 0x4a3828);
+    hline(s, x - 10, x + 10, y - 22, 0x3a3a40);
+    rectf(s, x - 7, y - 19, 4, 6, 0xf0f0e8); rectf(s, x - 2, y - 18, 5, 4, 0xf0e070); rectf(s, x + 4, y - 19, 4, 7, 0xe8f0f8);
+    pset(s, x - 6, y - 17, 0x4a4a5a); pset(s, x - 5, y - 15, 0x4a4a5a); pset(s, x + 5, y - 16, 0xc83030); pset(s, x, y - 16, 0x4a4a5a);
+    snow_cap(s, x - 10, x + 10, y - 23);
+}
+
 static void forklift(Surf *s, int x, int y) {
     rectf(s, x - 8, y - 12, 14, 9, 0xe0a020); rectf(s, x - 6, y - 20, 8, 8, 0x2a2a2a);
     rect_line(s, x - 6, y - 20, 8, 8, 0x5a5a5a);
@@ -472,6 +508,25 @@ static void flat_prop(Surf *s, const Prop *p) {
         if (WIN) { line(s, x - 6, y - 2, x + 6, y - 2, 0x8a8a8a); vline(s, x + 4, y - 12, y - 2, 0xa02a20); hline(s, x + 2, x + 6, y - 12, 0xa02a20); rectf(s, x - 3, y - 6, 5, 4, 0xa02a20); }
         else { line(s, x - 5, y - 2, x + 4, y - 2, 0x2a6aa8); vline(s, x + 4, y - 12, y - 2, 0x8a8a8a); circlef(s, x - 5, y - 2, 1, 0x1a1a1a); circlef(s, x + 4, y - 1, 1, 0x1a1a1a); }
         break;
+    case P_BOLLARD:                                                        /* pollare: black iron, a rounded head */
+        ellipse_blend(s, x, y0 + 15, 4, 1, 0x000000, 80);
+        rectf(s, x - 2, y0 + 9, 5, 6, 0x26262a); rectf(s, x - 3, y0 + 7, 7, 3, 0x34343a); pset(s, x - 1, y0 + 8, 0x6a6a72);
+        if (WIN) hline(s, x - 3, x + 3, y0 + 6, 0xeef2f5);
+        break;
+    case P_WHEELBARROW:                                                    /* skottkärra */
+        rectf(s, x0 + 3, y0 + 7, 9, 5, 0x3a7a3a); hline(s, x0 + 2, x0 + 12, y0 + 6, 0x5a9a5a); hline(s, x0 + 4, x0 + 10, y0 + 12, 0x2a5a2a);
+        circlef(s, x0 + 13, y0 + 12, 2, 0x1a1a1a); pset(s, x0 + 13, y0 + 12, 0x8a8a8a);
+        line(s, x0 + 3, y0 + 11, x0 + 0, y0 + 14, 0x7a5a38); line(s, x0 + 5, y0 + 12, x0 + 3, y0 + 15, 0x7a5a38);
+        if (WIN) hline(s, x0 + 3, x0 + 11, y0 + 7, 0xeef2f5); else { pset(s, x0 + 6, y0 + 8, 0x6a4a2a); pset(s, x0 + 8, y0 + 8, 0x5a3a20); }
+        break;
+    case P_CRATES:                                                         /* fish crates, stacked */
+        for (int k = 0; k < 3; k++) {
+            uint32_t c = (v + k) % 3 == 0 ? 0x2a5aa8 : (v + k) % 3 == 1 ? 0xd8d8d0 : 0x3a8a6a;
+            int yy = y0 + 11 - k * 4, xx = x0 + 2 + (k == 1 ? 1 : 0);
+            rectf(s, xx, yy, 12, 4, c); hline(s, xx, xx + 11, yy, col_scale(c, 300)); rectf(s, xx + 4, yy + 1, 4, 1, col_scale(c, 140));
+        }
+        snow_cap(s, x0 + 2, x0 + 13, y0 + 2);
+        break;
     case P_TABLE: rectf(s, x0 + 2, y0 + 6, 12, 3, 0x7a5038); vline(s, x0 + 3, y0 + 9, y0 + 14, 0x5a3a2a); vline(s, x0 + 12, y0 + 9, y0 + 14, 0x5a3a2a); break;
     case P_HYDRANT: rectf(s, x - 2, y0 + 6, 5, 9, 0xd8b020); rectf(s, x - 3, y0 + 5, 7, 2, 0xc8a010); break;
     case P_ROCK: {
@@ -533,6 +588,7 @@ void prop_bounds(const Prop *p, int *w, int *h) {
     case P_MAYPOLE: *w = 28; *h = 48; break;
     case P_CONTAINER: case P_CONTAINER_V: *w = 48; *h = 26; break;
     case P_BUSSTOP: *w = 48; *h = 36; break;
+    case P_STALL: *w = 40; *h = 36; break;
     default: *w = 32; *h = 36; break;
     }
 }
@@ -569,6 +625,9 @@ void prop_draw(Surf *s, const Prop *p, int sx, int sy) {
     case P_FORKLIFT: forklift(s, sx, sy - 1); break;
     case P_BONFIRE: bonfire(s, sx, sy - 1); break;
     case P_SNOWMAN: snowman(s, sx, sy - 1); break;
+    case P_STALL: stall(s, sx, sy - 1, v); break;
+    case P_BUOY: buoy(s, sx, sy - 1); break;
+    case P_NOTICE: notice(s, sx, sy - 1); break;
     default: break;
     }
 }
