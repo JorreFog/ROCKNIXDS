@@ -20,6 +20,7 @@ NETS="104.16.0.0/12 172.64.0.0/13"      # Cloudflare, where retroachievements.or
 cleanup() {
     for n in $NETS; do ip route del unreachable $n 2>/dev/null; done
     systemctl unset-environment DSFLIP_SPREAD_THREADS DSFLIP_STALL_QUIT 2>/dev/null
+    [ -n "$HIDE" ] && kill $HIDE 2>/dev/null
     rm -f /tmp/rocknixds-testing /tmp/rocknixds-testing-resume /tmp/dsflip-hold "$RSTATE"
     [ -f "$RSTATE.freeze-repro" ] && mv "$RSTATE.freeze-repro" "$RSTATE"
 }
@@ -27,10 +28,25 @@ trap cleanup EXIT; trap 'exit 1' HUP INT TERM
 [ -f "$RSTATE" ] && mv "$RSTATE" "$RSTATE.freeze-repro"
 touch /tmp/rocknixds-testing /tmp/rocknixds-testing-resume   # test launches, resume on all the same (session.sh
                                                             # skips its own stats; ES still counts each as a play)
+# A notice (a game that crashed) is in last-session.log and not shown: a launch made under ES's message box waits
+# until someone closes the box. restore.sh posts it from /tmp/dsflip-notice.<pid>; without the file ES shows nothing.
+( while kill -0 $$ 2>/dev/null; do rm -f /tmp/dsflip-notice.[0-9]* 2>/dev/null; sleep 0.1; done ) & HIDE=$!
 [ "$MODE" = old ] && systemctl set-environment DSFLIP_SPREAD_THREADS=0
 systemctl set-environment DSFLIP_STALL_QUIT=0               # keep a stalled DraStic alive for the backtraces
 log() { echo "$*" | tee -a $REP; }
-idle() { i=0; while ! curl -s -m 1 localhost:1234/isIdle | grep -q true && [ $i -lt 60 ]; do sleep 0.5; i=$((i+1)); done; }
+# idle: ES takes a launch again. Its /isIdle says true all through a game, and ES drops a /launch that was made before
+# it noted the last game's end (es-rgds-launchonce), which is a little after the game's units are gone: so wait for the
+# units, then for ES's main thread to have been out of the launch command (wait4, syscall 260) for 1.5 s.
+idle() {
+    i=0; while { systemctl is-active -q dsflip-game || systemctl is-active -q dsflip-vtback; } && [ $i -lt 300 ]; do sleep 0.1; i=$((i+1)); done
+    EP=$(pidof emulationstation | cut -d' ' -f1); i=0; ok=0
+    while [ $ok -lt 15 ] && [ $i -lt 300 ]; do
+        sc=; read sc _ < /proc/$EP/syscall 2>/dev/null
+        case "$sc" in 260|"") ok=0 ;; *) ok=$((ok+1)) ;; esac
+        sleep 0.1; i=$((i+1))
+    done
+    i=0; while ! curl -s -m 1 localhost:1234/isIdle | grep -q true && [ $i -lt 60 ]; do sleep 0.5; i=$((i+1)); done
+}
 launch() {           # until libdsflip's verdict (/tmp/dsflip-state): from then on dsflip.log is this game's
     idle
     rm -f /tmp/dsflip-state
