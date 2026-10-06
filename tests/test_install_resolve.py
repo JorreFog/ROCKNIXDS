@@ -116,6 +116,14 @@ esac
         self.assertEqual(self.handed(r), ("main", "v1.5-plus", "--no-canvas"))
         self.assertIn("/v1.5-plus/install.sh", self.fetched()[-1])
 
+    def test_a_bank_release_is_never_taken_for_a_rocknixds_one(self):
+        # ROCKNIXDS Bank & Trade releases (bank-v*) live in the same repository, newer than the last ROCKNIXDS release
+        self.releases([("bank-v0.2.0", False), ("bank-v0.1.0", True), ("v1.5-plus", False), ("v1.5", False)])
+        self.device(False)
+        self.assertEqual(self.handed(self.run_installer())[1], "v1.5")
+        self.device(True)
+        self.assertEqual(self.handed(self.run_installer())[1], "v1.5-plus")
+
     def test_a_wide_panel_is_a_plus_too(self):
         self.model.write_bytes(b"Anbernic RG DS\0")
         self.modes.write_text("1024x768\n")

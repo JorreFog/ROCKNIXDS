@@ -48,6 +48,12 @@ Anbernic RG DS and RG DS Plus on ROCKNIX.</b></p>
 >
 > Thanks to everyone who has tested this and contributed to its development.
 
+> [!IMPORTANT]
+> **ROCKNIXDS does not support piracy.** It contains no games, ROMs, BIOS or firmware, and it is meant only for game
+> data you made yourself from original cartridges you own. Don't download or share copies of games. Nintendo, Pokémon
+> and all other names and trademarks belong to their respective owners; ROCKNIXDS is a fan project, not affiliated with
+> or endorsed by them. By using ROCKNIXDS you accept its [terms of use and legal notice](LEGAL.md).
+
 ## Get started
 
 The easiest way: put ROCKNIXDS on a fresh microSD card. No ssh, no commands.
@@ -103,6 +109,8 @@ Mali-G52); the RG DS Plus has two 1024×768 panels. ROCKNIXDS (formerly `rgds-ro
   own engine inside a patched EmulationStation. The DSi-style **`dii-ess-aye`** theme is still there too.
 - The **panel timing fix**, the older **vsync pacing shim**, and the measurement tools (including a DS
   stress-test ROM) behind all the numbers below.
+- **ROCKNIXDS Bank & Trade** (new, in `bank/`): a Pokémon bank, PKHeX legality checks and Wi-Fi trading between two
+  handhelds, on both screens. See [below](#bank-rocknixds-bank--trade).
 
 ### New in 1.6 (draft, not released)
 
@@ -801,6 +809,29 @@ dark-background and a light-background version, a stacked version for small squa
 
 ---
 
+## `bank/`: ROCKNIXDS Bank & Trade
+
+<p align="center"><img src="docs/img/bank-boxes.png" width="620" alt="ROCKNIXDS Bank: a Pokémon's details and legality on the top screen, a HeartGold box and a bank box on the bottom screen"></p>
+
+A Pokémon bank and trading app for both screens, built on [PKHeX.Core](https://github.com/kwsch/PKHeX): it finds the
+game saves on the card (DraStic's `.dsv`, `.sav`, `.srm`), keeps Pokémon in a bank of PKHeX files, moves them from one
+game to another (converting them up a generation as Pal Park and Poké Transfer did), checks every one with PKHeX's
+legality analysis, and trades between two handhelds over Wi-Fi: in lobbies that list a Pokémon and what its host
+wants for it (open ones by invitation: you ask, the host lets you in), or in private rooms that you join with a code
+(SPAKE2, so the code can't be sniffed; both handhelds sign the handshake with their own identity, so nobody can pose
+as one or sit in between; encrypted; a dropped connection never loses a Pokémon). Trade
+evolutions happen on arrival. It's a separate install; once installed it has a tile of its own in the menu (from 1.6;
+Ports before):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/bank/device/install-bank.sh | sh
+```
+
+[bank/README.md](bank/README.md) has the controls, where the bank and the save backups are, and how trading works. The
+app in `bank/` is GPL-3.0 (it links PKHeX.Core).
+
+---
+
 ## Known issues
 
 - **No DS games yet** (fixed in 1.5.13, seen working on an RG DS Plus; not yet on an RG DS): with an empty `roms/nds`
@@ -856,11 +887,13 @@ dark-background and a light-background version, a stacked version for small squa
 **Platform**
 - [ROCKNIX](https://rocknix.org) and its contributors: the OS everything runs on. **Anbernic**: the RG DS hardware.
 
-ROCKNIXDS is a fan project. It isn't affiliated with or endorsed by Nintendo, ROCKNIX or Anbernic. Nintendo DS is a
-trademark of Nintendo.
+ROCKNIXDS is a fan project. It isn't affiliated with or endorsed by Nintendo, The Pokémon Company, Creatures,
+GAME FREAK, ROCKNIX or Anbernic. Nintendo DS and Pokémon are trademarks of Nintendo; all other names and trademarks
+belong to their respective owners. See [LEGAL.md](LEGAL.md) for the terms of use, including the no-piracy rule.
 
 ## License
 
-[MIT](LICENSE): free for anyone to use, change and ship in their own projects, firmwares and forks. The parts that
+[MIT](LICENSE): free for anyone to use, change and ship in their own projects, firmwares and forks. `bank/` (ROCKNIXDS Bank &
+Trade) is the exception: it links PKHeX.Core and is GPL-3.0, as its own `bank/LICENSE` says. The parts that
 come from others keep their own terms (the upstream dii-ess-aye theme, rcheevos, stb, AMD FSR, the fonts); `LICENSE`
-lists them.
+lists them. [LEGAL.md](LEGAL.md) (the terms of use) adds no restriction on the rights these licences give you.

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Rocknixds.Bank</RootNamespace>
+    <AssemblyName>Bank.Core</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- PKHeX.Core (GPL-3.0-or-later): save formats, conversions between generations, legality analysis -->
+    <PackageReference Include="PKHeX.Core" Version="26.8.26" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Bank.Tests" />
+  </ItemGroup>
+</Project>
