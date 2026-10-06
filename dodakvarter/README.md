@@ -137,7 +137,7 @@ winter snow, or the bright midsummer night), made of districts: usually twelve, 
 ones, fifteen narrow ones or sixteen in four rows; a district bigger than usual gets more of its own things.
 Some of the dead dress for the season: in winter the nurse walks as Lucia with her crown of candles lit (they
 light the snow around her), at midsummer some wear flower wreaths and fireflies blink over the grass, in the
-autumn rain yellow sydvästar. The districts:
+autumn rain yellow sydvästar, and now and then lightning lights the whole town for an instant before the thunder. The districts:
 
 | District | What's in it |
 |---|---|
