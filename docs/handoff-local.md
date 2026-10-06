@@ -12,7 +12,7 @@ hand-off in `docs/1.6-prep/HANDOFF.md`):
 | RG DS Plus | `claude/1-6-prep-work-kwq9lc-plus` (from `1.6-prep`, 357ca9d) | `curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh \| RGDS_BRANCH=claude/1-6-prep-work-kwq9lc-plus sh` |
 | RG DS | `claude/1-6-prep-work-kwq9lc` (from the RG DS 1.5.13 branch `claude/tender-volta-a9nkpk`) | `curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh \| RGDS_BRANCH=claude/1-6-prep-work-kwq9lc sh` |
 
-Both ship SuperDrastic `0.5.0-beta.1-rocknixds.5` (SuperDrastic branch `claude/1-6-prep-work-kwq9lc`, without
+Both ship SuperDrastic `0.5.0-beta.1-rocknixds.6` (SuperDrastic branch `claude/1-6-prep-work-kwq9lc`, without
 `1.6-prep`'s parked Wi-Fi commit) and the same EmulationStation build. Neither bumps VERSION: that stays the owner's
 call, like a release, a tag or a push to `main` / `plus-beta`. `RGDS_SRC=/path/to/checkout sh install.sh` installs from
 a copy on the device. Logs that matter: `/storage/.config/drastic/dsflip/dsflip.log` (the engine's log of the last
@@ -276,7 +276,13 @@ Nintendo WFC doesn't get past the game's own Wi-Fi setup yet, so 1.6 neither sho
 ## F. The in-game menu on the RG DS
 
 Not on this line's list: the Plus has had it since 1.5.13 beta 1. The RG DS line now ships the same library, and its
-hand-off (`claude/1-6-prep-work-kwq9lc`, section F) has the checks for 640x480.
+hand-off (`claude/1-6-prep-work-kwq9lc`, section F) has the checks for 640x480. `.6` changes nothing at 1024x768
+except two fixes for both handhelds (rendered on a PC):
+- a selected empty slot on the Load page is readable (it was grey on blue);
+- dates have no double space.
+
+Japanese and Chinese game names show as empty boxes in the menu, as since 1.5.13: a fallback font is drafted in
+[`1.6-prep/superdrastic-menu-cjk-fallback.diff`](1.6-prep/superdrastic-menu-cjk-fallback.diff), not applied.
 
 ## G. Not done tonight: two suggestions, with a plan
 
@@ -309,7 +315,7 @@ The 1.6 work above went into both lines. They still differ where they did before
     margin) and the CPU placement (`DSFLIP_PIN`);
   - the 2048x768 splash, mako notifications, `input-rocknixds.conf`, `tools/threadsample.sh`.
 - **The same on both:**
-  - SuperDrastic `0.5.0-beta.1-rocknixds.5`;
+  - SuperDrastic `0.5.0-beta.1-rocknixds.6`;
   - the EmulationStation binary and all its patches (`es-rgds-dsfirst.patch` is gone: its collection names are in
     the rnds patch, the rest was superseded by `es-rgds-emptylibrary.patch`);
   - the Pixel theme, its font included;
@@ -478,7 +484,7 @@ delivers silence at times (a suspended PipeWire source? the pause menu?), which 
 names at start and which step 2 can catch mid-game.
 
 **Done on the host** (SuperDrastic commit *Microphone: tunables and logs for the handheld*, d8291e0, in every
-package since `0.4.0-beta.2-rocknixds.3`; 1.6 ships `0.5.0-beta.1-rocknixds.5`; nothing needs a rebuild to test):
+package since `0.4.0-beta.2-rocknixds.3`; 1.6 ships `0.5.0-beta.1-rocknixds.6`; nothing needs a rebuild to test):
 
 - `dsflip.log` says at start how the control is bound: `[mic] fake microphone: drastic.cfg controls_a 327 (Scroll
   Lock), controls_b N: pressing the key`, or `... pressing joystick button N` when the keyboard set is unbound but
@@ -549,7 +555,7 @@ thread, so it separates DraStic's side from ours when both lines are on the desk
 4. **H5, flicker.** `DSFLIP_MIC_HOLD_MS=150` (then 300): the `PRESS` count per blow drops to 1-2 and the candle goes
    out. The fix is that value as `envf("DSFLIP_MIC_HOLD_MS", ...)`'s default.
 5. **Rebuild** once the defaults are known: in a SuperDrastic checkout of branch `claude/1-6-prep-work-kwq9lc` (or
-   `git am dsflip/superdrastic-0.5.0-beta.1-rocknixds.5.patch` on tag `v0.5.0-beta.1`), bump `VERSION` to
+   `git am dsflip/superdrastic-0.5.0-beta.1-rocknixds.6.patch` on tag `v0.5.0-beta.1`), bump `VERSION` to
    `0.5.0-beta.1-rocknixds.6`, `sh build.sh <arm64 sysroot>` and `sh package.sh` (the `SUPERDRASTIC` file's comment
    names the toolchain), ship the tarball in `dsflip/`, regenerate the patch (`git format-patch --stdout
    v0.5.0-beta.1..HEAD`), pin version and sha256 in `SUPERDRASTIC`, and test it with `RGDS_SRC=<checkout>
@@ -575,8 +581,8 @@ still apply with `systemctl set-environment DSFLIP_WFC=kaeru`; where they say "t
 The work in progress since then is SuperDrastic `1.6-prep`'s last commit (01269ed, outside the 1.6 package).
 
 **Nothing in this section has run on a handheld.** DraStic has no Wi-Fi emulation: its wifi register handlers are
-stubs. The SuperDrastic package (since `0.4.0-beta.2-rocknixds.3`; in 1.6 `0.5.0-beta.1-rocknixds.5`, source in
-`dsflip/superdrastic-0.5.0-beta.1-rocknixds.5.patch`) carries the port of
+stubs. The SuperDrastic package (since `0.4.0-beta.2-rocknixds.3`; in 1.6 `0.5.0-beta.1-rocknixds.6`, source in
+`dsflip/superdrastic-0.5.0-beta.1-rocknixds.6.patch`) carries the port of
 ROCKNIXDS's unmerged `origin/cursor/drastic-wfc-dns-24ad` (b1a4564): `src/wifi.c` replaces DraStic r2.5.2.2's wifi
 load/store handler tables (at fixed offsets, for build id `7a5e0e5fc6e52e6e8f5499c3d4d667ef51db0748` only), answers
 the game as an open access point named `rocknixds`, hands it the chosen DNS server over DHCP and carries the game's

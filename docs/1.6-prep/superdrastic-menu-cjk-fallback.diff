@@ -1,0 +1,125 @@
+--- a/src/menu.c
++++ b/src/menu.c
+@@ -208,14 +208,28 @@
+     *s = (const char *)p;
+     return cp;
+ }
++/* the font for cp: F, or ES's own fallback for what Pixelify Sans lacks (Japanese and Chinese game names), read the
++ * first time a string needs it (DSFLIP_MENU_FONT_CJK: another file) */
++static font *glyph_font(font *F, int cp) {
++    static font cjk; static int tried;
++    if (stbtt_FindGlyphIndex(&F->f, cp)) return F;
++    if (!tried) {
++        tried = 1;
++        const char *const p[] = { getenv("DSFLIP_MENU_FONT_CJK"), "/storage/.config/emulationstation/resources/DroidSansFallbackFull.ttf",
++                                  "/usr/config/emulationstation/resources/DroidSansFallbackFull.ttf" };
++        font_load(&cjk, p, 3);
++    }
++    return cjk.ok && stbtt_FindGlyphIndex(&cjk.f, cp) ? &cjk : F;
++}
+ static float text_w(font *F, const char *t, float px, int max_cp) {
+     if (!F->ok) return 0;
+     float sc = stbtt_ScaleForPixelHeight(&F->f, px), w = 0; int prev = 0, n = 0;
+     for (const char *s = t; *s && n < max_cp; n++) {
+         int cp = utf8_next(&s), adv, lsb;
+-        stbtt_GetCodepointHMetrics(&F->f, cp, &adv, &lsb);
+-        if (prev) w += stbtt_GetCodepointKernAdvance(&F->f, prev, cp) * sc;
+-        w += adv * sc; prev = cp;
++        font *G = glyph_font(F, cp);
++        stbtt_GetCodepointHMetrics(&G->f, cp, &adv, &lsb);
++        if (prev && G == F) w += stbtt_GetCodepointKernAdvance(&F->f, prev, cp) * sc;
++        w += adv * (G == F ? sc : stbtt_ScaleForPixelHeight(&G->f, px)); prev = G == F ? cp : 0;
+     }
+     return w;
+ }
+@@ -237,19 +251,20 @@
+     int prev = 0; const char *s = t;
+     for (int i = 0; i < keep + (dots3 ? 3 : 0); i++) {
+         int cp = i < keep ? utf8_next(&s) : '.';
+-        if (prev) pen += stbtt_GetCodepointKernAdvance(&F->f, prev, cp) * sc;
+-        int adv, lsb; stbtt_GetCodepointHMetrics(&F->f, cp, &adv, &lsb);
++        font *G = glyph_font(F, cp); float gs = G == F ? sc : stbtt_ScaleForPixelHeight(&G->f, px);
++        if (prev && G == F) pen += stbtt_GetCodepointKernAdvance(&F->f, prev, cp) * sc;
++        int adv, lsb; stbtt_GetCodepointHMetrics(&G->f, cp, &adv, &lsb);
+         int x0, y0, x1, y1; float fx = pen - floorf(pen);
+-        stbtt_GetCodepointBitmapBoxSubpixel(&F->f, cp, sc, sc, fx, 0, &x0, &y0, &x1, &y1);
++        stbtt_GetCodepointBitmapBoxSubpixel(&G->f, cp, gs, gs, fx, 0, &x0, &y0, &x1, &y1);
+         int gw = x1 - x0, gh = y1 - y0;
+         if (gw > 0 && gh > 0 && gw <= 256 && gh <= 256) {
+-            stbtt_MakeCodepointBitmapSubpixel(&F->f, gb, gw, gh, gw, sc, sc, fx, 0, cp);
++            stbtt_MakeCodepointBitmapSubpixel(&G->f, gb, gw, gh, gw, gs, gs, fx, 0, cp);
+             int ox = (int)floorf(pen) + x0, oy = base + y0;
+             for (int yy = 0; yy < gh; yy++) for (int xx = 0; xx < gw; xx++) {
+                 int v = gb[yy * gw + xx]; if (v) blendpx(c, ox + xx, oy + yy, rgb, v / 255.0f);
+             }
+         }
+-        pen += adv * sc; prev = cp;
++        pen += adv * gs; prev = G == F ? cp : 0;
+     }
+ }
+ /* split t into at most two lines that fit maxw (the second cut with "..." if needed); returns the line count */
+--- a/src/ui.c
++++ b/src/ui.c
+@@ -134,13 +134,32 @@
+     return cp;
+ }
+ 
++/* the font for cp: fnt, or ES's own fallback for what it lacks (Japanese and Chinese names), read when first needed */
++static stbtt_fontinfo *glyph_font(int cp) {
++    static stbtt_fontinfo cjk; static int tried, ok;
++    if (stbtt_FindGlyphIndex(fnt, cp)) return fnt;
++    if (!tried) {
++        tried = 1;
++        const char *p[] = { getenv("DSFLIP_FONT_CJK"), "/storage/.config/emulationstation/resources/DroidSansFallbackFull.ttf",
++                            "/usr/config/emulationstation/resources/DroidSansFallbackFull.ttf" };
++        for (int i = 0; i < 3 && !ok; i++) {
++            FILE *f = p[i] ? fopen(p[i], "rb") : 0; if (!f) continue;
++            fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
++            unsigned char *d = n > 0 ? malloc((size_t)n) : 0;
++            if (d && fread(d, 1, (size_t)n, f) == (size_t)n && stbtt_InitFont(&cjk, d, stbtt_GetFontOffsetForIndex(d, 0))) ok = 1; else free(d);
++            fclose(f);
++        }
++    }
++    return ok && stbtt_FindGlyphIndex(&cjk, cp) ? &cjk : fnt;
++}
+ static float text_width(const char *t, float px, int max_cp) {
+     float sc = stbtt_ScaleForPixelHeight(fnt, px), w = 0; int prev = 0, n = 0;
+     for (const char *s = t; *s && n < max_cp; n++) {
+         int cp = utf8_next(&s), adv, lsb;
+-        stbtt_GetCodepointHMetrics(fnt, cp, &adv, &lsb);
+-        if (prev) w += stbtt_GetCodepointKernAdvance(fnt, prev, cp) * sc;
+-        w += adv * sc; prev = cp;
++        stbtt_fontinfo *g = glyph_font(cp);
++        stbtt_GetCodepointHMetrics(g, cp, &adv, &lsb);
++        if (prev && g == fnt) w += stbtt_GetCodepointKernAdvance(fnt, prev, cp) * sc;
++        w += adv * (g == fnt ? sc : stbtt_ScaleForPixelHeight(g, px)); prev = g == fnt ? cp : 0;
+     }
+     return w;
+ }
+@@ -158,20 +177,21 @@
+     int prev = 0; const char *s = t;
+     for (int i = 0; i < keep + (dots ? 3 : 0); i++) {
+         int cp = i < keep ? utf8_next(&s) : '.';
+-        if (prev) x += stbtt_GetCodepointKernAdvance(fnt, prev, cp) * sc;
++        stbtt_fontinfo *gf = glyph_font(cp); float gs = gf == fnt ? sc : stbtt_ScaleForPixelHeight(gf, px);
++        if (prev && gf == fnt) x += stbtt_GetCodepointKernAdvance(fnt, prev, cp) * sc;
+         int adv, lsb, x0, y0, x1, y1;
+-        stbtt_GetCodepointHMetrics(fnt, cp, &adv, &lsb);
++        stbtt_GetCodepointHMetrics(gf, cp, &adv, &lsb);
+         float sub = x - floorf(x);
+-        stbtt_GetCodepointBitmapBoxSubpixel(fnt, cp, sc, sc, sub, 0, &x0, &y0, &x1, &y1);
++        stbtt_GetCodepointBitmapBoxSubpixel(gf, cp, gs, gs, sub, 0, &x0, &y0, &x1, &y1);
+         int gw = x1 - x0, gh = y1 - y0;
+         if (gw > 0 && gh > 0 && gw < 256 && gh < 256) {
+             static unsigned char g[256 * 256];
+-            stbtt_MakeCodepointBitmapSubpixel(fnt, g, gw, gh, gw, sc, sc, sub, 0, cp);
++            stbtt_MakeCodepointBitmapSubpixel(gf, g, gw, gh, gw, gs, gs, sub, 0, cp);
+             for (int yy = 0; yy < gh; yy++)
+                 for (int xx = 0; xx < gw; xx++)
+                     if (g[yy * gw + xx]) blend(c, (int)floorf(x) + x0 + xx, y + y0 + yy, rgb, g[yy * gw + xx] / 255.0f);
+         }
+-        x += adv * sc; prev = cp;
++        x += adv * gs; prev = gf == fnt ? cp : 0;
+     }
+ }
+ 
