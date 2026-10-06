@@ -13,8 +13,11 @@ namespace Rocknixds.Bank.Trade;
 public sealed class SecureChannel : IDisposable
 {
     public const int ProtocolVersion = 1;
-    private const int MaxFrame = 1 << 20;
-    private static readonly TimeSpan HandshakeTimeout = TimeSpan.FromSeconds(20);
+    /// <summary>Before the code is proven a frame is a few hundred bytes of JSON: nobody gets to make us allocate more.</summary>
+    private const int MaxHandshakeFrame = 4096;
+    /// <summary>After it: a Pokémon file is under 400 bytes, so 64 KiB is a generous bound.</summary>
+    public const int MaxFrame = 64 * 1024;
+    public static TimeSpan HandshakeTimeout { get; internal set; } = TimeSpan.FromSeconds(10);
 
     private readonly Stream _stream;
     private readonly AesGcm _send;
@@ -49,7 +52,7 @@ public sealed class SecureChannel : IDisposable
         await WriteJsonAsync(stream, new HandshakeMsg { T = "spake", App = "rocknixds-bank", Proto = ProtocolVersion, Msg = spake.Message }, t);
         var reply = await ReadJsonAsync(stream, t);
         if (reply.T == "refused")
-            throw new TradeRefusedException(reply.Text ?? "The host refused the connection.");
+            throw new TradeRefusedException(TextGuard.Clean(reply.Text, 160) is { Length: > 0 } why ? $"The host refused: {why}" : "The host refused the connection.");
         if (reply.T != "spake" || reply.Msg is null || reply.Confirm is null)
             throw new IOException("unexpected handshake reply");
         if (reply.Proto != ProtocolVersion)
@@ -62,8 +65,13 @@ public sealed class SecureChannel : IDisposable
         return new SecureChannel(stream, keys.ClientToServer, keys.ServerToClient, isClient: true, remote);
     }
 
-    /// <summary>The host's handshake with one incoming connection.</summary>
-    public static async Task<SecureChannel> AcceptAsync(Stream stream, string code, string remote, CancellationToken ct = default)
+    /// <summary>
+    /// The host's handshake with one incoming connection. <paramref name="reserveAttempt"/> is asked before the host
+    /// reveals anything that depends on the code (its key confirmation): every connection that gets that far is one guess
+    /// at the code, whether it then confirms, sends garbage, hangs up or just goes quiet. Returning false refuses it.
+    /// </summary>
+    public static async Task<SecureChannel> AcceptAsync(Stream stream, string code, string remote, CancellationToken ct = default,
+        Func<bool>? reserveAttempt = null)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(HandshakeTimeout);
@@ -78,27 +86,45 @@ public sealed class SecureChannel : IDisposable
                 Text = "The host runs a different version of ROCKNIXDS Bank. Update both." }, t);
             throw new TradeRefusedException("A partner with a different version tried to connect.");
         }
+        // a well-formed message counts as an attempt from here on, valid group element or not: a real client never
+        // sends a bad one, and an attacker shouldn't get free modular exponentiations
+        if (reserveAttempt is not null && !reserveAttempt())
+        {
+            await WriteJsonAsync(stream, new HandshakeMsg { T = "refused", Proto = ProtocolVersion,
+                Text = "Too many wrong codes: this trade room is closed." }, t);
+            throw new TradeRefusedException("A connection was refused: the room has no attempts left.");
+        }
         var spake = new Spake2(isClient: false, code);
-        var keys = Keys.Derive(spake.Finish(hello.Msg));
-        await WriteJsonAsync(stream, new HandshakeMsg { T = "spake", Proto = ProtocolVersion, Msg = spake.Message,
-            Confirm = Confirm(keys.ConfirmServer, "server") }, t);
-        HandshakeMsg confirm;
+        Keys keys;
         try
         {
-            confirm = await ReadJsonAsync(stream, t);
+            keys = Keys.Derive(spake.Finish(hello.Msg));
         }
-        catch (EndOfStreamException)
+        catch (CryptographicException)
         {
-            throw new WrongCodeException(); // the client saw our confirmation fail and hung up
-        }
-        if (confirm.T != "confirm" || confirm.Confirm is null ||
-            !CryptographicOperations.FixedTimeEquals(confirm.Confirm, Confirm(keys.ConfirmClient, "client")))
             throw new WrongCodeException();
+        }
+        try
+        {
+            await WriteJsonAsync(stream, new HandshakeMsg { T = "spake", Proto = ProtocolVersion, Msg = spake.Message,
+                Confirm = Confirm(keys.ConfirmServer, "server") }, t);
+            var confirm = await ReadJsonAsync(stream, t);
+            if (confirm.T != "confirm" || confirm.Confirm is null ||
+                !CryptographicOperations.FixedTimeEquals(confirm.Confirm, Confirm(keys.ConfirmClient, "client")))
+                throw new WrongCodeException();
+        }
+        catch (Exception ex) when (ex is not WrongCodeException && !ct.IsCancellationRequested)
+        {
+            // hung up, timed out, garbage: after our confirmation went out, all of these are a failed guess
+            throw new WrongCodeException();
+        }
         return new SecureChannel(stream, keys.ServerToClient, keys.ClientToServer, isClient: false, remote);
     }
 
     public async Task SendAsync(byte[] plaintext, CancellationToken ct = default)
     {
+        if (plaintext.Length > MaxFrame)
+            throw new ArgumentException("message too large", nameof(plaintext));
         await _sendLock.WaitAsync(ct);
         try
         {
@@ -119,7 +145,7 @@ public sealed class SecureChannel : IDisposable
     /// <summary>The next frame, decrypted. Throws on a frame that was tampered with or replayed.</summary>
     public async Task<byte[]> ReceiveAsync(CancellationToken ct = default)
     {
-        var frame = await ReadFrameAsync(_stream, ct);
+        var frame = await ReadFrameAsync(_stream, MaxFrame + 16, ct);
         if (frame.Length < 16)
             throw new CryptographicException("short frame");
         var counter = _receiveCounter++;
@@ -149,12 +175,12 @@ public sealed class SecureChannel : IDisposable
         await s.FlushAsync(ct);
     }
 
-    private static async Task<byte[]> ReadFrameAsync(Stream s, CancellationToken ct)
+    private static async Task<byte[]> ReadFrameAsync(Stream s, int max, CancellationToken ct)
     {
         var header = new byte[4];
         await s.ReadExactlyAsync(header, ct);
         var len = BinaryPrimitives.ReadInt32BigEndian(header);
-        if (len is < 0 or > MaxFrame)
+        if (len is < 0 || len > max)
             throw new IOException($"frame of {len} bytes");
         var payload = new byte[len];
         await s.ReadExactlyAsync(payload, ct);
@@ -166,7 +192,7 @@ public sealed class SecureChannel : IDisposable
 
     private static async Task<HandshakeMsg> ReadJsonAsync(Stream s, CancellationToken ct)
     {
-        var frame = await ReadFrameAsync(s, ct);
+        var frame = await ReadFrameAsync(s, MaxHandshakeFrame, ct);
         return JsonSerializer.Deserialize(frame, TradeJson.Default.HandshakeMsg) ?? throw new IOException("empty handshake message");
     }
 

@@ -87,16 +87,34 @@ other: **Trade > Join a trade room**, pick the room (or type the address), type 
 Pokémon to offer with A, from the bank or the open game, and presses START to accept. The Pokémon you receive goes
 into your bank; the one you gave leaves its box (the bank, or the game, which is written straight away).
 
-How it's kept safe:
+How it's kept safe (`tests/Bank.Tests/SecurityTests.cs` attacks most of these):
 - **The code proves the partner.** The handhelds turn it into a session key with SPAKE2, a password-authenticated key
-  exchange: someone listening on the network can't work the code out from what they see, and a wrong guess costs a
-  connection attempt. The room closes after 5 wrong codes. Everything after that is encrypted and authenticated
-  (AES-256-GCM).
-- **Nothing is lost if the connection drops.** Each side gives its Pokémon away only after the other has said it has
-  it, so a dropped connection can at worst leave a copy on both sides. Both accept the exact pair of Pokémon on the
-  screens: changing an offer resets the accepts.
+  exchange: someone listening on the network can't work the code out from what they see. Every connection that gets
+  as far as being able to test a guess counts, however it ends (a wrong answer, hanging up, or going quiet), and the
+  room closes after 5. Everything after that is encrypted and authenticated (AES-256-GCM, a key per direction).
+- **Only the local network.** A room takes connections from private, link-local and VPN (100.64/10, Tailscale)
+  addresses only, never from the internet (a public IPv6 address, a forwarded port), unless `tradeAllowAnyAddress` is
+  set in the settings file. A room is open only while its screen is, and room discovery listens only while the join screen is: otherwise
+  the app listens on nothing.
+- **Hard to block.** Handshakes run side by side, at most 2 per address and 8 in all, 10 seconds each, and frames
+  before the code is proven are at most 4 KB: someone connecting and saying nothing (or a lot) can't keep the partner
+  out. Room announcements on the network are capped and cleaned up, so made-up ones can't flood the list.
+- **A partner can't hurt your handheld.** Messages are capped (64 KB, and a flood closes the connection); one legality
+  check runs at a time; a Pokémon that isn't structurally sound (bad checksum, a species, form, move or item that
+  doesn't exist in its format: glitch data that can corrupt an old game's save) is refused before anything else
+  looks at it; whatever arrives, the worst that happens is that the trade closes. The partner's name and messages are
+  shown and logged as one short line of printable text, the name is fixed at the start, and error details stay on the
+  handheld.
+- **Nothing is lost if the connection drops or the partner stalls.** Each side gives its Pokémon away only after the
+  other has said it has it, so a dropped connection can at worst leave a copy on both sides; an exchange that doesn't
+  finish within 30 seconds is given up the same way. Both accept the exact pair of Pokémon on the screens, and after
+  the partner changes its offer, accepting waits 3 seconds: no swapping a Pokémon under a thumb already on START.
 - **Legality is checked on the side that receives.** A partner's Pokémon that fails asks before you accept, or is
   refused altogether (a setting). Your own offer shows what the partner's check said.
+
+What it can't do: a modified app on the other side can keep a copy of what it gives (that is its own Pokémon), or
+lie about having received yours (then you still got theirs). And anyone on the network can close an open room by
+using up its 5 guesses; open a new one for a new code.
 
 ## How it's built
 

@@ -235,7 +235,8 @@ public sealed class History(string path)
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {line}\n");
+                // one line per event, whatever a traded Pokémon's names or a partner's name contain
+                File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {Trade.TextGuard.Clean(line, 1000)}\n");
             }
             catch (IOException)
             {

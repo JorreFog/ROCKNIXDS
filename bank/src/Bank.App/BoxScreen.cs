@@ -216,6 +216,11 @@ public sealed class BoxScreen(App app) : Screen(app)
             App.ShowToast(s.Mine is null ? "Offer a Pokémon first: pick it with A." : $"Waiting for {s.PartnerName} to offer something.");
             return;
         }
+        if (s.AcceptWait > TimeSpan.Zero)
+        {
+            App.ShowToast($"{s.PartnerName} just changed their offer: check it, then accept.", true);
+            return;
+        }
         var v = s.Theirs.Verdict;
         if (v is null)
         {
@@ -229,10 +234,16 @@ public sealed class BoxScreen(App app) : Screen(app)
                 App.Message("Not accepted", $"{s.Theirs.Summary.Title} fails the legality check ({v.Headline}). Trading for Pokémon that fail it is switched off in the settings.");
                 return;
             }
-            App.Confirm("Accept a Pokémon that isn't legal?", $"{s.Theirs.Summary.Title} fails the legality check: {v.Headline}", "Accept anyway", s.Accept);
+            App.Confirm("Accept a Pokémon that isn't legal?", $"{s.Theirs.Summary.Title} fails the legality check: {v.Headline}", "Accept anyway", () => TryAccept(s));
             return;
         }
-        s.Accept();
+        TryAccept(s);
+    }
+
+    private void TryAccept(TradeSession s)
+    {
+        if (!s.Accept())
+            App.ShowToast($"Not accepted: {s.PartnerName}'s offer changed. Check it and accept again.", true);
     }
 
     private void LeaveTrade() => App.Confirm("Leave the trade?", $"The connection to {Session!.PartnerName} closes. Nothing that wasn't traded yet changes hands.",
@@ -576,6 +587,7 @@ public sealed class BoxScreen(App app) : Screen(app)
             : s.Theirs is null ? $"Waiting for {s.PartnerName} to offer a Pokémon."
             : s.IAccepted && s.TheyAccepted ? "Both accepted: trading..."
             : s.IAccepted ? $"Waiting for {s.PartnerName} to accept."
+            : s.AcceptWait > TimeSpan.Zero ? $"{s.PartnerName} changed their offer. Check it before accepting."
             : s.TheyAccepted ? $"{s.PartnerName} accepted. Press START to accept the trade."
             : "Press START to accept this trade.";
         c.Fill(16, 428, 608, 40, p.Chip);

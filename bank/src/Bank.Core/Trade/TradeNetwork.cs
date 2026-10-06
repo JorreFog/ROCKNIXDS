@@ -7,19 +7,36 @@ namespace Rocknixds.Bank.Trade;
 
 /// <summary>
 /// Hosting a trade: listens on the trade port, announces itself on the LAN, and takes the first partner that proves the
-/// share code. Wrong codes are counted; after <see cref="MaxWrongCodes"/> the host stops so the code can't be guessed.
+/// share code.
+/// <list type="bullet">
+/// <item>Every connection that gets the host's key confirmation is one guess at the code, however it ends; after
+/// <see cref="MaxAttempts"/> of them the room closes, so the code can't be guessed (SPAKE2 allows no guessing offline).</item>
+/// <item>Handshakes run side by side (at most <see cref="MaxPerAddress"/> per address, <see cref="MaxConcurrent"/> in
+/// all, <see cref="SecureChannel.HandshakeTimeout"/> each), so someone connecting and saying nothing can't keep the
+/// real partner out.</item>
+/// <item>Only addresses of the local network may connect, unless the settings allow any.</item>
+/// </list>
 /// </summary>
 public sealed class TradeHost : IDisposable
 {
-    public const int MaxWrongCodes = 5;
+    public const int MaxAttempts = 5;
+    public const int MaxConcurrent = 8;
+    public const int MaxPerAddress = 2;
+
+    /// <summary>Kept for the screens' wording: the room closes after this many failed codes.</summary>
+    public const int MaxWrongCodes = MaxAttempts;
 
     private readonly BankConfig _cfg;
     private readonly CancellationTokenSource _cts = new();
+    private readonly Lock _lock = new();
+    private readonly Dictionary<string, int> _perAddress = [];
     private TcpListener? _listener;
+    private int _attempts;
     private int _wrong;
+    private int _inFlight;
 
     public string Code { get; } = ShareCode.New();
-    public int Port { get; }
+    public int Port { get; private set; }
     public volatile string Status = "Waiting for a partner...";
     public volatile bool Failed;
 
@@ -54,13 +71,14 @@ public sealed class TradeHost : IDisposable
                 return;
             }
         }
+        Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
         _ = Task.Run(AcceptLoop);
         _ = Task.Run(AnnounceLoop);
     }
 
     private async Task AcceptLoop()
     {
-        while (!_cts.IsCancellationRequested && Channel is null)
+        while (!_cts.IsCancellationRequested && Channel is null && !Failed)
         {
             TcpClient client;
             try
@@ -71,34 +89,94 @@ public sealed class TradeHost : IDisposable
             {
                 return;
             }
-            var remote = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.MapToIPv4().ToString() ?? "?";
-            client.NoDelay = true;
-            try
+            var ip = (client.Client.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None;
+            var remote = (ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4() : ip).ToString();
+            if (!_cfg.TradeAllowAnyAddress && !AddressGuard.IsLocal(ip))
             {
-                var ch = await SecureChannel.AcceptAsync(client.GetStream(), Code, remote, _cts.Token);
-                Channel = ch;
-                Status = $"Connected to {remote}";
-                StopListening();
+                client.Dispose();
+                Status = $"Refused a connection from {remote}: not on this network.";
+                continue;
+            }
+            lock (_lock)
+            {
+                _perAddress.TryGetValue(remote, out var n);
+                if (_inFlight >= MaxConcurrent || n >= MaxPerAddress)
+                {
+                    client.Dispose(); // busy: a partner tries again, a flood gets nowhere
+                    continue;
+                }
+                _perAddress[remote] = n + 1;
+                _inFlight++;
+            }
+            client.NoDelay = true;
+            _ = Task.Run(() => Handshake(client, remote));
+        }
+    }
+
+    private bool ReserveAttempt()
+    {
+        lock (_lock)
+        {
+            if (Failed || Channel is not null || _attempts >= MaxAttempts)
+                return false;
+            _attempts++;
+            return true;
+        }
+    }
+
+    private async Task Handshake(TcpClient client, string remote)
+    {
+        try
+        {
+            var ch = await SecureChannel.AcceptAsync(client.GetStream(), Code, remote, _cts.Token, ReserveAttempt);
+            bool first;
+            lock (_lock)
+            {
+                first = Channel is null && !Failed;
+                if (first)
+                    Channel = ch;
+            }
+            if (!first)
+            {
+                ch.Dispose();
                 return;
             }
-            catch (WrongCodeException)
+            Status = $"Connected to {remote}";
+            _cts.Cancel(); // the other handshakes in progress, and the announcements
+            StopListening();
+        }
+        catch (WrongCodeException)
+        {
+            client.Dispose();
+            int wrong;
+            lock (_lock)
+                wrong = ++_wrong;
+            if (wrong >= MaxAttempts) // every reserved attempt ends as a success or here, so this is all of them
             {
-                client.Dispose();
-                _wrong++;
-                if (_wrong >= MaxWrongCodes)
-                {
-                    Status = $"{_wrong} wrong codes were tried, so this trade room closed. Start a new one for a new code.";
-                    Failed = true;
-                    StopListening();
-                    return;
-                }
-                Status = $"Someone at {remote} tried a wrong code ({_wrong} of {MaxWrongCodes}).";
+                Status = $"{wrong} wrong codes were tried, so this trade room closed. Start a new one for a new code.";
+                Failed = true;
+                StopListening();
             }
-            catch (Exception ex) when (ex is not OperationCanceledException || !_cts.IsCancellationRequested)
+            else
             {
-                client.Dispose();
-                if (ex is TradeRefusedException r)
-                    Status = r.Message;
+                Status = $"Someone at {remote} tried a wrong code ({wrong} of {MaxAttempts}).";
+            }
+        }
+        catch (Exception ex)
+        {
+            client.Dispose();
+            if (ex is TradeRefusedException r && !_cts.IsCancellationRequested)
+                Status = r.Message;
+        }
+        finally
+        {
+            lock (_lock)
+            {
+                _inFlight--;
+                if (_perAddress.TryGetValue(remote, out var n) && n > 1)
+                    _perAddress[remote] = n - 1;
+                else
+                    _perAddress.Remove(remote);
             }
         }
     }
@@ -190,7 +268,15 @@ public sealed class RoomFinder : IDisposable
     private readonly Dictionary<string, FoundRoom> _rooms = [];
     private UdpClient? _udp;
 
+    public const int MaxRooms = 16;
+
     public string? Error { get; private set; }
+
+    private void Prune()
+    {
+        foreach (var k in _rooms.Where(kv => DateTime.UtcNow - kv.Value.Seen > TimeSpan.FromSeconds(4)).Select(kv => kv.Key).ToList())
+            _rooms.Remove(k);
+    }
 
     public void Start(int tradePort)
     {
@@ -212,12 +298,22 @@ public sealed class RoomFinder : IDisposable
                 try
                 {
                     var r = await _udp.ReceiveAsync(_cts.Token);
+                    if (r.Buffer.Length > 512)
+                        continue; // an announcement is under 150 bytes
                     var a = JsonSerializer.Deserialize(r.Buffer, TradeJson.Default.Announcement);
-                    if (a is null || a.App != "rocknixds-bank" || a.Port is <= 0 or > 65535)
+                    if (a is null || a.App != "rocknixds-bank" || a.Port is < 1024 or > 65535)
                         continue;
+                    var name = TextGuard.Clean(a.Name, 24);
                     var addr = r.RemoteEndPoint.Address.MapToIPv4().ToString();
                     lock (_lock)
-                        _rooms[$"{addr}:{a.Port}"] = new FoundRoom(a.Name.Length > 24 ? a.Name[..24] : a.Name, addr, a.Port, DateTime.UtcNow);
+                    {
+                        Prune();
+                        var key = $"{addr}:{a.Port}";
+                        // a few rooms at a time: a flood of made-up announcements can't fill memory or the list
+                        if (!_rooms.ContainsKey(key) && _rooms.Count >= MaxRooms)
+                            continue;
+                        _rooms[key] = new FoundRoom(name.Length > 0 ? name : addr, addr, a.Port, DateTime.UtcNow);
+                    }
                 }
                 catch (OperationCanceledException)
                 {

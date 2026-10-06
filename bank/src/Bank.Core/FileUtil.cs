@@ -26,7 +26,8 @@ internal static class FileUtil
     public static string Sanitize(string name)
     {
         var bad = Path.GetInvalidFileNameChars();
-        var chars = name.Select(c => bad.Contains(c) || c is '/' or '\\' or ':' or '*' or '?' or '"' or '<' or '>' or '|' ? '_' : c).ToArray();
+        // names can come from a traded Pokémon's nickname: no path separators, no control characters
+        var chars = name.Select(c => bad.Contains(c) || char.IsControl(c) || c is '/' or '\\' or ':' or '*' or '?' or '"' or '<' or '>' or '|' ? '_' : c).ToArray();
         var s = new string(chars).Trim().TrimEnd('.');
         return s.Length == 0 ? "_" : s;
     }

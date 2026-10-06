@@ -86,7 +86,7 @@ internal sealed class MemoryStorage(PKM mine) : ITradeStorage
 
 public class TradeTests
 {
-    private static async Task<(SecureChannel Host, SecureChannel Client)> Pair(string hostCode = "ABCDEF", string clientCode = "ABCDEF")
+    internal static async Task<(SecureChannel Host, SecureChannel Client)> Pair(string hostCode = "ABCDEF", string clientCode = "ABCDEF")
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -137,7 +137,7 @@ public class TradeTests
         client.Dispose();
     }
 
-    private static void PumpUntil(Func<bool> done, params (TradeSession S, ITradeStorage St)[] sides)
+    internal static void PumpUntil(Func<bool> done, params (TradeSession S, ITradeStorage St)[] sides)
     {
         var until = DateTime.UtcNow.AddSeconds(30);
         while (!done())
@@ -150,7 +150,11 @@ public class TradeTests
         }
     }
 
-    private static BankConfig Cfg(string name)
+    /// <summary>A session without the accept cooldown (the tests accept as soon as the verdicts are in).</summary>
+    internal static TradeSession Session(SecureChannel ch, BankConfig cfg, bool isHost) =>
+        new(ch, cfg, isHost) { AcceptCooldown = TimeSpan.Zero };
+
+    internal static BankConfig Cfg(string name)
     {
         var cfg = new BankConfig { TrainerName = name, DataFolder = "/nonexistent" };
         cfg.FillDefaults();
@@ -165,8 +169,8 @@ public class TradeTests
         var machop = Fixtures.Make(Species.Machop, GameVersion.Pt, "JOINER", 33333, 44444);
         var hostStore = new MemoryStorage(kadabra);
         var joinStore = new MemoryStorage(machop);
-        using var host = new TradeSession(hc, Cfg("Host"), isHost: true);
-        using var join = new TradeSession(cc, Cfg("Joiner"), isHost: false);
+        using var host = Session(hc, Cfg("Host"), true);
+        using var join = Session(cc, Cfg("Joiner"), false);
         var sides = new[] { (host, (ITradeStorage)hostStore), (join, (ITradeStorage)joinStore) };
 
         PumpUntil(() => host.PartnerName == "Joiner" && join.PartnerName == "Host", sides);
@@ -206,13 +210,13 @@ public class TradeTests
         var c = Fixtures.Make(Species.Vulpix, GameVersion.HG);
         var hostStore = new MemoryStorage(a);
         var joinStore = new MemoryStorage(b);
-        using var host = new TradeSession(hc, Cfg("Host"), true);
-        using var join = new TradeSession(cc, Cfg("Joiner"), false);
+        using var host = Session(hc, Cfg("Host"), true);
+        using var join = Session(cc, Cfg("Joiner"), false);
         var sides = new[] { (host, (ITradeStorage)hostStore), (join, (ITradeStorage)joinStore) };
 
         host.Offer(a, "A");
         join.Offer(b, "B");
-        PumpUntil(() => host.Theirs is not null && join.Theirs is not null, sides);
+        PumpUntil(() => host.Theirs?.Verdict is not null && join.Theirs?.Verdict is not null, sides);
         join.Accept();
         PumpUntil(() => host.TheyAccepted, sides);
         join.Offer(c, "C"); // changes its mind before the host accepts
@@ -241,13 +245,13 @@ public class TradeTests
         var b = Fixtures.Make(Species.Eevee, GameVersion.HG);
         var hostStore = new MemoryStorage(a);
         var joinStore = new MemoryStorage(b);
-        using var host = new TradeSession(hc, Cfg("Host"), true);
-        using var join = new TradeSession(cc, Cfg("Joiner"), false);
+        using var host = Session(hc, Cfg("Host"), true);
+        using var join = Session(cc, Cfg("Joiner"), false);
         var sides = new[] { (host, (ITradeStorage)hostStore), (join, (ITradeStorage)joinStore) };
 
         host.Offer(a, "A");
         join.Offer(b, "B");
-        PumpUntil(() => host.Theirs is not null && join.Theirs is not null, sides);
+        PumpUntil(() => host.Theirs?.Verdict is not null && join.Theirs?.Verdict is not null, sides);
         host.Accept();
         join.Accept();
         PumpUntil(() => host.TheyAccepted, sides);
@@ -270,13 +274,13 @@ public class TradeTests
         var b = Fixtures.Make(Species.Eevee, GameVersion.HG);
         var hostStore = new MemoryStorage(a);
         var joinStore = new MemoryStorage(b);
-        using var host = new TradeSession(hc, Cfg("Host"), true);
-        using var join = new TradeSession(cc, Cfg("Joiner"), false);
+        using var host = Session(hc, Cfg("Host"), true);
+        using var join = Session(cc, Cfg("Joiner"), false);
         var sides = new[] { (host, (ITradeStorage)hostStore), (join, (ITradeStorage)joinStore) };
 
         host.Offer(a, "A");
         join.Offer(b, "B");
-        PumpUntil(() => host.Theirs is not null && join.Theirs is not null, sides);
+        PumpUntil(() => host.Theirs?.Verdict is not null && join.Theirs?.Verdict is not null, sides);
         host.Accept();
         join.Accept();
         // run the joiner until it has stored the host's Pokémon, then cut the line before the host hears about it

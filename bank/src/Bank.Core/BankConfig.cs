@@ -22,6 +22,10 @@ public sealed class BankConfig
     /// <summary>TCP port a hosted trade listens on. The LAN announcement uses the next port (UDP).</summary>
     public int TradePort { get; set; } = 47900;
 
+    /// <summary>Let handhelds outside the local network join a trade room (a public IPv6 address, a forwarded port).
+    /// Off: only private, link-local and VPN (100.64/10) addresses may connect.</summary>
+    public bool TradeAllowAnyAddress { get; set; }
+
     /// <summary>The name trade partners see. Empty: the handheld's host name.</summary>
     public string TrainerName { get; set; } = "";
 

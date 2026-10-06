@@ -56,12 +56,27 @@ public sealed class TradeSession : IDisposable
     private static readonly TimeSpan PingEvery = TimeSpan.FromSeconds(4);
     private static readonly TimeSpan GiveUpAfter = TimeSpan.FromSeconds(20);
 
+    /// <summary>After the partner changes its offer, accepting waits this long: no swapping a Pokémon under a thumb
+    /// that is already on its way to START.</summary>
+    public TimeSpan AcceptCooldown { get; set; } = TimeSpan.FromSeconds(3);
+
+    /// <summary>An exchange that hasn't finished in this time (a partner that keeps the line open but stops answering)
+    /// is given up: as with a dropped connection, nothing is lost.</summary>
+    public TimeSpan ExchangeTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>More messages than this waiting: the partner is flooding, the connection closes.</summary>
+    public const int MaxQueued = 256;
+
     private readonly SecureChannel _channel;
     private readonly BankConfig _cfg;
     private readonly ConcurrentQueue<TradeMsg> _inbox = new();
     private readonly BlockingCollection<TradeMsg> _outbox = new();
     private readonly CancellationTokenSource _cts = new();
-    private readonly List<Task<(string Hash, LegalityVerdict Verdict)>> _checks = [];
+    // one legality check at a time, for the partner's current offer: a flood of offers can't queue up analyses
+    private Task<(string Hash, LegalityVerdict Verdict)>? _check;
+    private bool _helloSeen;
+    private DateTime _theirsChangedAt = DateTime.MinValue;
+    private DateTime _exchangeStarted;
     private DateTime _lastReceived = DateTime.UtcNow;
     private DateTime _lastSent = DateTime.UtcNow;
     private volatile string? _networkError;
@@ -127,13 +142,27 @@ public sealed class TradeSession : IDisposable
         Note("You took your offer back.");
     }
 
-    /// <summary>Agrees to give our offer for theirs, as they are now.</summary>
-    public void Accept()
+    /// <summary>How long accepting still waits after the partner's last change of offer (zero: it can be accepted).</summary>
+    public TimeSpan AcceptWait
+    {
+        get
+        {
+            var left = _theirsChangedAt + AcceptCooldown - DateTime.UtcNow;
+            return left > TimeSpan.Zero ? left : TimeSpan.Zero;
+        }
+    }
+
+    /// <summary>Agrees to give our offer for theirs, as they are now. Refused (false) right after their offer changed,
+    /// and before our legality check of it is done.</summary>
+    public bool Accept()
     {
         if (Phase != TradePhase.Open || Mine is null || Theirs is null || IAccepted)
-            return;
+            return false;
+        if (AcceptWait > TimeSpan.Zero || Theirs.Verdict is null)
+            return false;
         IAccepted = true;
         Send(new TradeMsg { T = "accept", Mine = Mine.Hash, Theirs = Theirs.Hash });
+        return true;
     }
 
     public void Unaccept()
@@ -159,26 +188,36 @@ public sealed class TradeSession : IDisposable
         if (Phase == TradePhase.Closed)
             return;
 
-        for (int i = _checks.Count - 1; i >= 0; i--)
+        if (_check is { IsCompleted: true } done)
         {
-            var task = _checks[i];
-            if (!task.IsCompleted)
-                continue;
-            _checks.RemoveAt(i);
-            if (!task.IsCompletedSuccessfully)
-                continue;
-            var (hash, verdict) = task.Result;
-            if (Theirs?.Hash == hash)
+            _check = null;
+            if (done.IsCompletedSuccessfully && Theirs?.Hash == done.Result.Hash)
             {
-                Theirs.Verdict = verdict;
-                Send(new TradeMsg { T = "verdict", Hash = hash, Valid = verdict.Valid, Text = verdict.Headline });
+                Theirs.Verdict = done.Result.Verdict;
+                Send(new TradeMsg { T = "verdict", Hash = done.Result.Hash, Valid = done.Result.Verdict.Valid, Text = done.Result.Verdict.Headline });
             }
         }
+        if (_check is null && Theirs is { Verdict: null } pending)
+            _check = Task.Run(() => (pending.Hash, Legality.Check(pending.Pk)));
 
+        if (_inbox.Count > MaxQueued)
+        {
+            Close($"{PartnerName} sent too many messages; the connection was closed.");
+            return;
+        }
         while (_inbox.TryDequeue(out var msg))
         {
             _lastReceived = DateTime.UtcNow;
-            Handle(msg, storage);
+            try
+            {
+                Handle(msg, storage);
+            }
+            catch (Exception)
+            {
+                // whatever the partner sent, it doesn't take the app down: the trade ends, nothing changes hands that
+                // hadn't already
+                Close(Phase == TradePhase.Exchanging ? InterruptedMessage() : $"{PartnerName} sent something this app can't handle; the trade was closed.");
+            }
             if (Phase == TradePhase.Closed)
                 return;
         }
@@ -195,12 +234,18 @@ public sealed class TradeSession : IDisposable
             _exTheirs = Theirs;
             _stored = _removed = false;
             Phase = TradePhase.Exchanging;
+            _exchangeStarted = DateTime.UtcNow;
             Send(new TradeMsg { T = "commit", Mine = Mine.Hash, Theirs = Theirs.Hash });
         }
 
         var now = DateTime.UtcNow;
         if (now - _lastSent > PingEvery)
             Send(new TradeMsg { T = "ping" });
+        if (Phase == TradePhase.Exchanging && now - _exchangeStarted > ExchangeTimeout)
+        {
+            Close(InterruptedMessage());
+            return;
+        }
         if (now - _lastReceived > GiveUpAfter)
             Close(Phase == TradePhase.Exchanging ? InterruptedMessage() : $"{PartnerName} stopped answering.");
     }
@@ -209,29 +254,40 @@ public sealed class TradeSession : IDisposable
     {
         switch (msg.T)
         {
-            case "hello":
-                PartnerName = string.IsNullOrWhiteSpace(msg.Name) ? "Partner" : msg.Name.Trim()[..Math.Min(msg.Name.Trim().Length, 24)];
+            case "hello" when !_helloSeen:
+                // once: a name can't change in the middle of a trade
+                _helloSeen = true;
+                var name = TextGuard.Clean(msg.Name, 24);
+                PartnerName = name.Length > 0 ? name : "Partner";
                 Note($"Connected to {PartnerName}.");
                 break;
 
             case "offer" when Phase == TradePhase.Open:
                 if (msg.Data is null)
                     break;
-                var pk = PkmIO.FromFileBytes(msg.Data, msg.Ext);
-                if (pk is null)
+                var pk = PkmIO.FromFileBytes(msg.Data, TextGuard.Clean(msg.Ext, 8));
+                var problem = pk is null ? "isn't a Pokémon this app can read" : PokemonGuard.Problem(pk) is { } p ? $"was refused: {p}" : null;
+                if (problem is not null)
                 {
-                    Note($"{PartnerName} offered something that isn't a Pokémon this app can read.");
+                    // the previous offer is gone too: nothing is left to accept by mistake
+                    Theirs = null;
+                    IAccepted = TheyAccepted = false;
+                    _theirsChangedAt = DateTime.UtcNow;
+                    Note($"{PartnerName}'s offer {problem}.");
                     break;
                 }
-                var offer = new TradeOffer(pk, PkmIO.Hash(pk));
+                var offer = new TradeOffer(pk!, PkmIO.Hash(pk!));
+                if (offer.Hash == Theirs?.Hash)
+                    break; // the same Pokémon again
                 Theirs = offer;
                 IAccepted = TheyAccepted = false;
-                _checks.Add(Task.Run(() => (offer.Hash, Legality.Check(offer.Pk))));
+                _theirsChangedAt = DateTime.UtcNow;
                 Note($"{PartnerName} offered {offer.Summary.Title} (Lv {offer.Summary.Level}).");
                 break;
 
             case "withdraw" when Phase == TradePhase.Open:
                 Theirs = null;
+                _theirsChangedAt = DateTime.UtcNow;
                 IAccepted = TheyAccepted = false;
                 Note($"{PartnerName} took their offer back.");
                 break;
@@ -250,7 +306,7 @@ public sealed class TradeSession : IDisposable
                 if (Mine is not null && msg.Hash == Mine.Hash)
                 {
                     Mine.PartnerSaysValid = msg.Valid;
-                    Mine.PartnerHeadline = msg.Text;
+                    Mine.PartnerHeadline = TextGuard.Clean(msg.Text, 120);
                 }
                 break;
 
@@ -263,6 +319,7 @@ public sealed class TradeSession : IDisposable
                     _exTheirs = Theirs;
                     _stored = _removed = false;
                     Phase = TradePhase.Exchanging;
+                    _exchangeStarted = DateTime.UtcNow;
                     if (!StoreTheirs(storage))
                         return;
                     Send(new TradeMsg { T = "received", Mine = _exMine.Hash, Theirs = _exTheirs.Hash });
@@ -273,7 +330,8 @@ public sealed class TradeSession : IDisposable
                 }
                 break;
 
-            case "abort" when IsHost && Phase == TradePhase.Exchanging:
+            // only before the host kept anything: after that the exchange is past turning back
+            case "abort" when IsHost && Phase == TradePhase.Exchanging && !_stored:
                 Phase = TradePhase.Open;
                 TheyAccepted = false;
                 _exMine = _exTheirs = null;
@@ -303,7 +361,8 @@ public sealed class TradeSession : IDisposable
                 break;
 
             case "bye":
-                Close(Phase == TradePhase.Exchanging ? InterruptedMessage() : msg.Text ?? $"{PartnerName} left the trade.");
+                var why = TextGuard.Clean(msg.Text, 160);
+                Close(Phase == TradePhase.Exchanging ? InterruptedMessage() : why.Length > 0 ? $"{PartnerName}: {why}" : $"{PartnerName} left the trade.");
                 break;
 
             case "ping":
@@ -315,11 +374,11 @@ public sealed class TradeSession : IDisposable
     {
         if (_stored)
             return true;
-        var pk = _exTheirs!.Pk.Clone();
-        _evolvedInto = _cfg.TradeEvolutions ? TradeEvolution.TryEvolve(pk, _exMine!.Pk.Species) : null;
-        _got = MonSummary.From(pk);
         try
         {
+            var pk = _exTheirs!.Pk.Clone();
+            _evolvedInto = _cfg.TradeEvolutions ? TradeEvolution.TryEvolve(pk, _exMine!.Pk.Species) : null;
+            _got = MonSummary.From(pk);
             _storedWhere = storage.StoreReceived(pk);
             _stored = true;
             return true;
@@ -327,7 +386,8 @@ public sealed class TradeSession : IDisposable
         catch (Exception ex)
         {
             // nothing was given away yet: tell the partner, end the trade
-            Send(new TradeMsg { T = "bye", Text = $"{MyName} couldn't keep the Pokémon ({ex.Message}). Nothing was traded." });
+            // the reason stays here (it can name local files): the partner hears that it failed, not why
+            Send(new TradeMsg { T = "bye", Text = "Couldn't keep the Pokémon. Nothing was traded." });
             Close($"Couldn't keep {_exTheirs.Summary.Title}: {ex.Message}. Nothing was traded.");
             return false;
         }
