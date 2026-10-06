@@ -213,14 +213,16 @@ steps below add is what to look at on the screens.
 ## C. The menu's memory, and the double launch (1.6 task 3)
 
 **What was found.**
-- **The likely cause: ROCKNIXDS Pixel under a menu.**
+- **A possible cause: ROCKNIXDS Pixel under a menu (not confirmed).**
   - ES keeps drawing the game list under its menus (game options, settings, a scrape) but updates only the menu.
   - The theme's engine took its decode worker's finished pictures only when updated, and forgot a picture's request
     as soon as the worker had made it.
-  - So under a menu, every frame asked for the same pictures again, and every finished picture woke ES for another
-    frame and was kept.
-  - On a PC, 120 such frames grew the heap by 43 MB at 640x480 and 111 MB at 1024x768, and it doesn't stop while
-    the menu stays up.
+  - So under a menu opened while pictures were still loading, every frame asked for them again, and every finished
+    picture woke ES for another frame and was kept.
+  - In the engine's test bench, 120 such frames grew the heap by 43 MB at 640x480 and 111 MB at 1024x768.
+  - A full EmulationStation on a PC (16 patches, Xvfb, a 420-game library, START's menu over the list just opened, 3
+    minutes) didn't grow with the old build or the new one: 202.5 to 203.0 MB and 194.3 to 194.6 MB at 1920x480. Its
+    pictures decode far faster than on a handheld, which shrinks the window, so device step 2 below is the real test.
 - The lead in the hand-off (`reloadAllGames` after every game) doesn't apply. `ViewController::doLaunchGame` returns
   true only for `windows_installers`, so DS games never trigger that reload.
 - The rnds engine's texture cache was bounded by count per group (400/200/120/90/8), not by bytes.
@@ -254,11 +256,12 @@ steps below add is what to look at on the screens.
 **On the device:**
 1. After boot and a few minutes of browsing, `cat /storage/.config/emulationstation/es-mem.log` has a line like
    `pid N rss 180 MB (heap ..., files ..., shared/GPU ...)`.
-2. **A menu over a game list** (the likely cause):
+2. **A menu over a game list** (the possible cause):
    - Restart ES, open a big ROCKNIXDS Pixel game list at once (its pictures still loading), and open the game options
      (or START's menu) over it. Leave it 2 minutes.
    - Then `grep VmRSS /proc/$(pidof emulationstation)/status`, and again after 2 more minutes: the same within a few
-     MB. Before 1.6 it climbed for as long as the menu stayed up.
+     MB. If 1.5.13 is at hand, the same with it tells whether this was the cause: it would climb for as long as the
+     menu stays up.
 3. **Browse hard:**
    - Hold right in the largest library for a minute, flip systems, open the game options a few times.
    - Run 10 games (start/quit), then leave the menu idle for 10 minutes.
