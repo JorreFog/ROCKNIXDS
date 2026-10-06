@@ -253,6 +253,7 @@ typedef struct {
     int wave_on; float wave_x, wave_y, wave_r;   /* the power coming on: a ring of light spreading from the switch */
     int over; float over_t;
     int song;                           /* the three trädgårdstomtar were found: the song played */
+    float storm_t, lightning_t, thunder_t;   /* autumn: the next flash, the flash, the thunder after it */
     int god;                            /* tests: DK_DEBUG_GOD */
     /* actors */
     Player p;
@@ -423,7 +424,7 @@ enum {
     SFX_HURT, SFX_WOLF, SFX_MOOSE, SFX_BOARD_BREAK, SFX_BOARD_FIX, SFX_BUY, SFX_DENY, SFX_BOX, SFX_HORSE,
     SFX_POWERUP_SPAWN, SFX_POWERUP, SFX_ROUND_START, SFX_ROUND_END, SFX_GAMEOVER, SFX_SWAP, SFX_PICKUP,
     SFX_MENU_MOVE, SFX_MENU_OK, SFX_MENU_BACK, SFX_PERK, SFX_PAP, SFX_POWER, SFX_DOOR, SFX_SPLAT, SFX_THROW,
-    SFX_BEEP, SFX_GULP, SFX_STEP, SFX_KABOOM, SFX_COUNT
+    SFX_BEEP, SFX_GULP, SFX_STEP, SFX_KABOOM, SFX_THUNDER, SFX_COUNT
 };
 enum { MUS_NONE, MUS_TITLE, MUS_BOX, MUS_GAMEOVER, MUS_SONG };
 

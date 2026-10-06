@@ -623,6 +623,11 @@ void render_game(Surf *s) {
         }
     }
     if (G->flash_t > 0) for (size_t i = 0; i < (size_t)lw * lh; i++) { lr[i] = (uint16_t)MIN(1023, lr[i] + 200); lg[i] = (uint16_t)MIN(1023, lg[i] + 200); lb[i] = (uint16_t)MIN(1023, lb[i] + 220); }
+    if (G->lightning_t > 0 && ((int)(G->lightning_t * 30) % 3) != 1) {   /* lightning: everything, bluish, flickering */
+        int k = (int)(G->lightning_t / 0.3f * 256);
+        uint16_t ar = (uint16_t)(260 * k >> 8), ag = (uint16_t)(275 * k >> 8), ab = (uint16_t)(330 * k >> 8);
+        for (size_t i = 0; i < (size_t)lw * lh; i++) { lr[i] = (uint16_t)MIN(1023, lr[i] + ar); lg[i] = (uint16_t)MIN(1023, lg[i] + ag); lb[i] = (uint16_t)MIN(1023, lb[i] + ab); }
+    }
     apply_light(s);
     /* ---- what glows ---- */
     for (int i = 0; i < MAX_ZOMBIES; i++) if (G->z[i].alive) zombie_eyes(s, &G->z[i]);

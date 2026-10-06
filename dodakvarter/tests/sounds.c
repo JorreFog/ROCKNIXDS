@@ -46,10 +46,10 @@ int main(int argc, char **argv) {
         "explode", "reload", "empty", "knife", "hit", "groan1", "groan2", "groan3", "zattack", "hurt", "wolf", "moose",
         "board-break", "board-fix", "buy", "deny", "box", "horse", "powerup-spawn", "powerup", "round-start", "round-end",
         "gameover", "swap", "pickup", "menu-move", "menu-ok", "menu-back", "perk", "pap", "power", "door", "splat", "throw",
-        "beep", "gulp", "step", "kaboom" };
+        "beep", "gulp", "step", "kaboom", "thunder" };
     for (int i = 0; i < SFX_COUNT; i++) {
         char n[48]; snprintf(n, sizeof n, "sfx-%s", names[i] ? names[i] : "?");
-        quiet(); sfx(i, 1, 0); take(dir, n, i == SFX_ROUND_START || i == SFX_POWER || i == SFX_ROUND_END ? 2.8f : 1.4f, 0);
+        quiet(); sfx(i, 1, 0); take(dir, n, i == SFX_ROUND_START || i == SFX_POWER || i == SFX_ROUND_END ? 2.8f : i == SFX_THUNDER ? 3.6f : 1.4f, 0);
     }
     quiet(); music_play(MUS_TITLE); take(dir, "music-title", 24, 0);
     music_play(MUS_NONE); quiet(); music_play(MUS_BOX); take(dir, "music-box", 3.6f, 0);

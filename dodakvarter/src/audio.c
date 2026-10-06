@@ -121,6 +121,12 @@ static void synth_all(void) {
     /* explosion */
     b = buf_new(1.4f, &n); { LP l = { 0 }, l2 = { 0 }; float ph = 0; for (int i = 0; i < n; i++) { float t = (float)i / RATE; float x = noise(); ph += 2 * PI_F * (55 - t * 20) / RATE; b[i] = lp(&l, x, 900 * expf(-t * 1.5f) + 150) * env(t, 0.002f, 0.35f) * 1.4f + sinf(ph) * env(t, 0.002f, 0.18f) + lp(&l2, x, 5000) * env(t, 0.0005f, 0.02f); } finish(SFX_EXPLODE, b, n, 1.0f); }
     b = buf_new(2.2f, &n); { LP l = { 0 }; float ph = 0; for (int i = 0; i < n; i++) { float t = (float)i / RATE; ph += 2 * PI_F * (40 - t * 8) / RATE; b[i] = lp(&l, noise(), 600 * expf(-t) + 100) * env(t, 0.01f, 0.7f) * 1.3f + sinf(ph) * env(t, 0.01f, 0.5f); } finish(SFX_KABOOM, b, n, 1.0f); }
+    /* thunder: a crack, then the rumble rolling, swelling and dying away */
+    b = buf_new(3.6f, &n); { LP l1 = { 0 }, l2 = { 0 }, l3 = { 0 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE;
+        float roll = 0.55f + 0.45f * sinf(t * 7.3f) * sinf(t * 2.9f + 1);
+        float rumble = lp(&l2, lp(&l1, noise(), 160), 110) * 3.2f * MIN(1.0f, t / 0.25f) * expf(-t / 1.3f) * roll;
+        float crack = lp(&l3, noise(), 2400) * env(t, 0.003f, 0.06f) * 0.8f;
+        b[i] = rumble + crack; } finish(SFX_THUNDER, b, n, 0.9f); }
     /* reload: click, slide, click */
     b = buf_new(0.5f, &n); { LP l = { 0 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE; float x = noise(); float c1 = env(t, 0.0005f, 0.006f), c2 = t > 0.18f ? env(t - 0.18f, 0.02f, 0.05f) * 0.4f : 0, c3 = t > 0.36f ? env(t - 0.36f, 0.0005f, 0.008f) : 0; b[i] = (x - lp(&l, x, 1500)) * (c1 + c3) + x * c2 * 0.5f; } finish(SFX_RELOAD, b, n, 0.6f); }
     b = buf_new(0.05f, &n); for (int i = 0; i < n; i++) b[i] = noise() * env((float)i / RATE, 0.0005f, 0.004f); finish(SFX_EMPTY, b, n, 0.5f);

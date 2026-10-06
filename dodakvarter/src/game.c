@@ -431,6 +431,13 @@ static void camera_update(float dt) {
     if (G->shake > 0) G->shake = MAX(0, G->shake - dt * 12);
     if (G->hurt_flash > 0) G->hurt_flash = MAX(0, G->hurt_flash - dt * 2);
     if (G->flash_t > 0) G->flash_t -= dt;
+    if (G->season == SEASON_AUTUMN && !G->over) {           /* a storm: lightning now and then, the thunder after it */
+        if ((G->storm_t -= dt) <= 0) {
+            G->storm_t = 25 + rng_float(&G->fx) * 60; G->lightning_t = 0.3f; G->thunder_t = 0.6f + rng_float(&G->fx) * 1.6f;
+        }
+        if (G->thunder_t > 0 && (G->thunder_t -= dt) <= 0) sfx(SFX_THUNDER, 0.8f, rng_rangef(&G->fx, -0.5f, 0.5f));
+    }
+    if (G->lightning_t > 0) G->lightning_t -= dt;
 }
 
 /* ---------------------------------------------------------------- a run */
@@ -442,6 +449,7 @@ void game_new(uint64_t seed, int season) {
     memset(G, 0, sizeof *G);
     G->view_w = vw; G->view_h = vh;
     G->seed = seed; G->season = season;
+    G->storm_t = 20;                                        /* (the first lightning comes a while in) */
     rng_seed(&G->rng, seed, 1); rng_seed(&G->fx, seed, 2);
     map_generate(seed, season);
     world_paint();

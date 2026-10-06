@@ -157,6 +157,7 @@ int main(int argc, char **argv) {
         for (int k = 0; k < PU_COUNT; k++) { G->pu[k].alive = 1; G->pu[k].kind = k; G->pu[k].x = p->x - 70 + k * 26; G->pu[k].y = p->y - 55; }
         p->aim = PI_F / 2; ticks(1, &in); A.state = ST_PLAY;
     }
+    if (getenv("DK_SCENE_LIGHTNING")) G->lightning_t = 0.28f;   /* the instant the lightning strikes */
     app_render(&top, &bot);
     shot(out);
     return 0;
