@@ -78,10 +78,10 @@ index 90df9a9b..75714e3d 100644
  			else if (complete || SDL_GetTicks() - firstFrame > 3000)
 diff --git a/es-app/src/rnds/RndsEs.cpp b/es-app/src/rnds/RndsEs.cpp
 new file mode 100644
-index 00000000..235f35f6
+index 00000000..0ce8df9d
 --- /dev/null
 +++ b/es-app/src/rnds/RndsEs.cpp
-@@ -0,0 +1,1211 @@
+@@ -0,0 +1,1229 @@
 +#include "rnds/RndsEs.h"
 +#include "rnds/RndsUI.h"
 +
@@ -1268,8 +1268,26 @@ index 00000000..235f35f6
 +	{
 +		if (!d->ui || !d->isShown(from))
 +			return;
++		if (d->window->peekGui() != ViewController::get())
++			covered();
 +		d->backend.base = trans;
 +		d->ui->render();
++	}
++
++	void EsHost::covered()
++	{
++		if (!d->ui)
++			return;
++		// its finger's lift goes to the menu
++		d->ui->touchCancel();
++		// update paused ES's power saver for the animations and lifts it when they end, but update doesn't run under a
++		// menu: ES would draw flat out until it closed. The next update pauses it again if anything still moves; what
++		// the worker finishes meanwhile wakes ES for a frame (and render takes it in)
++		if (d->psPaused)
++		{
++			PowerSaver::resume();
++			d->psPaused = false;
++		}
 +	}
 +
 +	void EsHost::dataChanged()
@@ -1295,10 +1313,10 @@ index 00000000..235f35f6
 +}
 diff --git a/es-app/src/rnds/RndsEs.h b/es-app/src/rnds/RndsEs.h
 new file mode 100644
-index 00000000..f47b0348
+index 00000000..bbde5f03
 --- /dev/null
 +++ b/es-app/src/rnds/RndsEs.h
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,66 @@
 +#pragma once
 +// ROCKNIXDS rnds engine inside EmulationStation. A theme that declares <view name="rnds"> is drawn by the engine
 +// (RndsUI) instead of ES's own views: SystemView hands it the system shelf, RndsGameListView each system's games.
@@ -1351,6 +1369,8 @@ index 00000000..f47b0348
 +		bool mouseMove(int x, int y);		// the pointer moved (a finger dragging the game list's rail)
 +		void update(GuiComponent* from, int deltaTime);
 +		void render(GuiComponent* from, const Transform4x4f& trans);
++		// the view is under a menu (ES draws it but doesn't update it): a touch ends where it is, and ES may sleep
++		void covered();
 +		void dataChanged();
 +
 +		int nextWake();
@@ -2581,15 +2601,16 @@ index 00000000..90e55347
 +}
 diff --git a/es-app/src/rnds/RndsUI.cpp b/es-app/src/rnds/RndsUI.cpp
 new file mode 100644
-index 00000000..9ddc2189
+index 00000000..0f8bbdd3
 --- /dev/null
 +++ b/es-app/src/rnds/RndsUI.cpp
-@@ -0,0 +1,2069 @@
+@@ -0,0 +1,2090 @@
 +#include "RndsUI.h"
 +
 +#include <algorithm>
 +#include <cmath>
 +#include <cstdio>
++#include <cstring>
 +#include <mutex>
 +#include <set>
 +
@@ -3535,7 +3556,8 @@ index 00000000..9ddc2189
 +			float bubbleY = 60, bubbleH = 92;
 +			float reelY = 160, reelH = 226;
 +			std::vector<TextLine> titleLines, subLines;
-+			float countW = 0;
++			float countW = 0;		// the count's text ("03 / 07")
++			float railW = 0;		// the rail's track: what the widest count leaves (one length for the whole list)
 +			Face left, right;
 +			float leftW = 0, rightW = 0;
 +			float startW = 0;
@@ -3554,6 +3576,17 @@ index 00000000..9ddc2189
 +			snprintf(a, sizeof a, "%02d", n == 0 ? 0 : at + 1);
 +			snprintf(b, sizeof b, "%02d", n);
 +			return line(a, ts(true, 18)).width + line(" / ", ts(false, 18)).width + line(b, ts(false, 18)).width;
++		}
++		// the widest the count gets on a list of n (every digit of the position as wide as the widest digit): the rail
++		// keeps one length while the number changes ("98" is narrower than "372"), so a finger on it means the same game
++		// when it lifts as during its last move
++		float countWidthMax(int n)
++		{
++			char b[16];
++			snprintf(b, sizeof b, "%02d", n);
++			float widest = 0;
++			for (char d = '0'; d <= '9'; d++) widest = std::max(widest, line(std::string(1, d), ts(true, 18)).width);
++			return strlen(b) * widest + line(" / ", ts(false, 18)).width + line(b, ts(false, 18)).width;
 +		}
 +		float faceW(const Face& f) { return f.kind == 2 ? 3 + 12 + line(f.label, tFace()).width + 12 + 3 : 3 + 12 + kbdW(f.kbd) + 8 + line(f.label, tFace()).width + 12 + 3; }
 +
@@ -3583,6 +3616,7 @@ index 00000000..9ddc2189
 +			int n = v == LAUNCH ? 1 : count();
 +			int at = v == LAUNCH ? 0 : center();
 +			g.countW = countWidth(at, n);
++			g.railW = 604 - 12 - countWidthMax(n);
 +
 +			if (v == HOME)
 +			{
@@ -4143,7 +4177,7 @@ index 00000000..9ddc2189
 +		{
 +			int n = src->gameCount();
 +			if (ui->mView != LIBRARY || n == 0) return;
-+			float inner = 604 - 12 - countWidth(ui->mGame, n) - 4;
++			float inner = 604 - 12 - countWidthMax(n) - 4;
 +			int at = n < 2 ? 0 : (int)std::lround((x - 20 - 21) * (n - 1) / std::max(1.0f, inner - 42));
 +			at = std::min(n - 1, std::max(0, at));
 +			if (at != ui->mGame) setGame(at);
@@ -4263,7 +4297,7 @@ index 00000000..9ddc2189
 +
 +			// rail
 +			int at = v == LAUNCH ? 0 : center(), total = v == LAUNCH ? 1 : n;
-+			float trackW = 604 - 12 - g.countW;
++			float trackW = g.railW;
 +			drawBox(railBox(), 18, 396, trackW, 10);
 +			float target = thumbLeft(at, total, trackW - 4);
 +			if (!thumbKnown || railDrag) { thumbKnown = true; thumbFrom = thumbTo = target; thumbAt = -1e9; }	// dragged: under the finger
@@ -4383,7 +4417,7 @@ index 00000000..9ddc2189
 +			if (in(0, 10, 276, 46)) return ACT_PREV;
 +			if (in(364, 10, 276, 46)) return ACT_NEXT;
 +			// a game list's rail, from the reel's foot to the face buttons: a tap jumps there, a drag scrubs the list
-+			if (v == LIBRARY && count() > 0 && in(12, 384, 604 - g.countW, 36)) return ACT_RAIL;
++			if (v == LIBRARY && count() > 0 && in(12, 384, g.railW + 12, 36)) return ACT_RAIL;
 +			if (in(320 - g.startW / 2, g.reelY + 120, g.startW, 32)) return ACT_OPEN;
 +			if (!in(10, g.reelY, 620, g.reelH)) return ACT_NONE;
 +			// topmost slot first
@@ -4546,6 +4580,13 @@ index 00000000..9ddc2189
 +		return true;
 +	}
 +
++	void UI::touchCancel()
++	{
++		d->pointerDown = false;
++		d->railDrag = false;
++		d->pressedAction = 0; d->pressedSide = -1; d->pressedArrow = -1;
++	}
++
 +	bool UI::touchMove(int screen, float x, float)
 +	{
 +		if (screen != 1 || !d->pointerDown || !d->railDrag) return false;	// taps and swipes act when the finger lifts
@@ -4656,10 +4697,10 @@ index 00000000..9ddc2189
 +}
 diff --git a/es-app/src/rnds/RndsUI.h b/es-app/src/rnds/RndsUI.h
 new file mode 100644
-index 00000000..14b913e8
+index 00000000..b9b1b595
 --- /dev/null
 +++ b/es-app/src/rnds/RndsUI.h
-@@ -0,0 +1,180 @@
+@@ -0,0 +1,181 @@
 +#pragma once
 +// ROCKNIXDS rnds engine: the ROCKNIXDS menu mockup (mockup/index.html) as a native two-screen UI. Three views: home
 +// (the system shelf), library (a system's games as cartridges) and the ready screen. Layout, colours, fonts and
@@ -4806,6 +4847,7 @@ index 00000000..14b913e8
 +		void jumpTo(int game);					// the library's cursor straight to a game (jump to a letter)
 +		bool touch(int screen, float x, float y, bool down);	// device px of that screen
 +		bool touchMove(int screen, float x, float y);			// the finger moved while down (drags the game list's rail)
++		void touchCancel();						// the view went under a menu: the touch ends where it is, nothing acts
 +
 +		void update(double nowMs);
 +		void render();
@@ -5085,10 +5127,10 @@ index 59153c8c..9bd152a5 100644
  
 diff --git a/es-app/src/views/gamelist/RndsGameListView.cpp b/es-app/src/views/gamelist/RndsGameListView.cpp
 new file mode 100644
-index 00000000..0cb2b167
+index 00000000..fb569585
 --- /dev/null
 +++ b/es-app/src/views/gamelist/RndsGameListView.cpp
-@@ -0,0 +1,257 @@
+@@ -0,0 +1,270 @@
 +#include "views/gamelist/RndsGameListView.h"
 +
 +#include "rnds/RndsEs.h"
@@ -5317,6 +5359,19 @@ index 00000000..0cb2b167
 +		mWindow->releaseMouseCapture();
 +}
 +
++// a menu over the list (or another view in its place): a finger down on the list lets go of it (its lift goes to the
++// menu) and its touch ends there, and ES may sleep under the menu
++void RndsGameListView::topWindow(bool isTop)
++{
++	ISimpleGameListView::topWindow(isTop);
++	if (isTop)
++		return;
++	if (mWindow->hasMouseCapture(this))
++		mWindow->releaseMouseCapture();
++	if (auto host = rnds::EsHost::instance())
++		host->covered();
++}
++
 +bool RndsGameListView::hitTest(int x, int y, Transform4x4f& parentTransform, std::vector<GuiComponent*>* pResult)
 +{
 +	// only the view: the engine takes every touch, the header components it doesn't draw must not
@@ -5348,10 +5403,10 @@ index 00000000..0cb2b167
 +}
 diff --git a/es-app/src/views/gamelist/RndsGameListView.h b/es-app/src/views/gamelist/RndsGameListView.h
 new file mode 100644
-index 00000000..d802ad66
+index 00000000..a971ac6a
 --- /dev/null
 +++ b/es-app/src/views/gamelist/RndsGameListView.h
-@@ -0,0 +1,62 @@
+@@ -0,0 +1,63 @@
 +#pragma once
 +#ifndef ES_APP_VIEWS_GAME_LIST_RNDS_GAME_LIST_VIEW_H
 +#define ES_APP_VIEWS_GAME_LIST_RNDS_GAME_LIST_VIEW_H
@@ -5385,6 +5440,7 @@ index 00000000..d802ad66
 +	virtual void render(const Transform4x4f& parentTrans) override;
 +	virtual void onShow() override;
 +	virtual void onHide() override;
++	virtual void topWindow(bool isTop) override;
 +	virtual bool onMouseClick(int button, bool pressed, int x, int y) override;
 +	virtual void onMouseMove(int x, int y) override;
 +	virtual bool hitTest(int x, int y, Transform4x4f& parentTransform, std::vector<GuiComponent*>* pResult = nullptr) override;
