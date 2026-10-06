@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 CC=${CC:-cc}
 SRCS="src/game.c src/mapgen.c src/world.c src/props.c src/render.c src/hud.c src/menu.c src/weapons.c src/zombies.c
       src/loot.c src/inter.c src/audio.c src/save.c src/lang.c src/data.c src/bot.c src/art.c src/art_data.c src/gfx.c
-      src/font.c src/png.c src/plat.c src/plat_headless.c src/plat_kms.c src/plat_sdl.c src/input_evdev.c src/audio_alsa.c"
+      src/font.c src/png.c src/plat.c src/plat_headless.c src/plat_kms.c src/plat_sdl.c src/selftest.c src/input_evdev.c src/audio_alsa.c"
 INC="-I/usr/include/libdrm -I/usr/include/SDL2"
 mkdir -p build
 SAN="-fsanitize=address,undefined -fno-omit-frame-pointer"

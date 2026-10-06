@@ -2,7 +2,7 @@
 // screen the inventory. The loop runs at 60 ticks a second, paced by the panels' refresh.
 //
 //   dodakvarter [--backend kms|sdl|headless] [--seed N] [--start] [--bot] [--frames N]
-//               [--snap DIR --snap-every N] [--size WxH]
+//               [--snap DIR --snap-every N] [--size WxH] [--selftest]
 #include "game.h"
 #include "menu.h"
 #include <stdio.h>
@@ -11,12 +11,13 @@
 #include <unistd.h>
 
 void bot_input(Input *in);
+int selftest(const PlatInfo *pi, Surf *top, Surf *bot);
 static volatile sig_atomic_t stop;
 static void on_signal(int s) { (void)s; stop = 1; }
 
 int main(int argc, char **argv) {
     const char *backend = 0, *snapdir = 0;
-    int bot = 0, start = 0, frames = -1, snap_every = 0, season = -1;
+    int bot = 0, start = 0, frames = -1, snap_every = 0, season = -1, test = 0;
     uint64_t seed = 0;
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i], *v = i + 1 < argc ? argv[i + 1] : 0;
@@ -29,6 +30,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(a, "--snap") && v) { snapdir = v; i++; }
         else if (!strcmp(a, "--snap-every") && v) { snap_every = atoi(v); i++; }
         else if (!strcmp(a, "--size") && v) { setenv("DK_HEADLESS_SIZE", v, 1); setenv("DK_WINDOW_SIZE", v, 1); i++; }
+        else if (!strcmp(a, "--selftest")) { test = 1; setenv("DK_VERBOSE", "1", 1); }
         else if (!strcmp(a, "--version")) { printf("Döda Kvarter %s\n", DK_VERSION); return 0; }
         else if (!strcmp(a, "--help")) { printf("usage: %s [--backend kms|sdl|headless] [--seed N] [--start] [--bot]\n", argv[0]); return 0; }
     }
@@ -52,6 +54,7 @@ int main(int argc, char **argv) {
     audio_set_volume(S.volume);
     A.state = ST_TITLE; A.rank = -1; A.seed_override = seed;
     A.bot_w = pi.bot_w; A.bot_h = pi.bot_h;
+    if (test) { int r = selftest(&pi, &top, &bot_s); plat_shutdown(); return r; }
     music_play(MUS_TITLE);
     if (start) app_new_run();
     Input in, prev; memset(&in, 0, sizeof in); memset(&prev, 0, sizeof prev);

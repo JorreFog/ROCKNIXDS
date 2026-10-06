@@ -38,7 +38,8 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
   rm -f $NOTICE
   trap 'kill -TERM $P 2>/dev/null; sleep 0.5; kill -9 $P 2>/dev/null; echo "$(date) stopped by the unit"; exit 0' TERM INT
   cd $D
-  XDG_RUNTIME_DIR=/var/run/0-runtime-dir DK_DATA=$D/data ./dodakvarter --backend kms >> $D/data/game.out 2>&1 &
+  OUT=$D/data/game.out; [ "$1" = --selftest ] && OUT=$D/data/selftest.txt && : > $OUT
+  XDG_RUNTIME_DIR=/var/run/0-runtime-dir DK_DATA=$D/data ./dodakvarter --backend kms "$@" >> $OUT 2>&1 &
   P=$!
   wait $P; rc=$?
   echo "$(ms) ms: the game exited: $rc"

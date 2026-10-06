@@ -189,6 +189,11 @@ the VT, puts the GPU at its lowest clock and the CPU on schedutil, aims ROCKNIX'
 then hands everything back through ROCKNIXDS's `restore.sh`) and `gamelist.py` (its entry and pictures in the Ports
 list). By hand, over ssh: `systemctl stop essway sway; /storage/.config/rocknixds/dodakvarter/dodakvarter; systemctl start sway essway`.
 
+**Checking a handheld.** Over ssh, `/storage/.config/rocknixds/dodakvarter/selftest.sh` takes the screens as the game
+would and shows on each panel which one it is (TOP, BOTTOM) with its size, a grid and colour bars; touches draw a
+cross where they land, the buttons light up as you press them and a beep plays every second. START and SELECT end
+it, ES comes back, and it prints what it found: the panels, the pad, both touchscreens, the sound.
+
 ## Building
 
 ```sh

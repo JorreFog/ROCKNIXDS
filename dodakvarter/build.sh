@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 V=$(cat VERSION 2>/dev/null || echo dev)
 SRCS="src/main.c src/game.c src/mapgen.c src/world.c src/props.c src/render.c src/hud.c src/menu.c src/weapons.c
       src/zombies.c src/loot.c src/inter.c src/audio.c src/save.c src/lang.c src/data.c src/bot.c src/art.c
-      src/art_data.c src/gfx.c src/font.c src/png.c src/plat.c src/plat_headless.c src/plat_kms.c src/plat_sdl.c
+      src/art_data.c src/gfx.c src/font.c src/png.c src/plat.c src/plat_headless.c src/plat_kms.c src/plat_sdl.c src/selftest.c
       src/input_evdev.c src/audio_alsa.c"
 WARN="-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wno-format-truncation"
 mkdir -p build

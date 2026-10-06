@@ -570,8 +570,8 @@ if [ $GAME_ON = 1 ] && [ -f "$SRC/dodakvarter/bin/dodakvarter-aarch64" ]; then
     DK=/storage/.config/rocknixds/dodakvarter
     mkdir -p $DK/data /storage/roms/ports/images
     cp "$SRC/dodakvarter/bin/dodakvarter-aarch64" $DK/dodakvarter
-    for f in launch.sh session.sh restore.sh gamelist.py; do cp "$SRC/dodakvarter/device/$f" $DK/; done
-    chmod +x $DK/dodakvarter $DK/launch.sh $DK/session.sh $DK/restore.sh
+    for f in launch.sh session.sh restore.sh selftest.sh gamelist.py; do cp "$SRC/dodakvarter/device/$f" $DK/; done
+    chmod +x $DK/dodakvarter $DK/launch.sh $DK/session.sh $DK/restore.sh $DK/selftest.sh
     cp "$SRC/dodakvarter/device/Doda Kvarter.sh" "/storage/roms/ports/Doda Kvarter.sh"
     chmod +x "/storage/roms/ports/Doda Kvarter.sh"
     cp "$SRC"/dodakvarter/device/media/dodakvarter-*.png /storage/roms/ports/images/
