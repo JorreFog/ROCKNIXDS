@@ -1,7 +1,7 @@
 From 02b181f40a019b94299b02b8dc5f334ca74781c4 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 15:21:56 +0000
-Subject: [PATCH 01/13] Shaders can draw a smaller buffer than the panel;
+Subject: [PATCH 01/15] Shaders can draw a smaller buffer than the panel;
  ds-fsr draws 3x on the RG DS Plus
 
 A shader's source may say "// dsflip-output: Nx" (N times the DS screen's 256x192) or "dsflip-output: WxH": its
@@ -312,7 +312,7 @@ index 1939acf..e7dd4a9 100644
 From 3de78751408ed7350c4f6d726775267571fcfd5a Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 17:39:05 +0000
-Subject: [PATCH 02/13] Port the Wi-Fi (Nintendo WFC) path from ROCKNIXDS
+Subject: [PATCH 02/15] Port the Wi-Fi (Nintendo WFC) path from ROCKNIXDS
  cursor/drastic-wfc-dns into SuperDrastic
 
 Ported, unchanged in logic, from ROCKNIXDS commit b1a4564 (branch origin/cursor/drastic-wfc-dns-24ad,
@@ -2196,7 +2196,7 @@ index 0000000..535fe1c
 From 0861654f97441d280960ff3a1757773aa49064be Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 17:56:24 +0000
-Subject: [PATCH 03/13] Wi-Fi: ARP only for the gateway, RX records with their
+Subject: [PATCH 03/15] Wi-Fi: ARP only for the gateway, RX records with their
  FCS and W_RXLEN_CROP, a probe of DraStic's W_IF store;
  0.4.0-beta.2-rocknixds.2
 
@@ -2413,7 +2413,7 @@ index 535fe1c..a90f87d 100644
 From d8291e0d67a1a77942bc6ea7dabb2cd5b90e5a9c Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 18:07:03 +0000
-Subject: [PATCH 04/13] Microphone: tunables and logs for the handheld, a
+Subject: [PATCH 04/15] Microphone: tunables and logs for the handheld, a
  joystick-button fallback for the fake microphone; 0.4.0-beta.2-rocknixds.3
 
 A real blow does nothing on the RG DS (ROCKNIXDS issue 26). The mic thread can now be tuned and watched without a
@@ -2633,7 +2633,7 @@ index 9892be8..f397894 100644
 From fe2c56f1a6a455a5c776ac5dbdf15c6c92678f81 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 22:54:27 +0000
-Subject: [PATCH 05/13] Stall watch, a quit that works on a stuck game,
+Subject: [PATCH 05/15] Stall watch, a quit that works on a stuck game,
  RetroAchievements logins that survive no network
 
 2026-10-05, an RG DS Plus: Black 2 started with its resume state, DraStic stopped presenting frames a few seconds
@@ -3134,7 +3134,7 @@ index f397894..1e31a47 100644
 From bb4f885cfbd1e7f5fa0b0818a62567a81e67292b Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 22:54:27 +0000
-Subject: [PATCH 06/13] Online play parked for ROCKNIXDS 1.6: only DSFLIP_WFC
+Subject: [PATCH 06/15] Online play parked for ROCKNIXDS 1.6: only DSFLIP_WFC
  turns the Wi-Fi hook on
 
 nds.wfc_dns from system.cfg (ES's "wfc dns", offered by the 1.5.13 test builds) is read only with
@@ -3203,7 +3203,7 @@ index 7ba0b7a..888b56a 100644
 From b874a209b2e70875fd1716ceea146deec4494795 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 23:09:32 +0000
-Subject: [PATCH 07/13] In-game menu's Blow presses DraStic's fake microphone
+Subject: [PATCH 07/15] In-game menu's Blow presses DraStic's fake microphone
  the way its binding asks (ROCKNIXDS issue 26)
 
 The Microphone page's Blow held the keyboard control (Scroll Lock, 327) only. A drastic.cfg whose keyboard set has no
@@ -3301,7 +3301,7 @@ index fd02359..b3be979 100644
 From 09c5054a6c56610ad0c4a34ee49242df0138147d Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 23:10:02 +0000
-Subject: [PATCH 08/13] 0.5.0-beta.1-rocknixds.4: the ROCKNIXDS 1.6 test build
+Subject: [PATCH 08/15] 0.5.0-beta.1-rocknixds.4: the ROCKNIXDS 1.6 test build
  (both handhelds)
 
 v0.5.0-beta.1 plus the 1.5.13 commits (ds-fsr 3x, the parked Wi-Fi path off by default, microphone tunables) and
@@ -3329,7 +3329,7 @@ index 08c0d0c..b560c44 100644
 From f81578546546e5f6d2d004cf20ed6b297a6201af Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 23:15:36 +0000
-Subject: [PATCH 09/13] DSFLIP_STALL_TEST: DraStic's main thread stops after
+Subject: [PATCH 09/15] DSFLIP_STALL_TEST: DraStic's main thread stops after
  that many seconds, to test the stall watch on a handheld
 
 The 2026-10-05 freeze (DraStic alive, its main thread no longer presenting) can't be made on purpose: SIGSTOP stops
@@ -3380,7 +3380,7 @@ index b7be2fd..9e82449 100644
 From d5900155f037aafaddb585f0611db842525186ca Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 23:19:16 +0000
-Subject: [PATCH 10/13] Stall card: 15 s at a time while the stall lasts, so it
+Subject: [PATCH 10/15] Stall card: 15 s at a time while the stall lasts, so it
  doesn't outstay a stall that ends; the menu's Quit timestamps its request
 
 The card was posted for 10 minutes: a stall that ended (a long pause, not a hang) left it over the game. It is now
@@ -3451,7 +3451,7 @@ index 1e31a47..51152b7 100644
 From 212712c1ffb195ca1211e05f043ba430dbd20161 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 23:19:35 +0000
-Subject: [PATCH 11/13] 0.5.0-beta.1-rocknixds.5: the ROCKNIXDS 1.6 test build,
+Subject: [PATCH 11/15] 0.5.0-beta.1-rocknixds.5: the ROCKNIXDS 1.6 test build,
  with the stall test switch and the shorter stall card
 
 .4 plus DSFLIP_STALL_TEST (DraStic's main thread stops on purpose, to test the stall watch on a handheld), the stall
@@ -3477,7 +3477,7 @@ index b560c44..b400b70 100644
 From c8bc8604a6f6828c227c1ae4e3919d9bfcb7192e Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 6 Oct 2026 00:55:26 +0000
-Subject: [PATCH 12/13] In-game menu at 640x480: pixel text on Pixelify Sans's
+Subject: [PATCH 12/15] In-game menu at 640x480: pixel text on Pixelify Sans's
  grid, a readable selected empty slot, dates without a double space
 
 Rendered on the build machine at both panel sizes (every screen and pop-up): at 640x480 nothing runs out of its box,
@@ -3604,7 +3604,7 @@ index b3be979..2ef2875 100644
 From 44d6e1be7e12265d5b9e2dbfb411eb72b890d94c Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 6 Oct 2026 00:55:26 +0000
-Subject: [PATCH 13/13] 0.5.0-beta.1-rocknixds.6: the ROCKNIXDS 1.6 test build,
+Subject: [PATCH 13/15] 0.5.0-beta.1-rocknixds.6: the ROCKNIXDS 1.6 test build,
  with the in-game menu right at 640x480
 
 .5 plus the in-game menu's pixel text on the font's grid on the RG DS's 640x480 panels, a readable selected empty
@@ -3623,6 +3623,182 @@ index b400b70..1fdcbf1 100644
 @@ -1 +1 @@
 -0.5.0-beta.1-rocknixds.5
 +0.5.0-beta.1-rocknixds.6
+-- 
+2.43.0
+
+
+From 5e14c95a2cbcd8d9abad95a52703b0ecebb24532 Mon Sep 17 00:00:00 2001
+From: JorreFog <JorreFog@users.noreply.github.com>
+Date: Tue, 6 Oct 2026 18:35:51 +0200
+Subject: [PATCH 14/15] DraStic's helper threads wait until their locks exist:
+ the freeze at a game's start
+
+DraStic r2.5.2.2 starts four of its helper threads before it initialises what each of them waits on: pthread_create,
+then pthread_mutex_init twice and pthread_cond_init twice (at +0x312ac for the thread that starts at +0x2fa50, and at
++0x597b4, three times over, for the three 3D threads that start at +0x58e50). A helper that is quick is already inside
+pthread_cond_wait when its creator wipes that condition variable. glibc (2.25 on) keeps a condition variable's waiters
+in the variable itself, so the first pthread_cond_signal finds none and wakes nobody, and whoever handed the work over
+waits for the answer for good. The game shows no frame, or none from the first frame that needs that helper (a first
+3D frame that comes with a state load fits the freeze of 2026-10-05 on an RG DS Plus; no dump exists from that one).
+
+Measured on an RG DS Plus, 0.5.0-beta.1-rocknixds.6: 4 of 25 starts of Pokemon HeartGold showed no frame. gdb: three
+with a 3D helper still in the pthread_cond_wait at +0x58eb8 after its hand-off, the 3D thread waiting for it in the
+one at +0x592f8 and the main thread in the one at +0x596a8; one with the lines helper in the one at +0x2faf0 and the
+main thread waiting for it in the one at +0x30d30. Every thread was allowed on all four CPUs, so it was not the CPU
+placement, which .4 took for the cause; placed early it only made the creator late more often.
+
+pthread_create now starts those four through helper_start, where a helper first waits until its creator has made its
+second pthread_cond_init since the pthread_create (the last of the four initialisations; pthread_cond_init is wrapped
+to count them). A door opens by itself after 2 s. A DraStic whose code is elsewhere is started as before.
+
+DSFLIP_HELPER_DOOR=0 starts them as DraStic does. DSFLIP_HELPER_RACE=<ms> makes the creator sleep that long after each
+of the four pthread_create calls. On the RG DS Plus with DSFLIP_HELPER_RACE=20: 4 of 4 starts froze without the door,
+0 of 6 with it, and the log has the four helpers waiting 20.6 to 21.5 ms for their locks.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_0163Mqir7sNdo9dnTp5gcyfe
+---
+ docs/INTEGRATION.md |  2 ++
+ src/dsflip.c        | 76 ++++++++++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 77 insertions(+), 1 deletion(-)
+
+diff --git a/docs/INTEGRATION.md b/docs/INTEGRATION.md
+index d217cd6..bdd5932 100644
+--- a/docs/INTEGRATION.md
++++ b/docs/INTEGRATION.md
+@@ -161,6 +161,8 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
+ | `DSFLIP_STALL_TEST` | off | Seconds after the first frame at which DraStic's main thread stops for good (tests the stall watch) |
+ | `DSFLIP_NOTICE` | `/tmp/dsflip-notice` | Where that ending leaves a line for the launcher to show |
+ | `DSFLIP_SPREAD_THREADS` | 1 | 0 = new threads inherit their creator's CPUs (with DraStic's main thread confined to one CPU, its new helper threads then share that CPU only) |
++| `DSFLIP_HELPER_DOOR` | 1 | 0 = DraStic's four helper threads start the way DraStic starts them: before the locks they wait on exist. DraStic r2.5.2.2 calls `pthread_create` first and initialises the thread's two mutexes and two condition variables after it; a helper that is already waiting by then never gets its first hand-off, and the game shows no frame (or stops at its first 3D frame). With the door a helper waits for its creator's second `pthread_cond_init`, 2 s at most; the log has a line per helper |
++| `DSFLIP_HELPER_RACE` | off | Milliseconds DraStic's main thread sleeps right after starting each of those helpers. With `DSFLIP_HELPER_DOOR=0` the game then freezes at every start; with the door nothing changes (tests the door on a handheld) |
+ | `DSFLIP_GPU_CLOCKS`, `DSFLIP_AUDIO_RATE` | 1, 1 | The launcher's GPU clock and PipeWire rate handling |
+ | `DSFLIP_WFC` | off | Nintendo WFC online play (parked: it does not get past the game's Wi-Fi setup yet): `kaeru`, `altwfc`, `wiilink` or a dotted DNS address. SuperDrastic answers the DS as an open access point named `rocknixds` and hands it that DNS server over DHCP; the game's traffic goes through the host's own sockets (UDP, client TCP). Needs the DraStic build r2.5.2.2 (it checks the build id). `nds.wfc_dns` in ROCKNIX's `system.cfg` is read only with `DSFLIP_WFC_CONFIG=1`. `DSFLIP_WFC_DEBUG=1` logs every frame |
+ | `DSFLIP_AUDIO_PUMP` | 1 | 0 = DraStic's own SDL audio |
+diff --git a/src/dsflip.c b/src/dsflip.c
+index e390b9e..94b4815 100644
+--- a/src/dsflip.c
++++ b/src/dsflip.c
+@@ -41,6 +41,7 @@
+ #include <unistd.h>
+ #include <time.h>
+ #include <dlfcn.h>
++#include <link.h>
+ #include <errno.h>
+ #include <glob.h>
+ #include <signal.h>
+@@ -920,7 +921,7 @@ static void stall_watch(long long t) {  /* the presenter, every wake-up (at leas
+  * after a state load, say -- started on CPU 3 alone until the next placement pass. glibc applies an attribute's CPU
+  * set before the new thread first runs. DSFLIP_SPREAD_THREADS=0: inherit as before. */
+ static cpu_set_t all_cpus; static int spread_threads = -1;
+-int pthread_create(pthread_t *th, const pthread_attr_t *attr, void *(*fn)(void *), void *arg) {
++static int create_spread(pthread_t *th, const pthread_attr_t *attr, void *(*fn)(void *), void *arg) {
+     static int (*real)(pthread_t *, const pthread_attr_t *, void *(*)(void *), void *);
+     if (!real) real = (int (*)(pthread_t *, const pthread_attr_t *, void *(*)(void *), void *))dlsym(RTLD_NEXT, "pthread_create");
+     if (spread_threads <= 0) return real(th, attr, fn, arg);
+@@ -939,6 +940,79 @@ int pthread_create(pthread_t *th, const pthread_attr_t *attr, void *(*fn)(void *
+     return r;
+ }
+ 
++/* DraStic's helper threads wait at a door until the locks they wait on exist.
++ *
++ * DraStic r2.5.2.2 (aarch64, build id 7a5e0e5f...0748) starts four of its helper threads before it initialises what
++ * each of them waits on: pthread_create, then pthread_mutex_init twice and pthread_cond_init twice. That is at
++ * +0x312ac for the thread that starts at +0x2fa50 (a screen's lines), and at +0x597b4, three times over, for the
++ * three that start at +0x58e50 (the 3D bins; the thread at +0x59430 that hands them their work is created after its
++ * locks, as it should be). A helper that is quick is already inside pthread_cond_wait when its creator wipes that
++ * condition variable. glibc (2.25 on) keeps a condition variable's waiters in the variable itself, so the
++ * pthread_cond_signal of the first hand-off finds no waiter and wakes nobody, and whoever handed the work over waits
++ * for the answer for good: the game shows no frame at all, or none from the first frame that needs that helper (the
++ * first 3D frame after a state load: the freeze of 2026-10-05 on an RG DS Plus).
++ * Measured on an RG DS Plus on 2026-10-06, 1.6's library: 4 of 25 starts of Pokemon HeartGold showed no frame. gdb:
++ * three with a 3D helper still in the pthread_cond_wait at +0x58eb8 after its hand-off, the 3D thread waiting for it
++ * in the one at +0x592f8 and the main thread in the one at +0x596a8; one with the lines helper in the one at +0x2faf0
++ * and the main thread waiting for it in the one at +0x30d30. Every thread was allowed on all four CPUs: session.sh's
++ * CPU placement was not the cause; placed too early it made the creator late more often (68dfccd in ROCKNIXDS: 8 of
++ * 9 starts).
++ *
++ * So the pthread_create below starts these four through helper_start, where a helper's first act is to wait until
++ * its creator has made its second pthread_cond_init call since the pthread_create: the last of the four
++ * initialisations, counted in the pthread_cond_init below. A door opens by itself after 2 s (with a line in the log),
++ * so nothing waits here for good, and a DraStic whose code is elsewhere is started as before.
++ * DSFLIP_HELPER_DOOR=0: start them as DraStic does. DSFLIP_HELPER_RACE=<ms>: the creator sleeps that long right after
++ * each of the four pthread_create calls, which is the freeze at every start without the door and changes nothing with
++ * it: the test on a handheld. */
++#define DS_HELPER_LINES 0x2fa50
++#define DS_HELPER_BINS  0x58e50
++typedef struct { void *(*fn)(void *); void *arg; unsigned off; int open; long long t0; } door_t;
++#define DOORS 64
++static door_t doors[DOORS]; static unsigned door_n;
++static __thread door_t *door_mine; static __thread int door_inits;     /* the creator's: the helper it started last */
++static int helper_door = -1, helper_race_ms; static uintptr_t exe_base;
++static int exe_base_cb(struct dl_phdr_info *i, size_t n, void *u) { (void)n; (void)u; exe_base = i->dlpi_addr; return 1; }   /* the first is the program */
++
++static void *helper_start(void *p) {
++    door_t *d = p; void *(*fn)(void *) = d->fn; void *arg = d->arg; unsigned off = d->off; long long t0 = d->t0;
++    int i = 0;
++    for (; i < 20000 && !__atomic_load_n(&d->open, __ATOMIC_ACQUIRE); i++) { struct timespec t = { 0, 100000 }; nanosleep(&t, 0); }
++    if (i == 20000) LOG("[dsflip] DraStic's helper +0x%x waited 2 s for its locks and starts all the same\n", off);
++    else LOG("[dsflip] DraStic's helper +0x%x waited %lld us for its locks\n", off, now_us() - t0);
++    return fn(arg);
++}
++
++int pthread_create(pthread_t *th, const pthread_attr_t *attr, void *(*fn)(void *), void *arg) {
++    if (helper_door < 0) {
++        const char *e = getenv("DSFLIP_HELPER_DOOR"); int on = !(e && *e == '0');
++        e = getenv("DSFLIP_HELPER_RACE"); helper_race_ms = e ? atoi(e) : 0;
++        dl_iterate_phdr(exe_base_cb, 0);
++        helper_door = on;
++    }
++    uintptr_t off = (uintptr_t)fn - exe_base;
++    int helper = exe_base && (off == DS_HELPER_LINES || off == DS_HELPER_BINS);
++    door_t *d = 0;
++    if (helper && helper_door) {
++        if (door_mine) __atomic_store_n(&door_mine->open, 1, __ATOMIC_RELEASE);     /* the one before: never left waiting */
++        d = &doors[__atomic_fetch_add(&door_n, 1, __ATOMIC_RELAXED) % DOORS];
++        d->fn = fn; d->arg = arg; d->off = (unsigned)off; d->t0 = now_us(); __atomic_store_n(&d->open, 0, __ATOMIC_RELEASE);
++        door_mine = d; door_inits = 0;
++    }
++    int r = d ? create_spread(th, attr, helper_start, d) : create_spread(th, attr, fn, arg);
++    if (r && d) door_mine = 0;                                          /* no thread: nobody at this door */
++    if (helper && helper_race_ms > 0) { struct timespec t = { helper_race_ms / 1000, (helper_race_ms % 1000) * 1000000L }; nanosleep(&t, 0); }
++    return r;
++}
++
++int pthread_cond_init(pthread_cond_t *c, const pthread_condattr_t *a) {
++    static int (*real)(pthread_cond_t *, const pthread_condattr_t *);
++    if (!real) real = (int (*)(pthread_cond_t *, const pthread_condattr_t *))dlsym(RTLD_NEXT, "pthread_cond_init");
++    int r = real(c, a);
++    if (door_mine && ++door_inits == 2) { __atomic_store_n(&door_mine->open, 1, __ATOMIC_RELEASE); door_mine = 0; }
++    return r;
++}
++
+ /* ---------- the in-game menu's screens (menu.c) ---------- */
+ /* two panel-sized XRGB8888 buffers per panel; the menu draws into one that isn't on screen or on its way there and
+  * puts it up in place of whatever frames were waiting. DraStic's next frame after the menu replaces them. */
+-- 
+2.43.0
+
+
+From 85e87196025670d68c84e0f29aae442fd558d080 Mon Sep 17 00:00:00 2001
+From: JorreFog <JorreFog@users.noreply.github.com>
+Date: Tue, 6 Oct 2026 18:35:51 +0200
+Subject: [PATCH 15/15] 0.5.0-beta.1-rocknixds.7: the ROCKNIXDS 1.6 test build,
+ without the freeze at a game's start
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_0163Mqir7sNdo9dnTp5gcyfe
+---
+ VERSION | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/VERSION b/VERSION
+index 1fdcbf1..f8a456d 100644
+--- a/VERSION
++++ b/VERSION
+@@ -1 +1 @@
+-0.5.0-beta.1-rocknixds.6
++0.5.0-beta.1-rocknixds.7
 -- 
 2.43.0
 

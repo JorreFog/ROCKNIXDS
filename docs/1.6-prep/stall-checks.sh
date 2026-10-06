@@ -10,7 +10,7 @@
 # One PASS/FAIL/SKIP line per check; the log lines behind each go to /storage/stall-checks-<date>.txt. The game's own
 # saves are not touched, and a resume state the player had for the game is put back. ES counts the 6 starts as plays
 # of that game (play count, last played). dsflip.log ends up holding the
-# last check's game. ES shows the notices of checks 1 and 5 once it's done: close them with A.
+# last check's game. The notices of checks 1 and 5 are not shown in ES during the run (see HIDE below).
 D=/storage/.config/drastic/dsflip
 ROM=$(ls /storage/roms/nds/*.nds /storage/roms/nds/*.zip 2>/dev/null | grep -i -- "${1:?usage: stall-checks.sh <rom-substring>}" | head -n1)
 [ -n "$ROM" ] || { echo "no rom matching $1"; exit 1; }
@@ -21,6 +21,7 @@ SLOG=$D/last-session.log
 cleanup() {
     systemctl unset-environment DSFLIP_STALL_TEST 2>/dev/null
     P=$(pidof drastic || pidof drastic.real); [ -n "$P" ] && kill -9 $P
+    [ -n "$HIDE" ] && kill $HIDE 2>/dev/null
     rm -f /tmp/rocknixds-testing /tmp/rocknixds-testing-resume "$RSTATE"
     [ -f "$RSTATE.stall-checks" ] && mv "$RSTATE.stall-checks" "$RSTATE"
 }
@@ -28,10 +29,26 @@ trap cleanup EXIT; trap 'exit 1' HUP INT TERM
 [ -f "$RSTATE" ] && mv "$RSTATE" "$RSTATE.stall-checks"
 touch /tmp/rocknixds-testing /tmp/rocknixds-testing-resume   # test launches, resume on all the same (session.sh
                                                             # skips its own stats; ES still counts each as a play)
+# The notices of checks 1 and 5 are checked in the session's log and not shown: ES would keep each message box up, and
+# a launch made under a message box waits until someone closes the box. restore.sh posts a notice from
+# /tmp/dsflip-notice.<pid>, a second after ES answers: without the file ES gets an empty request, and shows nothing.
+( while kill -0 $$ 2>/dev/null; do rm -f /tmp/dsflip-notice.[0-9]* 2>/dev/null; sleep 0.1; done ) & HIDE=$!
 log() { echo "$*" | tee -a $REP; }
 lines() { echo "--- $1" >> $REP; grep -a "$2" $D/dsflip.log | cut -c1-200 | head -n 12 >> $REP; }
 session() { tail -n +$((SL + 1)) $SLOG 2>/dev/null; }       # last-session.log since this check's launch
-idle() { i=0; while ! curl -s -m 1 localhost:1234/isIdle | grep -q true && [ $i -lt 60 ]; do sleep 0.5; i=$((i+1)); done; }
+# idle: ES takes a launch again. Its /isIdle says true all through a game, and ES drops a /launch that was made before
+# it noted the last game's end (es-rgds-launchonce), which is a little after the game's units are gone: so wait for the
+# units, then for ES's main thread to have been out of the launch command (wait4, syscall 260) for 1.5 s.
+idle() {
+    i=0; while { systemctl is-active -q dsflip-game || systemctl is-active -q dsflip-vtback; } && [ $i -lt 300 ]; do sleep 0.1; i=$((i+1)); done
+    EP=$(pidof emulationstation | cut -d' ' -f1); i=0; ok=0
+    while [ $ok -lt 15 ] && [ $i -lt 300 ]; do
+        sc=; read sc _ < /proc/$EP/syscall 2>/dev/null
+        case "$sc" in 260|"") ok=0 ;; *) ok=$((ok+1)) ;; esac
+        sleep 0.1; i=$((i+1))
+    done
+    i=0; while ! curl -s -m 1 localhost:1234/isIdle | grep -q true && [ $i -lt 60 ]; do sleep 0.5; i=$((i+1)); done
+}
 # launch [stall-at-s]: the game through ES; true once libdsflip has the panels (P = DraStic, S0 = when it was asked)
 launch() {
     if [ -n "$1" ]; then systemctl set-environment DSFLIP_STALL_TEST=$1; else systemctl unset-environment DSFLIP_STALL_TEST; fi
@@ -53,7 +70,12 @@ until_log() { i=0; while ! grep -aq "$2" $D/dsflip.log && [ $i -lt $(($1 * 10)) 
 unit_done() { i=0; while systemctl is-active -q dsflip-game && [ $i -lt 300 ]; do sleep 0.1; i=$((i+1)); done; }
 pass=0 fail=0 skip=0
 result() {
-    case $1 in ok) pass=$((pass+1)); log "PASS $2" ;; skip) skip=$((skip+1)); log "SKIP $2" ;; *) fail=$((fail+1)); log "FAIL $2" ;; esac
+    case $1 in ok) pass=$((pass+1)); log "PASS $2" ;; skip) skip=$((skip+1)); log "SKIP $2" ;;
+    *)  fail=$((fail+1)); log "FAIL $2"
+        # what the failed check's game logged, whole: the next check's game takes dsflip.log over
+        { echo "--- dsflip.log at the failure"; cut -c1-240 $D/dsflip.log | grep -av 'present/s=[1-9]' | tail -n 150
+          echo "--- last-session.log since the launch"; session | tail -n 40; } >> $REP ;;
+    esac
 }
 log "stall-checks: $GAME (ROCKNIXDS $(cat /storage/.config/rocknixds-version 2>/dev/null))"
 
