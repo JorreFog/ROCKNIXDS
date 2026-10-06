@@ -602,5 +602,6 @@ echo "$RGDS_VERSION$([ "$BRANCH" = main ] || echo " ($BRANCH)")" > $VERSION_FILE
 rm -rf $WORK
 es_start
 say "Installed ROCKNIXDS $RGDS_VERSION. Start a DS game from EmulationStation as usual."
+say "ROCKNIXDS does not support piracy: use only games you dumped from cartridges you own. Terms: https://github.com/$REPO/blob/main/LEGAL.md"
 say "Undo: curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | sh -s -- --uninstall"
 [ -n "$NEED_REBOOT" ] && say "Reboot for the 60 Hz panel timing to take effect." || true

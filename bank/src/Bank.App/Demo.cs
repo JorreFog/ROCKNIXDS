@@ -52,6 +52,7 @@ public static class Demo
         bank.Put(0, 9, hacked);
         bank.RenameBox(0, "Favourites");
         cfg.LastSave = Path.Combine(roms, "nds", "Pokemon - HeartGold Version (USA).dsv");
+        LegalTerms.Accept(cfg); // straight to the boxes in the sandbox; the terms screen still opens from the menu
         cfg.Save();
         return cfg.ConfigPath;
     }

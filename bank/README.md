@@ -47,6 +47,13 @@ app in `/storage/.config/rocknixds/bank` and its entry in **Ports > ROCKNIXDS Ba
 `sh install-bank.sh --uninstall` removes it (the bank itself stays). Without network:
 `BANK_TARBALL=/path/to/rocknixds-bank-<version>-aarch64.tar.gz sh install-bank.sh`.
 
+## Terms of use
+
+The first time it starts (and again whenever they change), the app shows its [terms of use](../LEGAL.md) and asks you
+to read them to the end and accept them: use only saves from cartridges you own, never pirated copies, and trade only
+Pokémon from your own games. ROCKNIXDS does not support piracy. Not accepting closes the app. The terms are in the
+menu (**Menu → Terms of use**) to read again at any time.
+
 ## Use
 
 **Close the game first.** Emulators write their own copy of the save when they quit, over whatever changed meanwhile.
@@ -195,5 +202,8 @@ pre-release (never "latest", so ROCKNIXDS's own updater doesn't take it for a RO
 ## License
 
 GPL-3.0 (`LICENSE`), because it links PKHeX.Core; the rest of ROCKNIXDS stays MIT. `THIRD_PARTY.md` lists the parts from
-others. Pokémon and its names are trademarks of Nintendo, Creatures and GAME FREAK: this is a fan-made tool for your
-own saves, not affiliated with them.
+others. The terms of use ([`LEGAL.md`](../LEGAL.md)) add no restriction on the rights the licence gives you.
+
+Pokémon and its names are trademarks and copyrights of Nintendo, Creatures, GAME FREAK and The Pokémon Company; all other
+names and trademarks belong to their respective owners. This is a fan-made tool for your own saves, not affiliated with or
+endorsed by any of them.

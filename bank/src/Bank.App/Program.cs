@@ -174,7 +174,11 @@ public static class Program
             var bottom = new Canvas(renderer, regular, medium, sprites);
 
             var app = new App(cfg, Log);
-            app.Push(new LoadingScreen(app));
+            // the terms of use first: read and accepted once per version, before anything else opens
+            if (LegalTerms.IsAccepted(cfg))
+                app.Push(new LoadingScreen(app));
+            else
+                app.Push(new TermsScreen(app, () => app.Replace(new LoadingScreen(app))));
 
             input.WindowSize = () =>
             {

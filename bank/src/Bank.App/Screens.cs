@@ -206,9 +206,10 @@ public static class MainMenu
             }),
             new("Settings", () => app.Push(new SettingsScreen(app))),
             new("About", () => app.Push(new AboutScreen(app))),
+            new("Terms of use", () => app.Push(new TermsScreen(app, null))),
             new("Quit", () => app.QuitRequested = true),
             new("Close", () => { }),
-        ], cancelIndex: 6);
+        ], cancelIndex: 7);
     }
 }
 
@@ -367,8 +368,9 @@ public sealed class AboutScreen(App app) : Screen(app)
             "Save reading and writing, the conversions between generations and the legality checks are PKHeX.Core " +
             "by Kaphotics and the PKHeX contributors (GPL-3.0), which makes this app GPL-3.0 too. The Pokémon box sprites " +
             "come with PKHeX. Font: Pixelify Sans (SIL Open Font License).\n\n" +
-            "Pokémon and its names are trademarks of Nintendo, Creatures and GAME FREAK. This is a fan-made tool for your " +
-            "own saves, not affiliated with them.\n\n" +
+            "ROCKNIXDS does not support piracy: use only games you dumped from cartridges you own. Pokémon, Nintendo and the " +
+            "other names are trademarks of their owners; this fan project isn't affiliated with them. The terms of use are " +
+            "in the menu.\n\n" +
             "Saves are backed up the first time they change in a session (the backups folder in the data folder), and every " +
             "move and trade is written to history.log there.",
             24, 24, 592, 16, p.Ink);
