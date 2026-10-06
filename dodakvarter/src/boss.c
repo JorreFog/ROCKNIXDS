@@ -54,6 +54,26 @@ void boss_round_start(int r) {
 }
 
 /* where it comes up: an open spawn, not too close and not too far, that the player can be reached from */
+#define FALL 1.6f                                       /* (its fall, before it lies still: seconds) */
+
+/* in sight as it comes up: where the view will be, ahead of your aim and leaning its way (as camera_update has it,
+   held at the town's edge), with all of it in the picture */
+static int in_sight(float sx, float sy) {
+    const Player *p = &G->p;
+    float mx = G->view_w / 2.0f - 30, my = G->view_h / 2.0f - 30;
+    float vx = clampf(p->x + cosf(p->aim) * 26 + clampf((sx - p->x) * 0.5f, -mx, mx) - G->view_w / 2.0f, 0, (float)(G->ww - G->view_w));
+    float vy = clampf(p->y - 8 + sinf(p->aim) * 21 + clampf((sy - 20 - p->y) * 0.5f, -my, my) - G->view_h / 2.0f, 0, (float)(G->wh - G->view_h));
+    return sx - vx > 28 && sx - vx < G->view_w - 28 && sy - vy > 66 && sy - vy < G->view_h - 24 &&
+           p->x - vx > 12 && p->x - vx < G->view_w - 12 && p->y - vy > 24 && p->y - vy < G->view_h - 8;
+}
+static int open_ground(float x, float y) {                  /* room for it, and a way from there to you */
+    int tx = (int)(x / TS), ty = (int)((y - 2) / TS);
+    if (tx < 1 || ty < 1 || tx >= G->w - 1 || ty >= G->h - 1 || G->flow[ty][tx] == 0xFFFF) return 0;
+    for (int j = -1; j <= 0; j++) for (int i = -1; i <= 1; i++) if (solid_at(tx + i, ty + j)) return 0;
+    return 1;
+}
+
+/* where it comes up: a spawn about 150 px away that you'll see; failing that, open ground in front of you */
 static int boss_spot(float *x, float *y) {
     Player *p = &G->p;
     int best = -1; float bscore = 1e9f;
@@ -64,9 +84,16 @@ static int boss_spot(float *x, float *y) {
         int tx = (int)(sx / TS), ty = (int)((sy - 2) / TS);
         if (tx < 0 || ty < 0 || tx >= G->w || ty >= G->h || solid_at(tx, ty) || G->flow[ty][tx] == 0xFFFF) continue;
         float d = sqrtf(dist2f(sx, sy, p->x, p->y));
-        float score = fabsf(d - 170) + (d < 90 ? 400 : 0);
+        float score = fabsf(d - 150) + (d < 90 ? 400 : 0) + (in_sight(sx, sy) ? 0 : 150);
         if (score < bscore) { bscore = score; best = i; *x = sx; *y = sy; }
     }
+    if (best >= 0 && bscore < 100) return best;
+    for (int r = 0; r < 4; r++)                             /* out of the ground: ahead of you first, then around */
+        for (int a = 0; a < 24; a++) {
+            float ang = p->aim + (a & 1 ? 1 : -1) * ((a + 1) / 2) * (2 * PI_F / 24), d = 140 - r * 15;
+            float gx = p->x + cosf(ang) * d, gy = p->y + sinf(ang) * d * 0.75f;
+            if (open_ground(gx, gy) && in_sight(gx, gy)) { *x = gx; *y = gy; return 0; }
+        }
     return best;
 }
 
@@ -277,18 +304,19 @@ static void draugen(Zombie *z, Boss *b, float pd, float dt) {
     case B_HORN:                                            /* the horn: the dead around him rise */
         if (b->t < 1.1f && b->n == 0) {
             b->n = 1;
-            int want = b->enraged ? 6 : 4, alive = 0;
+            int want = b->enraged ? 5 : 3, alive = 0;
             for (int i = 0; i < MAX_ZOMBIES; i++) if (G->z[i].alive && G->z[i].state != ZS_DEAD && G->z[i].type != ZT_BOSS) alive++;
-            for (int k = 0; k < want && alive < 20; k++) {
+            for (int k = 0; k < want && alive < 14; k++) {
                 float a = rng_rangef(&G->rng, 0, 2 * PI_F), d = rng_rangef(&G->rng, 22, 46);
                 float x = z->x + cosf(a) * d, y = z->y + sinf(a) * d * 0.7f;
                 if (solid_at((int)(x / TS), (int)((y - 2) / TS))) continue;
-                if (zombie_at_spot(ZT_WALKER, x, y)) { alive++; b->summoned++; }
+                Zombie *w = zombie_at_spot(ZT_WALKER, x, y);
+                if (w) { w->hp = w->maxhp = w->maxhp * 0.35f; alive++; b->summoned++; }   /* (old bones: they break sooner) */
             }
             spawn_parts(PT_FROST, z->x, z->y - 30, 30, 0x9ae8ff, 60);
             G->flash_t = 0.1f;
         }
-        if (b->t <= 0) { set(b, B_CHASE, 0); b->cd[2] = 18; }
+        if (b->t <= 0) { set(b, B_CHASE, 0); b->cd[2] = 22; }
         return;
     default:
         if (b->t <= 0) set(b, B_CHASE, 0);
@@ -488,6 +516,65 @@ static void lindorm(Zombie *z, Boss *b, float pd, float dt) {
 }
 
 /* ---------------------------------------------------------------- every tick */
+/* its fall: frost, stone, water or venom coming off it... */
+static void falling(Zombie *z, float dt) {
+    float k = z->t / FALL, h = z->variant == BOSS_LINDORM ? 12 : BD[z->variant].h;
+    float px = z->x + rng_rangef(&G->fx, -10, 10), py = z->y - rng_rangef(&G->fx, 2, h);
+    switch (z->variant) {
+    case BOSS_DRAUGEN: if (rng_chance(&G->fx, dt * 45)) spawn_parts(PT_FROST, px, py, 1, 0x9ae8ff, 20 + 40 * k); break;
+    case BOSS_TROLL: if (rng_chance(&G->fx, dt * 12)) spawn_parts(k < 0.5f ? PT_DUST : PT_GIB, px, py, 1, 0x8a8478, 25); break;
+    case BOSS_NACKEN: if (rng_chance(&G->fx, dt * 35)) spawn_parts(PT_WATER, z->x + rng_rangef(&G->fx, -14, 14), z->y, 1, 0x8ac8ff, 50); break;
+    default: if (rng_chance(&G->fx, dt * 30)) spawn_parts(PT_GAS, px, z->y - 6, 1, 0x7ad040, 20); break;
+    }
+    if (rng_chance(&G->fx, dt * 6)) shake(2);
+}
+/* ...and then it goes, each its own way */
+static void fallen(Zombie *z) {
+    switch (z->variant) {
+    case BOSS_DRAUGEN:                                      /* back to dust and frost */
+        spawn_parts(PT_DUST, z->x, z->y - 16, 40, 0x9a9488, 90);
+        spawn_parts(PT_FROST, z->x, z->y - 24, 50, 0x9ae8ff, 110);
+        sfx_at(SFX_SWOOSH, z->x, z->y, 0.8f);
+        break;
+    case BOSS_TROLL:                                        /* stone, and it crumbles */
+        spawn_parts(PT_GIB, z->x, z->y - 20, 50, 0x7a766e, 140);
+        spawn_parts(PT_DUST, z->x, z->y - 10, 50, 0x8a8478, 100);
+        sfx_at(SFX_SLAM, z->x, z->y, 1);
+        break;
+    case BOSS_NACKEN:                                       /* into the water */
+        spawn_parts(PT_WATER, z->x, z->y - 16, 70, 0x8ac8ff, 130);
+        sfx_at(SFX_SPLASH, z->x, z->y, 1);
+        break;
+    default:                                                /* venom and scales */
+        spawn_parts(PT_GAS, z->x, z->y - 8, 36, 0x7ad040, 60);
+        spawn_parts(PT_GIB, z->x, z->y - 8, 30, 0x3a6a2a, 130);
+        sfx_at(SFX_HISS, z->x, z->y, 1);
+        break;
+    }
+    if (z->variant != BOSS_DRAUGEN && z->variant != BOSS_NACKEN) world_decal_blood(z->x, z->y, 60);
+    shake(8);
+    sfx(SFX_FANFARE, 0.9f, 0);
+}
+
+/* the view leans to a boss as it comes up and greets you, and as it falls (1: lean to x, y) */
+int boss_focus(float *x, float *y) {
+    const Boss *b = &G->boss;
+    if (b->zi < 0 || b->zi >= MAX_ZOMBIES) return 0;
+    const Zombie *z = &G->z[b->zi];
+    if (!z->alive || z->type != ZT_BOSS) return 0;
+    if (!(z->state == ZS_RISE || (z->state == ZS_DEAD && z->t < FALL) || (b->on && b->st == B_ROAR && b->n == 1))) return 0;
+    *x = z->x; *y = z->y - (z->variant == BOSS_LINDORM ? 8 : 20);
+    return 1;
+}
+
+/* the first moment of its fall is seen slowed down */
+float boss_time_scale(void) {
+    const Boss *b = &G->boss;
+    if (b->zi < 0 || b->zi >= MAX_ZOMBIES) return 1;
+    const Zombie *z = &G->z[b->zi];
+    return z->alive && z->type == ZT_BOSS && z->state == ZS_DEAD && z->t < 0.5f ? 0.35f : 1;
+}
+
 int boss_ai(Zombie *z, float dt) {
     if (z->type != ZT_BOSS) return 0;
     Boss *b = &G->boss;
@@ -495,11 +582,23 @@ int boss_ai(Zombie *z, float dt) {
     if (z->flash > 0) z->flash -= dt;
     if (z->slow > 0) z->slow -= dt;
     if (z->burn > 0) { z->burn -= dt; if (rng_chance(&G->fx, 0.4f)) spawn_parts(PT_FIRE, z->x + rng_rangef(&G->fx, -8, 8), z->y - 20, 1, 0xffa030, 10); }
-    if (z->state == ZS_DEAD) { z->t += dt; if (z->t > 14) z->alive = 0; return 1; }   /* it lies there a while */
+    if (z->state == ZS_DEAD) {                              /* it falls, then lies there a while */
+        float t0 = z->t; z->t += dt;
+        if (z->t < FALL) falling(z, dt);
+        else if (t0 < FALL) fallen(z);
+        if (z->t > 14) z->alive = 0;
+        return 1;
+    }
     if (z->state == ZS_RISE) {
         z->t -= dt;
         if (rng_chance(&G->fx, 0.5f)) spawn_parts(PT_DUST, z->x + rng_rangef(&G->fx, -12, 12), z->y, 1, G->season == SEASON_WINTER ? 0xe8eef4 : 0x5a4636, 30);
-        if (z->t <= 0) { z->state = ZS_CHASE; set(b, B_CHASE, 0); }
+        if (z->t <= 0) {                                    /* up: it greets you, and then it comes */
+            z->state = ZS_CHASE; set(b, B_ROAR, 1.4f); b->n = 1;
+            b->face = b->kind == BOSS_LINDORM ? atan2f(p->y - z->y, p->x - z->x) : p->x < z->x ? PI_F : 0;
+            sfx_at(b->kind == BOSS_NACKEN ? SFX_FIDDLE : SFX_ROAR, z->x, z->y, 1); shake(7);
+            ring(z->x, z->y, 80, 0.8f, 0, b->kind == BOSS_NACKEN);
+            spawn_parts(PT_DUST, z->x, z->y, 26, G->season == SEASON_WINTER ? 0xe8eef4 : 0x5a4636, 80);
+        }
         return 1;
     }
     float rate = b->enraged ? 1.45f : 1.0f;
@@ -508,6 +607,8 @@ int boss_ai(Zombie *z, float dt) {
     if (!b->enraged && z->hp < z->maxhp * 0.5f && b->st == B_CHASE) {   /* half its health gone: enraged */
         b->enraged = 1; set(b, B_ROAR, 1.1f);
         sfx_at(SFX_ROAR, z->x, z->y, 1); shake(6);
+        ring(z->x, z->y, 64, 0.6f, 0, 2);                  /* (a red wave: only seen) */
+        spawn_parts(PT_SPARK, z->x, z->y - BD[b->kind].h * 0.5f, 24, 0xff4020, 90);
         msg(0xff6040, "%s %s", BD[b->kind].name, tr("is enraged"));
         return 1;
     }
@@ -528,7 +629,18 @@ int boss_ai(Zombie *z, float dt) {
     return 1;
 }
 
-void boss_hit(Zombie *z, float dmg) { (void)z; (void)dmg; }
+/* a hit: what comes off it, at the height of its body (frost, stone, water, green blood and scales) */
+void boss_hit(Zombie *z, float dmg) {
+    (void)dmg;
+    float cy, r = boss_hit_radius(z, &cy);
+    float x = z->x + rng_rangef(&G->fx, -r * 0.6f, r * 0.6f), y = z->y - cy + rng_rangef(&G->fx, -6, 6);
+    switch (z->variant) {
+    case BOSS_DRAUGEN: spawn_parts(PT_FROST, x, y, 2, 0x9ae8ff, 50); spawn_parts(PT_BLOOD, x, y, 1, 0x4a5a6a, 40); break;
+    case BOSS_TROLL: spawn_parts(PT_GIB, x, y, 2, 0x7a766e, 60); spawn_parts(PT_BLOOD, x, y, 1, 0x5a3a1a, 40); break;
+    case BOSS_NACKEN: spawn_parts(PT_WATER, x, y, 3, 0x8ac8ff, 50); break;
+    default: spawn_parts(PT_BLOOD, x, y, 2, 0x5a8a20, 50); spawn_parts(PT_GIB, x, y, 1, 0x3a6a2a, 50); break;
+    }
+}
 
 void boss_killed(Zombie *z) {
     Boss *b = &G->boss;
@@ -539,30 +651,11 @@ void boss_killed(Zombie *z) {
     char up[48]; snprintf(up, sizeof up, "%s", BD[b->kind].name);
     banner(0xf0d040, up, tr("slain"));
     G->banner_t = 3.5f;
-    shake(10); G->flash_t = 0.25f;
+    shake(10); G->flash_t = 0.1f;                         /* (a short one: the fall is slowed down) */
     sfx(SFX_ROAR, 1, 0); sfx(SFX_KABOOM, 0.7f, 0);
     if (music_now() == MUS_BOSS) music_play(MUS_NONE);
-    switch (b->kind) {                                      /* each goes its own way */
-    case BOSS_DRAUGEN:                                      /* back to dust and frost */
-        spawn_parts(PT_DUST, z->x, z->y - 16, 40, 0x9a9488, 90);
-        spawn_parts(PT_FROST, z->x, z->y - 24, 40, 0x9ae8ff, 100);
-        break;
-    case BOSS_TROLL:                                        /* to stone, as a troll does */
-        spawn_parts(PT_GIB, z->x, z->y - 20, 40, 0x7a766e, 130);
-        spawn_parts(PT_DUST, z->x, z->y - 10, 40, 0x8a8478, 90);
-        break;
-    case BOSS_NACKEN:                                       /* into water */
-        spawn_parts(PT_WATER, z->x, z->y - 16, 60, 0x8ac8ff, 120);
-        sfx_at(SFX_SPLASH, z->x, z->y, 1);
-        break;
-    default:                                                /* venom and scales */
-        spawn_parts(PT_GAS, z->x, z->y - 8, 30, 0x7ad040, 60);
-        spawn_parts(PT_GIB, z->x, z->y - 8, 24, 0x3a6a2a, 120);
-        break;
-    }
-    spawn_parts(PT_BLOOD, z->x, z->y - 16, 30, 0x8a1010, 110);
+    spawn_parts(PT_BLOOD, z->x, z->y - 16, 30, 0x8a1010, 110);   /* (then it falls: falling(), fallen()) */
     spawn_parts(PT_CONFETTI, z->x, z->y - 30, 30, 0xf0d040, 90);
-    world_decal_blood(z->x, z->y, 60);
     /* the spoils: a legendary weapon, Max Ammo, and money */
     static const int spoils[] = { W_AK5, W_AK4, W_KSP58, W_HAGEL, W_STUDSARE, W_STRAL, W_ASKA, W_SNO };
     item_drop_weapon(weapon_make(spoils[rng_int(&G->rng, (int)ARRAY_LEN(spoils))], RAR_LEGENDARY), z->x + 14, z->y + 6);
@@ -613,6 +706,7 @@ static const char *sprite_for(const Zombie *z) {
         switch (b->st) {
         case B_PLAY: snprintf(name, sizeof name, "boss_nacken_play_%d", ((int)(G->time * 7)) & 1); return name;
         case B_BECKON: case B_WINDUP: return "boss_nacken_beckon";
+        case B_ROAR: if (b->n == 1) { snprintf(name, sizeof name, "boss_nacken_play_%d", ((int)(G->time * 7)) & 1); return name; } return "boss_nacken_beckon";
         case B_DIVE: case B_UNDER: case B_EMERGE: return "boss_nacken_dive";
         }
         snprintf(name, sizeof name, "boss_nacken_idle_%d", ((int)(G->time * 2.5f)) & 1); return name;
@@ -662,14 +756,48 @@ static void draw_lindorm_body(Surf *s, Zombie *z, int cx, int cy) {
     }
 }
 
+/* its fall: it shudders, flashing; Draugen goes to frost, the troll to stone, Näcken sinks into his pool, the
+   lindworm's head thrashes and drops */
+static void draw_fall(Surf *s, Zombie *z, int sx, int sy) {
+    Boss *b = &G->boss;
+    static const char *pose[BOSS_COUNT] = { "boss_draugen_horn", "boss_troll_roar", "boss_nacken_dive", "boss_lindorm_head_1" };
+    const Img *im = boss_img(pose[z->variant]);
+    if (!im) return;
+    float k = CLAMP(z->t / FALL, 0, 1);
+    int jit = (int)(sinf(z->t * 70) * 2.5f * (1 - k * 0.6f)), white = ((int)(z->t * 14)) & 1;
+    if (z->variant == BOSS_LINDORM) {
+        draw_lindorm_body(s, z, (int)G->camx, (int)G->camy);
+        ellipse_blend(s, sx, sy + 2, 14, 5, 0x000000, 90);
+        blit_rot(s, im, (float)(sx + jit), (float)(sy - 8) + k * 5, b->face - PI_F / 2 + sinf(z->t * 18) * 0.5f * (1 - k), 0);
+        if (white) circle_blend(s, sx + jit, sy - 8 + (int)(k * 5), 11, 0xffffff, 80);
+        return;
+    }
+    int flip = (b->face > PI_F / 2 && b->face < 3 * PI_F / 2) ? FLIP_X : 0;
+    int ox = sx - im->w / 2 + jit, oy = sy - im->h + 1, shw = z->variant == BOSS_TROLL ? 20 : 15;
+    ellipse_blend(s, sx, sy, shw, shw / 3, 0x000000, (int)(110 * (1 - k * 0.5f)));
+    if (z->variant == BOSS_DRAUGEN)
+        blit_ex(s, im, ox, oy, flip, 0x9ae8ff, (int)(60 + 190 * k), (int)(255 * (1 - k * k)));
+    else if (z->variant == BOSS_TROLL)
+        blit_ex(s, im, ox, oy, flip, k < 0.3f && white ? 0xffffff : 0x6e6a62, k < 0.3f && white ? 170 : (int)(200 * MIN(1.0f, k * 1.5f)), 255);
+    else {
+        ellipse_blend(s, sx, sy, 18, 7, 0x0a1a2a, 200);
+        int clip_h = (int)(im->h * (1 - k));
+        if (clip_h > 0) {
+            Surf c = *s; surf_clip(&c, ox - 4, oy, im->w + 8, im->h);
+            blit_ex(&c, im, ox, oy + im->h - clip_h, flip, white ? 0xffffff : 0, white ? 120 : 0, 255);
+        }
+    }
+}
+
 void boss_draw(Surf *s, Zombie *z) {
     Boss *b = &G->boss;
     int cx = (int)G->camx, cy = (int)G->camy;
     int sx = (int)(z->x - cx), sy = (int)(z->y - cy);
     z->rimg = 0;
+    if (z->state == ZS_DEAD && z->t < FALL) { draw_fall(s, z, sx, sy); return; }
     if (z->state == ZS_DEAD) {
         const Img *d = art_exists(sprite_for(z)) ? art(sprite_for(z)) : 0;
-        if (d) blit_ex(s, d, sx - d->w / 2, sy - d->h + 3, b->face > 1.5f && b->face < 4.7f ? FLIP_X : 0, 0, 0, z->t > 11 ? (int)(255 * (14 - z->t) / 3) : 255);
+        if (d) blit_ex(s, d, sx - d->w / 2, sy - d->h + 3, b->face > 1.5f && b->face < 4.7f ? FLIP_X : 0, 0, 0, z->t > 11 ? (int)(255 * (14 - z->t) / 3) : 255);   /* (after its fall) */
         return;
     }
     if (z->variant == BOSS_LINDORM) {
@@ -766,7 +894,7 @@ void boss_lights(void) {
         if (!h->alive) continue;
         if (h->kind == HZ_NOTE) render_add_light(h->x, h->y - 16, 22, 0x60e0ff, 0.5f);
         else if (h->kind == HZ_POOL) render_add_light(h->x, h->y, 30, 0x60d040, 0.35f);
-        else if (h->kind == HZ_RING && h->a > 0.5f) render_add_light(h->x, h->y, h->r, 0x6ab8ff, 0.3f);
+        else if (h->kind == HZ_RING && h->a > 0.5f) render_add_light(h->x, h->y, h->r, h->a > 1.5f ? 0xff4020 : 0x6ab8ff, 0.3f);
     }
 }
 
@@ -797,9 +925,10 @@ static void telegraphs(Surf *s) {
         float k = h->dur > 0 ? MIN(1.0f, h->t / h->dur) : 1;
         if (h->kind == HZ_RING) {                           /* the shockwave: a bright edge, a fainter one inside */
             float rad = h->r * k;
-            uint32_t c = h->a > 0.5f ? 0x9ad8ff : 0xf0e0c0;
+            int kind = (int)(h->a + 0.5f);                  /* (0 dust, 1 water, 2 a rage) */
+            uint32_t c = kind == 2 ? 0xff5030 : kind == 1 ? 0x9ad8ff : 0xf0e0c0;
             ground_ring(s, x, y, rad, c, (int)(240 * (1 - k * 0.5f)), 3);
-            ground_ring(s, x, y, rad * 0.82f, h->a > 0.5f ? 0x4a88d8 : 0xa08060, (int)(150 * (1 - k)), 2);
+            ground_ring(s, x, y, rad * 0.82f, kind == 2 ? 0xa01808 : kind == 1 ? 0x4a88d8 : 0xa08060, (int)(150 * (1 - k)), 2);
         } else if (h->kind == HZ_ROCK || h->kind == HZ_VENOM)   /* where it will land */
             ground_ring(s, x, y, h->r, h->kind == HZ_ROCK ? 0xff4020 : 0x80e040, 120 + (int)(120 * k), 2);
     }

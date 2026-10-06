@@ -178,6 +178,11 @@ int main(void) {
         if (!G->boss.on) continue;
         Zombie *z = &G->z[G->boss.zi];
         CHECK(z->type == ZT_BOSS && z->variant == k && z->maxhp >= 30000, "boss %d: type %d variant %d, %.0f hp", k, z->type, z->variant, z->maxhp);
+        /* up, it greets you: on the screen, the view leaning its way */
+        float fx, fy; int focus = 0;
+        for (int t = 0; t < 40; t++) { G->spawn_cd = 1e9f; game_update(&none, &none, 1.0f / 60); focus += boss_focus(&fx, &fy); }
+        float vx = z->x - G->camx, vy = z->y - G->camy;
+        CHECK(focus == 40 && vx > 0 && vx < G->view_w && vy > 20 && vy < G->view_h, "%s greeted you out of sight (%.0f, %.0f in the view)", boss_name(k), vx, vy);
         G->insta_t = 5; damage_zombie(z, 100, 0, 0, 0, 0); G->insta_t = 0;
         CHECK(z->state != ZS_DEAD && z->hp > z->maxhp * 0.9f, "%s died to Insta-Kill", boss_name(k));
         kill_all_zombies(0);
@@ -204,11 +209,14 @@ int main(void) {
         for (int i = 0; i < MAX_POWERUPS; i++) maxammo += G->pu[i].alive && G->pu[i].kind == PU_MAXAMMO;
         CHECK(z->state == ZS_DEAD && !G->boss.on && G->boss_kills == kills + 1, "%s didn't die", boss_name(k));
         CHECK(legendary >= 1 && maxammo >= 1 && p->kr >= kr + 2000, "%s's spoils: %d legendary, %d max ammo, %d kr more", boss_name(k), legendary, maxammo, p->kr - kr);
+        CHECK(boss_time_scale() < 1, "%s's fall wasn't slowed down", boss_name(k));
         kill_all_zombies(0);
         for (int t = 0; t < 60 * 3 && G->rstate == RS_ACTIVE; t++) { G->spawn_cd = 1e9f; G->spawned = G->to_spawn; game_update(&none, &none, 1.0f / 60); }
         CHECK(G->rstate == RS_BREAK, "the round didn't end after %s fell", boss_name(k));
         for (int t = 0; t < 60 * 2; t++) game_update(&none, &none, 1.0f / 60);
         CHECK(G->boss.bar <= 0 && !G->boss.enraged, "%s's bar was still up in the break (%.2f)", boss_name(k), G->boss.bar);
+        for (int t = 0; t < 60; t++) game_update(&none, &none, 1.0f / 60);   /* (its fall: slowed down at first) */
+        CHECK(boss_time_scale() == 1 && z->alive && z->state == ZS_DEAD && z->t > 1.6f, "%s's fall: %.2f s in, time at %.2f", boss_name(k), z->t, boss_time_scale());
     }
     char rm[640]; snprintf(rm, sizeof rm, "rm -rf '%s'", dir);
     if (system(rm)) printf("(couldn't remove %s)\n", dir);

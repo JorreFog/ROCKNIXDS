@@ -20,7 +20,7 @@ is a new town with loot that gets better as the rounds get harder.
   <img src="docs/img/scores.png" width="260" alt="The high score list in Swedish, a star by today's town">
 </p>
 <p align="center">
-  <img src="docs/img/boss-draugen.png" width="200" alt="Round 20: Draugen, the dead Viking chieftain, his axe raised, his health bar across the top">
+  <img src="docs/img/boss-draugen.png" width="200" alt="Round 20: Draugen, the dead Viking chieftain, leaping at you with his axe raised, where he will land marked red; his health bar across the top">
   <img src="docs/img/boss-troll.png" width="200" alt="Round 40: Bergatrollet, the mountain troll, with a boulder over its head">
   <img src="docs/img/boss-nacken.png" width="200" alt="Round 60: Näcken fiddling in his pool, fans of glowing notes flying">
   <img src="docs/img/boss-lindorm.png" width="200" alt="Round 80: Lindormen, the lindworm, its long scaled body behind it, venom pooling">
@@ -140,7 +140,11 @@ it's out of sight). They are far bigger than the dead and drawn in more detail, 
 | 60 | **Näcken**, the fiddler in the water | plays: fans of glowing notes sweeping across you; beckons: you are drawn to him; sinks into his pool and comes up again beside you |
 | 80 | **Lindormen**, the lindworm | bites; spits venom that pools on the ground; burrows under the asphalt and bursts up beneath you (a mound runs at you first) |
 
-Then round again (100, 120, ...), stronger each time. At half health a boss is enraged: faster, and quicker to strike.
+It comes up where you'll see it, greets you (a roar, a shockwave you only see; Näcken plays), and comes for you. Felled,
+its fall is slowed down a moment, and each goes its own way: Draugen to frost and dust, the troll to stone that
+crumbles, Näcken down into his pool, the lindworm thrashing in its venom.
+
+Then round again (100, 120, ...), stronger each time. At half health a boss is enraged (a red wave goes out from it): faster, and quicker to strike.
 Insta-Kill doesn't kill them, Kaboom only takes a tenth, firecrackers don't fool them, the elstängsel only burns them,
 and the wonder weapons, blasts and fire do a third to a half of their damage (as in Call of Duty).
 A boss round has half the usual zombies, and ends when the boss is down; it leaves a legendary weapon, a Max Ammo and

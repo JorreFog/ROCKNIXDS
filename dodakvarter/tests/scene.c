@@ -83,6 +83,16 @@ int main(int argc, char **argv) {
             Input none; memset(&none, 0, sizeof none); game_update(&none, &none, 1.0f / 60);
         }
         if (getenv("DK_SCENE_HP")) { Zombie *z = &G->z[G->boss.zi]; z->hp = z->maxhp * (float)atof(getenv("DK_SCENE_HP")); }
+        if (getenv("DK_SCENE_KILL")) {                     /* then felled: DK_SCENE_KILL ticks into its fall */
+            Zombie *z = &G->z[G->boss.zi]; G->boss.hidden = 0; z->state = ZS_CHASE; z->hp = 1;
+            damage_zombie(z, 10, 0, 0, 0, 0);
+            for (int k = atoi(getenv("DK_SCENE_KILL")); k > 0; k--) {
+                G->spawn_cd = 1e9f;
+                Input none; memset(&none, 0, sizeof none); game_update(&none, &none, 1.0f / 60);
+            }
+            G->camx = clampf(z->x - G->view_w / 2.0f, 0, (float)(G->ww - G->view_w));   /* (the picture: on it) */
+            G->camy = clampf(z->y - 20 - G->view_h / 2.0f, 0, (float)(G->wh - G->view_h));
+        }
         A.state = ST_PLAY;
         app_render(&top, &bot); shot(out);
         return 0;

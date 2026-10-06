@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
         "board-break", "board-fix", "buy", "deny", "box", "horse", "powerup-spawn", "powerup", "round-start", "round-end",
         "gameover", "swap", "pickup", "menu-move", "menu-ok", "menu-back", "perk", "pap", "power", "door", "splat", "throw",
         "beep", "gulp", "step", "kaboom", "thunder", "boss-roar", "boss-horn", "boss-swoosh", "boss-slam", "boss-fiddle",
-        "boss-splash", "boss-hiss", "jingle-julmust", "jingle-snabbkaffe", "jingle-salmiak",
+        "boss-splash", "boss-hiss", "boss-fanfare", "jingle-julmust", "jingle-snabbkaffe", "jingle-salmiak",
         "jingle-kanelbulle", "jingle-blabarssoppa", "jingle-lingondricka", "jingle-kaviar" };
     for (int i = 0; i < SFX_COUNT; i++) {
         char n[48]; snprintf(n, sizeof n, "sfx-%s", names[i] ? names[i] : "?");

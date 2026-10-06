@@ -111,7 +111,7 @@ void damage_zombie(Zombie *z, float dmg, int crit, int melee, float kx, float ky
     if (crit) dmg *= 2;
     z->hp -= dmg; z->flash = 0.08f;
     if (z->type != ZT_MOOSE && z->type != ZT_BOSS) { z->vx += kx; z->vy += ky; }
-    spawn_parts(PT_BLOOD, z->x, z->y - 9, 3, 0x9a1414, 50);
+    if (z->type == ZT_BOSS) boss_hit(z, dmg); else spawn_parts(PT_BLOOD, z->x, z->y - 9, 3, 0x9a1414, 50);
     if (z->hp <= 0) zombie_killed(z, crit, melee);
     else {
         add_kr(10, 1);                                    /* every hit that doesn't kill: +10 */

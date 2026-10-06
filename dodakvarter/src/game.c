@@ -426,10 +426,10 @@ static void camera_update(float dt) {
     Player *p = &G->p;
     float lead = 26;
     float tx = p->x + cosf(p->aim) * lead - G->view_w / 2.0f, ty = p->y - 8 + sinf(p->aim) * lead * 0.8f - G->view_h / 2.0f;
-    if (G->boss.on && G->boss.zi >= 0 && G->z[G->boss.zi].alive && G->z[G->boss.zi].type == ZT_BOSS && G->z[G->boss.zi].state == ZS_RISE) {
-        const Zombie *z = &G->z[G->boss.zi];                /* a boss coming up: the view leans its way (you stay in it) */
+    float bx, by;
+    if (boss_focus(&bx, &by)) {                             /* a boss coming up, greeting you, falling: the view leans its way (you stay in it) */
         float mx = G->view_w / 2.0f - 30, my = G->view_h / 2.0f - 30;
-        tx += clampf((z->x - p->x) * 0.5f, -mx, mx); ty += clampf((z->y - 20 - p->y) * 0.5f, -my, my);
+        tx += clampf((bx - p->x) * 0.5f, -mx, mx); ty += clampf((by - p->y) * 0.5f, -my, my);
     }
     float k = 1 - expf(-dt * 6);
     G->camx += (tx - G->camx) * k; G->camy += (ty - G->camy) * k;
@@ -497,6 +497,7 @@ void game_new(uint64_t seed, int season) {
 }
 
 void game_update(const Input *in, const Input *prev, float dt) {
+    dt *= boss_time_scale();                                /* (a boss's fall: slowed down a moment) */
     G->time += dt;
     if (G->over) { G->over_t += dt; parts_update(dt); camera_update(dt); return; }
     for (int i = 0; i < 4; i++) if (G->msg_t[i] > 0) G->msg_t[i] -= dt;

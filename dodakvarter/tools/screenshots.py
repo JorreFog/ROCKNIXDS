@@ -57,10 +57,10 @@ def main():
         "loot": render("loot", season=0, seed=6), "gameover": render("gameover", season=1, seed=5),
         "scores": render("scores", sv=True), "plus": render("horde", season=1, seed=5, size="1024x768"),
         "trap": render("trap", season=0, seed=3),
-        "boss-draugen": render("boss", season=1, DK_DEBUG_BOSS="0", DK_SCENE_TICKS="520"),
-        "boss-troll": render("boss", season=0, DK_DEBUG_BOSS="1", DK_SCENE_TICKS="700"),
-        "boss-nacken": render("boss", season=2, DK_DEBUG_BOSS="2", DK_SCENE_TICKS="620"),
-        "boss-lindorm": render("boss", season=0, DK_DEBUG_BOSS="3", DK_SCENE_TICKS="700"),
+        "boss-draugen": render("boss", season=1, DK_DEBUG_BOSS="0", DK_SCENE_TICKS="550"),
+        "boss-troll": render("boss", season=0, DK_DEBUG_BOSS="1", DK_SCENE_TICKS="850"),
+        "boss-nacken": render("boss", season=2, DK_DEBUG_BOSS="2", DK_SCENE_TICKS="650"),
+        "boss-lindorm": render("boss", season=0, DK_DEBUG_BOSS="3", DK_SCENE_TICKS="625"),
     }
     for k, v in shots.items():
         (v if k == "plus" else x2(v)).save(os.path.join(img, k + ".png"), optimize=True)

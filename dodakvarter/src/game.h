@@ -404,7 +404,7 @@ void boss_round_start(int r);           /* its banner; it comes up a moment late
 void boss_update_round(float dt);       /* bringing it up */
 int boss_ai(Zombie *z, float dt);       /* its own moves (1: handled) */
 void boss_killed(Zombie *z);
-void boss_hit(Zombie *z, float dmg);    /* the health bar's trail */
+void boss_hit(Zombie *z, float dmg);    /* what comes off it when it's hit */
 void boss_stuck(Zombie *z);             /* lost somewhere: up again nearer */
 void hazards_update(float dt);
 void boss_draw(Surf *s, Zombie *z);
@@ -416,6 +416,8 @@ void boss_overlay(Surf *s);             /* the health bar on top of the screen, 
 const char *boss_name(int kind);
 float boss_hit_radius(const Zombie *z, float *cy);   /* how big it is to bullets, and its middle's height */
 void boss_air_glow(Surf *s);            /* notes, the axe's swing, Näcken's thread: after the light */
+int boss_focus(float *x, float *y);     /* where the view leans while a boss comes up, greets you or falls */
+float boss_time_scale(void);            /* <1 for the first moment of a boss's fall: slowed down */
 void zombie_steer(Zombie *z, float *dx, float *dy);
 void render_add_light(float wx, float wy, float rad, uint32_t col, float k);
 
@@ -471,7 +473,7 @@ enum {
     SFX_POWERUP_SPAWN, SFX_POWERUP, SFX_ROUND_START, SFX_ROUND_END, SFX_GAMEOVER, SFX_SWAP, SFX_PICKUP,
     SFX_MENU_MOVE, SFX_MENU_OK, SFX_MENU_BACK, SFX_PERK, SFX_PAP, SFX_POWER, SFX_DOOR, SFX_SPLAT, SFX_THROW,
     SFX_BEEP, SFX_GULP, SFX_STEP, SFX_KABOOM, SFX_THUNDER,
-    SFX_ROAR, SFX_HORN, SFX_SWOOSH, SFX_SLAM, SFX_FIDDLE, SFX_SPLASH, SFX_HISS,   /* the bosses */
+    SFX_ROAR, SFX_HORN, SFX_SWOOSH, SFX_SLAM, SFX_FIDDLE, SFX_SPLASH, SFX_HISS, SFX_FANFARE,   /* the bosses */
     SFX_JINGLE, SFX_COUNT = SFX_JINGLE + PK_COUNT          /* each perk machine's jingle */
 };
 enum { MUS_NONE, MUS_TITLE, MUS_BOX, MUS_GAMEOVER, MUS_SONG, MUS_BOSS };

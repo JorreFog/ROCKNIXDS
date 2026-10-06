@@ -200,6 +200,21 @@ static void synth_all(void) {
     b = buf_new(1.0f, &n); { LP l = { 0 };
         for (int i = 0; i < n; i++) { float t = (float)i / RATE, x = noise(), hp = x - lp(&l, x, 3500); b[i] = hp * sinf(PI_F * t) * (0.75f + 0.25f * sinf(2 * PI_F * 40 * t)); }
         finish(SFX_HISS, b, n, 0.7f); }
+    /* (original) a boss felled: brass in D, three quick notes, a leap up, and the D an octave above, held */
+    b = buf_new(2.9f, &n); { LP l = { 0 }; float ph = 0, ph2 = 0, t0 = 0;
+        static const float fan[7][2] = { { 62, .13f }, { 62, .13f }, { 62, .13f }, { 69, .45f }, { 67, .16f }, { 69, .16f }, { 74, 1.0f } };
+        for (int k = 0; k < 7; k++) {
+            float f = midi((int)fan[k][0]) / RATE, d = fan[k][1];
+            int s0 = (int)(t0 * RATE), s1 = MIN(n, (int)((t0 + d + (k == 6 ? 0.6f : 0)) * RATE));
+            for (int s = s0; s < s1; s++) {
+                float tn = (float)(s - s0) / RATE;
+                float e = MIN(1.0f, tn / 0.02f) * (k == 6 ? expf(-tn * 1.8f) : tn < d - 0.03f ? 1.0f : MAX(0.0f, (d - tn) / 0.03f));
+                ph += f; ph -= floorf(ph); ph2 += f * 0.5f; ph2 -= floorf(ph2);
+                b[s] += lp(&l, (ph * 2 - 1) * 0.6f + (ph2 * 2 - 1) * 0.35f, 700 + 2600 * e) * e;
+            }
+            t0 += d;
+        }
+        finish(SFX_FANFARE, b, n, 0.8f); }
     /* reload: click, slide, click */
     b = buf_new(0.5f, &n); { LP l = { 0 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE; float x = noise(); float c1 = env(t, 0.0005f, 0.006f), c2 = t > 0.18f ? env(t - 0.18f, 0.02f, 0.05f) * 0.4f : 0, c3 = t > 0.36f ? env(t - 0.36f, 0.0005f, 0.008f) : 0; b[i] = (x - lp(&l, x, 1500)) * (c1 + c3) + x * c2 * 0.5f; } finish(SFX_RELOAD, b, n, 0.6f); }
     b = buf_new(0.05f, &n); for (int i = 0; i < n; i++) b[i] = noise() * env((float)i / RATE, 0.0005f, 0.004f); finish(SFX_EMPTY, b, n, 0.5f);
