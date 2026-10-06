@@ -9,31 +9,26 @@ leave the flag set and every later launch ignored.
 
 The HTTP API's /launch is queued on the UI thread, which waits while a game runs: a request that came in meanwhile ran
 after the game, as a second start nobody asked for at that moment. It is dropped now when it was received before the
-last game handed back (ViewController::lastGameEndedAt).
+last game handed back (ViewController::lastGameEndedAt). Both times come from a steady clock (ViewController::monoMs):
+SDL_GetTicks starts again when ES re-initialises SDL around a game it closes its window for (every launch but DraStic's
+fast switch), which let a request made during such a game through as a second start (seen in a test with two /launch
+requests 0.15 s apart).
 
 diff --git a/es-app/src/services/HttpServerThread.cpp b/es-app/src/services/HttpServerThread.cpp
-index ab8f9306..5b066a05 100644
+index ab8f9306..e1042df0 100644
 --- a/es-app/src/services/HttpServerThread.cpp
 +++ b/es-app/src/services/HttpServerThread.cpp
-@@ -17,6 +17,7 @@
- #include "guis/GuiMsgBox.h"
- #include "utils/FileSystemUtil.h"
- #include "HttpApi.h"
-+#include <SDL_timer.h>
- #include "Settings.h"
- #include "ApiSystem.h"
- 
-@@ -620,7 +621,16 @@ void HttpServerThread::run()
+@@ -620,7 +620,16 @@ void HttpServerThread::run()
  				if (file->getFullPath() == path || file->getPath() == path)
  				{
  					Window* w = mWindow;
 -					mWindow->postToUiThread([w, file]() {
-+					unsigned int receivedAt = SDL_GetTicks();
++					long long receivedAt = ViewController::monoMs();
 +					mWindow->postToUiThread([w, file, receivedAt]() {
 +						// ROCKNIXDS: the UI thread waits for a running game; a request that came meanwhile is not
 +						// for the menu that comes back (es-rgds-launchonce)
-+						unsigned int ended = ViewController::lastGameEndedAt();
-+						if (ended != 0 && !SDL_TICKS_PASSED(receivedAt, ended))
++						long long ended = ViewController::lastGameEndedAt();
++						if (ended != 0 && receivedAt < ended)
 +						{
 +							LOG(LogWarning) << "Launch request for " << file->getPath() << " ignored: it came while a game was running";
 +							return;
@@ -42,19 +37,27 @@ index ab8f9306..5b066a05 100644
  						ViewController::get()->launch(file);
  					});
 diff --git a/es-app/src/views/ViewController.cpp b/es-app/src/views/ViewController.cpp
-index 58fbb055..6db33b42 100644
+index 58fbb055..af899d99 100644
 --- a/es-app/src/views/ViewController.cpp
 +++ b/es-app/src/views/ViewController.cpp
-@@ -37,6 +37,8 @@
+@@ -35,8 +35,16 @@
+ #include "guis/GuiNetPlay.h"
+ #include "Gamelist.h"
  #include "PowerSaver.h"
++#include <chrono>
  
  ViewController* ViewController::sInstance = nullptr;
-+unsigned int ViewController::sLastGameEndedAt = 0;
-+unsigned int ViewController::sLaunchStartedAt = 0;
++long long ViewController::sLastGameEndedAt = 0;
++long long ViewController::sLaunchStartedAt = 0;
++
++long long ViewController::monoMs()
++{
++	return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
++}
  
  ViewController* ViewController::get()
  {
-@@ -471,11 +473,11 @@ bool ViewController::doLaunchGame(FileData* game, LaunchGameOptions options)
+@@ -471,11 +479,9 @@ bool ViewController::doLaunchGame(FileData* game, LaunchGameOptions options)
  	// Silence TTS when launching a game
  	TextToSpeech::getInstance()->say(" ");
  
@@ -64,14 +67,12 @@ index 58fbb055..6db33b42 100644
 -
 -	return false;
 +	bool reload = game->launchGame(mWindow, options) && game->getSourceFileData()->getSystemName() == "windows_installers";
-+	sLastGameEndedAt = SDL_GetTicks();
-+	if (sLastGameEndedAt == 0)
-+		sLastGameEndedAt = 1;
++	sLastGameEndedAt = monoMs();
 +	return reload;
  }
  
  bool ViewController::checkLaunchOptions(FileData* game, LaunchGameOptions options, Vector3f center)
-@@ -523,6 +525,23 @@ bool ViewController::checkLaunchOptions(FileData* game, LaunchGameOptions option
+@@ -523,6 +529,23 @@ bool ViewController::checkLaunchOptions(FileData* game, LaunchGameOptions option
  
  void ViewController::launch(FileData* game, LaunchGameOptions options, Vector3f center, bool allowCheckLaunchOptions)
  {
@@ -83,7 +84,7 @@ index 58fbb055..6db33b42 100644
 +	// so 10 s covers any transition.
 +	if (GuiComponent::isLaunchTransitionRunning)
 +	{
-+		if (SDL_GetTicks() - sLaunchStartedAt < 10000)
++		if (monoMs() - sLaunchStartedAt < 10000)
 +		{
 +			LOG(LogWarning) << "Launch of " << game->getPath() << " ignored: a game is already starting";
 +			return;
@@ -95,34 +96,37 @@ index 58fbb055..6db33b42 100644
  	if (allowCheckLaunchOptions && !checkLaunchOptions(game, options, center))
  		return;
  
-@@ -573,6 +592,7 @@ void ViewController::launch(FileData* game, LaunchGameOptions options, Vector3f
+@@ -573,6 +596,7 @@ void ViewController::launch(FileData* game, LaunchGameOptions options, Vector3f
  	mLockInput = true;
  
  	GuiComponent::isLaunchTransitionRunning = true;
-+	sLaunchStartedAt = SDL_GetTicks();
++	sLaunchStartedAt = monoMs();
  		
  	// ROCKNIXDS: the rnds engine's ready screen stays up until the game takes over (no splash, no fade)
  	bool rndsLaunch = game->getSourceFileData()->getSystem() != nullptr && rnds::isRndsTheme(game->getSourceFileData()->getSystem()->getTheme());
 diff --git a/es-app/src/views/ViewController.h b/es-app/src/views/ViewController.h
-index a2f93c6a..c2a16e91 100644
+index a2f93c6a..3e802ed2 100644
 --- a/es-app/src/views/ViewController.h
 +++ b/es-app/src/views/ViewController.h
-@@ -30,6 +30,9 @@ public:
+@@ -30,6 +30,12 @@ public:
  	static void deinit();
  
  	static bool hasInstance() { return sInstance != nullptr; }
-+	// ROCKNIXDS: when the last game handed control back (SDL ticks, 0: none yet); a launch request received before that
++	// ROCKNIXDS: when the last game handed control back (monoMs, 0: none yet); a launch request received before that
 +	// was made while the game ran (the HTTP API queues it on the UI thread) and is dropped (es-rgds-launchonce)
-+	static unsigned int lastGameEndedAt() { return sLastGameEndedAt; }
++	static long long lastGameEndedAt() { return sLastGameEndedAt; }
++	// a steady clock in ms: not SDL_GetTicks, which starts again when ES re-initialises SDL around a game it closes its
++	// window for (every launch but DraStic's fast switch)
++	static long long monoMs();
  	
  	static void saveState();
  
-@@ -126,6 +129,8 @@ private:
+@@ -126,6 +132,8 @@ private:
  
  	ViewController(Window* window);
  	static ViewController* sInstance;
-+	static unsigned int sLastGameEndedAt;
-+	static unsigned int sLaunchStartedAt;
++	static long long sLastGameEndedAt;
++	static long long sLaunchStartedAt;
  
  	void playViewTransition(bool forceImmediate);
  	bool doLaunchGame(FileData* game, LaunchGameOptions options);
