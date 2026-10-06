@@ -46,4 +46,4 @@ for cx, title, sub, col in ((145, "DÖDA KVARTER", "zombie roguelike", RED), (49
 badge(a, 90, 112, "NEW GAME", RED)
 badge(a, 494, 112, "NEW APP", BLUE)
 
-a.render(os.path.join(OUT, "hero.png"))
+a.render(os.path.join(OUT, "01-hero.png"))

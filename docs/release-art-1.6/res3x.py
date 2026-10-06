@@ -138,4 +138,4 @@ for i, (img, (big, res, sub, col)) in enumerate(zip((c1, c2, c3), labels)):
         badge(a, x + PW - 70, y + PH + 12, "SMOOTHER", BLUE)
 
 a.text(16, H - 18, "One scene, the same crop, rendered at each resolution. 3x: 2.25 samples for every pixel on the panel.", 12, INK3)
-a.render(os.path.join(OUT, "3x-resolution.png"))
+a.render(os.path.join(OUT, "05-3x-resolution.png"))

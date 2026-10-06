@@ -53,4 +53,4 @@ fy = H - 26
 a.text(16, fy + 4, "...and every fix since 1.5.12. The full list is in the release notes below.", 12, INK3)
 crisp_text(a, W - 16, fy + 3, "discord.gg/uMPB63kF", 11, (150, 160, 250), anchor="ra")
 
-a.render(os.path.join(OUT, "whats-new.png"))
+a.render(os.path.join(OUT, "03-whats-new.png"))

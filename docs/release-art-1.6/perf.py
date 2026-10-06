@@ -95,4 +95,4 @@ for k, (big, l1, l2) in enumerate(TILES):
 foot = "Chart and top 3 tiles: vs stock, both with DraStic's renderer. Bottom: Gengis Engine vs DraStic's."
 assert a.tlen(foot, 12) <= W - 32, a.tlen(foot, 12)
 a.text(16, H - 20, foot, 12, INK3)
-a.render(os.path.join(OUT, "performance.png"))
+a.render(os.path.join(OUT, "04-performance.png"))

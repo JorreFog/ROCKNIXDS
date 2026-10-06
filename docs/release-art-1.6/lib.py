@@ -11,7 +11,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 FONT_DIR = os.path.join(HERE, "ref/fonts")  # 1.6's Pixelify Sans (5/S, 2/Z, B/G told apart: #34)
 REF = os.path.join(HERE, "ref")
-OUT = os.path.join(REPO, "docs/img/1.6")
+OUT = os.path.join(REPO, "1.6 artwork")  # the final pictures, numbered in release-page order
 
 # ROCKNIXDS Pixel's palette (sampled from the theme's renders and its mockup).
 BG0 = (7, 10, 14)

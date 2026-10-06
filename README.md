@@ -38,7 +38,7 @@ Anbernic RG DS and RG DS Plus on ROCKNIX.</b></p>
 <p align="center"><sub>Pokémon HeartGold at 2× internal resolution (captured from the panels' scanout buffers).</sub></p>
 
 <p align="center">
-  <a href="https://discord.gg/uMPB63kF"><img src="docs/img/1.6/discord.png" width="640" alt="Join the ROCKNIXDS Discord: discord.gg/uMPB63kF"></a>
+  <a href="https://discord.gg/uMPB63kF"><img src="1.6%20artwork/02-discord.png" width="640" alt="Join the ROCKNIXDS Discord: discord.gg/uMPB63kF"></a>
 </p>
 <p align="center"><b>Questions, bug reports, setups: join the <a href="https://discord.gg/uMPB63kF">ROCKNIXDS Discord</a>.</b></p>
 

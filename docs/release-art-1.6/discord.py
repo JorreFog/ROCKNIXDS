@@ -62,4 +62,4 @@ for name in cast:
     a.paste_base(im, x, 150 - im.height)
     x += im.width + 8
 
-a.render(os.path.join(OUT, "discord.png"))
+a.render(os.path.join(OUT, "02-discord.png"))

@@ -72,4 +72,4 @@ for i, (ic, t1, t2) in enumerate(FEATS):
     a.wrap(fx + 38, y + 17, t2, W - fx - 12 - 44, 12, INK2, lh=12)
 
 a.text(16, H - 16, "Ports > ROCKNIXDS Bank", 12, BLUE_LT, medium=True)
-a.render(os.path.join(OUT, "bank-trade.png"))
+a.render(os.path.join(OUT, "06-bank-trade.png"))

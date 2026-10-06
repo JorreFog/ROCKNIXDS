@@ -173,4 +173,4 @@ for y0, x0, ln in ((96, 0, 140), (236, 420, 200)):
             a.px(x0 + i, y0, (230, 230, 240))
 a.scanlines(0, 0, W, H, BLACK, 0.12, 2)
 
-a.render(os.path.join(OUT, "doda-kvarter.png"))
+a.render(os.path.join(OUT, "07-doda-kvarter.png"))
