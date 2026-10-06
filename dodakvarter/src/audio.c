@@ -211,7 +211,8 @@ static void music_tick(int16_t *out, int frames) {
 /* ---------------------------------------------------------------- the mixer (audio thread) */
 static void mix(int16_t *out, int frames) {
     memset(out, 0, (size_t)frames * 4);
-    while (rtail != rhead) {
+    unsigned head = __atomic_load_n(&rhead, __ATOMIC_ACQUIRE);  /* (the commands up to here are written) */
+    while (rtail != head) {
         Cmd c = ring[rtail & 255];
         __atomic_store_n(&rtail, rtail + 1, __ATOMIC_RELEASE);
         if (c.id < 0 || c.id >= SFX_COUNT || !snd[c.id].pcm) continue;
@@ -250,7 +251,7 @@ void audio_set_volume(int v) { master = CLAMP(v, 0, 100); }
 void sfx(int id, float vol, float pan) {
     if (!ready || master == 0) return;
     unsigned h = rhead;
-    if (h - rtail >= 255) return;
+    if (h - __atomic_load_n(&rtail, __ATOMIC_ACQUIRE) >= 255) return;   /* full (the mixer is behind) */
     Cmd *c = &ring[h & 255];
     c->id = id; c->vol = vol; c->pan = clampf(pan, -1, 1);
     c->rate = (id == SFX_HIT || id == SFX_SPLAT || (id >= SFX_GROAN1 && id <= SFX_ZATTACK) || id == SFX_STEP) ? 0.9f + (float)(rand() % 200) / 1000.0f : 1.0f;
