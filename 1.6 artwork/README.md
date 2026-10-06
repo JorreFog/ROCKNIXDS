@@ -16,5 +16,13 @@ with each picture's alt text. All are PNG, 1280–1360 px wide, shown at 880 px 
 | `08-special-thanks.png` | Special thanks, near the end | Everyone who opened a GitHub issue, by name |
 | `09-thanks.png` | The very end | Thank you, the last big update, the Discord link |
 
-Don't edit these by hand: they are made by [`docs/release-art-1.6/build.sh`](../docs/release-art-1.6/), which
-writes straight into this folder.
+Also here, not on the release page: two Döda Kvarter gameplay GIFs, real play at the game's own 320x240 and
+20 fps (7 s each, looping, 5–6 MB):
+
+| File | What it shows |
+|---|---|
+| `doda-kvarter-horde.gif` | A horde on round 14, a winter night, Double Points |
+| `doda-kvarter-boss.gif` | Round 20: Draugen's title card, then his charges |
+
+Don't edit these by hand: [`docs/release-art-1.6/build.sh`](../docs/release-art-1.6/) makes the pictures and
+`docs/release-art-1.6/gameplay.sh` the clips, straight into this folder.
