@@ -25,6 +25,46 @@ jobs:
           tar tzf sd.tar.gz | grep -q '/shaders/ds-crisp.frag$'
       - name: Scripts parse
         run: |
-          for f in install.sh dsflip/device/*.sh dsflip/device/fast-switch dsflip/device/powerstate dsflip/device/battery-led-status tools/*.sh; do
+          for f in install.sh dsflip/device/*.sh dsflip/device/fast-switch dsflip/device/powerstate dsflip/device/battery-led-status tools/*.sh dodakvarter/device/*.sh dodakvarter/*.sh dodakvarter/tests/*.sh; do
             case "$(head -n1 "$f")" in *bash*) bash -n "$f" ;; *) sh -n "$f" ;; esac || { echo "syntax error in $f"; exit 1; }
           done
+
+  # Döda Kvarter (dodakvarter/): the art is generated from its sources, the tests pass (500 towns, the bot playing
+  # whole runs under AddressSanitizer and UBSan), and it builds for the RG DS against a Debian trixie arm64 sysroot
+  # (glibc 2.41, as ROCKNIX's; the binary may need 2.38 at most). The build is kept as an artifact.
+  dodakvarter:
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain and arm64 sysroot
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends clang lld llvm gcc libc6-dev libdrm-dev libsdl2-dev python3 ca-certificates
+          dpkg --add-architecture arm64
+          apt-get update
+          mkdir -p /tmp/deb && cd /tmp/deb
+          apt-get download libc6:arm64 libc6-dev:arm64 linux-libc-dev:arm64 libdrm-dev:arm64 libdrm2:arm64 \
+                           libgcc-14-dev:arm64 libgcc-s1:arm64 libsdl2-dev:arm64
+          for d in *.deb; do dpkg-deb -x "$d" /sysroot; done
+          ln -s usr/lib /sysroot/lib
+      - name: Art is generated from art/*.txt
+        run: |
+          cp dodakvarter/src/art_data.c /tmp/art_data.c
+          python3 dodakvarter/art/build_art.py
+          cmp dodakvarter/src/art_data.c /tmp/art_data.c || { echo "src/art_data.c is stale: run art/build_art.py"; exit 1; }
+      - name: Tests
+        run: CC=gcc sh dodakvarter/tests/run.sh
+      - name: Build for the RG DS
+        run: |
+          sh dodakvarter/build.sh aarch64 /sysroot
+          B=dodakvarter/build/dodakvarter-aarch64
+          llvm-readelf -h $B | grep -q AArch64
+          newest=$(llvm-readelf -V $B | grep -o 'GLIBC_2\.[0-9]*' | sort -uV | tail -n1)
+          echo "needs up to $newest"
+          [ "$(printf '%s\nGLIBC_2.38\n' "$newest" | sort -V | tail -n1)" = GLIBC_2.38 ] || { echo "needs glibc newer than 2.38"; exit 1; }
+          llvm-readelf -d $B | grep NEEDED
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dodakvarter-aarch64-${{ github.sha }}
+          path: dodakvarter/build/dodakvarter-aarch64

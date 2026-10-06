@@ -1,0 +1,270 @@
+// audio.c: every sound is synthesised at start (no files): noise, oscillators, filters and envelopes. A mixer
+// runs on the platform's audio thread; the game sends it commands through a lock-free ring. Music is a small
+// sequencer: the title plays "Vem kan segla förutan vind?" (a traditional Swedish folk song) as a music box.
+#include "game.h"
+#include <stdio.h>
+#include <stdlib.h>
+
+#define RATE 48000
+#define NVOICES 28
+
+typedef struct { int16_t *pcm; int n; } Sound;
+static Sound snd[SFX_COUNT];
+
+typedef struct { const Sound *s; float pos, rate, vol, pan; int active; } Voice;
+static Voice voices[NVOICES];
+
+/* commands from the game thread */
+typedef struct { int id; float vol, pan, rate; } Cmd;
+static Cmd ring[256];
+static volatile unsigned rhead, rtail;
+static volatile int master = 80, want_music = MUS_NONE;
+static int ready;
+
+/* ---------------------------------------------------------------- synthesis helpers */
+static uint32_t nstate = 12345;
+static float noise(void) { nstate = nstate * 1664525u + 1013904223u; return ((nstate >> 9) & 0xFFFF) / 32768.0f - 1.0f; }
+typedef struct { float y; } LP;
+static float lp(LP *f, float x, float cutoff) { float a = 1 - expf(-2 * PI_F * cutoff / RATE); f->y += a * (x - f->y); return f->y; }
+typedef struct { float lo, bp; } SVF;                           /* state variable filter: band pass */
+static float bandpass(SVF *f, float x, float freq, float q) {
+    float k = 2 * sinf(PI_F * MIN(freq, RATE / 6.0f) / RATE);
+    float hi = x - f->lo - q * f->bp;
+    f->bp += k * hi; f->lo += k * f->bp;
+    return f->bp;
+}
+static float *buf_new(float secs, int *n) { *n = (int)(secs * RATE); return calloc((size_t)*n, sizeof(float)); }
+static void finish(int id, float *b, int n, float gain) {
+    float peak = 0.0001f;
+    for (int i = 0; i < n; i++) peak = MAX(peak, fabsf(b[i]));
+    float k = gain / peak;
+    snd[id].pcm = malloc((size_t)n * 2); snd[id].n = n;
+    for (int i = 0; i < n; i++) {
+        float v = b[i] * k;
+        if (i > n - 64) v *= (n - i) / 64.0f;                   /* no click at the end */
+        snd[id].pcm[i] = (int16_t)(CLAMP(v, -1, 1) * 32000);
+    }
+    free(b);
+}
+static float env(float t, float a, float d) { return t < a ? t / a : expf(-(t - a) / d); }
+
+/* a gunshot: a crack of noise, a body, a low thump */
+static void gun(int id, float len, float crack_cut, float body_cut, float thump_hz, float tail) {
+    int n; float *b = buf_new(len, &n);
+    LP f1 = { 0 }, f2 = { 0 };
+    float ph = 0;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / RATE, x = noise();
+        float crack = lp(&f1, x, crack_cut) * env(t, 0.0005f, 0.012f);
+        float body = lp(&f2, x, body_cut) * env(t, 0.001f, tail);
+        ph += 2 * PI_F * thump_hz * (1 - t * 2) / RATE;
+        float thump = sinf(ph) * env(t, 0.001f, 0.04f);
+        b[i] = crack * 1.2f + body * 0.9f + thump * 0.8f;
+    }
+    finish(id, b, n, 0.9f);
+}
+
+static void groan(int id, float len, float f0, float f1, float seed) {
+    int n; float *b = buf_new(len, &n);
+    SVF a = { 0 }, c = { 0 }; LP l = { 0 };
+    float ph = 0;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / RATE, k = t / len;
+        float f = f0 + (f1 - f0) * k + sinf(t * 7 + seed) * 6 + sinf(t * 23 + seed) * 3;
+        ph += f / RATE; ph -= floorf(ph);
+        float saw = ph * 2 - 1 + noise() * 0.25f;
+        float v = bandpass(&a, saw, 550 + 150 * sinf(t * 3 + seed), 0.35f) + 0.6f * bandpass(&c, saw, 1150, 0.4f);
+        v = lp(&l, v, 2200);
+        float e = MIN(1.0f, t / 0.12f) * (1 - k) * (0.7f + 0.3f * sinf(t * 11 + seed));
+        b[i] = v * e;
+    }
+    finish(id, b, n, 0.8f);
+}
+
+static void tone_seq(int id, const float *freqs, int nf, float note, float decay, int bell) {
+    int n; float *b = buf_new(note * nf + decay * 3, &n);
+    for (int k = 0; k < nf; k++) {
+        if (freqs[k] <= 0) continue;
+        int s0 = (int)(k * note * RATE);
+        for (int i = s0; i < n; i++) {
+            float t = (float)(i - s0) / RATE, e = expf(-t / decay);
+            if (e < 0.001f) break;
+            float w = 2 * PI_F * freqs[k] * t;
+            float v = bell ? sinf(w) + 0.5f * sinf(w * 2.01f) * expf(-t / (decay * 0.3f)) + 0.25f * sinf(w * 3.98f) * expf(-t / (decay * 0.15f))
+                           : (sinf(w) > 0 ? 0.6f : -0.6f) + 0.3f * sinf(w);
+            b[i] += v * e * MIN(1.0f, t * 400);
+        }
+    }
+    finish(id, b, n, 0.7f);
+}
+
+static float midi(int m) { return 440.0f * powf(2.0f, (m - 69) / 12.0f); }
+
+static void synth_all(void) {
+    int n; float *b;
+    gun(SFX_PISTOL, 0.22f, 7000, 1800, 120, 0.05f);
+    gun(SFX_SMG, 0.14f, 8000, 2200, 140, 0.03f);
+    gun(SFX_RIFLE, 0.28f, 6000, 1500, 100, 0.07f);
+    gun(SFX_SHOTGUN, 0.45f, 4500, 900, 80, 0.14f);
+    gun(SFX_SNIPER, 0.7f, 9000, 1200, 70, 0.22f);
+    gun(SFX_LMG, 0.2f, 6500, 1400, 90, 0.05f);
+    /* rocket: a rising whoosh */
+    b = buf_new(0.55f, &n); { SVF f = { 0 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE; b[i] = bandpass(&f, noise(), 300 + t * 2400, 0.5f) * env(t, 0.02f, 0.25f) + noise() * 0.3f * env(t, 0.0005f, 0.01f); } finish(SFX_ROCKET, b, n, 0.8f); }
+    /* ray gun: pew */
+    b = buf_new(0.25f, &n); { float ph = 0; for (int i = 0; i < n; i++) { float t = (float)i / RATE; float f = 1400 * expf(-t * 9) + 250 + 40 * sinf(t * 90); ph += f / RATE; ph -= floorf(ph); b[i] = (ph < 0.5f ? 0.7f : -0.7f) * env(t, 0.002f, 0.08f); } finish(SFX_RAY, b, n, 0.6f); }
+    /* zap: buzz and crackle */
+    b = buf_new(0.4f, &n); { float ph = 0; for (int i = 0; i < n; i++) { float t = (float)i / RATE; ph += 120.0f / RATE; ph -= floorf(ph); float crack = (noise() > 0.92f ? noise() : 0); b[i] = ((ph < 0.5f ? 0.4f : -0.4f) + crack * 1.2f + noise() * 0.2f) * env(t, 0.002f, 0.12f); } finish(SFX_ZAP, b, n, 0.7f); }
+    /* frost: a hiss */
+    b = buf_new(0.18f, &n); { LP l = { 0 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE, x = noise(); b[i] = (x - lp(&l, x, 3000)) * env(t, 0.01f, 0.06f); } finish(SFX_FROST, b, n, 0.5f); }
+    /* explosion */
+    b = buf_new(1.4f, &n); { LP l = { 0 }, l2 = { 0 }; float ph = 0; for (int i = 0; i < n; i++) { float t = (float)i / RATE; float x = noise(); ph += 2 * PI_F * (55 - t * 20) / RATE; b[i] = lp(&l, x, 900 * expf(-t * 1.5f) + 150) * env(t, 0.002f, 0.35f) * 1.4f + sinf(ph) * env(t, 0.002f, 0.18f) + lp(&l2, x, 5000) * env(t, 0.0005f, 0.02f); } finish(SFX_EXPLODE, b, n, 1.0f); }
+    b = buf_new(2.2f, &n); { LP l = { 0 }; float ph = 0; for (int i = 0; i < n; i++) { float t = (float)i / RATE; ph += 2 * PI_F * (40 - t * 8) / RATE; b[i] = lp(&l, noise(), 600 * expf(-t) + 100) * env(t, 0.01f, 0.7f) * 1.3f + sinf(ph) * env(t, 0.01f, 0.5f); } finish(SFX_KABOOM, b, n, 1.0f); }
+    /* reload: click, slide, click */
+    b = buf_new(0.5f, &n); { LP l = { 0 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE; float x = noise(); float c1 = env(t, 0.0005f, 0.006f), c2 = t > 0.18f ? env(t - 0.18f, 0.02f, 0.05f) * 0.4f : 0, c3 = t > 0.36f ? env(t - 0.36f, 0.0005f, 0.008f) : 0; b[i] = (x - lp(&l, x, 1500)) * (c1 + c3) + x * c2 * 0.5f; } finish(SFX_RELOAD, b, n, 0.6f); }
+    b = buf_new(0.05f, &n); for (int i = 0; i < n; i++) b[i] = noise() * env((float)i / RATE, 0.0005f, 0.004f); finish(SFX_EMPTY, b, n, 0.5f);
+    b = buf_new(0.06f, &n); for (int i = 0; i < n; i++) b[i] = noise() * env((float)i / RATE, 0.0005f, 0.006f) + sinf(i * 0.3f) * env((float)i / RATE, 0.0005f, 0.01f); finish(SFX_SWAP, b, n, 0.5f);
+    /* knife swoosh */
+    b = buf_new(0.18f, &n); { SVF f = { 0 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE; b[i] = bandpass(&f, noise(), 800 + t * 9000, 0.6f) * sinf(PI_F * t / 0.18f); } finish(SFX_KNIFE, b, n, 0.5f); }
+    /* hit: a wet thud */
+    b = buf_new(0.12f, &n); { LP l = { 0 }; float ph = 0; for (int i = 0; i < n; i++) { float t = (float)i / RATE; ph += 2 * PI_F * (180 - t * 900) / RATE; b[i] = (lp(&l, noise(), 1200) + sinf(ph) * 0.6f) * env(t, 0.001f, 0.03f); } finish(SFX_HIT, b, n, 0.6f); }
+    b = buf_new(0.3f, &n); { LP l = { 0 }; float ph = 0; for (int i = 0; i < n; i++) { float t = (float)i / RATE; ph += 2 * PI_F * (110 - t * 120) / RATE; b[i] = (lp(&l, noise(), 700) * 1.3f + sinf(ph)) * env(t, 0.002f, 0.07f); } finish(SFX_SPLAT, b, n, 0.7f); }
+    groan(SFX_GROAN1, 1.1f, 120, 85, 0.3f);
+    groan(SFX_GROAN2, 0.8f, 95, 130, 1.7f);
+    groan(SFX_GROAN3, 1.3f, 140, 70, 4.1f);
+    groan(SFX_ZATTACK, 0.45f, 160, 90, 2.2f);
+    /* the player hurt: a short grunt */
+    b = buf_new(0.25f, &n); { SVF a = { 0 }; float ph = 0; for (int i = 0; i < n; i++) { float t = (float)i / RATE; ph += (210 - t * 300) / RATE; ph -= floorf(ph); b[i] = bandpass(&a, ph * 2 - 1, 700, 0.4f) * env(t, 0.01f, 0.07f); } finish(SFX_HURT, b, n, 0.7f); }
+    /* a wolf's howl */
+    b = buf_new(1.3f, &n); { float ph = 0; for (int i = 0; i < n; i++) { float t = (float)i / RATE; float f = 420 + 300 * sinf(PI_F * MIN(1.0f, t / 1.1f)) + 8 * sinf(t * 40); ph += 2 * PI_F * f / RATE; b[i] = (sinf(ph) + 0.2f * sinf(ph * 2) + noise() * 0.05f) * MIN(1.0f, t / 0.15f) * MAX(0.0f, 1 - t / 1.3f); } finish(SFX_WOLF, b, n, 0.6f); }
+    /* the moose: a deep bellow */
+    b = buf_new(1.5f, &n); { SVF a = { 0 }; float ph = 0; for (int i = 0; i < n; i++) { float t = (float)i / RATE; float f = 85 + 30 * sinf(PI_F * t / 1.5f) + 5 * sinf(t * 31); ph += f / RATE; ph -= floorf(ph); float v = ph * 2 - 1 + noise() * 0.4f; b[i] = (bandpass(&a, v, 420, 0.3f) + v * 0.3f) * MIN(1.0f, t / 0.1f) * MAX(0.0f, 1 - t / 1.5f) * (0.8f + 0.2f * sinf(t * 17)); } finish(SFX_MOOSE, b, n, 0.9f); }
+    /* boards: crack, and the hammer */
+    b = buf_new(0.25f, &n); { SVF a = { 0 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE; b[i] = (bandpass(&a, noise(), 320, 0.15f) * 2 + noise() * env(t, 0.0005f, 0.01f)) * env(t, 0.001f, 0.06f); } finish(SFX_BOARD_BREAK, b, n, 0.7f); }
+    b = buf_new(0.3f, &n); for (int i = 0; i < n; i++) { float t = (float)i / RATE, t2 = t - 0.14f; b[i] = sinf(2 * PI_F * 230 * t) * env(t, 0.0005f, 0.03f) + (t2 > 0 ? sinf(2 * PI_F * 250 * t2) * env(t2, 0.0005f, 0.03f) : 0) + noise() * (env(t, 0.0005f, 0.004f) + (t2 > 0 ? env(t2, 0.0005f, 0.004f) : 0)); } finish(SFX_BOARD_FIX, b, n, 0.6f);
+    /* ka-ching */
+    { float f[] = { 2093, 2637, 3136 }; tone_seq(SFX_BUY, f, 3, 0.05f, 0.25f, 1); }
+    b = buf_new(0.25f, &n); for (int i = 0; i < n; i++) { float t = (float)i / RATE; b[i] = (sinf(2 * PI_F * 110 * t) > 0 ? 0.5f : -0.5f) * env(t, 0.005f, 0.12f); } finish(SFX_DENY, b, n, 0.5f);
+    /* the box's music-box jingle */
+    { float f[] = { midi(76), midi(79), midi(83), midi(88), midi(86), midi(83), midi(79), midi(83), midi(88) }; tone_seq(SFX_BOX, f, 9, 0.12f, 0.5f, 1); }
+    /* the Dalahäst's whinny */
+    b = buf_new(1.0f, &n); { float ph = 0; for (int i = 0; i < n; i++) { float t = (float)i / RATE; float f = 700 + 250 * sinf(t * 38) * MAX(0.0f, 1 - t) + 200 * (1 - t); ph += 2 * PI_F * f / RATE; b[i] = (sinf(ph) + 0.4f * sinf(ph * 2.02f)) * MIN(1.0f, t / 0.05f) * MAX(0.0f, 1 - t) ; } finish(SFX_HORSE, b, n, 0.6f); }
+    { float f[] = { midi(72), midi(76), midi(79), midi(84) }; tone_seq(SFX_POWERUP_SPAWN, f, 4, 0.06f, 0.3f, 1); }
+    { float f[] = { midi(79), midi(84), midi(88), midi(91), midi(96) }; tone_seq(SFX_POWERUP, f, 5, 0.05f, 0.35f, 0); }
+    { float f[] = { midi(60), midi(64), midi(67), midi(72) }; tone_seq(SFX_PERK, f, 4, 0.09f, 0.3f, 1); }
+    /* round start: drums and a dark chord; round end: a falling one */
+    b = buf_new(2.6f, &n); { float ph[4] = { 0 }; static const int ch[4] = { 45, 52, 57, 60 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE; float v = 0; for (int k = 0; k < 4; k++) { ph[k] += midi(ch[k]) / RATE; ph[k] -= floorf(ph[k]); v += (ph[k] * 2 - 1) * 0.25f; } float drum = 0; for (int d = 0; d < 3; d++) { float td = t - d * 0.35f; if (td > 0) drum += sinf(2 * PI_F * (70 - td * 60) * td) * env(td, 0.002f, 0.12f); } b[i] = v * MIN(1.0f, t / 0.6f) * MAX(0.0f, 1 - t / 2.6f) * 0.7f + drum; } finish(SFX_ROUND_START, b, n, 0.8f); }
+    b = buf_new(2.4f, &n); { float ph[3] = { 0 }; static const int ch[3] = { 57, 60, 64 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE; float v = 0; for (int k = 0; k < 3; k++) { ph[k] += midi(ch[k]) * (1 - t * 0.08f) / RATE; ph[k] -= floorf(ph[k]); v += sinf(2 * PI_F * ph[k]) * 0.3f; } b[i] = v * MIN(1.0f, t / 0.1f) * MAX(0.0f, 1 - t / 2.4f); } finish(SFX_ROUND_END, b, n, 0.6f); }
+    { float f[] = { midi(64), midi(60), midi(57), midi(52), midi(45) }; tone_seq(SFX_GAMEOVER, f, 5, 0.32f, 0.8f, 0); }
+    { float f[] = { 1200 }; tone_seq(SFX_PICKUP, f, 1, 0.05f, 0.06f, 0); }
+    { float f[] = { 900 }; tone_seq(SFX_MENU_MOVE, f, 1, 0.03f, 0.03f, 0); }
+    { float f[] = { midi(84), midi(91) }; tone_seq(SFX_MENU_OK, f, 2, 0.05f, 0.08f, 0); }
+    { float f[] = { midi(79), midi(72) }; tone_seq(SFX_MENU_BACK, f, 2, 0.05f, 0.08f, 0); }
+    { float f[] = { 2400 }; tone_seq(SFX_BEEP, f, 1, 0.02f, 0.02f, 0); }
+    /* Smedjan: hammer on the anvil */
+    b = buf_new(1.2f, &n); for (int i = 0; i < n; i++) { float t = (float)i / RATE; float v = 0; for (int k = 0; k < 3; k++) { float tk = t - k * 0.3f; if (tk > 0) v += (sinf(2 * PI_F * 1800 * tk) * 0.6f + sinf(2 * PI_F * 2750 * tk) * 0.4f + noise() * 0.5f * env(tk, 0.0005f, 0.003f)) * env(tk, 0.0005f, 0.12f); } b[i] = v; } finish(SFX_PAP, b, n, 0.7f);
+    /* the power: a heavy switch, then a hum coming up */
+    b = buf_new(2.0f, &n); { float ph = 0; for (int i = 0; i < n; i++) { float t = (float)i / RATE; ph += 2 * PI_F * (50 + 10 * MIN(1.0f, t)) / RATE; b[i] = noise() * env(t, 0.0005f, 0.03f) + sinf(ph) * MIN(1.0f, t / 0.8f) * MAX(0.0f, 1 - t / 2) * 0.6f + sinf(ph * 2) * 0.2f * MIN(1.0f, t); } finish(SFX_POWER, b, n, 0.8f); }
+    b = buf_new(0.9f, &n); { LP l = { 0 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE; b[i] = lp(&l, noise(), 1400) * env(t, 0.005f, 0.2f) * (1 + 0.5f * (noise() > 0.8f)); } finish(SFX_DOOR, b, n, 0.8f); }
+    b = buf_new(0.2f, &n); { SVF f = { 0 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE; b[i] = bandpass(&f, noise(), 1500, 0.5f) * sinf(PI_F * t / 0.2f); } finish(SFX_THROW, b, n, 0.4f); }
+    b = buf_new(0.45f, &n); { float ph = 0; for (int i = 0; i < n; i++) { float t = (float)i / RATE; ph += 2 * PI_F * (180 + 60 * sinf(t * 25)) / RATE; b[i] = sinf(ph) * env(t, 0.01f, 0.12f) * (0.6f + 0.4f * sinf(t * 25)); } finish(SFX_GULP, b, n, 0.6f); }
+    b = buf_new(0.08f, &n); { LP l = { 0 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE; b[i] = lp(&l, noise(), 400) * env(t, 0.002f, 0.02f); } finish(SFX_STEP, b, n, 0.5f); }
+}
+
+/* ---------------------------------------------------------------- music */
+/* "Vem kan segla förutan vind?" (traditional), in A minor: pitch, length in eighths */
+static const int16_t TUNE[][2] = {
+    {69,2},{69,2},{72,2},{71,2},{69,4},{64,4}, {69,2},{69,2},{72,2},{71,2},{69,8},
+    {69,2},{71,2},{72,2},{74,2},{76,4},{72,4}, {74,2},{72,2},{71,2},{68,2},{69,8},
+    {76,2},{76,2},{77,2},{76,2},{74,4},{72,4}, {74,2},{72,2},{71,2},{68,2},{69,8},
+};
+static int mus, mus_note, mus_left;          /* samples left of the current note */
+static float mus_ph, mus_env, mus_freq, mus_bass_ph, mus_bass_f;
+static int mus_beat;
+
+static void music_tick(int16_t *out, int frames) {
+    if (mus != want_music) { mus = want_music; mus_note = 0; mus_left = 0; mus_env = 0; }
+    if (mus != MUS_TITLE) return;
+    const int eighth = RATE * 3 / 10 / 2;      /* slow and sad: 100 bpm in quarters */
+    for (int i = 0; i < frames; i++) {
+        if (mus_left <= 0) {
+            int nn = ARRAY_LEN(TUNE);
+            if (mus_note >= nn) mus_note = 0;
+            mus_freq = midi(TUNE[mus_note][0]);
+            mus_left = TUNE[mus_note][1] * eighth;
+            mus_env = 1;
+            if (mus_beat++ % 2 == 0) mus_bass_f = midi(TUNE[mus_note][0] - 24);
+            mus_note++;
+        }
+        mus_left--;
+        mus_env *= 0.99992f;
+        mus_ph += mus_freq / RATE; mus_ph -= floorf(mus_ph);
+        mus_bass_ph += mus_bass_f / RATE; mus_bass_ph -= floorf(mus_bass_ph);
+        float w = 2 * PI_F * mus_ph;
+        float v = (sinf(w) + 0.35f * sinf(w * 2) * mus_env + 0.15f * sinf(w * 3) * mus_env * mus_env) * mus_env * 0.16f;
+        v += sinf(2 * PI_F * mus_bass_ph) * 0.07f;
+        int s = (int)(v * 32767 * master / 100);
+        out[i * 2] = (int16_t)CLAMP(out[i * 2] + s, -32768, 32767);
+        out[i * 2 + 1] = (int16_t)CLAMP(out[i * 2 + 1] + s, -32768, 32767);
+    }
+}
+
+/* ---------------------------------------------------------------- the mixer (audio thread) */
+static void mix(int16_t *out, int frames) {
+    memset(out, 0, (size_t)frames * 4);
+    while (rtail != rhead) {
+        Cmd c = ring[rtail & 255];
+        __atomic_store_n(&rtail, rtail + 1, __ATOMIC_RELEASE);
+        if (c.id < 0 || c.id >= SFX_COUNT || !snd[c.id].pcm) continue;
+        Voice *v = 0;
+        for (int i = 0; i < NVOICES; i++) if (!voices[i].active) { v = &voices[i]; break; }
+        if (!v) {                                             /* steal the quietest */
+            v = &voices[0];
+            for (int i = 1; i < NVOICES; i++) if (voices[i].vol < v->vol) v = &voices[i];
+        }
+        v->s = &snd[c.id]; v->pos = 0; v->rate = c.rate; v->vol = c.vol; v->pan = c.pan; v->active = 1;
+    }
+    float m = master / 100.0f;
+    for (int k = 0; k < NVOICES; k++) {
+        Voice *v = &voices[k];
+        if (!v->active) continue;
+        float lv = v->vol * m * (v->pan > 0 ? 1 - v->pan : 1), rv = v->vol * m * (v->pan < 0 ? 1 + v->pan : 1);
+        for (int i = 0; i < frames; i++) {
+            int p = (int)v->pos;
+            if (p >= v->s->n - 1) { v->active = 0; break; }
+            float f = v->pos - p, s = v->s->pcm[p] * (1 - f) + v->s->pcm[p + 1] * f;
+            int l = out[i * 2] + (int)(s * lv), r = out[i * 2 + 1] + (int)(s * rv);
+            out[i * 2] = (int16_t)CLAMP(l, -32768, 32767); out[i * 2 + 1] = (int16_t)CLAMP(r, -32768, 32767);
+            v->pos += v->rate;
+        }
+    }
+    music_tick(out, frames);
+}
+
+void audio_init(void) {
+    synth_all();
+    ready = plat_audio_start(RATE, mix) == 0;
+    plat_log("audio: %s", ready ? "on" : "off");
+}
+void audio_set_volume(int v) { master = CLAMP(v, 0, 100); }
+
+void sfx(int id, float vol, float pan) {
+    if (!ready || master == 0) return;
+    unsigned h = rhead;
+    if (h - rtail >= 255) return;
+    Cmd *c = &ring[h & 255];
+    c->id = id; c->vol = vol; c->pan = clampf(pan, -1, 1);
+    c->rate = (id == SFX_HIT || id == SFX_SPLAT || (id >= SFX_GROAN1 && id <= SFX_ZATTACK) || id == SFX_STEP) ? 0.9f + (float)(rand() % 200) / 1000.0f : 1.0f;
+    __atomic_store_n(&rhead, h + 1, __ATOMIC_RELEASE);
+}
+/* a sound in the world: quieter with distance, panned by where it is on screen */
+void sfx_at(int id, float x, float y, float vol) {
+    float dx = x - G->p.x, dy = y - G->p.y, d = sqrtf(dx * dx + dy * dy);
+    float k = 1.0f - d / 360.0f;
+    if (k <= 0.02f) return;
+    sfx(id, vol * k, clampf(dx / 200.0f, -0.8f, 0.8f));
+}
+void music_play(int track) { want_music = S.music ? track : MUS_NONE; }
+
+/* tests: render the mixer's output without a device */
+void audio_render_test(int16_t *out, int frames);
+void audio_render_test(int16_t *out, int frames) { if (!snd[0].pcm) synth_all(); ready = 1; mix(out, frames); }

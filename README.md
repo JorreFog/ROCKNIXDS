@@ -103,8 +103,29 @@ Mali-G52); the RG DS Plus has two 1024×768 panels. ROCKNIXDS (formerly `rgds-ro
 - **ROCKNIXDS Pixel** (new in 1.5), a pixel-art frontend across both screens, in light and dark: a system shelf,
   DS cartridges wearing their real label art, box covers, play stats and RetroAchievements progress, drawn by its
   own engine inside a patched EmulationStation. The DSi-style **`dii-ess-aye`** theme is still there too.
+- **Döda Kvarter**, a zombie roguelike made for both screens, in Ports: Call of Duty Zombies' rounds in a
+  Swedish suburb at night, drawn straight onto the panels like the DS games. See [`dodakvarter/`](dodakvarter).
 - The **panel timing fix**, the older **vsync pacing shim**, and the measurement tools (including a DS
   stress-test ROM) behind all the numbers below.
+
+### New: Döda Kvarter
+
+<p align="center">
+  <img src="dodakvarter/docs/img/horde-winter.png" width="248" alt="Döda Kvarter: a horde at night in a miljonprogram yard on the top screen; the gun, health, armour, perks, the bag and the town map on the bottom screen">
+  <img src="dodakvarter/docs/img/title.png" width="248" alt="Döda Kvarter's title: a night skyline of apartment blocks, the dead walking past in the snow; the menu below">
+</p>
+
+**A game made for this handheld**, in *Ports > Döda Kvarter*. The top screen is a Swedish suburb at night seen from
+above, the bottom screen your inventory: health and armour, the gun and its ammo, perks, the bag (tap it) and a map
+of the town. It plays like Call of Duty Zombies, with Black Ops' own numbers: endless rounds of the dead, kronor for
+every hit, barricades to buy your way into the next district, wall buys, the Mystery Box (*Lådan*, where a
+Dalahäst takes the place of the teddy bear), the power switch, perks as Swedish food (Julmust, Snabbkaffe,
+Kanelbulle...), the Pack-a-Punch (*Smedjan*), wolf nights and a zombie moose. It's a roguelike too: every run is a
+new town (miljonprogram yards, the centrum with its tunnelbana, Falu red villas, gamla stan, allotments, a church
+and its graveyard...) in autumn rain, winter snow or a midsummer night, and the loot gets rarer and better every round.
+A native program (C, no libraries) that draws both screens straight onto the panels like the DS games, at the
+panels' full resolution: 2× pixels on the RG DS, 3× on the RG DS Plus. Everything about it:
+[dodakvarter/README.md](dodakvarter/README.md). `--no-game` installs without it.
 
 ### New in 1.5
 
@@ -322,7 +343,7 @@ its art, the theme draws a card with the game's name or box art.
 | Option | |
 |---|---|
 | `--with-60hz` | also retune both panels to 60.000 Hz (edits the device tree in `/flash`, backed up; needs a reboot) |
-| `--no-theme` / `--no-dsflip` / `--no-hires` | skip that part |
+| `--no-theme` / `--no-dsflip` / `--no-hires` / `--no-game` | skip that part (`--no-game`: Döda Kvarter) |
 | `--uninstall` | undo what the installer changed; settings you made since the install are kept. Add `--restore-files` to put back the whole config files from the install-time backups instead |
 | `--version` | print the installed ROCKNIXDS version (also in `/storage/.config/rocknixds-version`) |
 
