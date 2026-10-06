@@ -700,7 +700,10 @@ and an unused third. Positions are fractions of that canvas, so both devices sha
   `rnds/gen_icons.py` for the rest (home consoles, handhelds, computers, fantasy consoles, phones, music, video,
   pictures, streaming, engines...). The theme's `<text name="palette">` picks dark or light; the light theme uses the
   dark one's `rnds/` folder. Cartridges show the card's label art: the real card scan's art window when the media
-  tool found one, else its label art made from the cover, else the cover without its NINTENDO DS strip.
+  tool found one, else its label art made from the cover, else the cover without its NINTENDO DS strip, else (1.6) the
+  system's icon on a plain label, so no cartridge is empty; ROCKNIX's SVG pictures for its Tools are drawn too (1.6).
+  A `systems.cfg` line that ends in `[app]` is an app with a tile of its own (`device/es_systems_rocknixds.cfg` lists
+  ROCKNIXDS's game and its bank as systems of one entry): A on the tile starts it.
   `rnds/gen_splash.mjs` renders each theme's boot splash (`rgds-splash.png`, `rgds-splash-2048x768.png`). RetroAchievements progress comes from ES's own client for the selected
   game (cached in `rnds-achievements.cfg`). Stock ES (when the launcher has to run it) shows dii-ess-aye's layout
   instead. `rnds/test/` has the host harness that renders the engine's frames from the mockup's own data, to compare
@@ -766,6 +769,7 @@ and an unused third. Positions are fractions of that canvas, so both devices sha
 | `es-rgds-*.patch`, `emulationstation-rgds` | ES patches and the built binary (aarch64); [`tools/build-es.sh`](tools/build-es.sh) builds it without ROCKNIX's build system |
 | `themes/rocknixds-pixel-dark`, `themes/rocknixds-pixel-light`, `rnds/` | ROCKNIXDS Pixel and the tools that make its fonts, icons and status-bar pictures; `rnds/test/` the engine's host harness |
 | `device/autostart-dii-ess-aye`, `device/sway-config.theme` | Boot hook: redoes the bind mount and restores the theme's sway config, which ROCKNIX's `111-sway-init` overwrites on every boot |
+| `device/es_systems_rocknixds.cfg` | ROCKNIXDS's own apps (Döda Kvarter, ROCKNIXDS Bank) as systems of one entry: a tile each on the menu's shelf once the app is installed |
 | `scrape/` | Media tools: cart scans, 3D boxes, label art, RetroAchievements strip, HTTP-API push |
 
 ---
