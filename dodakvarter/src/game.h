@@ -228,6 +228,7 @@ typedef struct {
     uint16_t lureflow[MAPH_MAX][MAPW_MAX]; int lure_on, lure_was; float lure_x, lure_y;
     /* run */
     uint64_t seed; int season;
+    int daily;                          /* today's town: the date (YYYYMMDD), else 0 */
     Rng rng, fx;
     float time;
     int round, rstate; float rtime;
@@ -283,6 +284,7 @@ static inline int opaque_at(int x, int y) { Tile *t = tile_at(x, y); return !t |
 
 /* mapgen.c */
 void map_generate(uint64_t seed, int season);
+void town_name(uint64_t seed, char *out, int n);
 int zone_at(float x, float y);
 void zone_open(int z);
 void refresh_walls(void);

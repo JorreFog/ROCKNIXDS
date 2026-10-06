@@ -46,6 +46,7 @@ int main(int argc, char **argv) {
     settings_load();
     if (season >= 0) S.season = season + 1;
     scores_load();
+    stats_load();
     render_init();
     audio_init();
     audio_set_volume(S.volume);

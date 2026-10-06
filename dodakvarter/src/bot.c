@@ -107,7 +107,7 @@ void bot_input(Input *in) {
     case ST_TITLE: if (A.t > 0.5f && tap) in->held |= BIT(B_A); return;
     case ST_GAMEOVER: if (A.t > 2.5f && tap) in->held |= BIT(B_A); return;
     case ST_NAME: if (tap) in->held |= BIT(B_A); return;
-    case ST_SCORES: return;
+    case ST_SCORES: if (A.t > 1.0f && tap) in->held |= BIT(B_A); return;          /* back to the title, and again */
     case ST_PAUSE: if (tap) in->held |= BIT(B_START); return;
     default: break;
     }

@@ -46,6 +46,10 @@ top screen to fire where you touch (*Touch aiming* in the settings). With *Swap 
 On a computer: arrows or WASD, J or Z to fire, K or X to use, U reload, I switch, E knife, Q sprint, 1 item,
 3 grenade, Tab next item, Enter pause; the mouse aims (left button fires) and clicks the bottom screen.
 
+*Today's town* on the title is the same town (and season) for everyone on the same day; its runs get a star in the
+high score list. The list's second page (left or right) adds up everything you've played: runs, zombies, rounds,
+the best round, the time, the kronor, boxes, critical hits, downs.
+
 Quitting never loses a run: *Save and quit* in the pause menu, ROCKNIX's exit hotkey, or a shutdown while it runs
 keep it in `run.sav`, and the title offers *Continue* (back where you were, paused). The run is also
 kept after every round, so even a flat battery costs one round at most. A run that ends (or *Give up*) is gone.

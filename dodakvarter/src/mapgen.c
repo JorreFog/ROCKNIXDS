@@ -948,6 +948,13 @@ static const char *ZONE_NAMES[Z_COUNT] = {
 static const char *TOWN_A[] = { "Björk", "Gran", "Tall", "Ek", "Sjö", "Berg", "Ström", "Lind", "Hög", "Ny", "Väster", "Öster", "Söder", "Norr", "Ängs", "Skogs", "Lönn", "Hassel", "Råg", "Kvarn" };
 static const char *TOWN_B[] = { "hagen", "dal", "by", "berga", "sta", "holm", "vik", "torp", "backen", "ängen", "gården", "skogen", "lunda", "näs", "bro" };
 
+/* the name map_generate gives the town of this seed (its first two draws), for the title */
+void town_name(uint64_t seed, char *out, int n) {
+    Rng r; rng_seed(&r, seed, 7);
+    int a = rng_int(&r, ARRAY_LEN(TOWN_A)), b = rng_int(&r, ARRAY_LEN(TOWN_B));
+    snprintf(out, (size_t)n, "%s%s", TOWN_A[a], TOWN_B[b]);
+}
+
 int zone_at(float x, float y) {
     Tile *t = tile_at((int)(x / TS), (int)(y / TS));
     return t ? t->zone : 0;

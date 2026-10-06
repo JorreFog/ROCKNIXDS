@@ -9,6 +9,7 @@ typedef struct {
     uint64_t seed;
     long long date;
     char town[32];
+    int daily;                          /* the date of the day's town it was played in, else 0 */
 } Score;
 extern Score scores[MAX_SCORES];
 extern int nscores;
@@ -19,6 +20,12 @@ void scores_load(void);
 void scores_save(void);
 int score_rank(const Score *s);
 void score_insert(const Score *s, int at);
+
+/* everything played, added up (stats.txt) */
+typedef struct { int runs, kills, rounds, best_round, secs, kr, boxes, downs, crits, dailies; } Stats;
+extern Stats ST;
+void stats_load(void);
+void stats_add_run(void);               /* the run in G just ended */
 
 /* the run in progress (run.sav): written when you quit and between rounds, deleted when the run ends */
 int run_save(void);                     /* now (quitting); 0 when written */

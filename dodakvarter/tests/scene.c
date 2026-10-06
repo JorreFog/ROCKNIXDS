@@ -49,12 +49,14 @@ int main(int argc, char **argv) {
     if (!strcmp(name, "title") || !strcmp(name, "scores") || !strcmp(name, "settings") || !strcmp(name, "howto") || !strcmp(name, "name")) {
         A.state = !strcmp(name, "title") ? ST_TITLE : !strcmp(name, "scores") ? ST_SCORES : !strcmp(name, "settings") ? ST_SETTINGS : !strcmp(name, "howto") ? ST_HOWTO : ST_NAME;
         A.t = 3.3f; A.rank = -1; A.page = getenv("DK_SCENE_PAGE") ? atoi(getenv("DK_SCENE_PAGE")) : 1;
+        if (getenv("DK_SCENE_SEL")) A.sel = atoi(getenv("DK_SCENE_SEL"));
         if (getenv("DK_SCENE_SAVED")) { A.has_save = A.save_checked = 1; snprintf(A.save_town, sizeof A.save_town, "Björkhagen"); A.save_round = 12; }
         if (A.state == ST_NAME) { game_new(seed, season); G->round = 14; A.letters[0] = 9; A.letters[1] = 15; A.letters[2] = 26; A.name_pos = 2; }
         if (A.state == ST_SCORES) {
             static const char *n[] = { "JOR", "ÅSA", "ELL", "BOB", "KIM" };
-            for (int i = 0; i < 5; i++) { Score s; memset(&s, 0, sizeof s); snprintf(s.name, sizeof s.name, "%s", n[i]); s.round = 23 - i * 4; s.kills = 512 - i * 90; s.kr = 98000 - i * 15000; snprintf(s.town, sizeof s.town, "%s", i & 1 ? "Björkhagen" : "Sjövik"); score_insert(&s, score_rank(&s)); }
-            A.rank = 1;
+            for (int i = 0; i < 5; i++) { Score s; memset(&s, 0, sizeof s); snprintf(s.name, sizeof s.name, "%s", n[i]); s.round = 23 - i * 4; s.kills = 512 - i * 90; s.kr = 98000 - i * 15000; snprintf(s.town, sizeof s.town, "%s", i & 1 ? "Björkhagen" : "Sjövik"); s.daily = i == 2 ? 20261006 : 0; score_insert(&s, score_rank(&s)); }
+            A.rank = 1; A.page = getenv("DK_SCENE_PAGE") ? atoi(getenv("DK_SCENE_PAGE")) : 0;
+            ST = (Stats){ 37, 6412, 288, 23, 41 * 3600 + 17 * 60, 1840250, 96, 71, 1204, 9 };
         }
         app_render(&top, &bot); shot(out);
         return 0;

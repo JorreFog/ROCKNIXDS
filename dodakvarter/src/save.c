@@ -55,7 +55,7 @@ void scores_load(void) {
         Score *s = &scores[nscores];
         memset(s, 0, sizeof *s);
         unsigned long long seed; long long date;
-        if (sscanf(line, "%15s %d %d %d %d %d %llu %lld %31s", s->name, &s->round, &s->kills, &s->kr, &s->secs, &s->season, &seed, &date, s->town) >= 8) {
+        if (sscanf(line, "%15s %d %d %d %d %d %llu %lld %31s %d", s->name, &s->round, &s->kills, &s->kr, &s->secs, &s->season, &seed, &date, s->town, &s->daily) >= 8) {
             s->seed = seed; s->date = date;
             for (char *c = s->town; *c; c++) if (*c == '_') *c = ' ';
             nscores++;
@@ -72,8 +72,8 @@ void scores_save(void) {
         Score *s = &scores[i];
         char town[32]; snprintf(town, sizeof town, "%s", s->town[0] ? s->town : "-");
         for (char *c = town; *c; c++) if (*c == ' ') *c = '_';
-        fprintf(f, "%s %d %d %d %d %d %llu %lld %s\n", s->name[0] ? s->name : "???", s->round, s->kills, s->kr, s->secs, s->season,
-                (unsigned long long)s->seed, (long long)s->date, town);
+        fprintf(f, "%s %d %d %d %d %d %llu %lld %s %d\n", s->name[0] ? s->name : "???", s->round, s->kills, s->kr, s->secs, s->season,
+                (unsigned long long)s->seed, (long long)s->date, town, s->daily);
     }
     fclose(f);
     rename(t, p);
@@ -95,6 +95,36 @@ void score_insert(const Score *s, int at) {
     for (int i = nscores - 1; i > at; i--) scores[i] = scores[i - 1];
     scores[at] = *s;
     scores_save();
+}
+
+/* ---------------------------------------------------------------- all the runs, added up */
+Stats ST;
+static const char *STAT_KEYS[] = { "runs", "kills", "rounds", "best_round", "secs", "kr", "boxes", "downs", "crits", "dailies" };
+void stats_load(void) {
+    char p[600]; path(p, sizeof p, "stats.txt");
+    memset(&ST, 0, sizeof ST);
+    FILE *f = fopen(p, "r");
+    if (!f) return;
+    char k[64]; long long v; int *fields = (int *)&ST;
+    while (fscanf(f, "%63s %lld", k, &v) == 2)
+        for (int i = 0; i < (int)ARRAY_LEN(STAT_KEYS); i++) if (!strcmp(k, STAT_KEYS[i])) fields[i] = (int)CLAMP(v, 0, 2000000000LL);
+    fclose(f);
+}
+static void stats_save(void) {
+    char p[600], t[610]; path(p, sizeof p, "stats.txt"); snprintf(t, sizeof t, "%s.tmp", p);
+    FILE *f = fopen(t, "w");
+    if (!f) return;
+    const int *fields = (const int *)&ST;
+    for (int i = 0; i < (int)ARRAY_LEN(STAT_KEYS); i++) fprintf(f, "%s %d\n", STAT_KEYS[i], fields[i]);
+    fclose(f);
+    rename(t, p);
+}
+void stats_add_run(void) {
+    const Player *p = &G->p;
+    ST.runs++; ST.kills += p->kills; ST.rounds += MAX(0, G->round - 1); ST.best_round = MAX(ST.best_round, G->round);
+    ST.secs += (int)G->time; ST.kr += p->kr_total; ST.boxes += p->boxes; ST.downs += p->downs; ST.crits += p->crits;
+    if (G->daily) ST.dailies++;
+    stats_save();
 }
 
 /* ---------------------------------------------------------------- the run in progress

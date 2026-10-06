@@ -146,17 +146,21 @@ static void logo(Surf *s, int cy, float t) {
 
 /* ---------------------------------------------------------------- screens */
 /* the title's entries: Continue (and New run) when a run is saved */
-enum { T_CONTINUE, T_PLAY, T_NEW, T_SCORES, T_SETTINGS, T_HOWTO, T_QUIT };
+enum { T_CONTINUE, T_PLAY, T_NEW, T_DAILY, T_SCORES, T_SETTINGS, T_HOWTO, T_QUIT };
 static int title_items(int *acts, const char **labels) {
-    static const char *en[] = { "CONTINUE", "PLAY", "NEW RUN", "HIGH SCORES", "SETTINGS", "HOW TO PLAY", "QUIT" };
+    static const char *en[] = { "CONTINUE", "PLAY", "NEW RUN", "TODAY'S TOWN", "HIGH SCORES", "SETTINGS", "HOW TO PLAY", "QUIT" };
     int n = 0;
     if (A.has_save) { acts[n++] = T_CONTINUE; acts[n++] = T_NEW; } else acts[n++] = T_PLAY;
-    acts[n++] = T_SCORES; acts[n++] = T_SETTINGS; acts[n++] = T_HOWTO; acts[n++] = T_QUIT;
+    acts[n++] = T_DAILY; acts[n++] = T_SCORES; acts[n++] = T_SETTINGS; acts[n++] = T_HOWTO; acts[n++] = T_QUIT;
     for (int i = 0; labels && i < n; i++) labels[i] = tr(en[acts[i]]);
     return n;
 }
 static int title_index(int act) { int acts[8], n = title_items(acts, 0); for (int i = 0; i < n; i++) if (acts[i] == act) return i; return 0; }
-static int title_y0(int h, int n) { return h / 2 - 60 - (n > 5 ? 11 : 0); }
+static int title_y0(int h, int n) { return h / 2 - 60 - (n - 5) * 11; }
+
+/* today's town: the same seed for everyone on the same day (the local date) */
+static int today(void) { time_t t = time(0); struct tm tm; localtime_r(&t, &tm); return (tm.tm_year + 1900) * 10000 + (tm.tm_mon + 1) * 100 + tm.tm_mday; }
+static uint64_t daily_seed(int date) { uint64_t x = (uint64_t)date * 0x9E3779B97F4A7C15ull + 0xD0DA; x ^= x >> 29; x *= 0xBF58476D1CE4E5B9ull; return (x ^ (x >> 32)) | 1; }
 
 static void draw_title_bottom(Surf *s) {
     bg_bottom(s);
@@ -165,6 +169,14 @@ static void draw_title_bottom(Surf *s) {
     if (A.has_save && acts[A.sel] == T_CONTINUE) {
         char b[96]; snprintf(b, sizeof b, "%s, %s %d", A.save_town, tr("Round"), A.save_round);
         text_center(s, FONT_SMALL, s->w / 2, title_y0(s->h, n) - 10, 0x9aa4b8, 0, b);
+    }
+    if (acts[A.sel] == T_DAILY) {                          /* which town, and the best anyone here has done in it */
+        char town[32], b[96]; int d = today(), best = 0;
+        town_name(daily_seed(d), town, sizeof town);
+        for (int i = 0; i < nscores; i++) if (scores[i].daily == d) best = MAX(best, scores[i].round);
+        if (best) snprintf(b, sizeof b, "%s - %s: %s %d", town, tr("best today"), tr("Round"), best);
+        else snprintf(b, sizeof b, "%s - %s", town, tr("the same town for everyone today"));
+        text_center(s, FONT_SMALL, s->w / 2, title_y0(s->h, n) - 10, 0xd8b040, 0, b);
     }
     char b[96];
     if (nscores) { snprintf(b, sizeof b, "%s: %s - %s %d", tr("HIGH SCORES"), scores[0].name, tr("Round"), scores[0].round); text_center(s, FONT_SMALL, s->w / 2, s->h - 30, 0xd8b040, 0, b); }
@@ -249,8 +261,26 @@ static void draw_howto(Surf *s) {
     text_center(s, FONT_NORMAL, s->w / 2, s->h - 17, 0xa0a8b8, 0, b);
 }
 
-static void draw_scores(Surf *s) {
+static void draw_stats(Surf *s) {
     bg_bottom(s);
+    text_center(s, FONT_NORMAL, s->w / 2, 12, 0xd8b040, 0, tr("STATISTICS"));
+    char v[10][32];
+    snprintf(v[0], 32, "%d", ST.runs); fmt_num(v[1], ST.kills); snprintf(v[2], 32, "%d", ST.rounds); snprintf(v[3], 32, "%d", ST.best_round);
+    snprintf(v[4], 32, "%d:%02d", ST.secs / 3600, ST.secs / 60 % 60); fmt_num(v[5], ST.kr); strcat(v[5], " kr"); snprintf(v[6], 32, "%d", ST.boxes);
+    snprintf(v[7], 32, "%d", ST.crits); snprintf(v[8], 32, "%d", ST.downs); snprintf(v[9], 32, "%d", ST.dailies);
+    static const char *lab[10] = { "Runs", "Zombies killed", "Rounds survived", "Best round", "Time played", "Kronor earned",
+                                   "Mystery Boxes", "Critical hits", "Times downed", "Days' towns played" };
+    for (int i = 0; i < 10; i++) {
+        int y = 34 + i * 17;
+        rectf(s, s->w / 2 - 130, y - 3, 260, 15, i & 1 ? 0x161a22 : 0x1a1e28);
+        text(s, FONT_NORMAL, s->w / 2 - 124, y, 0xa0a8b8, tr(lab[i]));
+        text(s, FONT_NORMAL, s->w / 2 + 124 - text_w(FONT_NORMAL, v[i]), y, 0xe8ecf4, v[i]);
+    }
+}
+static void draw_scores(Surf *s) {
+    if (A.page == 1) { draw_stats(s); text_center(s, FONT_NORMAL, s->w / 2, s->h - 14, 0x5a6272, 0, "\xe2\x97\x80 2 / 2 \xe2\x96\xb6"); return; }
+    bg_bottom(s);
+    text_center(s, FONT_NORMAL, s->w / 2, s->h - 14, 0x5a6272, 0, "\xe2\x97\x80 1 / 2 \xe2\x96\xb6");
     int x = s->w / 2 - 150, y = 10;
     text(s, FONT_SMALL, x + 4, y, 0x7a8494, "#");
     text(s, FONT_SMALL, x + 22, y, 0x7a8494, "NAMN");
@@ -273,7 +303,8 @@ static void draw_scores(Surf *s) {
         snprintf(b, sizeof b, "%d", sc->kills); text(s, FONT_NORMAL, x + 118, yy + 1, c, b);
         fmt_num(b, sc->kr); text(s, FONT_NORMAL, x + 160, yy + 1, c, b);
         Surf cl = *s; surf_clip(&cl, x + 212, yy - 2, 86, 14);
-        text(&cl, FONT_SMALL, x + 214, yy + 3, 0x8a94a4, sc->town);
+        if (sc->daily) { text(&cl, FONT_SMALL, x + 214, yy + 3, 0xd8b040, "\xe2\x98\x85"); text(&cl, FONT_SMALL, x + 221, yy + 3, 0xd8b040, sc->town); }
+        else text(&cl, FONT_SMALL, x + 214, yy + 3, 0x8a94a4, sc->town);
     }
 }
 
@@ -344,15 +375,16 @@ void title_top(Surf *s) {
 /* ---------------------------------------------------------------- the state machine (main.c calls) */
 #define PAUSE_ITEMS 5
 static void refresh_save_info(void) { A.has_save = run_peek(A.save_town, sizeof A.save_town, &A.save_round) == 0; }
-void app_new_run(void) {
+static void new_run(uint64_t seed, int daily) {
     run_discard(); A.has_save = 0;
     render_fx_reset();
-    uint64_t seed = A.seed_override ? A.seed_override : ((uint64_t)time(0) * 2654435761u) ^ (uint64_t)clock();
-    int season = S.season ? S.season - 1 : (int)((seed * 0x9E3779B97F4A7C15ull >> 40) % SEASON_COUNT);   /* a seed is a whole run */
+    int season = S.season && !daily ? S.season - 1 : (int)((seed * 0x9E3779B97F4A7C15ull >> 40) % SEASON_COUNT);   /* a seed is a whole run */
     game_new(seed, season);
+    G->daily = daily;
     A.state = ST_PLAY; A.t = 0; A.last_rstate = G->rstate;
     music_play(MUS_NONE);
 }
+void app_new_run(void) { new_run(A.seed_override ? A.seed_override : ((uint64_t)time(0) * 2654435761u) ^ (uint64_t)clock(), 0); }
 static void continue_run(void) {
     if (run_load()) { refresh_save_info(); return; }
     A.state = ST_PAUSE; A.sel = 0; A.t = 0; A.last_rstate = G->rstate;   /* back where you left it, paused */
@@ -370,7 +402,8 @@ static void end_run(void) {
     A.state = ST_GAMEOVER; A.t = 0; G->over = 1;
     memset(&A.last, 0, sizeof A.last);
     A.last.round = G->round; A.last.kills = G->p.kills; A.last.kr = G->p.kr_total; A.last.secs = (int)G->time;
-    A.last.season = G->season; A.last.seed = G->seed; A.last.date = (long long)time(0);
+    A.last.season = G->season; A.last.seed = G->seed; A.last.date = (long long)time(0); A.last.daily = G->daily;
+    stats_add_run();
     snprintf(A.last.town, sizeof A.last.town, "%s", G->town);
     A.rank = score_rank(&A.last);
 }
@@ -394,7 +427,8 @@ void app_update(const Input *in, const Input *prev, float dt) {
             switch (acts[A.sel]) {
             case T_CONTINUE: continue_run(); break;
             case T_PLAY: case T_NEW: app_new_run(); break;
-            case T_SCORES: A.state = ST_SCORES; A.rank = -1; break;
+            case T_DAILY: { int d = today(); new_run(daily_seed(d), d); break; }
+            case T_SCORES: A.state = ST_SCORES; A.rank = -1; A.page = 0; break;
             case T_SETTINGS: A.state = ST_SETTINGS; A.settings_from = ST_TITLE; A.sel = 0; break;
             case T_HOWTO: A.state = ST_HOWTO; A.page = 0; break;
             case T_QUIT: A.quit = 1; break;
@@ -486,6 +520,8 @@ void app_update(const Input *in, const Input *prev, float dt) {
         break;
     }
     case ST_SCORES:
+        if (left || right) { A.page = !A.page; sfx(SFX_MENU_MOVE, 0.5f, 0); break; }
+        if (touch_down(in, prev) && in->ty[1] > A.bot_h - 24) { A.page = !A.page; sfx(SFX_MENU_MOVE, 0.5f, 0); break; }
         if (A.t > 0.3f && (ok_pressed(in, prev) || back_pressed(in, prev) || touch_down(in, prev))) {
             A.state = ST_TITLE; A.sel = 0; A.rank = -1; sfx(SFX_MENU_BACK, 0.5f, 0);
             music_play(MUS_TITLE);
