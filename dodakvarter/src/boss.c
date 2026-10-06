@@ -246,6 +246,7 @@ void boss_stuck(Zombie *z) {
     float x, y;
     if (boss_spot(&x, &y) < 0) return;
     z->x = x; z->y = y; z->state = ZS_RISE; z->t = 1.2f; b->st = B_CHASE; b->hidden = 0; b->h = 0;
+    b->n = 2;                                               /* (up again: no greeting this time) */
     for (int i = 0; i < BOSS_TRAIL; i++) { b->trail[i][0] = x; b->trail[i][1] = y; }
     spawn_parts(PT_DUST, x, y, 20, G->season == SEASON_WINTER ? 0xe8eef4 : 0x5a4636, 50);
     plat_log("boss %s lost its way: up again at %.0f,%.0f", BD[b->kind].name, x, y);
@@ -554,18 +555,36 @@ static void fallen(Zombie *z) {
     if (z->variant != BOSS_DRAUGEN && z->variant != BOSS_NACKEN) world_decal_blood(z->x, z->y, 60);
     shake(8);
     sfx(SFX_FANFARE, 0.9f, 0);
+    /* the spoils: a legendary weapon, Max Ammo, and money */
+    static const int spoils[] = { W_AK5, W_AK4, W_KSP58, W_HAGEL, W_STUDSARE, W_STRAL, W_ASKA, W_SNO };
+    item_drop_weapon(weapon_make(spoils[rng_int(&G->rng, (int)ARRAY_LEN(spoils))], RAR_LEGENDARY), z->x + 14, z->y + 6);
+    powerup_spawn(PU_MAXAMMO, z->x - 14, z->y + 6);
+    int kr = 2000 * MAX(1, G->round / 20);
+    add_kr(kr, 0);
+    char t[24]; snprintf(t, sizeof t, "+%d kr", kr); float_text(z->x, z->y - 50, 0xffe060, t);
 }
 
 /* the view leans to a boss as it comes up and greets you, and as it falls (1: lean to x, y) */
 int boss_focus(float *x, float *y) {
     const Boss *b = &G->boss;
-    if (b->zi < 0 || b->zi >= MAX_ZOMBIES) return 0;
+    if (G->over || b->zi < 0 || b->zi >= MAX_ZOMBIES) return 0;
     const Zombie *z = &G->z[b->zi];
     if (!z->alive || z->type != ZT_BOSS) return 0;
     if (!(z->state == ZS_RISE || (z->state == ZS_DEAD && z->t < FALL) || (b->on && b->st == B_ROAR && b->n == 1))) return 0;
     *x = z->x; *y = z->y - (z->variant == BOSS_LINDORM ? 8 : 20);
     return 1;
 }
+
+/* a boss just felled: its name and "slain" stay up through its fall and a moment after (game seconds) */
+int boss_holds_banner(void) {
+    const Boss *b = &G->boss;
+    if (b->zi < 0 || b->zi >= MAX_ZOMBIES) return 0;
+    const Zombie *z = &G->z[b->zi];
+    return z->alive && z->type == ZT_BOSS && z->state == ZS_DEAD && z->t < 3.0f;
+}
+
+/* a boss's remains, lying (drawn behind what stands near, as the dead are); not while it falls */
+int boss_lying(const Zombie *z) { return z->state == ZS_DEAD && z->t >= FALL; }
 
 /* the first moment of its fall is seen slowed down */
 float boss_time_scale(void) {
@@ -592,7 +611,8 @@ int boss_ai(Zombie *z, float dt) {
     if (z->state == ZS_RISE) {
         z->t -= dt;
         if (rng_chance(&G->fx, 0.5f)) spawn_parts(PT_DUST, z->x + rng_rangef(&G->fx, -12, 12), z->y, 1, G->season == SEASON_WINTER ? 0xe8eef4 : 0x5a4636, 30);
-        if (z->t <= 0) {                                    /* up: it greets you, and then it comes */
+        if (z->t <= 0 && b->n == 2) { z->state = ZS_CHASE; set(b, B_CHASE, 0); }   /* (up again after losing its way) */
+        else if (z->t <= 0) {                               /* up: it greets you, and then it comes */
             z->state = ZS_CHASE; set(b, B_ROAR, 1.4f); b->n = 1;
             b->face = b->kind == BOSS_LINDORM ? atan2f(p->y - z->y, p->x - z->x) : p->x < z->x ? PI_F : 0;
             sfx_at(b->kind == BOSS_NACKEN ? SFX_FIDDLE : SFX_ROAR, z->x, z->y, 1); shake(7);
@@ -645,24 +665,17 @@ void boss_hit(Zombie *z, float dmg) {
 void boss_killed(Zombie *z) {
     Boss *b = &G->boss;
     Player *p = &G->p;
-    int tier = MAX(1, G->round / 20);
     b->on = 0; b->hidden = 0; b->h = 0; b->st = B_CHASE; b->enraged = 0;
     G->boss_kills++;
-    char up[48]; snprintf(up, sizeof up, "%s", BD[b->kind].name);
-    banner(0xf0d040, up, tr("slain"));
-    G->banner_t = 3.5f;
+    /* its name, and "slain": nothing else over them for a few seconds (see boss_holds_banner) */
+    snprintf(G->banner, sizeof G->banner, "%s", BD[b->kind].name);
+    snprintf(G->banner2, sizeof G->banner2, "%s", tr("slain"));
+    G->banner_col = 0xf0d040; G->banner_t = 3.5f;
     shake(10); G->flash_t = 0.1f;                         /* (a short one: the fall is slowed down) */
     sfx(SFX_ROAR, 1, 0); sfx(SFX_KABOOM, 0.7f, 0);
     if (music_now() == MUS_BOSS) music_play(MUS_NONE);
     spawn_parts(PT_BLOOD, z->x, z->y - 16, 30, 0x8a1010, 110);   /* (then it falls: falling(), fallen()) */
     spawn_parts(PT_CONFETTI, z->x, z->y - 30, 30, 0xf0d040, 90);
-    /* the spoils: a legendary weapon, Max Ammo, and money */
-    static const int spoils[] = { W_AK5, W_AK4, W_KSP58, W_HAGEL, W_STUDSARE, W_STRAL, W_ASKA, W_SNO };
-    item_drop_weapon(weapon_make(spoils[rng_int(&G->rng, (int)ARRAY_LEN(spoils))], RAR_LEGENDARY), z->x + 14, z->y + 6);
-    powerup_spawn(PU_MAXAMMO, z->x - 14, z->y + 6);
-    int kr = 2000 * tier;
-    add_kr(kr, 0);
-    char t[24]; snprintf(t, sizeof t, "+%d kr", kr); float_text(z->x, z->y - 50, 0xffe060, t);
     for (int i = 0; i < MAX_HAZARDS; i++) if (G->hz[i].kind == HZ_NOTE || G->hz[i].kind == HZ_ROCK || G->hz[i].kind == HZ_VENOM) G->hz[i].alive = 0;
     plat_log("boss %s slain in round %d at %.0f s (%d kills)", BD[b->kind].name, G->round, G->time, p->kills);
 }
@@ -797,7 +810,8 @@ void boss_draw(Surf *s, Zombie *z) {
     if (z->state == ZS_DEAD && z->t < FALL) { draw_fall(s, z, sx, sy); return; }
     if (z->state == ZS_DEAD) {
         const Img *d = art_exists(sprite_for(z)) ? art(sprite_for(z)) : 0;
-        if (d) blit_ex(s, d, sx - d->w / 2, sy - d->h + 3, b->face > 1.5f && b->face < 4.7f ? FLIP_X : 0, 0, 0, z->t > 11 ? (int)(255 * (14 - z->t) / 3) : 255);   /* (after its fall) */
+        int alpha = z->t > 11 ? (int)(255 * (14 - z->t) / 3) : (int)(255 * MIN(1.0f, (z->t - FALL) / 0.4f));   /* (in after its fall, out at the end) */
+        if (d) blit_ex(s, d, sx - d->w / 2, sy - d->h + 3, b->face > 1.5f && b->face < 4.7f ? FLIP_X : 0, 0, 0, alpha);
         return;
     }
     if (z->variant == BOSS_LINDORM) {

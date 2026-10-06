@@ -200,23 +200,38 @@ int main(void) {
         CHECK(p->hp < 1e6f, "%s never hurt the player in half a minute", boss_name(k));
         CHECK(moves >= 4, "%s made only %d moves", boss_name(k), moves);
         CHECK(G->rstate == RS_ACTIVE, "the round ended with %s up", boss_name(k));
-        /* killed: the spoils */
-        int kr = p->kr, kills = G->boss_kills;
+        /* killed: it falls (slowed down at first), its banner up through it; then the spoils and the fanfare */
+        int kr = p->kr, kills = G->boss_kills, fanfare = sfx_asked[SFX_FANFARE];
         G->boss.hidden = 0; z->state = ZS_CHASE; z->hp = 1;
         damage_zombie(z, 10, 0, 0, 0, 0);
+        CHECK(z->state == ZS_DEAD && !G->boss.on && G->boss_kills == kills + 1, "%s didn't die", boss_name(k));
+        CHECK(boss_time_scale() < 1, "%s's fall wasn't slowed down", boss_name(k));
+        banner(0x40ff40, "MAX AMMO", 0);
+        CHECK(!strcmp(G->banner2, tr("slain")), "another banner went up over %s's", boss_name(k));
+        p->x = z->x + 150; p->y = z->y;                    /* (away from where the spoils fall) */
+        for (int t = 0; t < 60 * 3; t++) { G->spawn_cd = 1e9f; game_update(&none, &none, 1.0f / 60); }
         int legendary = 0, maxammo = 0;
         for (int i = 0; i < MAX_ITEMS; i++) legendary += G->items[i].alive && G->items[i].kind == IK_WEAPON && G->items[i].w.rar == RAR_LEGENDARY;
         for (int i = 0; i < MAX_POWERUPS; i++) maxammo += G->pu[i].alive && G->pu[i].kind == PU_MAXAMMO;
-        CHECK(z->state == ZS_DEAD && !G->boss.on && G->boss_kills == kills + 1, "%s didn't die", boss_name(k));
-        CHECK(legendary >= 1 && maxammo >= 1 && p->kr >= kr + 2000, "%s's spoils: %d legendary, %d max ammo, %d kr more", boss_name(k), legendary, maxammo, p->kr - kr);
-        CHECK(boss_time_scale() < 1, "%s's fall wasn't slowed down", boss_name(k));
+        CHECK(boss_time_scale() == 1 && z->alive && z->state == ZS_DEAD && z->t > 1.6f, "%s's fall: %.2f s in, time at %.2f", boss_name(k), z->t, boss_time_scale());
+        CHECK(legendary >= 1 && maxammo >= 1 && p->kr >= kr + 2000 && sfx_asked[SFX_FANFARE] == fanfare + 1,
+              "%s's spoils: %d legendary, %d max ammo, %d kr more, %d fanfares", boss_name(k), legendary, maxammo, p->kr - kr, sfx_asked[SFX_FANFARE] - fanfare);
         kill_all_zombies(0);
         for (int t = 0; t < 60 * 3 && G->rstate == RS_ACTIVE; t++) { G->spawn_cd = 1e9f; G->spawned = G->to_spawn; game_update(&none, &none, 1.0f / 60); }
         CHECK(G->rstate == RS_BREAK, "the round didn't end after %s fell", boss_name(k));
-        for (int t = 0; t < 60 * 2; t++) game_update(&none, &none, 1.0f / 60);
+        for (int t = 0; t < 60 * 3; t++) game_update(&none, &none, 1.0f / 60);
         CHECK(G->boss.bar <= 0 && !G->boss.enraged, "%s's bar was still up in the break (%.2f)", boss_name(k), G->boss.bar);
-        for (int t = 0; t < 60; t++) game_update(&none, &none, 1.0f / 60);   /* (its fall: slowed down at first) */
-        CHECK(boss_time_scale() == 1 && z->alive && z->state == ZS_DEAD && z->t > 1.6f, "%s's fall: %.2f s in, time at %.2f", boss_name(k), z->t, boss_time_scale());
+    }
+    /* where a boss comes up, in more towns: in sight as it greets you (the view leaning its way) */
+    static const int towns[] = { 347, 494, 553, 615, 634, 641, 670 };
+    for (int i = 0; i < (int)ARRAY_LEN(towns); i++) {
+        game_new((uint64_t)towns[i], towns[i] % SEASON_COUNT);
+        G->power_on = 1; round_start(20);
+        for (int t = 0; t < 60 * 8 && !(G->boss.on && G->z[G->boss.zi].state == ZS_CHASE); t++) { G->spawn_cd = 1e9f; game_update(&none, &none, 1.0f / 60); }
+        for (int t = 0; t < 40; t++) { G->spawn_cd = 1e9f; game_update(&none, &none, 1.0f / 60); }
+        Zombie *z = &G->z[G->boss.zi];
+        float vx = z->x - G->camx, vy = z->y - G->camy;
+        CHECK(G->boss.on && vx > 0 && vx < G->view_w && vy > 20 && vy < G->view_h, "town %d: the boss greeted you out of sight (%.0f, %.0f)", towns[i], vx, vy);
     }
     char rm[640]; snprintf(rm, sizeof rm, "rm -rf '%s'", dir);
     if (system(rm)) printf("(couldn't remove %s)\n", dir);

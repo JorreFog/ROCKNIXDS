@@ -418,6 +418,8 @@ float boss_hit_radius(const Zombie *z, float *cy);   /* how big it is to bullets
 void boss_air_glow(Surf *s);            /* notes, the axe's swing, Näcken's thread: after the light */
 int boss_focus(float *x, float *y);     /* where the view leans while a boss comes up, greets you or falls */
 float boss_time_scale(void);            /* <1 for the first moment of a boss's fall: slowed down */
+int boss_lying(const Zombie *z);        /* a boss's remains (not while it falls) */
+int boss_holds_banner(void);             /* a boss just felled: its banner stays up */
 void zombie_steer(Zombie *z, float *dx, float *dy);
 void render_add_light(float wx, float wy, float rad, uint32_t col, float k);
 

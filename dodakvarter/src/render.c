@@ -546,7 +546,7 @@ void render_game(Surf *s) {
         if (!z->alive) continue;
         int m = z->type == ZT_BOSS ? 120 : 0;               /* (a boss is big, the lindworm long) */
         if (z->x - cx < -40 - m || z->x - cx > s->w + 40 + m || z->y - cy < -8 - m || z->y - cy > s->h + 48 + m) continue;
-        push((int)z->y - (z->state == ZS_DEAD ? 12 : 0), DR_ZOMBIE, i);
+        push((int)z->y - (z->state == ZS_DEAD && (z->type != ZT_BOSS || boss_lying(z)) ? 12 : 0), DR_ZOMBIE, i);
     }
     push((int)p->y, DR_PLAYER, 0);
     for (int i = 0; i < MAX_ITEMS; i++) if (G->items[i].alive) push((int)G->items[i].y - 4, DR_ITEM, i);

@@ -201,14 +201,14 @@ static void synth_all(void) {
         for (int i = 0; i < n; i++) { float t = (float)i / RATE, x = noise(), hp = x - lp(&l, x, 3500); b[i] = hp * sinf(PI_F * t) * (0.75f + 0.25f * sinf(2 * PI_F * 40 * t)); }
         finish(SFX_HISS, b, n, 0.7f); }
     /* (original) a boss felled: brass in D, three quick notes, a leap up, and the D an octave above, held */
-    b = buf_new(2.9f, &n); { LP l = { 0 }; float ph = 0, ph2 = 0, t0 = 0;
+    b = buf_new(3.3f, &n); { LP l = { 0 }; float ph = 0, ph2 = 0, t0 = 0;
         static const float fan[7][2] = { { 62, .13f }, { 62, .13f }, { 62, .13f }, { 69, .45f }, { 67, .16f }, { 69, .16f }, { 74, 1.0f } };
         for (int k = 0; k < 7; k++) {
             float f = midi((int)fan[k][0]) / RATE, d = fan[k][1];
-            int s0 = (int)(t0 * RATE), s1 = MIN(n, (int)((t0 + d + (k == 6 ? 0.6f : 0)) * RATE));
+            int s0 = (int)(t0 * RATE), s1 = k == 6 ? n : MIN(n, (int)((t0 + d) * RATE));   /* (the last rings out to the end) */
             for (int s = s0; s < s1; s++) {
                 float tn = (float)(s - s0) / RATE;
-                float e = MIN(1.0f, tn / 0.02f) * (k == 6 ? expf(-tn * 1.8f) : tn < d - 0.03f ? 1.0f : MAX(0.0f, (d - tn) / 0.03f));
+                float e = MIN(1.0f, tn / 0.02f) * (k == 6 ? expf(-tn * 2.2f) * MIN(1.0f, (float)(n - s) / (0.05f * RATE)) : tn < d - 0.03f ? 1.0f : MAX(0.0f, (d - tn) / 0.03f));
                 ph += f; ph -= floorf(ph); ph2 += f * 0.5f; ph2 -= floorf(ph2);
                 b[s] += lp(&l, (ph * 2 - 1) * 0.6f + (ph2 * 2 - 1) * 0.35f, 700 + 2600 * e) * e;
             }

@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
         "jingle-kanelbulle", "jingle-blabarssoppa", "jingle-lingondricka", "jingle-kaviar" };
     for (int i = 0; i < SFX_COUNT; i++) {
         char n[48]; snprintf(n, sizeof n, "sfx-%s", names[i] ? names[i] : "?");
-        quiet(); sfx(i, 1, 0); take(dir, n, i == SFX_ROUND_START || i == SFX_POWER || i == SFX_ROUND_END ? 2.8f : i == SFX_THUNDER || i >= SFX_JINGLE ? 3.6f : i >= SFX_ROAR ? 2.0f : 1.4f, 0);
+        quiet(); sfx(i, 1, 0); take(dir, n, i == SFX_ROUND_START || i == SFX_POWER || i == SFX_ROUND_END ? 2.8f : i == SFX_THUNDER || i >= SFX_JINGLE || i == SFX_FANFARE ? 3.6f : i >= SFX_ROAR ? 2.0f : 1.4f, 0);
     }
     quiet(); music_play(MUS_TITLE); take(dir, "music-title", 24, 0);
     music_play(MUS_NONE); quiet(); music_play(MUS_BOX); take(dir, "music-box", 3.6f, 0);

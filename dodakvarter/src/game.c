@@ -17,6 +17,7 @@ void msg(uint32_t col, const char *fmt, ...) {
 }
 void banner(uint32_t col, const char *a, const char *b) {
     if (G->boss.pending && G->banner_t > 0.5f) return;      /* (a boss's name stays up until it comes) */
+    if (boss_holds_banner()) return;                        /* (and when it's felled, for a moment) */
     snprintf(G->banner, sizeof G->banner, "%s", a ? a : "");
     snprintf(G->banner2, sizeof G->banner2, "%s", b ? b : "");
     G->banner_t = 3.0f; G->banner_col = col;
@@ -497,7 +498,7 @@ void game_new(uint64_t seed, int season) {
 }
 
 void game_update(const Input *in, const Input *prev, float dt) {
-    dt *= boss_time_scale();                                /* (a boss's fall: slowed down a moment) */
+    if (!G->over) dt *= boss_time_scale();                  /* (a boss's fall: slowed down a moment) */
     G->time += dt;
     if (G->over) { G->over_t += dt; parts_update(dt); camera_update(dt); return; }
     for (int i = 0; i < 4; i++) if (G->msg_t[i] > 0) G->msg_t[i] -= dt;
