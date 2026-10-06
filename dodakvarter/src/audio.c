@@ -1,6 +1,8 @@
 // audio.c: every sound is synthesised at start (no files): noise, oscillators, filters and envelopes. A mixer
 // runs on the platform's audio thread; the game sends it commands through a lock-free ring. Music is a small
-// sequencer: the title plays "Vem kan segla förutan vind?" (a traditional Swedish folk song) as a music box.
+// sequencer: the title plays "Vem kan segla förutan vind?" (a traditional Swedish folk song) as a music box; the
+// Mystery Box and the game over have little pieces of their own. Under the play runs the night outside, made as it
+// plays: autumn rain, winter wind, or a midsummer night's crickets and birds.
 #include "game.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,7 +20,7 @@ static Voice voices[NVOICES];
 typedef struct { int id; float vol, pan, rate; } Cmd;
 static Cmd ring[256];
 static volatile unsigned rhead, rtail;
-static int master = 80, want_music = MUS_NONE;      /* set by the game, read by the mixer: atomics */
+static int master = 80, want_music = MUS_NONE, want_amb = AMB_NONE;   /* set by the game, read by the mixer: atomics */
 static int ready;
 
 /* ---------------------------------------------------------------- synthesis helpers */
@@ -177,13 +179,75 @@ static const int16_t TUNE[][2] = {
     {69,2},{71,2},{72,2},{74,2},{76,4},{72,4}, {74,2},{72,2},{71,2},{68,2},{69,8},
     {76,2},{76,2},{77,2},{76,2},{74,4},{72,4}, {74,2},{72,2},{71,2},{68,2},{69,8},
 };
+/* the box and the game over: notes at times, on a few voices. Music box: a struck tine that rings down (a little
+   inharmonic overtone); organ: a soft reed swell that holds for the note's length */
+typedef struct { float t, len; int8_t note; } Ev;
+static const Ev BOX_SONG[] = {           /* (original) an A minor music box figure, round and round while it spins */
+    {0.00f,.5f,81},{0.18f,.5f,88},{0.36f,.5f,84},{0.54f,.5f,88},{0.72f,.5f,83},{0.90f,.5f,88},{1.08f,.5f,80},{1.26f,.5f,88},
+    {1.44f,.5f,81},{1.62f,.5f,88},{1.80f,.5f,84},{1.98f,.5f,88},{2.16f,.5f,86},{2.34f,.5f,84},{2.52f,.5f,83},{2.70f,.9f,80},
+    {2.88f,.5f,76},{3.06f,.5f,80},{3.24f,1.2f,81},
+};
+static const Ev OVER_SONG[] = {          /* (original) a slow chorale: Am, F, Dm, E, Am, the tune falling to A */
+    {0.0f,1.5f,57},{0.0f,1.5f,60},{0.0f,1.5f,64},{0.0f,1.5f,76},
+    {1.5f,1.5f,53},{1.5f,1.5f,57},{1.5f,1.5f,60},{1.5f,1.5f,72},
+    {3.0f,1.5f,50},{3.0f,1.5f,53},{3.0f,1.5f,57},{3.0f,1.5f,74},
+    {4.5f,1.5f,52},{4.5f,1.5f,56},{4.5f,1.5f,59},{4.5f,1.5f,71},
+    {6.0f,3.4f,45},{6.0f,3.4f,57},{6.0f,3.4f,60},{6.0f,3.4f,64},{6.0f,3.4f,69},
+};
+typedef struct { float ph, f, env, t, len, vel; int on; } MV;
+static MV mv[8];
+static float song_t; static int song_ev;
+static void song_tick(int16_t *out, int frames, const Ev *ev, int n, float period, int organ, float gain, int vol) {
+    for (int i = 0; i < frames; i++) {
+        while (song_ev < n && ev[song_ev].t <= song_t) {    /* notes starting now take a free voice */
+            MV *v = &mv[0];
+            for (int k = 0; k < 8; k++) if (!mv[k].on) { v = &mv[k]; break; }
+            v->on = 1; v->f = midi(ev[song_ev].note); v->t = 0; v->len = ev[song_ev].len; v->env = organ ? 0 : 1; v->ph = 0;
+            v->vel = organ && ev[song_ev].note >= 69 ? 0.9f : 0.6f;   /* (the tune over the chords) */
+            song_ev++;
+        }
+        float s = 0;
+        for (int k = 0; k < 8; k++) {
+            MV *v = &mv[k];
+            if (!v->on) continue;
+            v->t += 1.0f / RATE;
+            if (organ) {                                    /* swell in, hold, let go */
+                float target = v->t < v->len ? 1.0f : 0.0f;
+                v->env += (target - v->env) * (target > v->env ? 0.0006f : 0.00012f);
+                if (v->t > v->len && v->env < 0.001f) { v->on = 0; continue; }
+                float vib = 1 + 0.003f * sinf(2 * PI_F * 5.2f * v->t);
+                v->ph += v->f * vib / RATE; v->ph -= floorf(v->ph);
+                float w = 2 * PI_F * v->ph;
+                s += (sinf(w) + 0.5f * sinf(2 * w) + 0.25f * sinf(3 * w) + 0.1f * sinf(4 * w)) * v->env * v->vel * 0.09f;
+            } else {                                        /* struck: rings down */
+                v->env *= 0.99985f;
+                if (v->env < 0.002f) { v->on = 0; continue; }
+                v->ph += v->f / RATE; v->ph -= floorf(v->ph);
+                float w = 2 * PI_F * v->ph;
+                s += (sinf(w) + 0.25f * sinf(2 * w) * v->env + 0.1f * sinf(5.4f * w) * v->env * v->env) * v->env * v->vel * 0.12f;
+            }
+        }
+        song_t += 1.0f / RATE;
+        if (period > 0 && song_t >= period) { song_t -= period; song_ev = 0; }
+        int o = (int)(s * gain * 32767 * vol / 100);
+        out[i * 2] = (int16_t)CLAMP(out[i * 2] + o, -32768, 32767);
+        out[i * 2 + 1] = (int16_t)CLAMP(out[i * 2 + 1] + o, -32768, 32767);
+    }
+}
+
 static int mus, mus_note, mus_left;          /* samples left of the current note */
 static float mus_ph, mus_env, mus_freq, mus_bass_ph, mus_bass_f;
 static int mus_beat;
 
 static void music_tick(int16_t *out, int frames) {
     int want = __atomic_load_n(&want_music, __ATOMIC_RELAXED), vol = __atomic_load_n(&master, __ATOMIC_RELAXED);
-    if (mus != want) { mus = want; mus_note = 0; mus_left = 0; mus_env = 0; }
+    if (mus != want) {
+        mus = want; mus_note = 0; mus_left = 0; mus_env = 0;
+        song_t = 0; song_ev = 0; for (int k = 0; k < 8; k++) if (want != MUS_NONE) mv[k].on = 0;   /* (stopping lets notes ring out) */
+    }
+    if (mus == MUS_BOX) { song_tick(out, frames, BOX_SONG, ARRAY_LEN(BOX_SONG), 3.6f, 0, 2.0f, vol); return; }
+    if (mus == MUS_GAMEOVER) { song_tick(out, frames, OVER_SONG, ARRAY_LEN(OVER_SONG), 0, 1, 1.0f, vol); return; }
+    if (mus == MUS_NONE) { song_tick(out, frames, 0, 0, 0, 0, 0.8f, vol); return; }    /* the last notes ring out */
     if (mus != MUS_TITLE) return;
     const int eighth = RATE * 3 / 10 / 2;      /* slow and sad: 100 bpm in quarters */
     for (int i = 0; i < frames; i++) {
@@ -206,6 +270,69 @@ static void music_tick(int16_t *out, int frames) {
         int s = (int)(v * 32767 * vol / 100);
         out[i * 2] = (int16_t)CLAMP(out[i * 2] + s, -32768, 32767);
         out[i * 2 + 1] = (int16_t)CLAMP(out[i * 2 + 1] + s, -32768, 32767);
+    }
+}
+
+/* ---------------------------------------------------------------- the night outside (made as it plays) */
+static float amb_gain;                   /* fades between kinds */
+static int amb_kind;
+static uint32_t astate = 777;
+static float anoise(void) { astate = astate * 1664525u + 1013904223u; return ((astate >> 9) & 0xFFFF) / 32768.0f - 1.0f; }
+static float a_t, a_lp[4], a_drop[2], a_bird_t = 3, a_bird_f, a_bird_len, a_bird_ph, a_bird_age;
+static int a_bird_n;
+static void ambience_tick(int16_t *out, int frames, int vol) {
+    int want = __atomic_load_n(&want_amb, __ATOMIC_RELAXED);
+    for (int i = 0; i < frames; i++) {
+        /* fade out, change, fade in */
+        if (want != amb_kind) { amb_gain -= 1.0f / (RATE * 1.2f); if (amb_gain <= 0) { amb_gain = 0; amb_kind = want; } }
+        else if (amb_gain < 1) amb_gain = MIN(1.0f, amb_gain + 1.0f / (RATE * 2.5f));
+        if (amb_kind == AMB_NONE || amb_gain <= 0) continue;
+        a_t += 1.0f / RATE;
+        float l = 0, r = 0;
+        if (amb_kind == AMB_RAIN) {                         /* a wash of noise between 600 Hz and 5 kHz, and drops */
+            float nl = anoise(), nr = anoise();
+            a_lp[0] += 0.48f * (nl - a_lp[0]); a_lp[1] += 0.075f * (nl - a_lp[1]);
+            a_lp[2] += 0.48f * (nr - a_lp[2]); a_lp[3] += 0.075f * (nr - a_lp[3]);
+            l = (a_lp[0] - a_lp[1]) * 0.06f; r = (a_lp[2] - a_lp[3]) * 0.06f;
+            for (int c = 0; c < 2; c++) {
+                if ((astate & 1023) < 5) a_drop[c] += 0.4f + 0.6f * ((astate >> 12) & 255) / 255.0f;
+                a_drop[c] *= 0.993f;
+            }
+            l += (a_lp[0] - a_lp[1]) * a_drop[0] * 0.12f; r += (a_lp[2] - a_lp[3]) * a_drop[1] * 0.12f;
+        } else if (amb_kind == AMB_WIND) {                  /* gusts: low noise with a cutoff that breathes */
+            float g = 0.55f + 0.3f * sinf(2 * PI_F * 0.071f * a_t) + 0.15f * sinf(2 * PI_F * 0.19f * a_t + 1.3f);
+            float k = (180 + 520 * g) / RATE * 2 * PI_F;
+            a_lp[0] += k * (anoise() - a_lp[0]); a_lp[1] += k * (a_lp[0] - a_lp[1]);
+            a_lp[2] += k * (anoise() - a_lp[2]); a_lp[3] += k * (a_lp[2] - a_lp[3]);
+            l = a_lp[1] * g * 0.55f; r = a_lp[3] * g * 0.55f;
+        } else if (amb_kind == AMB_SUMMER) {                /* crickets, a bird now and then, a breath of air */
+            for (int c = 0; c < 3; c++) {
+                static const float per[3] = { 0.61f, 0.73f, 0.89f }, fr[3] = { 4400, 4750, 4150 }, pan[3] = { -0.7f, 0.5f, 0.1f };
+                float ph = fmodf(a_t + c * 0.21f, per[c]);
+                float on = ph < 0.09f && fmodf(ph, 0.03f) < 0.016f ? 1.0f : 0.0f;
+                float v = on * sinf(2 * PI_F * fr[c] * a_t) * 0.03f;
+                l += v * (1 - pan[c]) * 0.5f; r += v * (1 + pan[c]) * 0.5f;
+            }
+            a_bird_t -= 1.0f / RATE;
+            if (a_bird_t <= 0 && a_bird_n <= 0) { a_bird_n = 3 + (int)((astate >> 8) % 4); a_bird_age = 0; a_bird_len = 0; }
+            if (a_bird_n > 0) {                             /* a phrase of falling whistles */
+                if (a_bird_age >= a_bird_len) {
+                    a_bird_n--; a_bird_age = 0; a_bird_len = 0.07f + ((astate >> 10) & 63) / 600.0f;
+                    a_bird_f = 2600 + ((astate >> 4) % 1600);
+                    if (a_bird_n <= 0) a_bird_t = 3.5f + ((astate >> 6) % 600) / 100.0f;
+                }
+                a_bird_age += 1.0f / RATE;
+                float k = a_bird_age / a_bird_len, f = a_bird_f * (1 - 0.25f * k) * (1 + 0.02f * sinf(2 * PI_F * 38 * a_bird_age));
+                a_bird_ph += f / RATE; a_bird_ph -= floorf(a_bird_ph);
+                float v = sinf(2 * PI_F * a_bird_ph) * sinf(PI_F * MIN(1.0f, k)) * 0.07f;
+                l += v * 0.35f; r += v * 0.65f;
+            }
+            a_lp[0] += 0.05f * (anoise() - a_lp[0]);
+            l += a_lp[0] * 0.05f; r += a_lp[0] * 0.05f;
+        }
+        int sl = (int)(l * amb_gain * 32767 * vol / 100), sr = (int)(r * amb_gain * 32767 * vol / 100);
+        out[i * 2] = (int16_t)CLAMP(out[i * 2] + sl, -32768, 32767);
+        out[i * 2 + 1] = (int16_t)CLAMP(out[i * 2 + 1] + sr, -32768, 32767);
     }
 }
 
@@ -240,6 +367,7 @@ static void mix(int16_t *out, int frames) {
         }
     }
     music_tick(out, frames);
+    ambience_tick(out, frames, __atomic_load_n(&master, __ATOMIC_RELAXED));
 }
 
 void audio_init(void) {
@@ -247,6 +375,9 @@ void audio_init(void) {
     ready = plat_audio_start(RATE, mix) == 0;
     plat_log("audio: %s", ready ? "on" : "off");
 }
+/* tests/sounds.c: the mixer without a sound card, run by the caller */
+void audio_offline(void) { synth_all(); ready = 1; }
+void audio_render(int16_t *out, int frames) { mix(out, frames); }
 void audio_set_volume(int v) { __atomic_store_n(&master, CLAMP(v, 0, 100), __ATOMIC_RELAXED); }
 
 void sfx(int id, float vol, float pan) {
@@ -265,6 +396,7 @@ void sfx_at(int id, float x, float y, float vol) {
     if (k <= 0.02f) return;
     sfx(id, vol * k, clampf(dx / 200.0f, -0.8f, 0.8f));
 }
+void audio_ambience(int kind) { __atomic_store_n(&want_amb, kind, __ATOMIC_RELAXED); }
 void music_play(int track) { __atomic_store_n(&want_music, S.music ? track : MUS_NONE, __ATOMIC_RELAXED); }
 
 /* tests: render the mixer's output without a device */

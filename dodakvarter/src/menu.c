@@ -370,6 +370,8 @@ static void end_run(void) {
 
 void app_update(const Input *in, const Input *prev, float dt) {
     A.t += dt;
+    /* the night outside, under a run: rain in autumn, wind in winter, crickets and birds at midsummer */
+    audio_ambience(!app_run_in_progress() ? AMB_NONE : G->season == SEASON_WINTER ? AMB_WIND : G->season == SEASON_SUMMER ? AMB_SUMMER : AMB_RAIN);
     int up = pressed(in, prev, B_UP), down = pressed(in, prev, B_DOWN), left = pressed(in, prev, B_LEFT), right = pressed(in, prev, B_RIGHT);
     switch (A.state) {
     case ST_TITLE: {

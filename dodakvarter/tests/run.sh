@@ -3,7 +3,8 @@
 #   1. 500 generated towns: everything reachable, spawns, machines; Black Ops' round formulas
 #   2. the bot plays whole runs headless (every season, several towns) under AddressSanitizer and UBSan
 #   3. a run saved and loaded goes on exactly as if it had never stopped; quitting and starting again continues it
-#   4. the tools the screenshots and the map pictures are made with build
+#   4. every sound, the music and the ambience come out of the mixer neither silent nor clipped
+#   5. the tools the screenshots and the map pictures are made with build
 set -e
 cd "$(dirname "$0")/.."
 CC=${CC:-cc}
@@ -19,6 +20,7 @@ $CC -O1 -g -w $INC -o build/test_map tests/test_map.c $SRCS -ldrm -lm -lpthread 
 $CC -O1 -g -w $SAN $INC -o build/dk-test src/main.c $SRCS -ldrm -lm -lpthread -ldl
 $CC -O1 -g -w $SAN $INC -o build/test_save tests/test_save.c $SRCS -ldrm -lm -lpthread -ldl
 $CC -O1 -g -w $INC -o build/scene tests/scene.c $SRCS -ldrm -lm -lpthread -ldl
+$CC -O1 -g -w $INC -o build/sounds tests/sounds.c $SRCS -ldrm -lm -lpthread -ldl
 $CC -O1 -g -w $INC -o build/mapview tests/mapview.c $SRCS -ldrm -lm -lpthread -ldl
 echo "== towns"
 ./build/test_map ${MAPS:-500}
@@ -46,5 +48,7 @@ DK_DATA=$T/cont ASAN_OPTIONS=detect_leaks=0 ./build/dk-test --backend headless -
 grep -q "continuing the run" $T/cont/dodakvarter.log || { echo "the saved run wasn't continued"; cat $T/cont/dodakvarter.log; exit 1; }
 grep -q "runtime error\|AddressSanitizer" $T/errc1 $T/errc2 && { cat $T/errc1 $T/errc2; exit 1; }
 echo "continue after quitting: ok"
+echo "== sounds"
+./build/sounds $T/sounds | tail -n1
 rm -rf "$T"
 echo "all tests passed"

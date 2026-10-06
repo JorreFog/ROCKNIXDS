@@ -150,7 +150,7 @@ C, about 10,000 lines, no libraries but libc, libm and libdrm (SDL2 and libasoun
 |---|---|
 | `src/plat_kms.c` | both panels through atomic KMS commits: a pair of dumb buffers per panel, each frame scaled up by whole pixels into the free one and flipped on the next vblank, both panels in one commit; a screen that didn't change isn't sent. Takes the display the way SuperDrastic does (DRM master, a modeset, the display controller's underrun check) |
 | `src/input_evdev.c` | the gamepad (d-pad as buttons or a hat, sticks if any), both touchscreens (the bottom one is on `fe5e0000.i2c`), a USB keyboard; nothing grabbed, so ROCKNIX's hotkeys still work |
-| `src/audio_alsa.c`, `src/audio.c` | a mixer on its own thread into ALSA's default device (PipeWire); every sound synthesised at start (no sound files), the title music *Vem kan segla förutan vind?* (traditional) as a music box |
+| `src/audio_alsa.c`, `src/audio.c` | a mixer on its own thread into ALSA's default device (PipeWire); every sound synthesised at start (no sound files), the title music *Vem kan segla förutan vind?* (traditional) as a music box, a music box figure for the Mystery Box and a chorale for the game over (both original), and the night under the play, made as it plays: autumn rain, winter wind, crickets and birds at midsummer |
 | `src/plat_sdl.c`, `src/plat_headless.c` | a window for a computer; no display at all for the tests |
 | `src/render.c` | the top screen: the painted town, everything standing sorted by its feet, and the night: per-season ambient light, street lamps and windows once the power is on, the torch on your gun (stopped by walls), muzzle flashes; zombie eyes glow after the light |
 | `src/mapgen.c`, `src/world.c`, `src/props.c` | the town: districts, buildings with their facades, everything standing in it, painted once into one big bitmap |
@@ -177,6 +177,7 @@ sh build.sh aarch64 <sysroot>    # the RG DS: build/dodakvarter-aarch64 (the sys
 sh tests/run.sh                  # the tests: 500 towns, the bot playing whole runs under the sanitizers
 python3 art/build_art.py         # after changing art/*.txt (--preview sheet.png to look at it)
 python3 tools/screenshots.py     # the README's pictures and the Ports entry's, rendered by the game
+./build/sounds build/sounds      # every sound, the music and the ambience as WAV files (tests/run.sh builds it)
 ```
 
 `bin/dodakvarter-aarch64` is the build the installer puts on the device. `./build/dodakvarter --bot` lets the

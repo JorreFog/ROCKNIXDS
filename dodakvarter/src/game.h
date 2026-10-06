@@ -391,6 +391,10 @@ void audio_init(void);
 void sfx(int id, float vol, float pan);
 void sfx_at(int id, float x, float y, float vol);
 void music_play(int track);
+enum { AMB_NONE, AMB_RAIN, AMB_WIND, AMB_SUMMER };
+void audio_ambience(int kind);          /* the night outside, under the play */
+void audio_offline(void);               /* tests: the mixer driven by audio_render, no sound card */
+void audio_render(int16_t *out, int frames);
 void audio_set_volume(int v);
 enum {
     SFX_PISTOL, SFX_SMG, SFX_RIFLE, SFX_SHOTGUN, SFX_SNIPER, SFX_LMG, SFX_ROCKET, SFX_RAY, SFX_ZAP, SFX_FROST,

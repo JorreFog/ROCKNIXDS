@@ -88,7 +88,7 @@ static void box_update(Inter *it, float dt) {
     if (it->state == 1 && it->t > 3.6f) {                  /* the spin ends */
         if (it->b < 0) {                                    /* the Dalahäst: money back, the box moves on */
             it->state = 3; it->t = 0;
-            sfx_at(SFX_HORSE, it->x, it->y, 1);
+            sfx_at(SFX_HORSE, it->x, it->y, 1); music_play(MUS_NONE);
             add_kr(it->c, 0);
             msg(0xd84a3a, "%s", tr("Box moved"));
         } else { it->state = 2; it->t = 0; music_play(MUS_NONE); }
