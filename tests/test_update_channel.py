@@ -149,6 +149,13 @@ exit 0
         r = self.invoke("check")
         self.assertIn("UP TO DATE", r.stdout)
 
+    def test_a_bank_release_is_not_a_rocknixds_update(self):
+        self._releases(("bank-v0.2.0", False), ("v1.5-plus", False), ("v1.5", False))
+        self._cfg("rocknixds.channel=stable\n")
+        self._model("Anbernic RG DS")
+        r = self.invoke("check")
+        self.assertEqual(r.stdout.strip(), "UPDATE ROCKNIXDS 1.5")
+
     def test_a_plus_before_its_first_release_is_told_to_use_beta(self):
         self._releases(("v1.4", False), ("v1.5-plus-beta.5", True))
         self._model("Anbernic RG DS Plus")

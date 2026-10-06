@@ -1,0 +1,55 @@
+# ROCKNIXDS Bank & Trade (bank/): the tests, the handheld's package, and its release for a bank-v<version> tag.
+# Bank releases are published as pre-releases and never as "latest": ROCKNIXDS's installer and updater read the newest
+# stable release as ROCKNIXDS's own (and only take v* tags since bank 0.1).
+name: bank
+on:
+  push:
+    branches: [beta, plus-beta, main]
+    tags: ['bank-v*']
+    paths:
+      - 'bank/**'
+      - '.github/workflows/bank.yml'
+  pull_request:
+    paths:
+      - 'bank/**'
+      - '.github/workflows/bank.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bank:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Scripts parse
+        run: for f in bank/build.sh bank/tools/fetch-assets.sh bank/device/*.sh; do sh -n "$f"; done
+      - name: Tests
+        run: dotnet test bank/tests/Bank.Tests/Bank.Tests.csproj
+      - name: Package (aarch64)
+        run: sh bank/build.sh
+      - name: The tag matches bank/VERSION
+        if: startsWith(github.ref, 'refs/tags/bank-v')
+        run: test "${GITHUB_REF_NAME#bank-v}" = "$(cat bank/VERSION)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rocknixds-bank
+          path: bank/dist/rocknixds-bank-*
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/bank-v')
+        with:
+          name: ROCKNIXDS Bank & Trade ${{ github.ref_name }}
+          body: |
+            ROCKNIXDS Bank & Trade: a Pokémon bank, PKHeX legality checks and Wi-Fi trading for the RG DS and RG DS Plus.
+            Install on the handheld (ssh, as root):
+            `curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/bank/device/install-bank.sh | sh`
+            See bank/README.md.
+          prerelease: true
+          make_latest: false
+          files: |
+            bank/dist/rocknixds-bank-*-aarch64.tar.gz
+            bank/dist/rocknixds-bank-*-aarch64.tar.gz.sha256

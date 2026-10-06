@@ -64,7 +64,7 @@ except ValueError:
     sys.exit()
 for r in rel if isinstance(rel, list) else []:
     t = r.get("tag_name") or ""
-    if r.get("draft") or r.get("prerelease"):
+    if r.get("draft") or r.get("prerelease") or not t.startswith("v"):  # bank-v* tags: ROCKNIXDS Bank releases
         continue
     if (t.endswith("-plus") if plus else "plus" not in t):
         print(t)
