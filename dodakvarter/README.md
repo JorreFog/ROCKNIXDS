@@ -163,7 +163,8 @@ on every run).
 
 ## Inside
 
-C, about 10,000 lines, no libraries but libc, libm and libdrm (SDL2 and libasound are loaded only if there).
+C, about 11,000 lines (and 1,000 of tests), no libraries but libc, libm and libdrm (SDL2 and libasound are loaded only
+if there).
 
 | | |
 |---|---|
@@ -171,10 +172,13 @@ C, about 10,000 lines, no libraries but libc, libm and libdrm (SDL2 and libasoun
 | `src/input_evdev.c` | the gamepad (d-pad as buttons or a hat, sticks if any), both touchscreens (the bottom one is on `fe5e0000.i2c`), a USB keyboard; nothing grabbed, so ROCKNIX's hotkeys still work |
 | `src/audio_alsa.c`, `src/audio.c` | a mixer on its own thread into ALSA's default device (PipeWire); every sound synthesised at start (no sound files), the title music *Vem kan segla förutan vind?* (traditional) as a music box, a music box figure for the Mystery Box and a chorale for the game over (both original), and the night under the play, made as it plays: autumn rain, winter wind, crickets and birds at midsummer |
 | `src/plat_sdl.c`, `src/plat_headless.c` | a window for a computer; no display at all for the tests |
-| `src/render.c` | the top screen: the painted town, everything standing sorted by its feet, and the night: per-season ambient light, street lamps and windows once the power is on, the torch on your gun (stopped by walls), muzzle flashes; zombie eyes glow after the light |
+| `src/render.c` | the top screen: the painted town, everything standing sorted by its feet, and the night: per-season ambient light, street lamps and windows once the power is on (spreading from the switch), the torch on your gun (stopped by walls), muzzle flashes; zombie eyes, Lucia's candles, the trap's arcs and fireflies glow after the light |
 | `src/mapgen.c`, `src/world.c`, `src/props.c` | the town: districts, buildings with their facades, everything standing in it, painted once into one big bitmap |
 | `src/game.c`, `weapons.c`, `zombies.c`, `loot.c`, `inter.c` | the player, guns and what they hit, rounds and the dead (they find you along a flow field), loot and power-ups, buying things |
-| `src/hud.c`, `src/menu.c` | the bottom screen, the title, pause, settings, how to play, game over and the high scores |
+| `src/hud.c`, `src/menu.c` | the bottom screen, the title, pause, settings, how to play, game over, the high scores and the statistics |
+| `src/save.c` | settings, scores and statistics as text; the run in progress (`run.sav`): the game's state behind a header tied to the build and a checksum, written atomically, between rounds by a helper thread |
+| `src/selftest.c` | `--selftest`: which panel is which, touches, buttons, sticks and a beep, for checking a handheld |
+| `tests/` | `test_map.c` (towns: reachable, sealed, repaints), `test_rules.c` (the trap, windows, crawlers, a dry gun, the tomtar), `test_save.c` (a run saved and loaded goes on byte for byte the same), `sounds.c` (every sound to WAV), `scene.c` and `mapview.c` (pictures); `run.sh` runs them all and the bot |
 | `art/*.txt`, `art/build_art.py` | every sprite, drawn as text (one character a pixel); the script writes `src/art_data.c` |
 
 A frame takes about 1 ms on a desktop core (the night's lighting, the heaviest part, runs eight pixels at a time
@@ -188,8 +192,8 @@ apart). *Full* and *Light* fix it either way. Settings, the high score list (`sc
 **On the RG DS.** `device/` has the Ports entry (`Doda Kvarter.sh`), `launch.sh` (starts the session in a systemd
 unit, like ROCKNIXDS's DS launcher, or waits for it in fast-switch mode), `session.sh` (stops ES and sway or switches
 the VT, puts the GPU at its lowest clock and the CPU on schedutil, aims ROCKNIX's exit hotkey at the game, runs it,
-then hands everything back through ROCKNIXDS's `restore.sh`) and `gamelist.py` (its entry and pictures in the Ports
-list). By hand, over ssh: `systemctl stop essway sway; /storage/.config/rocknixds/dodakvarter/dodakvarter; systemctl start sway essway`.
+then hands everything back through ROCKNIXDS's `restore.sh`), `selftest.sh` and `gamelist.py` (its entry and
+pictures in the Ports list). By hand, over ssh: `systemctl stop essway sway; /storage/.config/rocknixds/dodakvarter/dodakvarter; systemctl start sway essway`.
 
 **Checking a handheld.** Over ssh, `/storage/.config/rocknixds/dodakvarter/selftest.sh` takes the screens as the game
 would and shows on each panel which one it is (TOP, BOTTOM) with its size, a grid and colour bars; touches draw a
