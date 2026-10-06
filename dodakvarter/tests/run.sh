@@ -1,9 +1,9 @@
 #!/bin/sh
 # tests/run.sh: Döda Kvarter's tests, on any Linux machine with a C compiler (no display needed).
 #   1. 500 generated towns: everything reachable, spawns, machines; Black Ops' round formulas
-#   2. rules played out one by one (the elstängsel, a zombie in a window, a dry gun); the bot plays whole runs
-#      headless (every season, several towns) under AddressSanitizer and UBSan, and sixteen more towns where no
-#      round may stall
+#   2. rules played out one by one (the elstängsel, a zombie in a window, a dry gun, the bosses); the bot plays whole
+#      runs headless (every season, several towns) under AddressSanitizer and UBSan, fights each boss, and plays
+#      sixteen more towns where no round may stall
 #   3. a run saved and loaded goes on exactly as if it had never stopped; quitting and starting again continues it;
 #      a monkey presses everything everywhere under the sanitizers
 #   4. every sound, the music and the ambience come out of the mixer neither silent nor clipped
@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 CC=${CC:-cc}
 SRCS="src/game.c src/mapgen.c src/world.c src/props.c src/render.c src/hud.c src/menu.c src/weapons.c src/zombies.c
       src/loot.c src/inter.c src/audio.c src/save.c src/lang.c src/data.c src/bot.c src/art.c src/art_data.c src/gfx.c
-      src/font.c src/png.c src/plat.c src/plat_headless.c src/plat_kms.c src/plat_sdl.c src/selftest.c src/input_evdev.c src/audio_alsa.c"
+      src/font.c src/png.c src/plat.c src/plat_headless.c src/plat_kms.c src/plat_sdl.c src/selftest.c src/input_evdev.c src/audio_alsa.c src/boss.c"
 INC="-I/usr/include/libdrm -I/usr/include/SDL2"
 mkdir -p build
 SAN="-fsanitize=address,undefined -fno-omit-frame-pointer"
@@ -46,6 +46,19 @@ DK_DATA=$T/late DK_DEBUG_ROUND=25 DK_DEBUG_KR=60000 DK_DEBUG_POWER=1 DK_DEBUG_OP
     ./build/dk-test --backend headless --seed 77 --start --bot --frames 5400 >/dev/null 2>$T/errlate || { cat $T/errlate; exit 1; }
 grep -q "runtime error\|AddressSanitizer" $T/errlate && { cat $T/errlate; exit 1; }
 echo "late game: ok"
+# the bosses: the bot fights each one (round 20, alone, at 40% of its health, with a legendary Ak 5) under the
+# sanitizers, and must fell it
+echo "== bosses"
+for k in 0 1 2 3; do
+    ( DK_DATA=$T/boss$k DK_DEBUG_BOSS=$k DK_DEBUG_BOSS_HP=0.4 DK_DEBUG_BOSS_ONLY=1 DK_DEBUG_GUN=3 DK_DEBUG_ROUND=20 DK_DEBUG_KR=60000 DK_DEBUG_POWER=1 DK_DEBUG_OPEN=1 DK_DEBUG_GOD=1 \
+        ASAN_OPTIONS=detect_leaks=0 ./build/dk-test --backend headless --seed $((40 + k)) --start --bot --frames ${BOSS_FRAMES:-9000} >/dev/null 2>$T/errboss$k \
+        || echo "exit $?" >> $T/errboss$k ) &
+done
+wait
+for k in 0 1 2 3; do
+    grep -q "runtime error\|AddressSanitizer\|^exit" $T/errboss$k && { cat $T/errboss$k; exit 1; }
+    grep "boss .* slain" $T/boss$k/dodakvarter.log || { echo "boss $k wasn't slain:"; grep boss $T/boss$k/dodakvarter.log; exit 1; }
+done
 # no round may stall: the bot plays sixteen more towns for six minutes each (dying and starting over), and no round
 # may take two and a half minutes, the one still going when it stops included (its rounds take a minute or so)
 echo "== stalled rounds"

@@ -173,7 +173,7 @@ enum { PU_MAXAMMO, PU_INSTAKILL, PU_DOUBLE, PU_KABOOM, PU_CARPENTER, PU_FIRESALE
 typedef struct { int alive, kind; float x, y, t; } PowerUp;
 
 /* ---------------------------------------------------------------- actors */
-enum { ZT_WALKER, ZT_BRUTE, ZT_BLOATER, ZT_WOLF, ZT_MOOSE, ZT_COUNT };
+enum { ZT_WALKER, ZT_BRUTE, ZT_BLOATER, ZT_WOLF, ZT_MOOSE, ZT_BOSS, ZT_COUNT };
 enum { ZS_RISE, ZS_WINDOW, ZS_CHASE, ZS_ATTACK, ZS_DEAD, ZS_CHARGE, ZS_WINDUP, ZS_STUN };
 typedef struct {
     int alive, type, variant, state, dir;
@@ -219,6 +219,25 @@ typedef struct { int alive; float x, y, r, t, dur; int kind; } Cloud;           
 typedef struct { int alive; float x, y, vy, t; char s[24]; uint32_t col; int screen; } FloatText;
 typedef struct { float x, y, r; uint32_t col; float k; int power; } Light;   /* power: comes on with the power */
 
+/* the bosses (boss.c): one every twentieth round, from the old stories */
+enum { BOSS_DRAUGEN, BOSS_TROLL, BOSS_NACKEN, BOSS_LINDORM, BOSS_COUNT };
+#define BOSS_TRAIL 64
+typedef struct {
+    int on, kind, zi, pending;          /* a boss is up (or coming): which one, its zombie (shot, burnt, frozen as one) */
+    int st; float t, t2;                /* what it is doing, and for how long */
+    float tx, ty, sx, sy, h;            /* a target point; where a leap started; height off the ground */
+    float ang; int n;                   /* a spiral's angle; strikes, waves or notes so far */
+    float cd[4];                        /* each attack's cooldown */
+    float chip, bar;                    /* the health bar: its white trail, how far it has come in */
+    int enraged, hidden;                /* half its health gone: faster; under the ground or the water: can't be hit */
+    float trail[BOSS_TRAIL][2]; int trail_head; float trail_d;   /* the lindworm's path, for its body */
+    float face;                         /* the direction it looks (radians) */
+    int summoned;                       /* zombies it called up, alive or not */
+} Boss;
+enum { HZ_RING, HZ_ROCK, HZ_NOTE, HZ_VENOM, HZ_POOL, HZ_CLEAVE, HZ_SPLASH };
+typedef struct { int alive, kind; float x, y, vx, vy, z, t, dur, r, dmg, a; int hit; float x0, y0; } Hazard;
+#define MAX_HAZARDS 96
+
 enum { SEASON_AUTUMN, SEASON_WINTER, SEASON_SUMMER, SEASON_COUNT };
 enum { RS_INTRO, RS_ACTIVE, RS_BREAK };
 
@@ -255,6 +274,8 @@ typedef struct {
     int song;                           /* the three trädgårdstomtar were found: the song played */
     float storm_t, lightning_t, thunder_t;   /* autumn: the next flash, the flash, the thunder after it */
     int god;                            /* tests: DK_DEBUG_GOD */
+    Boss boss; int boss_kills;
+    Hazard hz[MAX_HAZARDS];
     /* actors */
     Player p;
     Zombie z[MAX_ZOMBIES];
@@ -278,6 +299,8 @@ typedef struct {
 } Game;
 
 extern Game *G;
+/* can it be hit: up, and not under the ground or the water (a boss diving) */
+static inline int zombie_hittable(const Zombie *z) { return z->alive && z->state != ZS_DEAD && z->state != ZS_RISE && !(z->type == ZT_BOSS && G->boss.hidden); }
 extern const WeaponDef WEAPONS[W_COUNT];
 extern const ArmorDef ARMORS[A_COUNT];
 extern const ConsDef CONS[C_COUNT];
@@ -373,6 +396,28 @@ void spawn_zombie(int type);
 float zombie_hp_for_round(int r);
 int zombies_for_round(int r);
 void kill_all_zombies(int give_kr);
+Zombie *zombie_at_spot(int type, float x, float y);   /* rising out of the ground there (a boss calling them) */
+
+/* boss.c */
+int boss_kind_for_round(int r);         /* -1, or which boss comes in round r (every twentieth) */
+void boss_round_start(int r);           /* its banner; it comes up a moment later */
+void boss_update_round(float dt);       /* bringing it up */
+int boss_ai(Zombie *z, float dt);       /* its own moves (1: handled) */
+void boss_killed(Zombie *z);
+void boss_hit(Zombie *z, float dmg);    /* the health bar's trail */
+void boss_stuck(Zombie *z);             /* lost somewhere: up again nearer */
+void hazards_update(float dt);
+void boss_draw(Surf *s, Zombie *z);
+void boss_glow(Surf *s, Zombie *z);     /* after the light: eyes, fire, venom */
+void boss_lights(void);
+void hazards_draw_ground(Surf *s);
+void hazards_draw_air(Surf *s);
+void boss_overlay(Surf *s);             /* the health bar on top of the screen, an arrow when it's off screen */
+const char *boss_name(int kind);
+float boss_hit_radius(const Zombie *z, float *cy);   /* how big it is to bullets, and its middle's height */
+void boss_air_glow(Surf *s);            /* notes, the axe's swing, Näcken's thread: after the light */
+void zombie_steer(Zombie *z, float *dx, float *dy);
+void render_add_light(float wx, float wy, float rad, uint32_t col, float k);
 
 /* loot.c */
 int roll_rarity(int bonus);
@@ -426,9 +471,11 @@ enum {
     SFX_POWERUP_SPAWN, SFX_POWERUP, SFX_ROUND_START, SFX_ROUND_END, SFX_GAMEOVER, SFX_SWAP, SFX_PICKUP,
     SFX_MENU_MOVE, SFX_MENU_OK, SFX_MENU_BACK, SFX_PERK, SFX_PAP, SFX_POWER, SFX_DOOR, SFX_SPLAT, SFX_THROW,
     SFX_BEEP, SFX_GULP, SFX_STEP, SFX_KABOOM, SFX_THUNDER,
+    SFX_ROAR, SFX_HORN, SFX_SWOOSH, SFX_SLAM, SFX_FIDDLE, SFX_SPLASH, SFX_HISS,   /* the bosses */
     SFX_JINGLE, SFX_COUNT = SFX_JINGLE + PK_COUNT          /* each perk machine's jingle */
 };
-enum { MUS_NONE, MUS_TITLE, MUS_BOX, MUS_GAMEOVER, MUS_SONG };
+enum { MUS_NONE, MUS_TITLE, MUS_BOX, MUS_GAMEOVER, MUS_SONG, MUS_BOSS };
+int music_now(void);                    /* what the music is told to play */
 
 /* lang.c */
 enum { LANG_EN, LANG_SV };

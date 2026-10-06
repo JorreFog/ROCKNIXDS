@@ -117,14 +117,20 @@ void bot_input(Input *in) {
     Zombie *tgt = 0; float td = 1e9f; int crowd = 0;
     for (int i = 0; i < MAX_ZOMBIES; i++) {
         Zombie *z = &G->z[i];
-        if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE) continue;
+        if (!zombie_hittable(z)) continue;
         float d = sqrtf(dist2f(z->x, z->y, p->x, p->y));
         if (d < 70) crowd++;
         if (d < td && d < 240 && shot_clear(p->x, p->y - 8, z->x, z->y - 8)) { td = d; tgt = z; }
     }
+    if (G->boss.on) {                                       /* a boss in sight comes first */
+        Zombie *b = &G->z[G->boss.zi];
+        float d = sqrtf(dist2f(b->x, b->y, p->x, p->y));
+        if (b->state != ZS_RISE && b->state != ZS_DEAD && !G->boss.hidden && d < 260 && shot_clear(p->x, p->y - 8, b->x, b->y - 8) && (!tgt || td > 40)) { tgt = b; td = d; }
+    }
     if (tgt) {
         in->mouse = 1; in->mx = tgt->x - G->camx; in->my = tgt->y - 8 - G->camy;
-        in->held |= BIT(B_A);
+        const Weapon *cw = &p->w[p->cur];
+        if (!(cw->def >= 0 && cw->mag == 0 && cw->reserve == 0 && tap)) in->held |= BIT(B_A);   /* (a dry gun: pull again, and the game hands over a loaded one) */
         /* keep some distance: back away, sliding along walls */
         if (td < 80) {
             float ax = p->x - tgt->x, ay = p->y - tgt->y, l = sqrtf(ax * ax + ay * ay) + 0.01f;

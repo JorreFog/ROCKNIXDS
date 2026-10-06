@@ -99,7 +99,7 @@ void score_insert(const Score *s, int at) {
 
 /* ---------------------------------------------------------------- all the runs, added up */
 Stats ST;
-static const char *STAT_KEYS[] = { "runs", "kills", "rounds", "best_round", "secs", "kr", "boxes", "downs", "crits", "dailies" };
+static const char *STAT_KEYS[] = { "runs", "kills", "rounds", "best_round", "secs", "kr", "boxes", "downs", "crits", "dailies", "bosses" };
 void stats_load(void) {
     char p[600]; path(p, sizeof p, "stats.txt");
     memset(&ST, 0, sizeof ST);
@@ -124,6 +124,7 @@ void stats_add_run(void) {
     ST.runs++; ST.kills += p->kills; ST.rounds += MAX(0, G->round - 1); ST.best_round = MAX(ST.best_round, G->round);
     ST.secs += (int)G->time; ST.kr += p->kr_total; ST.boxes += p->boxes; ST.downs += p->downs; ST.crits += p->crits;
     if (G->daily) ST.dailies++;
+    ST.bosses += G->boss_kills;
     stats_save();
 }
 

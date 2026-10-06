@@ -19,6 +19,12 @@ is a new town with loot that gets better as the rounds get harder.
   <img src="docs/img/trap.png" width="260" alt="The elstängsel on: arcs across a gap between districts, a shocked zombie on the ground">
   <img src="docs/img/scores.png" width="260" alt="The high score list in Swedish, a star by today's town">
 </p>
+<p align="center">
+  <img src="docs/img/boss-draugen.png" width="200" alt="Round 20: Draugen, the dead Viking chieftain, his axe raised, his health bar across the top">
+  <img src="docs/img/boss-troll.png" width="200" alt="Round 40: Bergatrollet, the mountain troll, with a boulder over its head">
+  <img src="docs/img/boss-nacken.png" width="200" alt="Round 60: Näcken fiddling in his pool, fans of glowing notes flying">
+  <img src="docs/img/boss-lindorm.png" width="200" alt="Round 80: Lindormen, the lindworm, its long scaled body behind it, venom pooling">
+</p>
 
 It runs natively: a C program that draws every pixel itself and puts both screens straight onto the panels through
 DRM/KMS (no compositor, no GL), the way ROCKNIXDS runs DS games, at 60 frames a second. Pixel art at the panels'
@@ -122,6 +128,23 @@ round of fast wolves, the last one bringing a Max Ammo (the hellhound rounds). *
 four or five rounds after, a zombie moose with 5000 health and more each time, which lowers its antlers and charges
 (Black Ops' Panzer Soldat). The doorman from the centrum takes three times the bullets; the bloated one bursts into a
 cloud you shouldn't stand in.
+
+**The bosses.** Every twentieth round one of the old stories comes up out of the ground of the suburb, its name and a
+health bar across the top of the screen, its own music, and a marker on the map (an arrow at the screen's edge when
+it's out of sight). They are far bigger than the dead and drawn in more detail, and each has its own moves:
+
+| Round | Boss | Moves |
+|---|---|---|
+| 20 | **Draugen**, the dead Viking chieftain | cleaves with his Dane axe; leaps onto you (a shockwave where he lands); blows his war horn and the dead rise around him |
+| 40 | **Bergatrollet**, the mountain troll | smashes with its tree-trunk club; pounds the ground three times (three rings of shock); throws boulders (where they'll land is marked) |
+| 60 | **Näcken**, the fiddler in the water | plays: fans of glowing notes sweeping across you; beckons: you are drawn to him; sinks into his pool and comes up again beside you |
+| 80 | **Lindormen**, the lindworm | bites; spits venom that pools on the ground; burrows under the asphalt and bursts up beneath you (a mound runs at you first) |
+
+Then round again (100, 120, ...), stronger each time. At half health a boss is enraged: faster, and quicker to strike.
+Insta-Kill doesn't kill them, Kaboom only takes a tenth, firecrackers don't fool them, the elstängsel only burns them,
+and the wonder weapons, blasts and fire do a third to a half of their damage (as in Call of Duty).
+A boss round has half the usual zombies, and ends when the boss is down; it leaves a legendary weapon, a Max Ammo and
+2000 kr for every twenty rounds. The list's statistics count the bosses slain.
 
 **Loot** (the roguelike part). Search bins, cars, mailboxes, recycling bins, containers and sheds (hold B); the dead
 drop things too; every new round fills searched places again and leaves things on the ground. Everything has a rarity,

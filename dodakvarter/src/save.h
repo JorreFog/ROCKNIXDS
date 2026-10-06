@@ -22,7 +22,7 @@ int score_rank(const Score *s);
 void score_insert(const Score *s, int at);
 
 /* everything played, added up (stats.txt) */
-typedef struct { int runs, kills, rounds, best_round, secs, kr, boxes, downs, crits, dailies; } Stats;
+typedef struct { int runs, kills, rounds, best_round, secs, kr, boxes, downs, crits, dailies, bosses; } Stats;
 extern Stats ST;
 void stats_load(void);
 void stats_add_run(void);               /* the run in G just ended */

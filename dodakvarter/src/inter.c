@@ -135,8 +135,10 @@ static void traps_tick(float dt) {
             Zombie *z = &G->z[k];
             if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE || z->state == ZS_WINDOW) continue;
             if (z->x < x0 - 3 || z->x > x1 + 3 || z->y < y0 || z->y > y1 + 6) continue;
-            if (z->type == ZT_MOOSE) {                       /* the moose takes it, slowly */
-                float dmg = 2500 * dt;
+            if (z->type == ZT_MOOSE || z->type == ZT_BOSS) { /* the moose takes it, slowly; a boss burns (and pays nothing for it) */
+                if (z->type == ZT_BOSS && G->boss.hidden) continue;
+                float dmg = z->type == ZT_BOSS ? z->maxhp * 0.04f * dt : 2500 * dt;
+                if (z->type == ZT_BOSS) z->burn = 0.5f;
                 if (z->hp - dmg <= 0) damage_zombie(z, dmg, 0, 0, 0, 0); else { z->hp -= dmg; z->flash = 0.05f; }
             } else zombie_shocked(z);
         }

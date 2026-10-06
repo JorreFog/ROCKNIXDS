@@ -231,6 +231,10 @@ static void minimap(Surf *s) {
     for (int i = 0; i < MAX_ZOMBIES; i++) {                /* only the ones you could hear: within 14 tiles */
         Zombie *z = &G->z[i];
         if (!z->alive || z->state == ZS_DEAD) continue;
+        if (z->type == ZT_BOSS) {                          /* the boss, wherever it is: bigger, blinking */
+            if (!G->boss.hidden || ((int)(G->time * 4) & 1)) rectf(s, mx + (int)(z->x / TS * k) - 1, my + (int)(z->y / TS * k) - 1, 3, 3, ((int)(G->time * 3) & 1) ? 0xff2020 : 0xffd040);
+            continue;
+        }
         if (dist2f(z->x, z->y, p->x, p->y) > (14 * TS) * (14 * TS)) continue;
         pset(s, mx + (int)(z->x / TS * k), my + (int)(z->y / TS * k), z->type == ZT_MOOSE ? 0xffa040 : 0xff3030);
     }

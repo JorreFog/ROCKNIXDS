@@ -51,6 +51,8 @@ static void tracer(float x0, float y0, float x1, float y1, uint32_t col, int kin
 }
 
 /* ---------------------------------------------------------------- damage */
+/* a boss shrugs off most of the wonder weapons and the blasts (as Call of Duty's bosses do): this much gets through */
+static float vs_boss(const Zombie *z, float k) { return z->type == ZT_BOSS ? k : 1.0f; }
 static void zombie_killed(Zombie *z, int crit, int melee) {
     Player *p = &G->p;
     z->state = ZS_DEAD; z->t = 0;
@@ -58,6 +60,7 @@ static void zombie_killed(Zombie *z, int crit, int melee) {
     G->stats_zombies_by_type[z->type]++;
     if (melee) p->knifes++;
     if (crit) p->crits++;
+    if (z->type == ZT_BOSS) { boss_killed(z); return; }   /* its own spoils */
     /* Black Ops' kill money: 50, +10 for the torso, +50 for a headshot (our crit), +80 for the knife */
     int kr = melee ? 130 : crit ? 100 : 60;
     if (z->type == ZT_MOOSE) kr = 500;
@@ -92,6 +95,7 @@ static void zombie_killed(Zombie *z, int crit, int melee) {
 /* killed by the elstängsel: it counts for the round and the kills, as in Call of Duty it pays nothing and drops nothing */
 void zombie_shocked(Zombie *z) {
     if (!z->alive || z->state == ZS_DEAD) return;
+    if (z->type == ZT_BOSS) { damage_zombie(z, z->maxhp * 0.02f, 0, 0, 0, 0); return; }
     z->state = ZS_DEAD; z->t = 0; z->burn = 1.0f;
     G->p.kills++;
     G->stats_zombies_by_type[z->type]++;
@@ -102,10 +106,11 @@ void zombie_shocked(Zombie *z) {
 
 void damage_zombie(Zombie *z, float dmg, int crit, int melee, float kx, float ky) {
     if (!z->alive || z->state == ZS_DEAD) return;
-    if (G->insta_t > 0 && z->type != ZT_MOOSE) dmg = z->hp + 1;   /* Insta-Kill */
+    if (z->type == ZT_BOSS && (G->boss.hidden || z->state == ZS_RISE)) return;   /* (under the ground, or not up yet) */
+    if (G->insta_t > 0 && z->type != ZT_MOOSE && z->type != ZT_BOSS) dmg = z->hp + 1;   /* Insta-Kill */
     if (crit) dmg *= 2;
     z->hp -= dmg; z->flash = 0.08f;
-    if (z->type != ZT_MOOSE) { z->vx += kx; z->vy += ky; }
+    if (z->type != ZT_MOOSE && z->type != ZT_BOSS) { z->vx += kx; z->vy += ky; }
     spawn_parts(PT_BLOOD, z->x, z->y - 9, 3, 0x9a1414, 50);
     if (z->hp <= 0) zombie_killed(z, crit, melee);
     else {
@@ -119,15 +124,24 @@ static Zombie *ray_hit(float x0, float y0, float dx, float dy, float maxd, float
     Zombie *best = 0; float bd = maxd;
     for (int i = 0; i < MAX_ZOMBIES; i++) {
         Zombie *z = &G->z[i];
-        if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE) continue;
+        if (!zombie_hittable(z)) continue;
         int skipit = 0; for (int k = 0; k < nskip; k++) if (skip[k] == z) skipit = 1;
         if (skipit) continue;
         float r = z->type == ZT_MOOSE ? 16 : z->type == ZT_BRUTE ? 9 : z->type == ZT_WOLF ? 6 : 7;
         float cx = z->x, cy = z->y - (z->type == ZT_MOOSE ? 14 : z->type == ZT_WOLF || z->crawl ? 5 : 8);
-        float px = cx - x0, py = cy - y0, t = px * dx + py * dy;
-        if (t < 0 || t > bd) continue;
-        float ex = px - dx * t, ey = py - dy * t;
-        if (ex * ex + ey * ey <= r * r) { bd = t; best = z; }
+        int parts = 1; float step = 0;
+        if (z->type == ZT_BOSS) {                          /* tall: its body is two circles, feet to shoulders */
+            float h; r = boss_hit_radius(z, &h); cy = z->y - h * 0.5f;
+            if (h > 12) { parts = 2; step = h * 0.9f; }
+        }
+        for (int part = 0; part < parts; part++) {
+            float py0 = cy - part * step;
+            float px = cx - x0, py = py0 - y0, t = px * dx + py * dy;
+            if (px * px + py * py <= r * r && t > -r * 0.3f && z->type == ZT_BOSS) { bd = 0; best = z; break; }   /* (point-blank: the muzzle is in it, facing it) */
+            if (t < 0 || t > bd) continue;
+            float ex = px - dx * t, ey = py - dy * t;
+            if (ex * ex + ey * ey <= r * r) { bd = t; best = z; }
+        }
     }
     *hitd = bd;
     return best;
@@ -181,7 +195,7 @@ static void chain_lightning(float x, float y, float ang, const Weapon *w) {   /*
         Zombie *best = 0; float bd = 1e9f;
         for (int i = 0; i < MAX_ZOMBIES; i++) {
             Zombie *z = &G->z[i];
-            if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE) continue;
+            if (!zombie_hittable(z)) continue;
             int done = 0; for (int k = 0; k < nh; k++) if (hit[k] == z) done = 1;
             if (done) continue;
             float dx = z->x - cx, dy = z->y - 8 - cy, d = sqrtf(dx * dx + dy * dy);
@@ -195,7 +209,7 @@ static void chain_lightning(float x, float y, float ang, const Weapon *w) {   /*
         spawn_parts(PT_ELEC, best->x, best->y - 8, 6, 0xc0e0ff, 80);
         cx = best->x; cy = best->y - 8;
         hit[nh++] = best;
-        damage_zombie(best, dmg, 0, 0, 0, 0);
+        damage_zombie(best, dmg * vs_boss(best, 0.3f), 0, 0, 0, 0);
     }
     if (!nh) tracer(x, y, x + dirx * 80, y + diry * 80, 0xa0d0ff, 2, 0.12f);
     G->flash_t = 0.06f;
@@ -205,13 +219,13 @@ static void frost_cone(float x, float y, float ang, const Weapon *w) {     /* Sn
     float dmg = weapon_dmg(w) * (1 + G->round * 0.08f), range = WEAPONS[w->def].range * (w->pap ? 1.3f : 1.0f);
     for (int i = 0; i < MAX_ZOMBIES; i++) {
         Zombie *z = &G->z[i];
-        if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE) continue;
+        if (!zombie_hittable(z)) continue;
         float dx = z->x - x, dy = z->y - 8 - y, d = sqrtf(dx * dx + dy * dy);
         if (d > range) continue;
         if (fabsf(angdiff(atan2f(dy, dx), ang)) > 0.4f) continue;
         if (!shot_clear(x, y, z->x, z->y - 8)) continue;
         z->slow = MAX(z->slow, 2.5f);
-        damage_zombie(z, dmg, 0, 0, dx / (d + 1) * 6, dy / (d + 1) * 6);
+        damage_zombie(z, dmg * vs_boss(z, 0.4f), 0, 0, dx / (d + 1) * 6, dy / (d + 1) * 6);
     }
     for (int k = 0; k < 3; k++) {
         float a = ang + rng_rangef(&G->fx, -0.35f, 0.35f);
@@ -278,7 +292,7 @@ void explode(float x, float y, float r, float dmg, int from_player) {
         float dx = z->x - x, dy = z->y - 6 - y, d = sqrtf(dx * dx + dy * dy);
         if (d > r) continue;
         float k = 1.0f - 0.6f * d / r;
-        damage_zombie(z, dmg * k, 0, 0, dx / (d + 1) * 60, dy / (d + 1) * 60);
+        damage_zombie(z, dmg * k * vs_boss(z, 0.5f), 0, 0, dx / (d + 1) * 60, dy / (d + 1) * 60);
         /* a walker the blast didn't kill may lose its legs, and crawl on (as in Call of Duty) */
         if (z->type == ZT_WALKER && !z->crawl && z->state != ZS_DEAD && z->state != ZS_WINDOW && z->state != ZS_RISE && rng_chance(&G->rng, 0.5f)) {
             z->crawl = 1; z->speed = MAX(9.0f, z->speed * 0.35f); z->state = ZS_CHASE;
@@ -309,9 +323,9 @@ void shots_update(float dt) {
         int boom = s->life <= 0 || opaque_at((int)floorf(nx / TS), (int)floorf(ny / TS));
         if (!boom) for (int k = 0; k < MAX_ZOMBIES; k++) {
             Zombie *z = &G->z[k];
-            if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE) continue;
-            float r = z->type == ZT_MOOSE ? 16 : 8;
-            if (dist2f(nx, ny, z->x, z->y - 8) < r * r) { boom = 1; if (s->type == PR_PLASMA) damage_zombie(z, s->dmg, rng_chance(&G->rng, 0.12f), 0, s->vx * 0.05f, s->vy * 0.05f); break; }
+            if (!zombie_hittable(z)) continue;
+            float r = z->type == ZT_MOOSE ? 16 : z->type == ZT_BOSS ? 16 : 8, zy = z->type == ZT_BOSS && z->variant != BOSS_LINDORM ? z->y - 18 : z->y - 8;
+            if (dist2f(nx, ny, z->x, zy) < r * r) { boom = 1; if (s->type == PR_PLASMA) damage_zombie(z, s->dmg * vs_boss(z, 0.35f), rng_chance(&G->rng, 0.12f), 0, s->vx * 0.05f, s->vy * 0.05f); break; }
         }
         s->x = nx; s->y = ny;
         if (s->type == PR_ROCKET) spawn_parts(PT_SMOKE, s->x, s->y, 1, 0x6a6a6a, 6);
@@ -324,7 +338,7 @@ void shots_update(float dt) {
                     Zombie *z = &G->z[k];
                     if (!z->alive || z->state == ZS_DEAD) continue;
                     float d = sqrtf(dist2f(z->x, z->y - 6, s->x, s->y));
-                    if (d < s->splash) damage_zombie(z, s->dmg * 0.4f, 0, 0, 0, 0);
+                    if (d < s->splash && z->type != ZT_BOSS) damage_zombie(z, s->dmg * 0.4f, 0, 0, 0, 0);   /* (a boss only feels the hit) */
                 }
                 spawn_parts(PT_GLOW, s->x, s->y, 10, s->col, 60);
                 if (dist2f(G->p.x, G->p.y - 6, s->x, s->y) < 18 * 18) player_hurt(20, s->x, s->y);
@@ -342,7 +356,7 @@ void shots_update(float dt) {
             Zombie *z = &G->z[k];
             if (!z->alive || z->state == ZS_DEAD) continue;
             if (dist2f(z->x, z->y, c->x, c->y) < c->r * c->r) {
-                if (c->kind == 0) { z->burn = 1.0f; damage_zombie(z, (200 + zombie_hp_for_round(G->round) * 0.3f) * dt, 0, 0, 0, 0); }
+                if (c->kind == 0) { z->burn = 1.0f; damage_zombie(z, (200 + zombie_hp_for_round(G->round) * 0.3f) * dt * vs_boss(z, 0.3f), 0, 0, 0, 0); }
                 else z->slow = MAX(z->slow, 0.5f);
             }
         }
@@ -411,9 +425,9 @@ void melee_attack(void) {
         Zombie *best = 0; float bd = 1e9f;
         for (int i = 0; i < MAX_ZOMBIES; i++) {
             Zombie *z = &G->z[i];
-            if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE || z->flash > 0.07f) continue;
+            if (!zombie_hittable(z) || z->flash > 0.07f) continue;
             float dx = z->x - p->x, dy = z->y - p->y, d = sqrtf(dx * dx + dy * dy);
-            float reach = z->type == ZT_MOOSE ? 30 : 22;
+            float reach = z->type == ZT_MOOSE || z->type == ZT_BOSS ? 30 : 22;
             if (d > reach || fabsf(angdiff(atan2f(dy, dx), p->aim)) > 1.1f) continue;
             if (d < bd) { bd = d; best = z; }
         }

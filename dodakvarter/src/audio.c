@@ -162,6 +162,44 @@ static void synth_all(void) {
         float rumble = lp(&l2, lp(&l1, noise(), 160), 110) * 3.2f * MIN(1.0f, t / 0.25f) * expf(-t / 1.3f) * roll;
         float crack = lp(&l3, noise(), 2400) * env(t, 0.003f, 0.06f) * 0.8f;
         b[i] = rumble + crack; } finish(SFX_THUNDER, b, n, 0.9f); }
+    /* the bosses: a roar, Draugen's war horn, a swing, a slam, Näcken's fiddle, a splash, the lindworm's hiss */
+    b = buf_new(1.7f, &n); { SVF a = { 0 }, a2 = { 0 }; float ph = 0;
+        for (int i = 0; i < n; i++) {
+            float t = (float)i / RATE, f = 70 + 40 * sinf(PI_F * MIN(1.0f, t / 1.4f));
+            ph += f / RATE; ph -= floorf(ph);
+            float saw = ph * 2 - 1, x = saw * 0.7f + noise() * 0.5f, growl = 0.65f + 0.35f * sinf(2 * PI_F * 28 * t);
+            b[i] = (bandpass(&a, x, 520 + 200 * sinf(t * 3), 0.5f) * 1.2f + bandpass(&a2, x, 1100, 0.6f) * 0.5f + saw * 0.25f) * growl * MIN(1.0f, t / 0.12f) * MAX(0.0f, 1 - t / 1.7f);
+        }
+        finish(SFX_ROAR, b, n, 0.9f); }
+    b = buf_new(1.9f, &n); { LP l = { 0 }; float ph = 0;
+        for (int i = 0; i < n; i++) {
+            float t = (float)i / RATE, f = 98 * (1 - 0.06f * expf(-t * 12)) * (1 + 0.004f * sinf(2 * PI_F * 5 * t));
+            ph += f / RATE; ph -= floorf(ph);
+            float e = MIN(1.0f, t / 0.25f) * (t > 1.5f ? MAX(0.0f, 1 - (t - 1.5f) / 0.4f) : 1), v = 0;
+            for (int h = 1; h <= 8; h++) v += sinf(2 * PI_F * ph * h) / h * (h <= 2 + (int)(e * 6) ? 1.0f : 0.2f);
+            b[i] = lp(&l, v, 900 + 1500 * e) * e;
+        }
+        finish(SFX_HORN, b, n, 0.8f); }
+    b = buf_new(0.4f, &n); { SVF a = { 0 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE, s = sinf(PI_F * t / 0.4f); b[i] = bandpass(&a, noise(), 2600 - t * 5000, 0.7f) * s * s; } finish(SFX_SWOOSH, b, n, 0.7f); }
+    b = buf_new(0.9f, &n); { LP l = { 0 }; float ph = 0;
+        for (int i = 0; i < n; i++) { float t = (float)i / RATE; ph += 2 * PI_F * (60 - t * 30) / RATE; b[i] = sinf(ph) * env(t, 0.002f, 0.22f) * 1.2f + lp(&l, noise(), 1200 * expf(-t * 3) + 200) * env(t, 0.001f, 0.12f) * 1.4f; }
+        finish(SFX_SLAM, b, n, 1.0f); }
+    b = buf_new(1.9f, &n); { SVF a = { 0 }, a2 = { 0 }; float ph = 0; static const int notes[6] = { 69, 72, 76, 74, 72, 71 };
+        for (int i = 0; i < n; i++) {
+            float t = (float)i / RATE; int k = MIN(5, (int)(t / 0.3f)); float tn = t - k * 0.3f;
+            float f = midi(notes[k]) * (1 + 0.012f * sinf(2 * PI_F * 6 * t) * MIN(1.0f, tn * 4));
+            ph += f / RATE; ph -= floorf(ph);
+            float saw = ph * 2 - 1 + noise() * 0.06f;
+            float e = MIN(1.0f, tn / 0.05f) * (0.8f + 0.2f * sinf(PI_F * tn / 0.3f)) * (t > 1.6f ? MAX(0.0f, 1 - (t - 1.6f) / 0.3f) : 1);
+            b[i] = (bandpass(&a, saw, 1100, 0.5f) + bandpass(&a2, saw, 2600, 0.7f) * 0.5f + saw * 0.15f) * e;
+        }
+        finish(SFX_FIDDLE, b, n, 0.7f); }
+    b = buf_new(0.7f, &n); { SVF a = { 0 };
+        for (int i = 0; i < n; i++) { float t = (float)i / RATE; float x = bandpass(&a, noise(), 1800 - t * 1600, 0.4f) * env(t, 0.003f, 0.18f); float blip = sinf(2 * PI_F * (700 + 400 * sinf(t * 37)) * t) * env(fmodf(t, 0.09f), 0.002f, 0.02f) * (t > 0.1f ? 0.3f : 0); b[i] = x * 1.3f + blip; }
+        finish(SFX_SPLASH, b, n, 0.8f); }
+    b = buf_new(1.0f, &n); { LP l = { 0 };
+        for (int i = 0; i < n; i++) { float t = (float)i / RATE, x = noise(), hp = x - lp(&l, x, 3500); b[i] = hp * sinf(PI_F * t) * (0.75f + 0.25f * sinf(2 * PI_F * 40 * t)); }
+        finish(SFX_HISS, b, n, 0.7f); }
     /* reload: click, slide, click */
     b = buf_new(0.5f, &n); { LP l = { 0 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE; float x = noise(); float c1 = env(t, 0.0005f, 0.006f), c2 = t > 0.18f ? env(t - 0.18f, 0.02f, 0.05f) * 0.4f : 0, c3 = t > 0.36f ? env(t - 0.36f, 0.0005f, 0.008f) : 0; b[i] = (x - lp(&l, x, 1500)) * (c1 + c3) + x * c2 * 0.5f; } finish(SFX_RELOAD, b, n, 0.6f); }
     b = buf_new(0.05f, &n); for (int i = 0; i < n; i++) b[i] = noise() * env((float)i / RATE, 0.0005f, 0.004f); finish(SFX_EMPTY, b, n, 0.5f);
@@ -228,6 +266,11 @@ static const Ev BOX_SONG[] = {           /* (original) an A minor music box figu
     {1.44f,.5f,81},{1.62f,.5f,88},{1.80f,.5f,84},{1.98f,.5f,88},{2.16f,.5f,86},{2.34f,.5f,84},{2.52f,.5f,83},{2.70f,.9f,80},
     {2.88f,.5f,76},{3.06f,.5f,80},{3.24f,1.2f,81},
 };
+static const Ev BOSS_SONG[] = {          /* (original) a boss is up: D minor, the bass driving in octaves, a falling line */
+    {0.0f,.3f,38},{0.0f,1.2f,62},{0.0f,1.2f,69},{0.3f,.3f,50},{0.6f,.3f,38},{0.9f,.3f,50},{1.2f,.3f,38},{1.2f,.6f,65},
+    {1.5f,.3f,50},{1.8f,.3f,38},{1.8f,.6f,64},{2.1f,.3f,50},{2.4f,.3f,34},{2.4f,1.2f,62},{2.4f,1.2f,65},{2.7f,.3f,46},
+    {3.0f,.3f,34},{3.3f,.3f,46},{3.6f,.3f,36},{3.6f,1.2f,61},{3.6f,1.2f,64},{3.9f,.3f,48},{4.2f,.3f,37},{4.5f,.3f,49},
+};
 static const Ev OVER_SONG[] = {          /* (original) a slow chorale: Am, F, Dm, E, Am, the tune falling to A */
     {0.0f,1.5f,57},{0.0f,1.5f,60},{0.0f,1.5f,64},{0.0f,1.5f,76},
     {1.5f,1.5f,53},{1.5f,1.5f,57},{1.5f,1.5f,60},{1.5f,1.5f,72},
@@ -257,6 +300,7 @@ typedef struct { float ph, f, env, t, len, vel; int on; } MV;
 #define NMV 12
 static MV mv[NMV];
 static double song_t; static int song_ev;   /* (a double: a float counting seconds in 1/48000ths drifts after half a minute) */
+static int tune_over;                        /* a tune that doesn't repeat has rung out: set by the mixer, read by the game */
 static void song_tick(int16_t *out, int frames, const Ev *ev, int n, float period, int organ, float gain, int vol) {
     for (int i = 0; i < frames; i++) {
         while (song_ev < n && ev[song_ev].t <= song_t) {    /* notes starting now take a free voice */
@@ -293,6 +337,10 @@ static void song_tick(int16_t *out, int frames, const Ev *ev, int n, float perio
         out[i * 2] = (int16_t)CLAMP(out[i * 2] + o, -32768, 32767);
         out[i * 2 + 1] = (int16_t)CLAMP(out[i * 2 + 1] + o, -32768, 32767);
     }
+    if (period <= 0 && n > 0 && song_ev >= n) {
+        int ringing = 0; for (int k = 0; k < NMV; k++) ringing |= mv[k].on;
+        if (!ringing) __atomic_store_n(&tune_over, 1, __ATOMIC_RELAXED);
+    }
 }
 
 static int mus, mus_note, mus_left;          /* samples left of the current note */
@@ -302,10 +350,11 @@ static int mus_beat;
 static void music_tick(int16_t *out, int frames) {
     int want = __atomic_load_n(&want_music, __ATOMIC_RELAXED), vol = __atomic_load_n(&master, __ATOMIC_RELAXED);
     if (mus != want) {
-        mus = want; mus_note = 0; mus_left = 0; mus_env = 0;
+        mus = want; mus_note = 0; mus_left = 0; mus_env = 0; __atomic_store_n(&tune_over, 0, __ATOMIC_RELAXED);
         song_t = 0; song_ev = 0; for (int k = 0; k < NMV; k++) if (want != MUS_NONE) mv[k].on = 0;   /* (stopping lets notes ring out) */
     }
     if (mus == MUS_BOX) { song_tick(out, frames, BOX_SONG, ARRAY_LEN(BOX_SONG), 3.6f, 0, 2.0f, vol); return; }
+    if (mus == MUS_BOSS) { song_tick(out, frames, BOSS_SONG, ARRAY_LEN(BOSS_SONG), 4.8f, 0, 1.5f, vol); return; }
     if (mus == MUS_GAMEOVER) { song_tick(out, frames, OVER_SONG, ARRAY_LEN(OVER_SONG), 0, 1, 1.0f, vol); return; }
     if (mus == MUS_SONG) { song_tick(out, frames, SONG, nsong, 0, 0, 1.4f, vol); return; }
     if (mus == MUS_NONE) { song_tick(out, frames, 0, 0, 0, 0, 0.8f, vol); return; }    /* the last notes ring out */
@@ -465,7 +514,9 @@ void sfx_at(int id, float x, float y, float vol) {
     sfx(id, vol * k, clampf(dx / 200.0f, -0.8f, 0.8f));
 }
 void audio_ambience(int kind) { __atomic_store_n(&want_amb, kind, __ATOMIC_RELAXED); }
-void music_play(int track) { __atomic_store_n(&want_music, S.music ? track : MUS_NONE, __ATOMIC_RELAXED); }
+/* what is playing: MUS_NONE also once a tune that doesn't repeat (a found song, the game-over chorale) has rung out */
+int music_now(void) { return __atomic_load_n(&tune_over, __ATOMIC_RELAXED) ? MUS_NONE : __atomic_load_n(&want_music, __ATOMIC_RELAXED); }
+void music_play(int track) { __atomic_store_n(&tune_over, 0, __ATOMIC_RELAXED); __atomic_store_n(&want_music, S.music ? track : MUS_NONE, __ATOMIC_RELAXED); }
 
 /* tests: render the mixer's output without a device */
 void audio_render_test(int16_t *out, int frames);

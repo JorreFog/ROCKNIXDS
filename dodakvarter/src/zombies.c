@@ -94,6 +94,23 @@ static Zombie *new_zombie(void) {
     return 0;
 }
 
+/* one rising out of the ground at (x, y): a boss coming up, or the dead its horn calls */
+Zombie *zombie_at_spot(int type, float x, float y) {
+    Zombie *z = new_zombie();
+    if (!z) return 0;
+    int r = G->round;
+    z->alive = 1; z->type = type; z->x = x; z->y = y; z->window = -1;
+    z->variant = rng_int(&G->rng, 8);
+    z->hp = z->maxhp = zombie_hp_for_round(r);
+    int roll = 8 * (r - 1) + rng_int(&G->rng, 36);
+    z->speed = roll <= 35 ? 24 : roll <= 70 ? 46 : 62;
+    z->lastx = x; z->lasty = y;
+    z->state = ZS_RISE; z->t = 1.3f;
+    spawn_parts(PT_DUST, x, y, 8, G->season == SEASON_WINTER ? 0xe8eef4 : 0x5a4636, 30);
+    G->spawned++; G->to_spawn++;                            /* (counted in the round like the rest) */
+    return z;
+}
+
 void spawn_zombie(int type) {
     int si = pick_spawn();
     if (si < 0) return;
@@ -140,6 +157,10 @@ void round_start(int n) {
     G->round = n; G->rstate = RS_ACTIVE; G->rtime = 0; G->spawned = 0; G->special = 0; G->drops_round = 0;
     G->p.repair_kr = 0;
     G->spawn_cd = 2.0f;
+    int boss = boss_kind_for_round(n);
+    if (boss >= 0 && n == G->wolf_next) G->wolf_next++;     /* (a boss's round is its own) */
+    if (boss >= 0 && n == G->moose_next) G->moose_next++;
+    if (n == G->wolf_next && n == G->moose_next) G->moose_next++;   /* (a wolf night has no moose: it waits a round) */
     if (n == G->wolf_next) {                               /* Vargnatt: the hellhound round */
         G->special = 1; G->wolf_rounds++;
         G->to_spawn = G->wolf_rounds <= 2 ? 6 : 8;
@@ -148,10 +169,12 @@ void round_start(int n) {
         sfx(SFX_WOLF, 1, 0);
     } else {
         G->to_spawn = zombies_for_round(n);
-        if (n == G->moose_next) { G->moose_pending = 1; G->moose_next = n + rng_range(&G->rng, 4, 5); }
+        if (boss >= 0) G->to_spawn = getenv("DK_DEBUG_BOSS_ONLY") ? 0 : G->to_spawn / 2;   /* a boss round: fewer of the rest */
+        else if (n == G->moose_next) { G->moose_pending = 1; G->moose_next = n + rng_range(&G->rng, 4, 5); }
     }
     char b[32]; snprintf(b, sizeof b, "%s %d", tr("ROUND"), n);
-    if (!G->special) banner(0xc81818, b, n == 1 ? G->town : 0);
+    if (boss >= 0) boss_round_start(n);
+    else if (!G->special) banner(0xc81818, b, n == 1 ? G->town : 0);
     G->round_flash = 2.5f;
     sfx(SFX_ROUND_START, 1, 0);
     if (n > 1) loot_restock(2 + MIN(4, n / 3));
@@ -174,6 +197,7 @@ void round_update(float dt) {
         }
     }
     if (G->round_flash > 0) G->round_flash -= dt;
+    boss_update_round(dt);                                  /* (in the break too: its bar fades out) */
     if (G->rstate == RS_BREAK) {
         if (G->rtime >= 10.0f) round_start(G->round + 1);   /* ten seconds between rounds */
         return;
@@ -197,7 +221,7 @@ void round_update(float dt) {
         spawn_zombie(ZT_MOOSE);
         if (G->spawned > before) { G->moose_count++; G->to_spawn++; banner(0xd8a040, tr("THE MOOSE IS HERE"), 0); sfx(SFX_MOOSE, 1, 0); shake(5); }
     }
-    if (G->spawned >= G->to_spawn && zombies_alive() == 0) {
+    if (G->spawned >= G->to_spawn && zombies_alive() == 0 && !G->boss.pending) {
         G->rstate = RS_BREAK; G->rtime = 0;
         sfx(SFX_ROUND_END, 1, 0);
         G->round_flash = 2.5f;
@@ -209,6 +233,7 @@ void kill_all_zombies(int give_kr) {
         Zombie *z = &G->z[i];
         if (!z->alive || z->state == ZS_DEAD) continue;
         if (z->type == ZT_MOOSE) { damage_zombie(z, z->maxhp * 0.25f, 0, 0, 0, 0); continue; }
+        if (z->type == ZT_BOSS) { damage_zombie(z, z->maxhp * 0.1f, 0, 0, 0, 0); continue; }   /* a boss only takes a tenth */
         z->state = ZS_DEAD; z->t = 0;
         G->p.kills++;
         spawn_parts(PT_BLOOD, z->x, z->y - 8, 8, 0x8a1010, 60);
@@ -222,7 +247,7 @@ static void steer(Zombie *z, float *dx, float *dy) {
     Player *p = &G->p;
     float tx = p->x, ty = p->y;
     uint16_t (*field)[MAPW_MAX] = G->flow;
-    if (G->lure_on && z->type != ZT_MOOSE) { tx = G->lure_x; ty = G->lure_y; field = G->lureflow; }
+    if (G->lure_on && z->type != ZT_MOOSE && z->type != ZT_BOSS) { tx = G->lure_x; ty = G->lure_y; field = G->lureflow; }
     float ddx = tx - z->x, ddy = ty - z->y, d = sqrtf(ddx * ddx + ddy * ddy);
     if (d < 90 && walk_clear(z->x, z->y, tx, ty, 4)) { *dx = ddx / (d + 0.01f); *dy = ddy / (d + 0.01f); return; }
     int cx = (int)(z->x / TS), cy = (int)((z->y - 2) / TS);
@@ -241,8 +266,11 @@ static void steer(Zombie *z, float *dx, float *dy) {
     *dx = gx / gd; *dy = gy / gd;
 }
 
+void zombie_steer(Zombie *z, float *dx, float *dy) { steer(z, dx, dy); }
+
 static void zombie_update(Zombie *z, float dt) {
     Player *p = &G->p;
+    if (boss_ai(z, dt)) return;                              /* (a boss has its own moves) */
     if (z->flash > 0) z->flash -= dt;
     if (z->slow > 0) z->slow -= dt;
     if (z->burn > 0) { z->burn -= dt; if (rng_chance(&G->fx, 0.3f)) spawn_parts(PT_FIRE, z->x, z->y - 10, 1, 0xffa030, 10); }

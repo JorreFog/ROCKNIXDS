@@ -61,6 +61,8 @@ static void ambient(int *r, int *g, int *b) {
     if (G->special == 1 && G->rstate == RS_ACTIVE) { *r = *r * 3 / 4; *g = *g * 3 / 4; *b = *b * 7 / 8; }   /* wolf night is darker */
 }
 
+static void add_light(float wx, float wy, float rad, uint32_t col, float k);
+void render_add_light(float wx, float wy, float rad, uint32_t col, float k) { add_light(wx, wy, rad, col, k); }
 static void add_light(float wx, float wy, float rad, uint32_t col, float k) {
     rad /= (float)ls;
     int cx = (int)((wx - G->camx) / ls), cy = (int)((wy - G->camy) / ls), r = (int)rad;
@@ -258,6 +260,7 @@ static void draw_dress(Surf *s, const Zombie *z) {
 static void draw_shadow(Surf *s, int x, int y, int rx) { ellipse_blend(s, x, y, rx, MAX(1, rx / 3), 0x000000, 90); }
 
 static void draw_zombie(Surf *s, Zombie *z) {
+    if (z->type == ZT_BOSS) { boss_draw(s, z); return; }
     int sx = (int)(z->x - G->camx), sy = (int)(z->y - G->camy);
     int flip; const Img *im = zombie_img(z, &flip);
     if (!im) return;
@@ -322,6 +325,7 @@ static void draw_zombie(Surf *s, Zombie *z) {
 
 /* the glowing eyes, after the lighting: the sprite's eye pixels drawn again, unlit, with a little halo */
 static void zombie_eyes(Surf *s, Zombie *z) {
+    if (z->type == ZT_BOSS) { boss_glow(s, z); return; }
     if (z->state == ZS_DEAD || z->state == ZS_RISE || !z->rimg) return;
     const Img *im = z->rimg;
     uint32_t c = z->type == ZT_WOLF ? 0x9ad8ff : z->type == ZT_MOOSE ? 0xff4020 : z->speed > 55 ? 0xff7a20 : 0xffd23c;
@@ -447,6 +451,7 @@ static void overlays(Surf *s) {
         }
     }
     if (G->flash_t > 0) rect_blend(s, 0, 0, s->w, s->h, 0xfff8e0, (int)(G->flash_t * 600));
+    boss_overlay(s);                                        /* its health bar along the top */
     /* the round in the corner */
     uint32_t rc = G->rstate == RS_BREAK ? ((int)(G->time * 3) & 1 ? 0xf0f0f0 : 0xc81818) : 0xb81414;
     tally(s, 6, s->h - 20, G->round, rc);
@@ -520,6 +525,7 @@ void render_game(Surf *s) {
         float k = c->t < c->dur - 1 ? 1 : c->dur - c->t;
         ellipse_blend(s, (int)(c->x - cx), (int)(c->y - cy), (int)c->r, (int)(c->r * 0.6f), c->kind ? 0x8aa040 : 0xf07020, (int)(70 * k));
     }
+    hazards_draw_ground(s);                                 /* shockwaves, venom, where things will land */
     /* the sorted pass */
     ndl = 0;
     for (int i = 0; i < G->nprops; i++) {
@@ -538,7 +544,8 @@ void render_game(Surf *s) {
     for (int i = 0; i < MAX_ZOMBIES; i++) {
         Zombie *z = &G->z[i];
         if (!z->alive) continue;
-        if (z->x - cx < -40 || z->x - cx > s->w + 40 || z->y - cy < -8 || z->y - cy > s->h + 48) continue;
+        int m = z->type == ZT_BOSS ? 120 : 0;               /* (a boss is big, the lindworm long) */
+        if (z->x - cx < -40 - m || z->x - cx > s->w + 40 + m || z->y - cy < -8 - m || z->y - cy > s->h + 48 + m) continue;
         push((int)z->y - (z->state == ZS_DEAD ? 12 : 0), DR_ZOMBIE, i);
     }
     push((int)p->y, DR_PLAYER, 0);
@@ -571,6 +578,7 @@ void render_game(Surf *s) {
         }
         }
     }
+    hazards_draw_air(s);                                    /* boulders and venom in flight */
     /* particles */
     for (int i = 0; i < MAX_PARTS; i++) {
         Part *pt = &G->parts[i];
@@ -609,6 +617,7 @@ void render_game(Surf *s) {
     for (int i = 0; i < MAX_CLOUDS; i++) if (G->clouds[i].alive && G->clouds[i].kind == 0) add_light(G->clouds[i].x, G->clouds[i].y, 50, 0xff8a30, 0.7f);
     for (int i = 0; i < MAX_SHOTS; i++) if (G->shots[i].alive) add_light(G->shots[i].x, G->shots[i].y, 40, G->shots[i].col, 0.9f);
     for (int i = 0; i < MAX_POWERUPS; i++) if (G->pu[i].alive) add_light(G->pu[i].x, G->pu[i].y - 8, 36, 0x80ff80, 0.8f);
+    boss_lights();
     for (int i = 0; i < MAX_ITEMS; i++) if (G->items[i].alive && G->items[i].rar >= RAR_RARE) add_light(G->items[i].x, G->items[i].y - 6, 20, RARITY_COL[G->items[i].rar], 0.5f);
     for (int i = 0; i < G->nit; i++) {                   /* machines glow */
         Inter *it = &G->it[i];
@@ -631,6 +640,7 @@ void render_game(Surf *s) {
     apply_light(s);
     /* ---- what glows ---- */
     for (int i = 0; i < MAX_ZOMBIES; i++) if (G->z[i].alive) zombie_eyes(s, &G->z[i]);
+    boss_air_glow(s);
     for (int i = 0; i < MAX_ZOMBIES; i++) {                /* the candle flames */
         Zombie *z = &G->z[i];
         if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE || !z->rimg || dress(z) != DRESS_LUCIA) continue;

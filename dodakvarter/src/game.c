@@ -16,6 +16,7 @@ void msg(uint32_t col, const char *fmt, ...) {
     G->msg_t[0] = 6; G->msg_col[0] = col;
 }
 void banner(uint32_t col, const char *a, const char *b) {
+    if (G->boss.pending && G->banner_t > 0.5f) return;      /* (a boss's name stays up until it comes) */
     snprintf(G->banner, sizeof G->banner, "%s", a ? a : "");
     snprintf(G->banner2, sizeof G->banner2, "%s", b ? b : "");
     G->banner_t = 3.0f; G->banner_col = col;
@@ -199,7 +200,7 @@ static float aim_assist(float aim) {
     float range = 230;
     for (int i = 0; i < MAX_ZOMBIES; i++) {
         Zombie *z = &G->z[i];
-        if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE) continue;
+        if (!zombie_hittable(z)) continue;
         float dx = z->x - p->x, dy = (z->y - 6) - (p->y - 6), d = sqrtf(dx * dx + dy * dy);
         if (d > range || d < 1) continue;
         float a = atan2f(dy, dx), da = fabsf(angdiff(a, aim));
@@ -349,7 +350,8 @@ static void player_update(const Input *in, const Input *prev, float dt) {
     for (int i = 0; i < MAX_ZOMBIES; i++) {
         Zombie *z = &G->z[i];
         if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE || z->state == ZS_WINDOW) continue;
-        float zr = z->type == ZT_MOOSE ? 14 : z->type == ZT_BRUTE ? 8 : 6;
+        float zr = z->type == ZT_MOOSE ? 14 : z->type == ZT_BOSS ? (G->boss.hidden ? 0 : 11) : z->type == ZT_BRUTE ? 8 : 6;
+        if (zr <= 0) continue;
         float dx = p->x - z->x, dy = p->y - z->y, d = sqrtf(dx * dx + dy * dy), md = 5 + zr;
         if (d < md && d > 0.01f) {
             float push = (md - d) * 0.6f;
@@ -411,7 +413,7 @@ static void player_update(const Input *in, const Input *prev, float dt) {
         if (twin) {                                          /* point blank in the twin scheme: the knife */
             for (int i = 0; i < MAX_ZOMBIES; i++) {
                 Zombie *z = &G->z[i];
-                if (z->alive && z->state == ZS_CHASE && dist2f(z->x, z->y, p->x + cosf(aim) * 10, p->y + sinf(aim) * 10) < 14 * 14 && p->melee_cd <= 0) { melee_attack(); break; }
+                if (zombie_hittable(z) && z->state == ZS_CHASE && dist2f(z->x, z->y, p->x + cosf(aim) * 10, p->y + sinf(aim) * 10) < 14 * 14 && p->melee_cd <= 0) { melee_attack(); break; }
             }
         }
         if (p->melee_t <= 0) weapon_fire();
@@ -424,6 +426,11 @@ static void camera_update(float dt) {
     Player *p = &G->p;
     float lead = 26;
     float tx = p->x + cosf(p->aim) * lead - G->view_w / 2.0f, ty = p->y - 8 + sinf(p->aim) * lead * 0.8f - G->view_h / 2.0f;
+    if (G->boss.on && G->boss.zi >= 0 && G->z[G->boss.zi].alive && G->z[G->boss.zi].type == ZT_BOSS && G->z[G->boss.zi].state == ZS_RISE) {
+        const Zombie *z = &G->z[G->boss.zi];                /* a boss coming up: the view leans its way (you stay in it) */
+        float mx = G->view_w / 2.0f - 30, my = G->view_h / 2.0f - 30;
+        tx += clampf((z->x - p->x) * 0.5f, -mx, mx); ty += clampf((z->y - 20 - p->y) * 0.5f, -my, my);
+    }
     float k = 1 - expf(-dt * 6);
     G->camx += (tx - G->camx) * k; G->camy += (ty - G->camy) * k;
     G->camx = clampf(G->camx, 0, (float)(G->ww - G->view_w));
@@ -473,10 +480,12 @@ void game_new(uint64_t seed, int season) {
     G->moose_next = rng_range(&G->rng, 9, 11);
     banner(0xd02020, G->town, G->zones[G->start_zone].name);
     /* test hooks: DK_DEBUG_ROUND=N starts there, DK_DEBUG_KR=N with that much money, DK_DEBUG_POWER=1 powered,
-     * DK_DEBUG_OPEN=1 every barrier gone, DK_DEBUG_GOD=1 nothing hurts (long runs deep in the rounds) */
+     * DK_DEBUG_OPEN=1 every barrier gone, DK_DEBUG_GOD=1 nothing hurts (long runs deep in the rounds),
+     * DK_DEBUG_GUN=N a legendary gun of that kind in the second slot (as a player that deep would have) */
     const char *e;
     G->god = getenv("DK_DEBUG_GOD") != 0;
     if ((e = getenv("DK_DEBUG_KR"))) p->kr = atoi(e);
+    if ((e = getenv("DK_DEBUG_GUN")) && atoi(e) >= 0 && atoi(e) < W_COUNT) { p->w[1] = weapon_make(atoi(e), RAR_LEGENDARY); p->cur = 1; }
     if (getenv("DK_DEBUG_POWER")) { G->power_on = 1; world_power_wave(G->p.x, G->p.y); prop_lights(); }
     if (getenv("DK_DEBUG_OPEN"))
         for (int i = 0; i < G->nit; i++) if (G->it[i].type == IT_BARRIER) {
@@ -501,6 +510,7 @@ void game_update(const Input *in, const Input *prev, float dt) {
     flow_update(0);
     round_update(dt);
     zombies_update(dt);
+    hazards_update(dt);
     shots_update(dt);
     grenades_update(dt);
     items_update(dt);

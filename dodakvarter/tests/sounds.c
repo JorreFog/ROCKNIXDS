@@ -46,16 +46,18 @@ int main(int argc, char **argv) {
         "explode", "reload", "empty", "knife", "hit", "groan1", "groan2", "groan3", "zattack", "hurt", "wolf", "moose",
         "board-break", "board-fix", "buy", "deny", "box", "horse", "powerup-spawn", "powerup", "round-start", "round-end",
         "gameover", "swap", "pickup", "menu-move", "menu-ok", "menu-back", "perk", "pap", "power", "door", "splat", "throw",
-        "beep", "gulp", "step", "kaboom", "thunder", "jingle-julmust", "jingle-snabbkaffe", "jingle-salmiak",
+        "beep", "gulp", "step", "kaboom", "thunder", "boss-roar", "boss-horn", "boss-swoosh", "boss-slam", "boss-fiddle",
+        "boss-splash", "boss-hiss", "jingle-julmust", "jingle-snabbkaffe", "jingle-salmiak",
         "jingle-kanelbulle", "jingle-blabarssoppa", "jingle-lingondricka", "jingle-kaviar" };
     for (int i = 0; i < SFX_COUNT; i++) {
         char n[48]; snprintf(n, sizeof n, "sfx-%s", names[i] ? names[i] : "?");
-        quiet(); sfx(i, 1, 0); take(dir, n, i == SFX_ROUND_START || i == SFX_POWER || i == SFX_ROUND_END ? 2.8f : i == SFX_THUNDER || i >= SFX_JINGLE ? 3.6f : 1.4f, 0);
+        quiet(); sfx(i, 1, 0); take(dir, n, i == SFX_ROUND_START || i == SFX_POWER || i == SFX_ROUND_END ? 2.8f : i == SFX_THUNDER || i >= SFX_JINGLE ? 3.6f : i >= SFX_ROAR ? 2.0f : 1.4f, 0);
     }
     quiet(); music_play(MUS_TITLE); take(dir, "music-title", 24, 0);
     music_play(MUS_NONE); quiet(); music_play(MUS_BOX); take(dir, "music-box", 3.6f, 0);
     music_play(MUS_NONE); quiet(); music_play(MUS_GAMEOVER); take(dir, "music-gameover", 10, 0);
     music_play(MUS_NONE); quiet(); music_play(MUS_SONG); take(dir, "music-tomtar", 30, 0);
+    music_play(MUS_NONE); quiet(); music_play(MUS_BOSS); take(dir, "music-boss", 9.6f, 0);
     music_play(MUS_NONE); quiet();
     static const char *amb[] = { 0, "ambience-autumn-rain", "ambience-winter-wind", "ambience-midsummer-night" };
     for (int k = AMB_RAIN; k <= AMB_SUMMER; k++) { audio_ambience(k); take(dir, amb[k], 12, 4); audio_ambience(AMB_NONE); take(dir, "ambience-fade", 1.5f, 0); }

@@ -268,13 +268,14 @@ static void draw_howto(Surf *s) {
 static void draw_stats(Surf *s) {
     bg_bottom(s);
     text_center(s, FONT_NORMAL, s->w / 2, 12, 0xd8b040, 0, tr("STATISTICS"));
-    char v[10][32];
+    char v[11][32];
     snprintf(v[0], 32, "%d", ST.runs); fmt_num(v[1], ST.kills); snprintf(v[2], 32, "%d", ST.rounds); snprintf(v[3], 32, "%d", ST.best_round);
     snprintf(v[4], 32, "%d:%02d", ST.secs / 3600, ST.secs / 60 % 60); fmt_num(v[5], ST.kr); strcat(v[5], " kr"); snprintf(v[6], 32, "%d", ST.boxes);
     snprintf(v[7], 32, "%d", ST.crits); snprintf(v[8], 32, "%d", ST.downs); snprintf(v[9], 32, "%d", ST.dailies);
-    static const char *lab[10] = { "Runs", "Zombies killed", "Rounds survived", "Best round", "Time played", "Kronor earned",
-                                   "Mystery Boxes", "Critical hits", "Times downed", "Days' towns played" };
-    for (int i = 0; i < 10; i++) {
+    snprintf(v[10], 32, "%d", ST.bosses);
+    static const char *lab[11] = { "Runs", "Zombies killed", "Rounds survived", "Best round", "Time played", "Kronor earned",
+                                   "Mystery Boxes", "Critical hits", "Times downed", "Days' towns played", "Bosses slain" };
+    for (int i = 0; i < 11; i++) {
         int y = 34 + i * 17;
         rectf(s, s->w / 2 - 130, y - 3, 260, 15, i & 1 ? 0x161a22 : 0x1a1e28);
         text(s, FONT_NORMAL, s->w / 2 - 124, y, 0xa0a8b8, tr(lab[i]));

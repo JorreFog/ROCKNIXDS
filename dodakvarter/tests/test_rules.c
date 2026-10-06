@@ -6,6 +6,8 @@
 //   - a blast that doesn't kill may leave a walker crawling, slower, and a crawler never runs as the round's last
 //   - finding the three trädgårdstomtar plays the song and leaves a present
 //   - a perk machine plays its jingle now and then to whoever stands by it, once the power is on
+//   - a boss every twentieth round, in turn: Insta-Kill and Kaboom don't kill it, the round waits for it, each one's
+//     moves hurt you, and killed it leaves a legendary weapon, Max Ammo and money
 #include "../src/game.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,6 +65,16 @@ int main(void) {
         tick(2, &none);
         CHECK(z->state == ZS_DEAD, "a zombie in the gap lived");
         CHECK(p->kills == kills + 1 && p->kr == kr, "the trap's kill: %d kills (want %d), %d kr (want %d)", p->kills, kills + 1, p->kr, kr);
+        /* a boss in the gap burns, slowly, and pays nothing for it */
+        {
+            Zombie *bz = zombie_at(gx, gy, ZS_CHASE);
+            bz->type = ZT_BOSS; bz->variant = BOSS_TROLL; bz->hp = bz->maxhp = 50000;
+            memset(&G->boss, 0, sizeof G->boss); G->boss.on = 1; G->boss.kind = BOSS_TROLL; G->boss.zi = (int)(bz - G->z);
+            int kr1 = p->kr; float hp1 = bz->hp;
+            for (int t = 0; t < 30; t++) { bz->x = gx; bz->y = gy; tick(1, &none); }
+            CHECK(bz->hp < hp1 && bz->state != ZS_DEAD && p->kr == kr1, "a boss in the elstängsel: %.0f of %.0f hp, %d kr (want %d)", bz->hp, hp1, p->kr, kr1);
+            bz->alive = 0; memset(&G->boss, 0, sizeof G->boss); memset(G->hz, 0, sizeof G->hz);
+        }
         /* you, in the gap */
         float hp = p->hp; p->x = gx; p->y = gy; p->invuln = 0;
         tick(2, &none);
@@ -151,6 +163,52 @@ int main(void) {
             CHECK(notes, "no note rose from %s while its jingle played", PERKS[m->a].name);
         }
         G->god = 0;
+    }
+    /* the bosses */
+    CHECK(boss_kind_for_round(19) < 0 && boss_kind_for_round(20) == BOSS_DRAUGEN && boss_kind_for_round(40) == BOSS_TROLL &&
+          boss_kind_for_round(60) == BOSS_NACKEN && boss_kind_for_round(80) == BOSS_LINDORM && boss_kind_for_round(100) == BOSS_DRAUGEN &&
+          boss_kind_for_round(30) < 0, "the bosses' rounds");
+    for (int k = 0; k < BOSS_COUNT; k++) {
+        game_new(300 + (uint64_t)k, k % SEASON_COUNT);
+        Player *p = &G->p;
+        G->power_on = 1;
+        round_start(20 * (k + 1));
+        for (int t = 0; t < 60 * 8 && !(G->boss.on && G->z[G->boss.zi].state == ZS_CHASE); t++) { G->spawn_cd = 1e9f; game_update(&none, &none, 1.0f / 60); }
+        CHECK(G->boss.on, "%s didn't come up in round %d", boss_name(k), G->round);
+        if (!G->boss.on) continue;
+        Zombie *z = &G->z[G->boss.zi];
+        CHECK(z->type == ZT_BOSS && z->variant == k && z->maxhp >= 30000, "boss %d: type %d variant %d, %.0f hp", k, z->type, z->variant, z->maxhp);
+        G->insta_t = 5; damage_zombie(z, 100, 0, 0, 0, 0); G->insta_t = 0;
+        CHECK(z->state != ZS_DEAD && z->hp > z->maxhp * 0.9f, "%s died to Insta-Kill", boss_name(k));
+        kill_all_zombies(0);
+        CHECK(z->state != ZS_DEAD && z->hp > z->maxhp * 0.8f && z->hp < z->maxhp * 0.95f, "%s and Kaboom: %.0f of %.0f hp", boss_name(k), z->hp, z->maxhp);
+        /* stand there for half a minute: it comes for you, and its moves hurt */
+        p->hp = p->maxhp = 1e6f;
+        float hx = p->x, hy = p->y; int moves = 0, last = -1;
+        for (int t = 0; t < 60 * 30; t++) {
+            G->spawn_cd = 1e9f;
+            game_update(&none, &none, 1.0f / 60);
+            if (G->boss.st != last) { moves++; last = G->boss.st; }
+            if (p->downed || G->over) break;
+            if (dist2f(p->x, p->y, hx, hy) > 40 * 40) { p->x = hx; p->y = hy; }   /* (pushed and pulled: back to the spot) */
+        }
+        CHECK(p->hp < 1e6f, "%s never hurt the player in half a minute", boss_name(k));
+        CHECK(moves >= 4, "%s made only %d moves", boss_name(k), moves);
+        CHECK(G->rstate == RS_ACTIVE, "the round ended with %s up", boss_name(k));
+        /* killed: the spoils */
+        int kr = p->kr, kills = G->boss_kills;
+        G->boss.hidden = 0; z->state = ZS_CHASE; z->hp = 1;
+        damage_zombie(z, 10, 0, 0, 0, 0);
+        int legendary = 0, maxammo = 0;
+        for (int i = 0; i < MAX_ITEMS; i++) legendary += G->items[i].alive && G->items[i].kind == IK_WEAPON && G->items[i].w.rar == RAR_LEGENDARY;
+        for (int i = 0; i < MAX_POWERUPS; i++) maxammo += G->pu[i].alive && G->pu[i].kind == PU_MAXAMMO;
+        CHECK(z->state == ZS_DEAD && !G->boss.on && G->boss_kills == kills + 1, "%s didn't die", boss_name(k));
+        CHECK(legendary >= 1 && maxammo >= 1 && p->kr >= kr + 2000, "%s's spoils: %d legendary, %d max ammo, %d kr more", boss_name(k), legendary, maxammo, p->kr - kr);
+        kill_all_zombies(0);
+        for (int t = 0; t < 60 * 3 && G->rstate == RS_ACTIVE; t++) { G->spawn_cd = 1e9f; G->spawned = G->to_spawn; game_update(&none, &none, 1.0f / 60); }
+        CHECK(G->rstate == RS_BREAK, "the round didn't end after %s fell", boss_name(k));
+        for (int t = 0; t < 60 * 2; t++) game_update(&none, &none, 1.0f / 60);
+        CHECK(G->boss.bar <= 0 && !G->boss.enraged, "%s's bar was still up in the break (%.2f)", boss_name(k), G->boss.bar);
     }
     char rm[640]; snprintf(rm, sizeof rm, "rm -rf '%s'", dir);
     if (system(rm)) printf("(couldn't remove %s)\n", dir);

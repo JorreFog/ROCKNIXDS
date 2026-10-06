@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
             static const char *n[] = { "JOR", "ÅSA", "ELL", "BOB", "KIM" };
             for (int i = 0; i < 5; i++) { Score s; memset(&s, 0, sizeof s); snprintf(s.name, sizeof s.name, "%s", n[i]); s.round = 23 - i * 4; s.kills = 512 - i * 90; s.kr = 98000 - i * 15000; snprintf(s.town, sizeof s.town, "%s", i & 1 ? "Björkhagen" : "Sjövik"); s.daily = i == 2 ? 20261006 : 0; score_insert(&s, score_rank(&s)); }
             A.rank = 1; A.page = getenv("DK_SCENE_PAGE") ? atoi(getenv("DK_SCENE_PAGE")) : 0;
-            ST = (Stats){ 37, 6412, 288, 23, 41 * 3600 + 17 * 60, 1840250, 96, 71, 1204, 9 };
+            ST = (Stats){ 37, 6412, 288, 23, 41 * 3600 + 17 * 60, 1840250, 96, 71, 1204, 9, 2 };
         }
         app_render(&top, &bot); shot(out);
         return 0;
@@ -70,6 +70,20 @@ int main(int argc, char **argv) {
         if (n) { p->x = g[0]->x + 18; p->y = g[0]->y + 10; G->camx = p->x - top.w / 2; G->camy = p->y - top.h / 2; }
         G->round = 4; G->rstate = RS_ACTIVE; G->banner_t = 0; p->aim = PI_F;
         ticks(2, &in); A.state = ST_PLAY;
+        app_render(&top, &bot); shot(out);
+        return 0;
+    }
+    if (!strcmp(name, "boss")) {                           /* a boss up (DK_DEBUG_BOSS picks which), DK_SCENE_TICKS into the fight */
+        G->power_on = 1; world_power_wave(p->x, p->y); prop_lights();
+        G->god = 1;
+        round_start(20);
+        int n = getenv("DK_SCENE_TICKS") ? atoi(getenv("DK_SCENE_TICKS")) : 400;
+        for (int k = 0; k < n; k++) {
+            G->spawn_cd = 1e9f;                             /* (only the boss) */
+            Input none; memset(&none, 0, sizeof none); game_update(&none, &none, 1.0f / 60);
+        }
+        if (getenv("DK_SCENE_HP")) { Zombie *z = &G->z[G->boss.zi]; z->hp = z->maxhp * (float)atof(getenv("DK_SCENE_HP")); }
+        A.state = ST_PLAY;
         app_render(&top, &bot); shot(out);
         return 0;
     }

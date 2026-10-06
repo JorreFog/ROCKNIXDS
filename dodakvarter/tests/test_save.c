@@ -41,10 +41,11 @@ int main(void) {
     G = calloc(1, sizeof *G); G->view_w = 320; G->view_h = 240;
     Game *straight = malloc(sizeof *G), *loaded = malloc(sizeof *G);
 
-    for (int season = 0; season < SEASON_COUNT; season++) {
-        game_new(4242 + season, season);
+    for (int c = 0; c <= SEASON_COUNT; c++) {             /* each season, then a boss fight (the troll, round 40) */
+        int season = c % SEASON_COUNT;
+        game_new(4242 + c, season);
         G->god = 1;                                        /* (so that the run lasts) */
-        G->p.kr = 20000; round_start(3 + season * 4);
+        G->p.kr = 20000; round_start(c == SEASON_COUNT ? 40 : 3 + season * 4);
         play(0, 2340);
         if (season == 1) { G->power_on = 1; world_power_wave(G->p.x, G->p.y); prop_lights(); }   /* saved mid-wave */
         if (season == 2) { bag_add(C_SMALLARE, 1); throw_grenade(C_SMALLARE); }                /* and with a lure out */
@@ -65,7 +66,12 @@ int main(void) {
             while (first < sizeof *G && a[first] == b[first]) first++;
             CHECK(0, "season %d: the loaded run went another way (first difference at byte %zu of %zu)", season, first, sizeof *G);
         }
-        printf("season %d: round %d, %d kills, %d kr: the same after a save and a load\n", season, G->round, G->p.kills, G->p.kr);
+        if (c == SEASON_COUNT) {
+            int hz = 0; for (int i = 0; i < MAX_HAZARDS; i++) hz += G->hz[i].alive;
+            CHECK(G->boss.on, "no boss in the boss fight");
+            printf("boss fight: %s at %.0f of %.0f hp, %d hazards: the same after a save and a load\n", boss_name(G->boss.kind),
+                   G->boss.on ? G->z[G->boss.zi].hp : 0, G->boss.on ? G->z[G->boss.zi].maxhp : 0, hz);
+        } else printf("season %d: round %d, %d kills, %d kr: the same after a save and a load\n", season, G->round, G->p.kills, G->p.kr);
     }
     /* dying and quitting at once (the exit hotkey before the game over screen): the run neither comes back on the
        title nor goes uncounted, and a high score not yet named is kept */
