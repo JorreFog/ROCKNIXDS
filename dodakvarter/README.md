@@ -123,7 +123,8 @@ Health comes back by itself 2.4 s after the last hit (5 s when you're below a fi
 ## The town
 
 A new town every run, with its own name (Björkhagen, Sjövik, Tallsta...), in one of three seasons (autumn rain,
-winter snow, or the bright midsummer night), made of districts:
+winter snow, or the bright midsummer night), made of districts: usually twelve, four by three, sometimes nine big
+ones, fifteen narrow ones or sixteen in four rows; a district bigger than usual gets more of its own things:
 
 | District | What's in it |
 |---|---|
@@ -144,7 +145,8 @@ barricade in them; there are always loops to lead a horde around. The dead come 
 stairwell doors (they pull the boards off; you nail them back for money, but stand right at the gap and they swipe
 at you through it; shoot or knife them through the boards), up through manholes, graves and the ground. Each town
 has five spots for the box, seven perk machines, Smedjan, the power switch and the wall buys, all placed where you
-can reach them (tests/test_map.c checks 500 towns on every run).
+can reach them, and with the barricades shut no district can be walked out of (tests/test_map.c checks 500 towns
+on every run).
 
 ## Inside
 

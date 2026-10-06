@@ -247,6 +247,38 @@ static void trees(int x, int y, int w, int h, int n) {
 typedef struct { int x, y, w, h, zone; int hubx, huby; } Area;
 
 /* connect every port of the zone to its hub with a path */
+/* a district bigger than its generator planned for gets more of its own small things, one for so many free tiles,
+   each with a tile of clearance so nothing gets boxed in, and none on the paths or round its middle */
+static void fill_district(Area *a) {
+    static const struct { int kind, weight, solid; } FILL[Z_COUNT][6] = {
+        [Z_GARDEN]  = { {P_BIRCH,4,1}, {P_BUSH,3,1}, {P_BENCH,2,1}, {P_BIKES,2,1}, {P_SWINGS,1,1}, {P_SANDBOX,1,1} },
+        [Z_TORG]    = { {P_PLANTER,3,1}, {P_BENCH,3,1}, {P_BIKES,2,1}, {P_LAMP,2,1}, {P_BIN,1,1}, {P_PHONEBOX,1,1} },
+        [Z_VILLA]   = { {P_APPLE,3,1}, {P_BUSH,3,1}, {P_BIRCH,2,1}, {P_TRAMPOLINE,1,1}, {P_KICKBIKE,1,1}, {P_FLAGPOLE,1,1} },
+        [Z_OLDTOWN] = { {P_PLANTER,3,1}, {P_BIKES,2,1}, {P_BENCH,2,1}, {P_LAMP,2,1}, {P_BARREL,1,1}, {P_KICKBIKE,1,1} },
+        [Z_ALLOT]   = { {P_BUSH,3,1}, {P_APPLE,2,1}, {P_BARREL,2,1}, {P_WHEELBARROW,2,1}, {P_COMPOST,1,1}, {P_BENCH,1,1} },
+        [Z_PARK]    = { {P_BIRCH,4,1}, {P_PINE,3,1}, {P_BUSH,3,1}, {P_ROCK,2,1}, {P_BENCH,1,1}, {P_SPRUCE_SMALL,2,1} },
+        [Z_SCHOOL]  = { {P_BIKES,3,1}, {P_BIRCH,3,1}, {P_BENCH,2,1}, {P_CLIMBER,1,1}, {P_SWINGS,1,1}, {P_GOAL,1,1} },
+        [Z_CHURCH]  = { {P_BIRCH,3,1}, {P_GRAVE,4,1}, {P_BUSH,2,1}, {P_BENCH,1,1}, {P_LAMP,1,1}, {P_SPRUCE_SMALL,1,1} },
+        [Z_HARBOR]  = { {P_CRATES,3,1}, {P_PALLETS,3,1}, {P_BARREL,2,1}, {P_BOLLARD,1,1}, {P_LAMP,1,1}, {P_CART,0,1} },
+        [Z_STATION] = { {P_BIKES,3,1}, {P_BENCH,2,1}, {P_LAMP,2,1}, {P_BIN,1,1}, {P_KICKBIKE,1,1}, {P_PLANTER,1,1} },
+        [Z_MALL]    = { {P_CART,3,1}, {P_LAMP,2,1}, {P_PLANTER,1,1}, {P_RECYCLE,1,1}, {P_BIKES,1,1}, {P_BENCH,1,1} },
+    };
+    int type = G->zones[a->zone].type, free_n = 0, total = 0;
+    for (int j = a->y; j < a->y + a->h; j++) for (int i = a->x; i < a->x + a->w; i++) if (free_rect(i, j, 1, 1, BLOCKERS | TF_WATER)) free_n++;
+    for (int k = 0; k < 6; k++) total += FILL[type][k].weight;
+    int n = free_n / 34 - 3;
+    for (int tries = 0; tries < n * 8 && n > 0 && total > 0; tries++) {
+        int i = a->x + 1 + rng_int(R, MAX(1, a->w - 2)), j = a->y + 1 + rng_int(R, MAX(1, a->h - 2));
+        if (abs(i - a->hubx) <= 2 && abs(j - a->huby) <= 2) continue;
+        if (!free_rect(i - 1, j - 1, 3, 3, BLOCKERS | TF_WATER | TF_PATH)) continue;
+        int r = rng_int(R, total), k = 0;
+        while (r >= FILL[type][k].weight) r -= FILL[type][k++].weight;
+        if (FILL[type][k].kind == P_BIN || FILL[type][k].kind == P_BARREL || FILL[type][k].kind == P_COMPOST) add_loot_prop(FILL[type][k].kind, i, j, 1);
+        else prop_on(FILL[type][k].kind, i, j, FILL[type][k].solid);
+        n--;
+    }
+}
+
 static void connect_ports(Area *a, int g, int wd) {
     Zone *zn = &G->zones[a->zone];
     for (int i = 0; i < nports; i++) {
@@ -1005,12 +1037,17 @@ void map_generate(uint64_t seed, int season) {
     nports = 0;
     snprintf(G->town, sizeof G->town, "%s%s", TOWN_A[rng_int(R, ARRAY_LEN(TOWN_A))], TOWN_B[rng_int(R, ARRAY_LEN(TOWN_B))]);
 
-    /* the grid of cells */
-    int zc = 4, zr = 3;
+    /* the grid of cells: usually four by three; sometimes three big districts a row, five narrow ones, or four rows */
+    static const struct { int cols, rows, cw0, cw1, rh0, rh1, weight; } SHAPES[] = {
+        { 4, 3, 24, 30, 19, 23, 5 }, { 3, 3, 30, 36, 21, 25, 2 }, { 5, 3, 21, 26, 19, 23, 2 }, { 4, 4, 24, 30, 19, 22, 1 },
+    };
+    int pickw = rng_int(R, 10), sh = 0;
+    for (sh = 0; sh < (int)ARRAY_LEN(SHAPES) - 1 && pickw >= SHAPES[sh].weight; sh++) pickw -= SHAPES[sh].weight;
+    int zc = SHAPES[sh].cols, zr = SHAPES[sh].rows;
     G->zcols = zc; G->zrows = zr;
     colx[0] = 0; rowy[0] = 0;
-    for (int i = 0; i < zc; i++) colx[i + 1] = colx[i] + rng_range(R, 24, 30);
-    for (int j = 0; j < zr; j++) rowy[j + 1] = rowy[j] + rng_range(R, 19, 23);
+    for (int i = 0; i < zc; i++) colx[i + 1] = colx[i] + rng_range(R, SHAPES[sh].cw0, SHAPES[sh].cw1);
+    for (int j = 0; j < zr; j++) rowy[j + 1] = rowy[j] + rng_range(R, SHAPES[sh].rh0, SHAPES[sh].rh1);
     G->w = colx[zc]; G->h = rowy[zr];
     /* a couple of cells merge into bigger districts */
     for (int j = 0; j < zr; j++) for (int i = 0; i < zc; i++) cell_zone[j][i] = -1;
@@ -1144,6 +1181,7 @@ void map_generate(uint64_t seed, int season) {
         case Z_STATION: gen_station(&a); break;
         case Z_MALL: gen_mall(&a); break;
         }
+        fill_district(&a);
         G->zones[z].cx = a.hubx; G->zones[z].cy = a.huby;
         ring_props(z);
     }

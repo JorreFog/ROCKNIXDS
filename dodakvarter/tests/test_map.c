@@ -4,6 +4,7 @@
 //     exist and can be reached, perk machines and wall buys stand on reachable tiles
 //   - zombie health, round sizes and spawn rates follow Black Ops' numbers (docs/research.md)
 //   - repainting part of the town changes nothing that was there; the power wave ends as a whole repaint does
+//   - with the barricades shut, no district can be walked out of
 #include "../src/game.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,6 +13,7 @@ static int fails;
 #define CHECK(c, ...) do { if (!(c)) { fails++; printf("FAIL: "); printf(__VA_ARGS__); printf("\n"); } } while (0)
 
 static uint8_t seen[MAPH_MAX][MAPW_MAX];
+static int barriers_open = 1;           /* flood() walks through the barricades (as bought) */
 static void flood(int sx, int sy) {
     static int q[MAPW_MAX * MAPH_MAX];
     memset(seen, 0, sizeof seen);
@@ -23,7 +25,7 @@ static void flood(int sx, int sy) {
             int nx = x + d[k][0], ny = y + d[k][1];
             Tile *tt = tile_at(nx, ny);
             if (!tt || seen[ny][nx]) continue;
-            int pass = !(tt->f & TF_SOLID) || (tt->inter && G->it[tt->inter - 1].type == IT_BARRIER);
+            int pass = !(tt->f & TF_SOLID) || (barriers_open && tt->inter && G->it[tt->inter - 1].type == IT_BARRIER);
             if (!pass) continue;
             seen[ny][nx] = 1; q[t++] = ny * MAPW_MAX + nx;
         }
@@ -98,6 +100,19 @@ int main(int argc, char **argv) {
             }
             CHECK(sp >= 2, "seed %d: zone %d (%s) has %d spawns", seed, z, zn->name, sp);
         }
+        /* with the barricades shut, every district is sealed: nothing else can be walked into from it */
+        barriers_open = 0;
+        for (int z = 0; z < G->nzones; z++) {
+            Zone *zn = &G->zones[z];
+            if (solid_at(zn->cx, zn->cy)) continue;
+            flood(zn->cx, zn->cy);
+            int leak = 0;
+            for (int y = 0; y < G->h && !leak; y++) for (int x = 0; x < G->w; x++)
+                if (seen[y][x] && G->t[y][x].zone != z) { CHECK(0, "seed %d: walked out of zone %d at %d,%d (zone %d) without a barricade", seed, z, x, y, G->t[y][x].zone); leak = 1; break; }
+        }
+        barriers_open = 1;
+        CHECK(G->nprops < MAX_PROPS, "seed %d: %d props, the most there can be", seed, G->nprops);
+        flood(sz->cx, sz->cy);
         int power = 0, pap = 0, perks = 0, walls = 0;
         for (int i = 0; i < G->nit; i++) {
             Inter *it = &G->it[i];

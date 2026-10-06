@@ -38,6 +38,7 @@ int main(int argc, char **argv) {
         char b[32]; snprintf(b, sizeof b, "d%d", zn->dist);
         text_ol(&s, FONT_NORMAL, zn->x * TS + 20, zn->y * TS + 32, 0xffff80, 0x000000, b);
     }
+    printf("%s: %dx%d districts, %dx%d tiles\n", G->town, G->zcols, G->zrows, G->w, G->h);
     png_write(out, G->world, G->ww, G->wh, G->ww);
     printf("%s: %dx%d tiles, %d zones, %d buildings, %d props, %d interactables, %d spawns, town %s\n", out, G->w, G->h,
            G->nzones, G->nb, G->nprops, G->nit, G->nspawns, G->town);

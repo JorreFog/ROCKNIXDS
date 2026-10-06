@@ -14,7 +14,7 @@
 #define MAPH_MAX 96
 #define MAX_ZONES 16
 #define MAX_BUILDINGS 160
-#define MAX_PROPS 1400
+#define MAX_PROPS 2000
 #define MAX_INTER 320
 #define MAX_SPAWNS 160
 #define MAX_ZOMBIES 48
