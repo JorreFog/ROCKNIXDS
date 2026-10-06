@@ -253,4 +253,5 @@ public sealed class TradeMsg
 [JsonSerializable(typeof(HandshakeMsg))]
 [JsonSerializable(typeof(TradeMsg))]
 [JsonSerializable(typeof(Announcement))]
+[JsonSerializable(typeof(LobbyListing))]
 internal sealed partial class TradeJson : JsonSerializerContext;

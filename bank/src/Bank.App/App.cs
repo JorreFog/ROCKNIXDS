@@ -119,6 +119,9 @@ public sealed class App
     /// <summary>A message for when the player is back on the boxes (a trade that ended behind another screen).</summary>
     public string? PendingMessage { get; set; }
 
+    /// <summary>A hosted lobby to open again once the player is back on the boxes, with what happened last.</summary>
+    public (HostedLobby Lobby, string Status)? PendingLobby { get; set; }
+
     public void Push(Screen s)
     {
         _screens.Add(s);
@@ -274,6 +277,11 @@ public sealed class App
             Toast = null;
         Trade?.Update();
         Top.Update();
+        if (PendingLobby is { } pl && Dialog is null && Top is BoxScreen)
+        {
+            PendingLobby = null;
+            Push(new LobbyHostScreen(this, pl.Lobby, pl.Status));
+        }
         if (PendingMessage is { } m && Dialog is null && Top is BoxScreen)
         {
             PendingMessage = null;
@@ -462,12 +470,26 @@ public sealed class TradeStorage(App app) : ITradeStorage
 public sealed class TradeController(App app, TradeSession session)
 {
     private readonly TradeStorage _storage = new(app);
+    private bool _lobbyOffered;
 
     public TradeSession Session { get; } = session;
     public bool ShowPartnerReport { get; set; }
 
+    /// <summary>The lobby we host: its Pokémon is offered as soon as someone joins, and the lobby opens again when
+    /// they leave (unless that Pokémon was traded).</summary>
+    public HostedLobby? HostLobby { get; init; }
+
+    /// <summary>The listing of the lobby we joined: what its host advertised and wants.</summary>
+    public LobbyListing? JoinedLobby { get; init; }
+
     public void Update()
     {
+        if (HostLobby is { } lobby && !_lobbyOffered)
+        {
+            _lobbyOffered = true;
+            if (lobby.StillThere(app))
+                Session.Offer(lobby.Pk, (lobby.Slot, lobby.Save));
+        }
         Session.Pump(_storage);
         if (Session.Result is { } r)
         {
@@ -480,7 +502,29 @@ public sealed class TradeController(App app, TradeSession session)
             app.Trade = null;
             Session.Dispose();
             app.Find<BoxScreen>()?.Refresh();
-            app.PendingMessage = reason;
+            if (HostLobby is { } l && l.StillThere(app))
+                app.PendingLobby = (l, reason); // its Pokémon is still here: the lobby opens again
+            else if (HostLobby is { } gone)
+                app.PendingMessage = $"{reason}\n\nYour lobby for {MonSummary.From(gone.Pk).Title} closed: it was traded.";
+            else
+                app.PendingMessage = reason;
         }
     }
+}
+
+/// <summary>A lobby this handheld hosts: the Pokémon it lists (and where it is), and what it wants for it.</summary>
+public sealed record HostedLobby(PKM Pk, Slot Slot, SaveSession? Save, ushort Want, bool Open)
+{
+    public string Hash { get; } = PkmIO.Hash(Pk);
+
+    /// <summary>The listed Pokémon is still in its slot (it wasn't traded or moved).</summary>
+    public bool StillThere(App app)
+    {
+        if (Slot.Area == Area.Save && Save != app.Mover.Save)
+            return false;
+        var now = app.Mover.Read(Slot);
+        return now is not null && PkmIO.Hash(now) == Hash;
+    }
+
+    public LobbyListing Listing(string code) => LobbyListing.For(Pk, Want, Open, code);
 }

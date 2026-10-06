@@ -582,14 +582,25 @@ public sealed class TradeMenuScreen(App app) : Screen(app)
     private int _sel;
     private readonly List<RectF> _hit = [];
 
+    private static readonly (string Label, string Sub)[] Items =
+    [
+        ("Open a lobby", "List a Pokémon and what you want for it"),
+        ("Open a private room", "Show an address and a code for your partner"),
+        ("Join a lobby or room", "See what's on offer on this network"),
+        ("Back", ""),
+    ];
+
     private void Choose(int i)
     {
         switch (i)
         {
             case 0:
-                App.Push(new TradeHostScreen(App));
+                LobbyFlow.Start(App);
                 break;
             case 1:
+                App.Push(new TradeHostScreen(App));
+                break;
+            case 2:
                 App.Push(new TradeJoinScreen(App));
                 break;
             default:
@@ -605,12 +616,15 @@ public sealed class TradeMenuScreen(App app) : Screen(app)
             for (int i = 0; i < _hit.Count; i++)
             {
                 if (_hit[i].Contains(e.X, e.Y))
+                {
                     Choose(i);
+                    return;
+                }
             }
             return;
         }
-        if (e.Is(Btn.Up)) _sel = (_sel + 2) % 3;
-        else if (e.Is(Btn.Down)) _sel = (_sel + 1) % 3;
+        if (e.Is(Btn.Up)) _sel = (_sel + Items.Length - 1) % Items.Length;
+        else if (e.Is(Btn.Down)) _sel = (_sel + 1) % Items.Length;
         else if (e.Pressed(Btn.A)) Choose(_sel);
         else if (e.Pressed(Btn.B)) App.Pop();
         else if (e.Kind == InputKind.Quit) App.QuitRequested = true;
@@ -621,14 +635,15 @@ public sealed class TradeMenuScreen(App app) : Screen(app)
         Views.Header(c, App, "Trade");
         var p = c.P;
         c.Text("Trade with another handheld", 32, 64, 26, p.Ink, bold: true);
-        c.Paragraph("Both handhelds on the same Wi-Fi. One opens a trade room and shows its address and a code; the other " +
-                    "joins with the code. Each side offers a Pokémon from its bank or its open game, both are checked with " +
-                    "PKHeX, and the trade happens when both accept. What you receive goes into your bank.", 32, 110, 576, 17, p.Muted);
+        c.Paragraph("Both handhelds on the same Wi-Fi. Open a lobby to list a Pokémon and the one you want for it: everyone " +
+                    "here sees it in their list. Or open a private room and give your partner its code. Each side offers a " +
+                    "Pokémon, both are checked with PKHeX, and the trade happens when both accept. What you receive goes " +
+                    "into your bank.", 32, 110, 576, 17, p.Muted);
         var ips = Network.LocalAddresses();
-        c.Text("This handheld", 32, 300, 16, p.Muted);
-        c.Text(App.Cfg.EffectiveTrainerName, 180, 300, 17, p.Ink, maxW: 420);
-        c.Text("Address", 32, 330, 16, p.Muted);
-        c.Text(ips.Count > 0 ? string.Join(", ", ips) : "No network. Connect to Wi-Fi first (ROCKNIX's network settings).", 180, 330, 17,
+        c.Text("This handheld", 32, 330, 16, p.Muted);
+        c.Text(App.Cfg.EffectiveTrainerName, 180, 330, 17, p.Ink, maxW: 420);
+        c.Text("Address", 32, 360, 16, p.Muted);
+        c.Text(ips.Count > 0 ? string.Join(", ", ips) : "No network. Connect to Wi-Fi first (ROCKNIX's network settings).", 180, 360, 17,
             ips.Count > 0 ? p.Ink : p.Bad, maxW: 420);
     }
 
@@ -636,15 +651,14 @@ public sealed class TradeMenuScreen(App app) : Screen(app)
     {
         var p = c.P;
         _hit.Clear();
-        string[] labels = ["Open a trade room", "Join a trade room", "Back"];
-        string[] sub = ["Show an address and a code for your partner", "Find a room on this network, or type its address", ""];
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < Items.Length; i++)
         {
-            float y = 30 + i * 110;
-            var r = c.Button("", 40, y, 560, i == 2 ? 60 : 92, i == _sel);
-            c.Text(labels[i], 320, y + (i == 2 ? 18 : 18), 22, p.Ink, Align.Center, bold: true);
-            if (sub[i].Length > 0)
-                c.Text(sub[i], 320, y + 54, 15, p.Muted, Align.Center);
+            bool back = i == Items.Length - 1;
+            float y = 16 + i * 96;
+            var r = c.Button("", 40, y, 560, back ? 56 : 84, i == _sel);
+            c.Text(Items[i].Label, 320, y + (back ? 16 : 14), 22, p.Ink, Align.Center, bold: true);
+            if (Items[i].Sub.Length > 0)
+                c.Text(Items[i].Sub, 320, y + 50, 15, p.Muted, Align.Center);
             _hit.Add(r);
         }
     }
@@ -754,13 +768,21 @@ public sealed class TradeHostScreen(App app) : Screen(app)
     }
 }
 
+/// <summary>
+/// The lobbies and rooms open on this network. A lobby shows what its host trades away and what it wants for it; an
+/// open lobby is joined with one tap, the rest need their host's code.
+/// </summary>
 public sealed class TradeJoinScreen(App app) : Screen(app)
 {
+    private const int Visible = 5;
+    private const float RowH = 64, ListY = 50;
     private readonly RoomFinder _finder = new();
     private bool _started;
-    private int _sel;
-    private readonly List<RectF> _hit = [];
+    private int _sel, _scroll;
+    private readonly List<(RectF R, int Index)> _hit = [];
+    private RectF _back;
     private string? _error;
+    private HashSet<ushort> _owned = [];
 
     public override void Enter()
     {
@@ -768,9 +790,30 @@ public sealed class TradeJoinScreen(App app) : Screen(app)
             return;
         _started = true;
         _finder.Start(App.Cfg.TradePort);
+        _owned = OwnedSpecies(App);
     }
 
-    private List<FoundRoom> Rooms => _finder.Rooms;
+    /// <summary>The species in the bank and the open game's boxes: a lobby that wants one of them is marked.</summary>
+    internal static HashSet<ushort> OwnedSpecies(App app)
+    {
+        var set = new HashSet<ushort>(app.Bank.All().Where(x => !x.Pk.IsEgg).Select(x => x.Pk.Species));
+        if (app.Mover.Save is { } save)
+        {
+            for (int b = 0; b < save.BoxCount; b++)
+            {
+                for (int i = 0; i < save.SlotsPerBox; i++)
+                {
+                    if (save.Get(b, i) is { IsEgg: false } pk)
+                        set.Add(pk.Species);
+                }
+            }
+        }
+        return set;
+    }
+
+    // lobbies first (open ones first), then private rooms
+    private List<FoundRoom> Rooms => _finder.Rooms
+        .OrderBy(r => r.Lobby is null ? 2 : r.Lobby.Open ? 0 : 1).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
     private void Choose(int i)
     {
@@ -778,7 +821,10 @@ public sealed class TradeJoinScreen(App app) : Screen(app)
         if (i < rooms.Count)
         {
             var r = rooms[i];
-            AskCode(r.Address, r.Port, r.Name);
+            if (r.Lobby is { Open: true, Code: { } code } open)
+                Connect(r.Address, r.Port, code, open);
+            else
+                AskCode(r.Address, r.Port, r.Name, r.Lobby);
         }
         else
         {
@@ -787,7 +833,7 @@ public sealed class TradeJoinScreen(App app) : Screen(app)
                 var (host, port) = ParseAddress(addr, App.Cfg.TradePort);
                 App.Cfg.LastTradeAddress = addr;
                 App.TrySaveConfig();
-                AskCode(host, port, host);
+                AskCode(host, port, host, null);
             }));
         }
     }
@@ -801,19 +847,21 @@ public sealed class TradeJoinScreen(App app) : Screen(app)
         return (a, defaultPort);
     }
 
-    private void AskCode(string host, int port, string name) =>
-        App.Push(new KeyboardScreen(App, $"Code for {name}", KeyboardScreen.Kind.Code, "", ShareCode.Length, code => Connect(host, port, code)));
+    private void AskCode(string host, int port, string name, LobbyListing? lobby) =>
+        App.Push(new KeyboardScreen(App, $"Code for {name}", KeyboardScreen.Kind.Code, "", ShareCode.Length, code => Connect(host, port, code, lobby)));
 
-    private void Connect(string host, int port, string code)
+    private void Connect(string host, int port, string code, LobbyListing? lobby)
     {
         _error = null;
         App.Run($"Connecting to {host}...", () => TradeClient.ConnectAsync(host, port, code).GetAwaiter().GetResult(), ch =>
         {
             _finder.Dispose();
             var session = new TradeSession(ch, App.Cfg, isHost: false);
-            App.Trade = new TradeController(App, session);
+            App.Trade = new TradeController(App, session) { JoinedLobby = lobby };
             App.PopToRoot();
-            App.ShowToast("Connected. Pick a Pokémon to offer with A.");
+            App.ShowToast(lobby is { Want: > 0 }
+                ? $"Connected. The lobby wants {lobby.WantName}: offer one with A (yours are framed in green)."
+                : "Connected. Pick a Pokémon to offer with A.");
         }, ex =>
         {
             _error = ex switch
@@ -833,15 +881,15 @@ public sealed class TradeJoinScreen(App app) : Screen(app)
         int n = Rooms.Count + 1;
         if (e.Kind == InputKind.TouchUp)
         {
-            for (int i = 0; i < _hit.Count; i++)
+            if (_back.Contains(e.X, e.Y))
             {
-                if (_hit[i].Contains(e.X, e.Y))
+                Close();
+                return;
+            }
+            foreach (var (r, i) in _hit)
+            {
+                if (r.Contains(e.X, e.Y))
                 {
-                    if (i == _hit.Count - 1)
-                    {
-                        Close();
-                        return;
-                    }
                     _sel = i;
                     Choose(i);
                     return;
@@ -851,6 +899,8 @@ public sealed class TradeJoinScreen(App app) : Screen(app)
         }
         if (e.Is(Btn.Up)) _sel = (_sel - 1 + n) % n;
         else if (e.Is(Btn.Down)) _sel = (_sel + 1) % n;
+        else if (e.Is(Btn.L)) _sel = Math.Max(0, _sel - Visible);
+        else if (e.Is(Btn.R)) _sel = Math.Min(n - 1, _sel + Visible);
         else if (e.Pressed(Btn.A)) Choose(Math.Min(_sel, n - 1));
         else if (e.Pressed(Btn.B)) Close();
         else if (e.Kind == InputKind.Quit) App.QuitRequested = true;
@@ -866,12 +916,38 @@ public sealed class TradeJoinScreen(App app) : Screen(app)
 
     public override void DrawTop(Canvas c)
     {
-        Views.Header(c, App, "Join a trade room");
+        Views.Header(c, App, "Join a lobby or room");
         var p = c.P;
-        c.Paragraph("Rooms opened on this network show up below. Pick one and type the code its screen shows. " +
-                    "Can't see it? Make sure both handhelds are on the same Wi-Fi, or type the host's address.", 32, 70, 576, 17, p.Muted);
+        var rooms = Rooms;
+        if (_sel < rooms.Count && rooms[_sel] is { Lobby: { } l } room)
+        {
+            // the selected lobby, large: what's offered, what's wanted
+            c.Text($"{room.Name}'s lobby", 320, 54, 20, p.Ink, Align.Center, bold: true, maxW: 600);
+            c.Panel(32, 86, 250, 210, false);
+            c.Mon(l.Species, l.Form, l.Gender, l.Shiny, false, 40, 92, 234, 150, 2);
+            c.Text($"{l.OfferName}{(l.Shiny ? " ★" : "")}", 157, 246, 19, p.Ink, Align.Center, bold: true, maxW: 236);
+            c.Text($"Lv {l.Level} · Gen {l.Format}", 157, 270, 15, p.Muted, Align.Center);
+            c.Icon(Icons.Right, 300, 178, 4, p.Edge);
+            c.Panel(358, 86, 250, 210, false);
+            if (l.Want == 0)
+                c.Text("Any Pokémon", 483, 170, 22, p.Muted, Align.Center, bold: true);
+            else
+                c.Mon(l.Want, 0, 0, false, false, 366, 92, 234, 150, 2);
+            c.Text(l.Want == 0 ? "open to offers" : l.WantName, 483, 246, 19, p.Ink, Align.Center, bold: true, maxW: 236);
+            c.Text(l.Want != 0 && _owned.Contains(l.Want) ? "You have one" : l.Want == 0 ? "" : "You have none", 483, 270, 15,
+                l.Want != 0 && _owned.Contains(l.Want) ? p.Good : p.Muted, Align.Center);
+            c.Paragraph(l.Open
+                    ? "Open lobby: A joins straight away. The listing is the host's word for it: once you're in, its real offer is checked, and nothing is traded until you both accept."
+                    : "This lobby needs its host's code to join.",
+                32, 316, 576, 15, p.Muted);
+            c.Text($"{room.Address}{(room.Port == App.Cfg.TradePort ? "" : $":{room.Port}")}", 32, 420, 15, p.Muted);
+            return;
+        }
+        c.Paragraph("Lobbies list a Pokémon their host trades away and what they want for it: open ones are joined with one tap. " +
+                    "Private rooms need the code their host's screen shows. Can't see one? Both handhelds must be on the same Wi-Fi, " +
+                    "or type the host's address.", 32, 70, 576, 17, p.Muted);
         if (_finder.Error is { } err)
-            c.Paragraph(err, 32, 200, 576, 16, p.Bad);
+            c.Paragraph(err, 32, 230, 576, 16, p.Bad);
         var ips = Network.LocalAddresses();
         c.Text("This handheld: " + (ips.Count > 0 ? ips[0] : "no network"), 32, 420, 16, ips.Count > 0 ? p.Muted : p.Bad);
     }
@@ -881,29 +957,64 @@ public sealed class TradeJoinScreen(App app) : Screen(app)
         var p = c.P;
         _hit.Clear();
         var rooms = Rooms;
+        int lobbies = rooms.Count(r => r.Lobby is not null);
         c.Fill(0, 0, Canvas.W, 44, p.Band);
-        c.Text(rooms.Count == 0 ? "Looking for rooms..." : $"{rooms.Count} room{(rooms.Count == 1 ? "" : "s")} found", 16, 11, 19, p.Ink, bold: true);
+        c.Text(rooms.Count == 0 ? "Looking for lobbies and rooms..." : $"{lobbies} lobb{(lobbies == 1 ? "y" : "ies")}, {rooms.Count - lobbies} room{(rooms.Count - lobbies == 1 ? "" : "s")}",
+            16, 11, 19, p.Ink, bold: true);
         int n = rooms.Count + 1;
-        _sel = Math.Min(_sel, n - 1);
-        for (int i = 0; i < Math.Min(n, 5); i++)
+        _sel = Math.Clamp(_sel, 0, n - 1);
+        if (_sel < _scroll) _scroll = _sel;
+        if (_sel >= _scroll + Visible) _scroll = _sel - Visible + 1;
+        _scroll = Math.Clamp(_scroll, 0, Math.Max(0, n - Visible));
+        for (int k = 0; k < Visible && _scroll + k < n; k++)
         {
-            float y = 54 + i * 64;
+            int i = _scroll + k;
+            float y = ListY + k * RowH;
             bool sel = i == _sel;
-            c.Box(8, y, 624, 58, sel ? p.Band : p.Body, sel ? p.Edge : p.Rule, 2);
-            if (i < rooms.Count)
+            c.Box(8, y, 610, RowH - 6, sel ? p.Band : p.Body, sel ? p.Edge : p.Rule, 2);
+            if (i < rooms.Count && rooms[i].Lobby is { } l)
             {
-                c.Text(rooms[i].Name, 24, y + 8, 19, p.Ink, bold: true, maxW: 400);
-                c.Text(rooms[i].Address + (rooms[i].Port == App.Cfg.TradePort ? "" : $":{rooms[i].Port}"), 24, y + 33, 14, p.Muted);
+                // [offer] Name Lv → [want] Name   host · open/code · you have one
+                c.Mon(l.Species, l.Form, l.Gender, l.Shiny, false, 12, y + 3, 52, 52, 1);
+                if (l.Shiny)
+                    c.Icon(Icons.Star, 14, y + 6, 1, Color.Hex(0xffc93c));
+                c.Text($"{l.OfferName} Lv {l.Level}", 68, y + 7, 17, p.Ink, bold: true, maxW: 190);
+                c.Icon(Icons.Right, 268, y + 13, 2, p.Muted);
+                if (l.Want != 0)
+                    c.Mon(l.Want, 0, 0, false, false, 282, y + 3, 52, 52, 1);
+                c.Text(l.Want == 0 ? "Any Pokémon" : l.WantName, l.Want == 0 ? 286 : 338, y + 7, 17, p.Ink, bold: true, maxW: 150);
+                c.Text(rooms[i].Name, 68, y + 33, 13, p.Muted, maxW: 200);
+                float tx = 604;
+                tx -= c.Measure(l.Open ? "Open" : "Code", 12, true) + 10;
+                c.Tag(l.Open ? "Open" : "Code", tx, y + 8, l.Open ? p.Good : p.Muted, 12);
+                if (l.Want != 0 && _owned.Contains(l.Want))
+                {
+                    tx -= c.Measure("You have one", 12, true) + 18;
+                    c.Tag("You have one", tx, y + 32, p.Accent, 12);
+                }
+            }
+            else if (i < rooms.Count)
+            {
+                c.Icon(Icons.Lock, 26, y + 20, 3, p.Muted);
+                c.Text(rooms[i].Name, 68, y + 8, 18, p.Ink, bold: true, maxW: 380);
+                c.Text($"Private room · {rooms[i].Address}{(rooms[i].Port == App.Cfg.TradePort ? "" : $":{rooms[i].Port}")}", 68, y + 33, 13, p.Muted);
             }
             else
             {
                 c.Text("Type an address...", 24, y + 18, 19, p.Ink);
             }
-            _hit.Add(new RectF(8, y, 624, 58));
+            _hit.Add((new RectF(8, y, 610, RowH - 6), i));
         }
-        _hit.Add(c.Button("Back", 8, 384, 160, 44, false));
+        if (n > Visible)
+        {
+            float h = Visible * RowH - 6, th = h * Visible / n, ty = ListY + (h - th) * _scroll / Math.Max(1, n - Visible);
+            c.Fill(624, ListY, 8, h, p.Chip);
+            c.Fill(624, ty, 8, th, p.Line);
+        }
+        _back = c.Button("Back", 8, 384, 160, 44, false);
         float x = 8;
         x += c.Hint("A", "Join", x, 446);
+        x += c.Hint("L/R", "Page", x, 446);
         c.Hint("B", "Back", x, 446);
     }
 }

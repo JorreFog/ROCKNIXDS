@@ -39,6 +39,17 @@ public sealed class BoxScreen(App app) : Screen(app)
 
     public int BankBox => _bank.Box;
 
+    // choosing a Pokémon for something else (a lobby's listing): A picks, B cancels
+    private (string Prompt, Action<Slot, PKM> Picked)? _pick;
+
+    /// <summary>Lets the player choose a Pokémon from the boxes, then calls <paramref name="picked"/>.</summary>
+    public void StartPick(string prompt, Action<Slot, PKM> picked)
+    {
+        _held = null;
+        _report = false;
+        _pick = (prompt, picked);
+    }
+
     private Pane[] Panes => [_game, _bank];
     private Pane Cur => Panes[_pane];
     private bool Trading => App.Trade is not null;
@@ -167,7 +178,12 @@ public sealed class BoxScreen(App app) : Screen(app)
 
     private void Back()
     {
-        if (_held is not null)
+        if (_pick is not null)
+        {
+            _pick = null;
+            App.ShowToast("Cancelled.");
+        }
+        else if (_held is not null)
             _held = null;
         else if (Trading && Session!.Mine is not null && Session.CanChangeOffer)
             Session.Withdraw();
@@ -270,6 +286,19 @@ public sealed class BoxScreen(App app) : Screen(app)
         }
         var slot = SlotOf(pane, index);
         var pk = pane.Slots[index];
+        if (_pick is { } pick)
+        {
+            if (pk is null)
+                return;
+            if (pane.Locked[index])
+            {
+                App.ShowToast("The game has locked that slot.", true);
+                return;
+            }
+            _pick = null;
+            pick.Picked(slot, pk);
+            return;
+        }
         if (Trading)
         {
             Offer(slot, pk);
@@ -340,7 +369,9 @@ public sealed class BoxScreen(App app) : Screen(app)
             return;
         }
         s.Offer(pk, (slot, slot.Area == Area.Save ? App.Mover.Save : null));
-        App.ShowToast($"You offered {MonSummary.From(pk).Title}. START accepts once {s.PartnerName} offers too.");
+        App.ShowToast(s.Theirs is null
+            ? $"You offered {MonSummary.From(pk).Title}. START accepts once {s.PartnerName} offers too."
+            : $"You offered {MonSummary.From(pk).Title}. Press START to accept the trade.");
     }
 
     private void Options()
@@ -420,7 +451,7 @@ public sealed class BoxScreen(App app) : Screen(app)
                     _touchDownCell = c.Index;
                     var pane = Panes[c.Pane];
                     // press on a Pokémon with nothing held: pick it up and follow the finger
-                    if (!Trading && _held is null && c.Index < pane.SlotCount && pane.Slots[c.Index] is { } pk && !pane.Locked[c.Index])
+                    if (!Trading && _pick is null && _held is null && c.Index < pane.SlotCount && pane.Slots[c.Index] is { } pk && !pane.Locked[c.Index])
                     {
                         _held = (SlotOf(pane, c.Index), pk);
                         _dragging = true;
@@ -579,9 +610,13 @@ public sealed class BoxScreen(App app) : Screen(app)
             return;
         }
         string? partnerCheck = s.Mine?.PartnerSaysValid is { } ok ? $"{s.PartnerName}'s check: {(ok ? "legal" : s.Mine.PartnerHeadline)}" : null;
-        Views.OfferCard(c, 16, 52, 296, 366, "You offer", s.Mine, s.Mine is null ? null : App.VerdictFor(s.Mine.Pk), s.IAccepted,
+        var lobbyLine = LobbyLine(s);
+        float cardH = lobbyLine is null ? 366 : 340;
+        Views.OfferCard(c, 16, 52, 296, cardH, "You offer", s.Mine, s.Mine is null ? null : App.VerdictFor(s.Mine.Pk), s.IAccepted,
             partnerCheck, s.Mine?.PartnerSaysValid ?? true);
-        Views.OfferCard(c, 328, 52, 296, 366, $"{s.PartnerName} offers", s.Theirs, s.Theirs?.Verdict, s.TheyAccepted, null, true);
+        Views.OfferCard(c, 328, 52, 296, cardH, $"{s.PartnerName} offers", s.Theirs, s.Theirs?.Verdict, s.TheyAccepted, null, true);
+        if (lobbyLine is { } ll)
+            c.Text(ll.Text, 320, 398, 15, ll.Ok ? p.Good : p.Warn, Align.Center, bold: true, maxW: 600);
         string status = s.Phase == TradePhase.Exchanging ? "Trading..."
             : s.Mine is null ? "Pick the Pokémon to offer with A."
             : s.Theirs is null ? $"Waiting for {s.PartnerName} to offer a Pokémon."
@@ -592,6 +627,36 @@ public sealed class BoxScreen(App app) : Screen(app)
             : "Press START to accept this trade.";
         c.Fill(16, 428, 608, 40, p.Chip);
         c.Text(status, 320, 437, 18, p.Ink, Align.Center, bold: true, maxW: 590);
+    }
+
+    /// <summary>The lobby's terms against the offers on the table: what was asked for, what was listed.</summary>
+    private (string Text, bool Ok)? LobbyLine(TradeSession s)
+    {
+        var t = App.Trade!;
+        if (t.HostLobby is { } host)
+        {
+            if (host.Want == 0)
+                return ("Your lobby is open to any offer.", true);
+            var want = Names.Species(host.Want);
+            if (s.Theirs is null)
+                return ($"Your lobby asks for {want}.", true);
+            return s.Theirs.Pk.Species == host.Want && !s.Theirs.Pk.IsEgg
+                ? ($"Their offer is the {want} you asked for.", true)
+                : ($"You asked for {want}; they offer {s.Theirs.Summary.Title} instead.", false);
+        }
+        if (t.JoinedLobby is { } joined)
+        {
+            if (s.Theirs is not null && !joined.Advertises(s.Theirs.Pk))
+                return ($"Not what the lobby listed: it listed {joined.OfferName} Lv {joined.Level}{(joined.Shiny ? " (shiny)" : "")}.", false);
+            if (joined.Want == 0)
+                return ("This lobby takes any offer.", true);
+            if (s.Mine is null)
+                return ($"The lobby wants {joined.WantName}: yours are framed in green.", true);
+            return joined.Wants(s.Mine.Pk)
+                ? ($"Your offer is the {joined.WantName} the lobby wants.", true)
+                : ($"The lobby wants {joined.WantName}, not {s.Mine.Summary.Title}.", false);
+        }
+        return null;
     }
 
     public override void DrawBottom(Canvas c)
@@ -685,6 +750,8 @@ public sealed class BoxScreen(App app) : Screen(app)
                 }
                 if (offered == slot)
                     c.Tag("T", cx + 2, cy + Cell - 20, p.Accent, 10, filled: true);
+                else if (App.Trade?.JoinedLobby is { Want: > 0 } joined && joined.Wants(pk))
+                    c.Frame(cx + 2, cy + 2, Cell - 4, Cell - 4, p.Good, 2); // what the lobby's host wants
             }
             if (pane.Locked[idx])
                 c.Icon(Icons.Lock, cx + Cell - 9, cy + Cell - 11, 1, p.Muted);
@@ -713,6 +780,11 @@ public sealed class BoxScreen(App app) : Screen(app)
         {
             var s = Session!;
             msg = s.Log.Count > 0 ? s.Log[^1] : $"Connected to {s.PartnerName}.";
+        }
+        else if (_pick is { } pick)
+        {
+            msg = pick.Prompt;
+            col = p.Accent;
         }
         else if (_held is { } h)
         {
@@ -755,6 +827,12 @@ public sealed class BoxScreen(App app) : Screen(app)
             x += c.Hint("START", Session!.IAccepted ? "Unaccept" : "Accept", x, y);
             x += c.Hint("X", "Their report", x, y);
             c.Hint("SELECT", "Leave", x, y);
+        }
+        else if (_pick is not null)
+        {
+            x += c.Hint("A", "Choose", x, y);
+            x += c.Hint("B", "Cancel", x, y);
+            c.Hint("L/R", "Box", x, y);
         }
         else
         {

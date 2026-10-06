@@ -43,11 +43,19 @@ public sealed class TradeHost : IDisposable
     /// <summary>The connected, verified partner. Set once, from a background thread.</summary>
     public volatile SecureChannel? Channel;
 
-    public TradeHost(BankConfig cfg)
+    /// <summary>The lobby this room lists, or null for a private room.</summary>
+    public LobbyListing? Lobby { get; }
+
+    public TradeHost(BankConfig cfg, Func<string, LobbyListing>? lobby = null)
     {
         _cfg = cfg;
         Port = cfg.TradePort;
+        Lobby = lobby?.Invoke(Code);
     }
+
+    /// <summary>An open lobby's code is public: there is nothing to guess, so there is no limit on attempts (the limits
+    /// on concurrent handshakes, which keep idle connections from blocking the room, still apply).</summary>
+    private bool IsOpenLobby => Lobby is { Open: true };
 
     public void Start()
     {
@@ -117,7 +125,11 @@ public sealed class TradeHost : IDisposable
     {
         lock (_lock)
         {
-            if (Failed || Channel is not null || _attempts >= MaxAttempts)
+            if (Failed || Channel is not null)
+                return false;
+            if (IsOpenLobby)
+                return true;
+            if (_attempts >= MaxAttempts)
                 return false;
             _attempts++;
             return true;
@@ -151,7 +163,11 @@ public sealed class TradeHost : IDisposable
             int wrong;
             lock (_lock)
                 wrong = ++_wrong;
-            if (wrong >= MaxAttempts) // every reserved attempt ends as a success or here, so this is all of them
+            if (IsOpenLobby)
+            {
+                Status = $"Someone at {remote} couldn't complete the connection.";
+            }
+            else if (wrong >= MaxAttempts) // every reserved attempt ends as a success or here, so this is all of them
             {
                 Status = $"{wrong} wrong codes were tried, so this trade room closed. Start a new one for a new code.";
                 Failed = true;
@@ -192,6 +208,7 @@ public sealed class TradeHost : IDisposable
             Proto = SecureChannel.ProtocolVersion,
             Name = _cfg.EffectiveTrainerName,
             Port = Port,
+            Lobby = Lobby,
         }, TradeJson.Default.Announcement);
         while (!_cts.IsCancellationRequested && Channel is null && !Failed)
         {
@@ -256,9 +273,12 @@ public sealed class Announcement
     public int Proto { get; set; }
     public string Name { get; set; } = "";
     public int Port { get; set; }
+    /// <summary>A lobby's listing; null for a private room.</summary>
+    public LobbyListing? Lobby { get; set; }
 }
 
-public sealed record FoundRoom(string Name, string Address, int Port, DateTime Seen);
+/// <summary>A room heard on the network; <see cref="Lobby"/> when it's a lobby with a listing.</summary>
+public sealed record FoundRoom(string Name, string Address, int Port, DateTime Seen, LobbyListing? Lobby = null);
 
 /// <summary>Listens for trade rooms announced on the LAN.</summary>
 public sealed class RoomFinder : IDisposable
@@ -298,8 +318,8 @@ public sealed class RoomFinder : IDisposable
                 try
                 {
                     var r = await _udp.ReceiveAsync(_cts.Token);
-                    if (r.Buffer.Length > 512)
-                        continue; // an announcement is under 150 bytes
+                    if (r.Buffer.Length > 1024)
+                        continue; // an announcement with a lobby's listing is under 300 bytes
                     var a = JsonSerializer.Deserialize(r.Buffer, TradeJson.Default.Announcement);
                     if (a is null || a.App != "rocknixds-bank" || a.Port is < 1024 or > 65535)
                         continue;
@@ -312,7 +332,7 @@ public sealed class RoomFinder : IDisposable
                         // a few rooms at a time: a flood of made-up announcements can't fill memory or the list
                         if (!_rooms.ContainsKey(key) && _rooms.Count >= MaxRooms)
                             continue;
-                        _rooms[key] = new FoundRoom(name.Length > 0 ? name : addr, addr, a.Port, DateTime.UtcNow);
+                        _rooms[key] = new FoundRoom(name.Length > 0 ? name : addr, addr, a.Port, DateTime.UtcNow, LobbyListing.Validate(a.Lobby));
                     }
                 }
                 catch (OperationCanceledException)

@@ -20,10 +20,11 @@ the same conversions between generations and the same legality analysis.
 - **Checks legality** with PKHeX's legality analysis: every Pokémon in sight is checked in the background; an illegal
   one gets a red mark, and its full report (the same one PKHeX shows) is one button away. Putting one that fails into a
   game asks first, or is refused altogether (a setting).
-- **Trades between two handhelds** over Wi-Fi, peer to peer: one opens a trade room and shows its address and a
-  6-character code; the other finds the room on the network (or types the address) and enters the code. Both see each
-  other's offer checked for legality before they accept. Trade evolutions happen on arrival (Kadabra, Haunter, Onix
-  with a Metal Coat, Karrablast for Shelmet...), and an Everstone stops them, as in the games.
+- **Trades between two handhelds** over Wi-Fi, peer to peer. A host can open a **lobby**: it lists a Pokémon to trade
+  away and the species wanted for it, and every handheld on the network sees it in its Join list (an open lobby is
+  joined with one tap). Or a **private room**: the host shows its address and a 6-character code, the partner types
+  it. Both see each other's offer checked for legality before they accept. Trade evolutions happen on arrival
+  (Kadabra, Haunter, Onix with a Metal Coat, Karrablast for Shelmet...), and an Everstone stops them, as in the games.
 
 <p align="center">
   <img src="../docs/img/bank-report.png" width="760" alt="PKHeX's legality report for an edited Pikachu: invalid moves and level in red, the checks that pass below">
@@ -82,10 +83,31 @@ rooms), the name partners see, and the language of species, move and item names.
 
 ### Trading
 
-Both handhelds on the same network. On one: **Trade > Open a trade room**: it shows the code and its address. On the
-other: **Trade > Join a trade room**, pick the room (or type the address), type the code. Then each side picks the
-Pokémon to offer with A, from the bank or the open game, and presses START to accept. The Pokémon you receive goes
-into your bank; the one you gave leaves its box (the bank, or the game, which is written straight away).
+<p align="center">
+  <img src="../docs/img/bank-lobbies.png" width="760" alt="The Join list: Jorre's open lobby offers Kadabra Lv 15 for Mareep, marked Open and You have one; the top screen shows both Pokémon large">
+</p>
+
+Both handhelds on the same network. There are two ways to meet:
+
+- **Lobbies.** **Trade > Open a lobby**: choose the Pokémon to trade away, then the species you want for it (type the start
+  of its name; or *Any Pokémon* to take offers), then who can join: anyone (*open*) or only with a code. The lobby is
+  listed on every handheld on the network that opens **Trade > Join**, with both Pokémon, *Open* or *Code*, and *You have
+  one* when you own the wanted species. An open lobby is joined with A, no code. Once in, the lobby's Pokémon is already
+  offered; the Pokémon of yours it wants are framed in green; both screens say whether the offers match the lobby (what
+  it asked for, and whether the host's real offer is the one it listed). The lobby stays open for the next visitor until
+  its Pokémon has been traded.
+- **Private rooms.** **Trade > Open a private room**: it shows the code and its address. The partner picks it in
+  **Trade > Join** (or types the address) and types the code.
+
+Then each side picks the Pokémon to offer with A, from the bank or the open game, and presses START to accept. The
+Pokémon you receive goes into your bank; the one you gave leaves its box (the bank, or the game, which is written
+straight away).
+
+A lobby's listing is the host's word for it: anyone on the network can broadcast one. So what counts is the real offer
+once you're in, which is checked like every offer (and against the listing), and nothing changes hands until both
+accept. An open lobby's code travels with its listing: that's what makes it open, so its encryption keeps out
+listeners but not other players, and it has no limit on attempts. A lobby with a code keeps it secret (it is never in
+the listing) and closes after 5 wrong ones, like a private room.
 
 How it's kept safe (`tests/Bank.Tests/SecurityTests.cs` attacks most of these):
 - **The code proves the partner.** The handhelds turn it into a session key with SPAKE2, a password-authenticated key
@@ -113,8 +135,8 @@ How it's kept safe (`tests/Bank.Tests/SecurityTests.cs` attacks most of these):
   refused altogether (a setting). Your own offer shows what the partner's check said.
 
 What it can't do: a modified app on the other side can keep a copy of what it gives (that is its own Pokémon), or
-lie about having received yours (then you still got theirs). And anyone on the network can close an open room by
-using up its 5 guesses; open a new one for a new code.
+lie about having received yours (then you still got theirs). And anyone on the network can close a private room (or a lobby with a code) by
+using up its 5 guesses; open a new one for a new code. An open lobby can be joined by anyone on the network, by design.
 
 ## How it's built
 

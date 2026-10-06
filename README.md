@@ -712,8 +712,8 @@ dark-background and a light-background version, a stacked version for small squa
 A Pokémon bank and trading app for both screens, built on [PKHeX.Core](https://github.com/kwsch/PKHeX): it finds the
 game saves on the card (DraStic's `.dsv`, `.sav`, `.srm`), keeps Pokémon in a bank of PKHeX files, moves them from one
 game to another (converting them up a generation as Pal Park and Poké Transfer did), checks every one with PKHeX's
-legality analysis, and trades between two handhelds over Wi-Fi: one shows its address and a code, the other joins with
-the code (SPAKE2, so the code can't be sniffed; encrypted; a dropped connection never loses a Pokémon). Trade
+legality analysis, and trades between two handhelds over Wi-Fi: in lobbies that list a Pokémon and what its host
+wants for it (open ones joined with one tap), or in private rooms that you join with a code (SPAKE2, so the code can't be sniffed; encrypted; a dropped connection never loses a Pokémon). Trade
 evolutions happen on arrival. It's a separate install, from Ports once installed:
 
 ```sh
