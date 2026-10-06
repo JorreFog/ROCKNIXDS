@@ -42,7 +42,7 @@ index 75714e3d..056a703f 100644
  	// Must run before any window/message-queue APIs are touched.
  	Utils::Platform::setDpiAwareness();
 diff --git a/es-app/src/views/ViewController.cpp b/es-app/src/views/ViewController.cpp
-index c1b63879..71680576 100644
+index af899d99..ff8abda1 100644
 --- a/es-app/src/views/ViewController.cpp
 +++ b/es-app/src/views/ViewController.cpp
 @@ -30,6 +30,9 @@
@@ -55,7 +55,7 @@ index c1b63879..71680576 100644
  #include "TextToSpeech.h"
  #include "VolumeControl.h"
  #include "guis/GuiNetPlay.h"
-@@ -472,6 +475,9 @@ bool ViewController::doLaunchGame(FileData* game, LaunchGameOptions options)
+@@ -479,6 +482,9 @@ bool ViewController::doLaunchGame(FileData* game, LaunchGameOptions options)
  	// Silence TTS when launching a game
  	TextToSpeech::getInstance()->say(" ");
  
@@ -63,5 +63,5 @@ index c1b63879..71680576 100644
 +	malloc_trim(0);	// ROCKNIXDS (es-rgds-memory): what the menu freed goes back to the system before the game needs it
 +#endif
  	bool reload = game->launchGame(mWindow, options) && game->getSourceFileData()->getSystemName() == "windows_installers";
- 	sLastGameEndedAt = SDL_GetTicks();
- 	if (sLastGameEndedAt == 0)
+ 	sLastGameEndedAt = monoMs();
+ 	return reload;
