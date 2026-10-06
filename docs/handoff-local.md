@@ -254,7 +254,8 @@ needed), #33 (the RG DS untested) and #37 (fixed in 1.5.7; 1.6 adds the parse ch
 | 31 | `rocknixds-media.py`'s background RetroAchievements id hashes the first `.nds` in a `.zip` (else its first file) the way rcheevos does; `.7z` is skipped with a log line. Checked on the host: a synthetic ROM, plain and zipped (deflated and stored), gives rcheevos' own hash | both | A zipped DS game with achievements: after the menu's background job (or `rocknixds-media.py --local --auto`), its gamelist entry has a `cheevosId` and the Pixel library shows its achievement count |
 | 32, 34, 35 | `es-rgds-panelguis.patch` (ES): *View Game Media* (its pictures, the zoom view and *View fullscreen video*), the Save State Manager and *Manual scrape* are one panel wide, on the bottom panel. The zoom view opens with the whole picture fitted, L/R zoom, the D-pad moves it, and it never leaves the panel. From *View Game Media* it had always been empty: it was given the entry's number instead of its picture (an upstream bug). *Manual scrape*'s details column grows from the result list's share (24% to 45% of the window), so the values and the date fit; values longer than about 10 letters still end in "...". #34's other half, the Pixel font's 2/5/S, Z and B/G, has been on this line since 1.5.13 beta 1. Checked on a PC at 1920x480 and 3072x768 with Pixel dark: before and after in [1.6-prep/img](1.6-prep/img) (`es-32-*`, `es-34-*`, `es-35-*`) | both (ES) | 1. A scraped game with a picture and a video: *View Game Media* and *View fullscreen video* (game options) stay on the bottom panel. A on a picture shows all of it there; L/R zoom and the D-pad moves it, and nothing reaches the top panel. 2. *Game settings > Show savestate manager: Always*, then start a GBA game (RetroArch): the title, START NEW GAME and the slots are all on the bottom panel (START NEW GAME is shortened to "START NEW ..." at 640 px, as on any 4:3 screen). 3. *Scrape* on a game: the publisher, genre and the whole date are inside the window. `grim` grabs ES's screens to compare with the pictures |
 | 36, 37 | `es-features.sh`: a new `es_features.cfg` replaces the old one only if it parses with `<features>` as its root; otherwise the old one stays, or both go and ES reads ROCKNIX's copy. The RG DS line's depth-aware repair and its test are on the Plus line now; an option written on one line is no longer dropped. Tests: 74 (RG DS) and 73 (Plus) pass | both | `grep es-features /storage/.config/drastic/dsflip/install.log` (or the installer's output) after an update; the DS's per-system and per-game advanced settings list every DraStic option; Tools and Music Player are not in the per-system list |
-| 42, 44 | Not done: plans in section G | | |
+| 42 | Not done: the plan is in section G. It moves the players' save files, so it is the owner's call | | |
+| 44 | `es-rgds-rnds.patch`: *UI settings > ROM icon on cartridges (DS)* (ROCKNIXDS Pixel only, off by default). On, a DS game's cartridges on the bottom screen show the 32x32 icon from its ROM (`.nds`, or the first `.nds` in a `.zip`) instead of the label art, scaled up in whole steps without smoothing. It is read once per ROM, off the UI thread; odd ROMs, `.7z` and other systems keep their art; DSi animated icons show their still frame. Checked with the engine's harness: 20 synthetic ROMs, the setting off byte-identical to before, the sanitizers clean ([640](1.6-prep/img/rnds-44-rom-icon-640.png), [1024](1.6-prep/img/rnds-44-rom-icon-1024.png)) | both (ES) | Turn it on, open the DS game list: each cartridge on the bottom screen shows the game's own icon (the one the DS menu shows), sharp, on a light label, zipped games too, and the top screen is unchanged. Scroll a big list: no stall. Turn it off: the art is back. With a `.7z` game, that game keeps its art |
 | 43 | Not a bug: ROCKNIX turns front-end music on but ships no music. The README and the release notes now say to copy `.mp3`/`.ogg` files to `roms/music` | both (docs) | Copy one `.ogg` to `/storage/roms/music`, restart ES: it plays in the menu |
 
 ## E. Online play parked (1.6 task 5)
@@ -284,7 +285,7 @@ except two fixes for both handhelds (rendered on a PC):
 Japanese and Chinese game names show as empty boxes in the menu, as since 1.5.13: a fallback font is drafted in
 [`1.6-prep/superdrastic-menu-cjk-fallback.diff`](1.6-prep/superdrastic-menu-cjk-fallback.diff), not applied.
 
-## G. Not done tonight: two suggestions, with a plan
+## G. Not done tonight: #42, with a plan
 
 - **#42, in-game saves in a folder of their own.**
   - ROCKNIX's `start_drastic.sh` runs `rm -rf /storage/.config/drastic/backup; ln -sf /storage/roms/nds ...` on every
@@ -293,14 +294,7 @@ Japanese and Chinese game names show as empty boxes in the menu, as since 1.5.13
     deleted by that `rm -rf`) at `roms/saves/nds`, and move the existing `.dsv` files once, never overwriting.
     Point `session.sh`'s `DSV` (the resume state's staleness check) there, and make uninstall move them back.
   - It moves the players' save files, so it should be an opt-in ES switch, and the owner's call. Not started.
-- **#44, the ROM's own icon instead of the box art on the bottom screen.**
-  - The 32x32 icon is in the ROM: the header's 0x68 gives the banner, with 512 bytes of 4bpp tiles at +0x20 and a
-    BGR555 palette at +0x220.
-  - Plan:
-    - extract it in `rocknixds-media.py` (which reads the header already, for the RetroAchievements hash);
-    - push it to ES as an unused media field;
-    - add a Pixel setting ("Cartridge art: label / ROM icon") read by `artOf()` in `RndsUI.cpp`.
-  - Medium-sized (scripts, the rnds engine and a GuiMenu switch). Left for after 1.6's fixes.
+- **#44** was done after all (section D), as an opt-in Pixel setting read by the engine itself.
 
 ## H. Where the two lines still differ
 

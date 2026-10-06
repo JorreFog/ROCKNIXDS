@@ -114,7 +114,8 @@ One release for both handhelds; the full notes are [v1.6-plus.md](docs/releases/
 - **From the reports:** the options file is checked before it is replaced (#36, #37); zipped games get their
   RetroAchievements id (#31); the in-game menu's *Blow* follows `drastic.cfg`'s binding (#26); the pixel font's 5, 2,
   Z and B (#34); *View Game Media*, the Save State Manager and *Manual Scrape* fit the bottom screen (#32, #34, #35);
-  touch on the Pixel game list: drag or tap its progress bar, tap the ◀ ▶ arrows (#27).
+  touch on the Pixel game list: drag or tap its progress bar, tap the ◀ ▶ arrows (#27); an opt-in Pixel setting shows
+  a DS game's own ROM icon on its cartridges (#44).
 - **Online play is parked:** the 1.5.13 test builds' *wfc dns* option is gone until it works.
 
 ### New in 1.5
