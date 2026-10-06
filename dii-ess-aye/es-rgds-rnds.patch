@@ -74,10 +74,10 @@ index 90df9a9b..75714e3d 100644
  			else if (complete || SDL_GetTicks() - firstFrame > 3000)
 diff --git a/es-app/src/rnds/RndsEs.cpp b/es-app/src/rnds/RndsEs.cpp
 new file mode 100644
-index 00000000..140407d8
+index 00000000..0cdb517e
 --- /dev/null
 +++ b/es-app/src/rnds/RndsEs.cpp
-@@ -0,0 +1,1143 @@
+@@ -0,0 +1,1164 @@
 +#include "rnds/RndsEs.h"
 +#include "rnds/RndsUI.h"
 +
@@ -372,6 +372,7 @@ index 00000000..140407d8
 +		// a held left/right (or L/R): moves again after a pause, faster the longer it is held, like ES's lists
 +		struct Held { bool on = false; UI::Button button = UI::LEFT; int device = 0, type = 0, id = 0; Uint32 since = 0, last = 0; } held;
 +		Uint32 lastUpdate = 0;	// a held direction keeps frames coming: a longer gap means a menu was on top and got the release
++		Uint32 lastScrollSound = 0;
 +		int launchedCheevos = 0;
 +
 +		// worker
@@ -480,8 +481,9 @@ index 00000000..140407d8
 +			variant = var;
 +			scale = s;
 +			ui.reset(new UI(this, &backend, dir, s, var));
-+			// a finished picture only needs a frame (it is uploaded in update)
++			// a finished picture only needs a frame (it is uploaded in update or render)
 +			ui->setNotifiers([this] { kickWorker(); }, [] { PowerSaver::pushRefreshEvent(); });
++			ui->setLog([](const std::string& m) { LOG(LogInfo) << "rnds: " << m; });
 +			loadLooks();
 +			LOG(LogInfo) << "rnds: engine on " << W << "x" << H << " (" << (backend.dual ? "two panels" : "one panel") << ", scale " << s << "), assets " << dir;
 +			if (!ra)
@@ -674,6 +676,8 @@ index 00000000..140407d8
 +			SystemData* s = systems[i];
 +			r.id = s->getName();
 +			r.name = s->getFullName();
++			// ES names its own collections in lower case ("favorites"); the other names are capitalised
++			if (s->isCollection() && !r.name.empty() && r.name[0] >= 'a' && r.name[0] <= 'z') r.name[0] -= 32;
 +			r.maker = s->getSystemMetadata().manufacturer;
 +			// systems.cfg: the system's name, its theme folder, then by kind ("*portable", "*collection"...), then "*";
 +			// a system matched only by kind takes the accent of its maker ("@Sega") when there is one
@@ -883,7 +887,14 @@ index 00000000..140407d8
 +
 +		void selectGame(int i) override
 +		{
-+			playSound("scroll");
++			// a finger on the rail can pass many games a frame: a click at most every 45 ms (a held direction repeats
++			// every 55), not a pile of them on every free mixer channel
++			Uint32 t = SDL_GetTicks();
++			if (t - lastScrollSound >= 45)
++			{
++				playSound("scroll");
++				lastScrollSound = t;
++			}
 +			if (!list)
 +				return;
 +			busy = true;
@@ -1171,7 +1182,17 @@ index 00000000..140407d8
 +		return true;
 +	}
 +
-+	void EsHost::update(GuiComponent* from, int deltaTime)
++	bool EsHost::mouseMove(int x, int y)
++	{
++		if (!d->ui)
++			return false;
++		// a finger that slides off the bottom panel keeps dragging along its edge
++		float panelW = d->backend.dual ? Renderer::getScreenWidth() / 3.0f : (float)Renderer::getScreenWidth();
++		float bx = std::min(std::max(x - d->backend.originX[1], 0.0f), panelW - 1);
++		return d->ui->touchMove(1, bx, (float)y);
++	}
++
++	void EsHost::update(GuiComponent* from, int /*deltaTime*/)
 +	{
 +		if (!d->ui || !d->isShown(from))
 +			return;
@@ -1223,10 +1244,10 @@ index 00000000..140407d8
 +}
 diff --git a/es-app/src/rnds/RndsEs.h b/es-app/src/rnds/RndsEs.h
 new file mode 100644
-index 00000000..85770a09
+index 00000000..f47b0348
 --- /dev/null
 +++ b/es-app/src/rnds/RndsEs.h
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,64 @@
 +#pragma once
 +// ROCKNIXDS rnds engine inside EmulationStation. A theme that declares <view name="rnds"> is drawn by the engine
 +// (RndsUI) instead of ES's own views: SystemView hands it the system shelf, RndsGameListView each system's games.
@@ -1276,6 +1297,7 @@ index 00000000..85770a09
 +		// from the view that ES shows
 +		bool input(GuiComponent* from, InputConfig* config, Input input);
 +		bool mouse(int button, bool down, int x, int y);
++		bool mouseMove(int x, int y);		// the pointer moved (a finger dragging the game list's rail)
 +		void update(GuiComponent* from, int deltaTime);
 +		void render(GuiComponent* from, const Transform4x4f& trans);
 +		void dataChanged();
@@ -2352,10 +2374,10 @@ index 00000000..026769b4
 +}
 diff --git a/es-app/src/rnds/RndsUI.cpp b/es-app/src/rnds/RndsUI.cpp
 new file mode 100644
-index 00000000..6d9b7b70
+index 00000000..18700aee
 --- /dev/null
 +++ b/es-app/src/rnds/RndsUI.cpp
-@@ -0,0 +1,1805 @@
+@@ -0,0 +1,2010 @@
 +#include "RndsUI.h"
 +
 +#include <algorithm>
@@ -2484,8 +2506,6 @@ index 00000000..6d9b7b70
 +	static Shadow outer(float dx, float dy, const Color& c) { return Shadow{ dx, dy, 0, c, false }; }
 +	static Shadow inset(float dx, float dy, float spread, const Color& c) { return Shadow{ dx, dy, spread, c, true }; }
 +
-+	static std::string colorKey(const Color& c) { char b[16]; snprintf(b, sizeof b, "%08x", c.rgba8()); return b; }
-+
 +	// ---- implementation -------------------------------------------------------------------------------------------------
 +
 +	struct SlotState
@@ -2534,6 +2554,15 @@ index 00000000..6d9b7b70
 +
 +	enum Group { G_TEXT = 0, G_BOX, G_ICON, G_CART, G_PHOTO, G_COUNT };
 +	static const size_t GROUP_LIMIT[G_COUNT] = { 400, 200, 120, 90, 8 };
++	// and the cache's bytes (what its textures hold), at 1x (640x480) and times the panel's area (x2.56 at 1.6x). Measured
++	// with a 740-game library at 1x (1.6x): one frame of a game list draws 3.8 MB (9.8; the screen box alone is 1.2 MB,
++	// the sheet 1.0), and browsing settles at 11 MB (28) under the counts above: 400 lines of text at ~6 KB (14), 90
++	// cartridges at 34 KB (87), 8 covers at 175 KB (450) and ~3.6 MB (9.3) of boxes. But every cover size has its own
++	// frame (up to 200 KB, 500 KB at 1.6x): a library of scraped art in many sizes filled the box group's 200 entries
++	// with frames, 32 MB (81). 20 MB (51) keeps all of normal browsing and five frames' worth, and stops that
++	static const size_t BUDGET_1X = 20u << 20;
++	// the worker's queue: what scrolled off long ago is dropped (and asked for again if it comes back)
++	static const size_t MAX_JOBS = 64;
 +
 +	struct Face
 +	{
@@ -2542,7 +2571,7 @@ index 00000000..6d9b7b70
 +		int action = 0;		// what a tap does
 +	};
 +
-+	enum Action { ACT_NONE = 0, ACT_PREV, ACT_NEXT, ACT_OPEN, ACT_BACK, ACT_FAV, ACT_RESUME, ACT_SLOT };
++	enum Action { ACT_NONE = 0, ACT_PREV, ACT_NEXT, ACT_OPEN, ACT_BACK, ACT_FAV, ACT_RESUME, ACT_SLOT, ACT_RAIL };
 +
 +	struct UI::Impl
 +	{
@@ -2553,12 +2582,18 @@ index 00000000..6d9b7b70
 +		float s;
 +
 +		std::shared_ptr<Font> R, M;
-+		Bitmap shell;			// game_slot.png
++		std::shared_ptr<const Bitmap> shell;	// game_slot.png (shared with the cartridge jobs, not copied into each)
 +		Bitmap logo, wifi, batt;	// pre-rendered at this scale
 +
 +		std::map<std::string, CacheEntry> cache;
 +		uint64_t frame = 1;
++		size_t budget = 0;			// the cache's bytes (BUDGET_1X at this scale)
++		bool budgetLogged = false;
++		std::function<void(const std::string&)> log;
 +
++		// the worker: a key stays in queued from its request until the UI has taken its result (absorb), so a job
++		// finished while nothing takes results (ES draws the view under a menu but doesn't update it) is not asked for
++		// again every frame
 +		std::mutex qlock;
 +		std::deque<Job> jobs;
 +		std::set<std::string> queued;
@@ -2584,6 +2619,8 @@ index 00000000..6d9b7b70
 +		float downX = 0, downY = 0;
 +		int pressedAction = 0;		// face button held (drawn pressed)
 +		int pressedSide = -1;
++		int pressedArrow = -1;		// the game list's arrow held: 0 the previous game, 1 the next
++		bool railDrag = false;		// the finger is on the game list's rail: the cursor follows it
 +
 +		// per-render model
 +		std::vector<SysInfo> sysCache;
@@ -2623,22 +2660,46 @@ index 00000000..6d9b7b70
 +			return e;
 +		}
 +
++		// after a frame: the least recently used entries that this frame didn't draw go, oldest first, while a group has
++		// more entries than its limit or the cache holds more bytes than its budget
 +		void evict()
 +		{
-+			size_t count[G_COUNT] = { 0 };
-+			for (auto& kv : cache) count[kv.second.group]++;
-+			for (int g = 0; g < G_COUNT; g++)
++			size_t count[G_COUNT] = { 0 }, bytes[G_COUNT] = { 0 }, total = 0;
++			for (auto& kv : cache) { count[kv.second.group]++; bytes[kv.second.group] += kv.second.bytes; total += kv.second.bytes; }
++			bool overCount = false;
++			for (int g = 0; g < G_COUNT; g++) if (count[g] > GROUP_LIMIT[g]) overCount = true;
++			bool overBytes = total > budget;
++			if (!overCount && !overBytes)
++				return;
++			if (overBytes && !budgetLogged && log)
 +			{
-+				while (count[g] > GROUP_LIMIT[g])
++				budgetLogged = true;
++				char m[320];
++				snprintf(m, sizeof m, "texture cache at its budget: %zu entries, %.1f MB > %.1f MB (scale %.2f; text %zu/%.1f, boxes %zu/%.1f, "
++					"icons %zu/%.1f, cartridges %zu/%.1f, photos %zu/%.1f MB); dropping the least recently used",
++					cache.size(), total / 1048576.0, budget / 1048576.0, s, count[G_TEXT], bytes[G_TEXT] / 1048576.0,
++					count[G_BOX], bytes[G_BOX] / 1048576.0, count[G_ICON], bytes[G_ICON] / 1048576.0,
++					count[G_CART], bytes[G_CART] / 1048576.0, count[G_PHOTO], bytes[G_PHOTO] / 1048576.0);
++				log(m);
++			}
++			typedef std::map<std::string, CacheEntry>::iterator It;
++			std::vector<It> lru;	// in key order, then (stable) by age: the oldest first, as the per-group scan took them
++			for (It it = cache.begin(); it != cache.end(); ++it)
++				if (it->second.used < frame) lru.push_back(it);
++			std::stable_sort(lru.begin(), lru.end(), [](const It& a, const It& b) { return a->second.used < b->second.used; });
++			for (It it : lru)
++			{
++				int g = it->second.group;
++				if (count[g] <= GROUP_LIMIT[g] && total <= budget)
 +				{
-+					auto oldest = cache.end();
-+					for (auto it = cache.begin(); it != cache.end(); ++it)
-+						if (it->second.group == g && it->second.used < frame && (oldest == cache.end() || it->second.used < oldest->second.used))
-+							oldest = it;
-+					if (oldest == cache.end()) break;
-+					cache.erase(oldest);
-+					count[g]--;
++					if (!overCount) break;		// within the budget, and no group over its limit
++					continue;
 +				}
++				count[g]--;
++				total -= it->second.bytes;
++				cache.erase(it);
++				overCount = false;
++				for (int k = 0; k < G_COUNT; k++) if (count[k] > GROUP_LIMIT[k]) overCount = true;
 +			}
 +		}
 +
@@ -2649,9 +2710,35 @@ index 00000000..6d9b7b70
 +				std::lock_guard<std::mutex> l(qlock);
 +				if (queued.count(key)) return;
 +				queued.insert(key);
-+				jobs.push_front(Job{ key, group, smooth, fn });	// newest first: what's on screen now
++				jobs.push_front(Job{ key, group, smooth, std::move(fn) });	// newest first: what's on screen now
++				// the oldest jobs are what scrolled off long ago (a held direction through a big list): dropped, and
++				// asked for again if they come back
++				while (jobs.size() > MAX_JOBS)
++				{
++					queued.erase(jobs.back().key);
++					jobs.pop_back();
++				}
 +			}
 +			if (onQueued) onQueued();
++		}
++
++		// the worker's finished pictures into the cache (from update, and from render: ES keeps drawing a view under its
++		// menus without updating it)
++		void absorb()
++		{
++			std::vector<Done> ready;
++			{
++				std::lock_guard<std::mutex> l(qlock);
++				ready.swap(done);
++				for (auto& r : ready) queued.erase(r.key);
++			}
++			for (auto& r : ready)
++			{
++				if (r.bmp.empty()) { CacheEntry& e = cache[r.key]; e.group = r.group; e.used = frame; continue; }
++				bool isBox = r.group == G_BOX;
++				CacheEntry& e = put(r.key, r.group, r.bmp, r.smooth, isBox ? (int)r.cssW : 0, isBox ? (int)r.cssH : 0);
++				if (!isBox) { e.cssW = r.cssW; e.cssH = r.cssH; }
++			}
 +		}
 +
 +		// ---- assets ----
@@ -2661,7 +2748,7 @@ index 00000000..6d9b7b70
 +		{
 +			R = Font::load(dir + "/fonts/PixelifySans-Regular.ttf");
 +			M = Font::load(dir + "/fonts/PixelifySans-Medium.ttf");
-+			shell = loadPng("game_slot.png");
++			shell = std::make_shared<const Bitmap>(loadPng("game_slot.png"));
 +			std::string sfx = s > 1.3f ? "@1.6x.png" : "@1x.png";
 +			logo = loadPng("logo" + sfx);
 +			wifi = loadPng("wifi" + sfx);
@@ -2834,10 +2921,11 @@ index 00000000..6d9b7b70
 +			snprintf(k, sizeof k, "cart:%dx%d:", dw, dh);
 +			std::string key = std::string(k) + art0.scan + "|" + art0.label + "|" + art0.box;
 +			if (auto e = find(key)) return e->sp;
-+			Bitmap shellCopy = shell;
++			std::shared_ptr<const Bitmap> shellRef = shell;
 +			float sc = s;
-+			request(key, G_CART, true, [art0, shellCopy, sc, dw, dh](float&, float&) -> Bitmap
++			request(key, G_CART, true, [art0, shellRef, sc, dw, dh](float&, float&) -> Bitmap
 +			{
++				const Bitmap& shellCopy = *shellRef;
 +				// the canvas is 100x104 CSS px; bake it at device resolution, then resample to the drawn size
 +				int mw = (int)std::lround(100 * sc), mh = (int)std::lround(104 * sc);
 +				Bitmap master;
@@ -3193,6 +3281,14 @@ index 00000000..6d9b7b70
 +		TStyle tFace() { return ts(true, 19); }
 +
 +		float kbdW(const std::string& k) { return 12 + line(k, tKbd()).width; }
++		// the rail's count ("01 / 07"); the rail is the rest of the row
++		float countWidth(int at, int n)
++		{
++			char a[16], b[16];
++			snprintf(a, sizeof a, "%02d", n == 0 ? 0 : at + 1);
++			snprintf(b, sizeof b, "%02d", n);
++			return line(a, ts(true, 18)).width + line(" / ", ts(false, 18)).width + line(b, ts(false, 18)).width;
++		}
 +		float faceW(const Face& f) { return f.kind == 2 ? 3 + 12 + line(f.label, tFace()).width + 12 + 3 : 3 + 12 + kbdW(f.kbd) + 8 + line(f.label, tFace()).width + 12 + 3; }
 +
 +		Geo geometry()
@@ -3220,10 +3316,7 @@ index 00000000..6d9b7b70
 +
 +			int n = v == LAUNCH ? 1 : count();
 +			int at = v == LAUNCH ? 0 : center();
-+			char a[16], b[16];
-+			snprintf(a, sizeof a, "%02d", n == 0 ? 0 : at + 1);
-+			snprintf(b, sizeof b, "%02d", n);
-+			g.countW = line(a, ts(true, 18)).width + line(" / ", ts(false, 18)).width + line(b, ts(false, 18)).width;
++			g.countW = countWidth(at, n);
 +
 +			if (v == HOME)
 +			{
@@ -3318,6 +3411,14 @@ index 00000000..6d9b7b70
 +			BoxCss b; b.key = "bubble"; b.radius = 12; b.border = 3; b.borderColor = LINE; b.bg = P.bubbleBody;
 +			b.bands = { Band{ 0, 10, P.bubbleBand }, Band{ 10, -1, P.bubbleBody } };
 +			b.shadows = { inset(0, -6, 0, P.bubbleLow), outer(4, 4, BLACKISH) };
++			return b;
++		}
++		// the letter over the rail's thumb while it is dragged: a small bubble in the big one's style
++		BoxCss letterBox()
++		{
++			BoxCss b; b.key = "letter"; b.radius = 8; b.border = 3; b.borderColor = LINE; b.bg = P.bubbleBody;
++			b.bands = { Band{ 0, 6, P.bubbleBand }, Band{ 6, -1, P.bubbleBody } };
++			b.shadows = { inset(0, -4, 0, P.bubbleLow), outer(3, 3, BLACKISH) };
 +			return b;
 +		}
 +		BoxCss trackBox()
@@ -3697,6 +3798,91 @@ index 00000000..6d9b7b70
 +			drawText(f.label, tFace(), lx, 431 + dx, lc);
 +		}
 +
++		// the game list's ◀ ▶ (its shoulders are their tap zones): a stepped triangle on the look's pixel grid, whole CSS
++		// px at 1x and 2 device px at 1.6x, as tall as the names' capitals (13 px at 1x, 22 at 1.6x) and about half as
++		// wide (an A8 sprite in the text's colour, the thumb's blue while held)
++		struct ArrowDims { int u, rows, w, h; };
++		ArrowDims arrowDims()
++		{
++			int u = std::max(1, (int)std::lround(s));
++			int rows = std::max(3, (int)std::lround(13 * s / u)) | 1;
++			return ArrowDims{ u, rows, (rows / 2 + 1) * u, rows * u };
++		}
++		Sprite arrow(bool right)
++		{
++			ArrowDims a = arrowDims();
++			char k[48];
++			snprintf(k, sizeof k, "arrow:%d:%d:%d", right ? 1 : 0, a.rows, a.u);
++			if (auto e = find(k)) return e->sp;
++			Bitmap b;
++			b.w = a.w; b.h = a.h; b.alpha = true;
++			b.px.assign((size_t)b.w * b.h, 0);
++			int half = a.rows / 2;
++			for (int r = 0; r < a.rows; r++)
++			{
++				int span = (half + 1 - std::abs(r - half)) * a.u, x0 = right ? 0 : b.w - span;	// the tip's row is the widest
++				for (int y = r * a.u; y < (r + 1) * a.u; y++)
++					std::fill(b.px.begin() + (size_t)y * b.w + x0, b.px.begin() + (size_t)y * b.w + x0 + span, (uint8_t)255);
++			}
++			return put(k, G_ICON, b, false, 0, 0).sp;
++		}
++		// x: the ◀'s left edge, the ▶'s right edge; cy: the row's middle (CSS px)
++		void drawArrow(bool right, float x, float cy, bool held)
++		{
++			Sprite a = arrow(right);
++			if (!a.valid()) return;
++			float dx = std::round(X(x)) - (right ? a.tex->w : 0), dy = std::round(X(cy) - a.tex->h / 2.0f);
++			be->draw(a.tex, dx, dy, (float)a.tex->w, (float)a.tex->h, held ? Color::hex(0x3d8ec8) : INK);
++		}
++
++		// a triangle painted once about its own apex and drawn at (cx, top) CSS px (the letter bubble's pointer moves)
++		void drawPointer(const char* name, float cx, float top, float halfW, float h, const Color& c)
++		{
++			char k[64];
++			snprintf(k, sizeof k, "ptr:%s", name);
++			CacheEntry* e = find(k);
++			if (!e)
++			{
++				int bx, byy;
++				Bitmap b = paintTriangle(-X(halfW), 0, X(halfW), 0, 0, X(h), c, bx, byy);
++				e = &put(k, G_BOX, b, true, -bx, -byy);
++			}
++			be->draw(e->sp.tex, std::round(X(cx)) - e->sp.ox, std::floor(X(top)) - e->sp.oy, (float)e->sp.tex->w, (float)e->sp.tex->h, Color(1, 1, 1, 1));
++		}
++
++		// while the rail is dragged: the game's first letter ("#" for a digit or a sign) in a bubble over the thumb, in
++		// the band between the reel's plate and the rail, so it covers nothing
++		void drawLetter(float thumbX)
++		{
++			std::u32string t = upper(utf8to32(game(ui->mGame).title));
++			char32_t c = t.empty() ? U'#' : t[0];
++			bool letter = (c >= U'A' && c <= U'Z') || (c >= 0xc0 && c <= 0x17f && c != 0xd7 && c != 0xf7);
++			if (!letter || !M->hasGlyph(c)) c = U'#';
++			const float w = 36, h = 30, ptrH = 8;
++			float top = 391 - ptrH - h + 3;				// the pointer's tip 3 px over the thumb
++			float mid = thumbX + 21;					// the thumb's middle
++			float x = std::round(std::min(std::max(mid - w / 2, 12.0f), 628 - w));
++			drawBox(letterBox(), x, top, w, h);
++			float pm = std::min(std::max(mid, x + 12), x + w - 12), pb = top + h - 3;
++			drawPointer("letterO", pm, pb, 8, ptrH, LINE);
++			drawPointer("letterI", pm, pb, 5, ptrH - 3, P.bubbleBody);
++			TStyle tl = ts(true, 20);
++			TextLine l = layoutLine(std::u32string(1, c), tstyle(tl));
++			float lh = lineHeight(tl);
++			drawLine(l, tl, x + (w - l.width) / 2, top + 3 + (h - 6 - lh) / 2, lh, INK);
++		}
++
++		// the game list's rail under a finger at x (CSS px): the game whose thumb has its middle nearest to it
++		void railTo(float x)
++		{
++			int n = src->gameCount();
++			if (ui->mView != LIBRARY || n == 0) return;
++			float inner = 604 - 12 - countWidth(ui->mGame, n) - 4;
++			int at = n < 2 ? 0 : (int)std::lround((x - 20 - 21) * (n - 1) / std::max(1.0f, inner - 42));
++			at = std::min(n - 1, std::max(0, at));
++			if (at != ui->mGame) setGame(at);
++		}
++
 +		void drawBottom()
 +		{
 +			be->beginScreen(1);
@@ -3717,11 +3903,20 @@ index 00000000..6d9b7b70
 +				else if (n > 0) { prev = game((ui->mGame - 1 + n) % n).title; next = game((ui->mGame + 1) % n).title; }
 +				TStyle tsh = ts(false, 20);
 +				TextLine lp = layoutEllipsis(utf8to32(prev), tstyle(tsh), 180), ln = layoutEllipsis(utf8to32(next), tstyle(tsh), 180);
-+				drawLine(lp, tsh, 18 + kl + 8, 21 + rb, 24, INK);
++				// a game list's shoulders are its touch arrows too: ◀ and ▶ between the button and the name, a flex item
++				// more (8 px apart), so a name of the full 180 px still ends short of the rule
++				bool arrows = v == LIBRARY && n > 0;
++				float aw = arrows ? arrowDims().w / s + 8 : 0;
++				drawLine(lp, tsh, 18 + kl + 8 + aw, 21 + rb, 24, INK);
 +				drawBox(ruleBox(), 284, 31.5f + rb, 72, 3);
 +				drawBox(kbdBox(), 622 - kr, 21.5f + rb, kr, 23);
 +				drawText("R", tKbd(), 622 - kr + 6, 23.5f + rb, P.kbdInk);
-+				drawLine(ln, tsh, 622 - kr - 8 - ln.width, 21 + rb, 24, INK);
++				drawLine(ln, tsh, 622 - kr - 8 - aw - ln.width, 21 + rb, 24, INK);
++				if (arrows)
++				{
++					drawArrow(false, 18 + kl + 8, 33 + rb, pressedArrow == 0);
++					drawArrow(true, 622 - kr - 8, 33 + rb, pressedArrow == 1);
++				}
 +			}
 +
 +			// bubble
@@ -3805,7 +4000,7 @@ index 00000000..6d9b7b70
 +			float trackW = 604 - 12 - g.countW;
 +			drawBox(railBox(), 18, 396, trackW, 10);
 +			float target = thumbLeft(at, total, trackW - 4);
-+			if (!thumbKnown) { thumbKnown = true; thumbFrom = thumbTo = target; thumbAt = -1e9; }
++			if (!thumbKnown || railDrag) { thumbKnown = true; thumbFrom = thumbTo = target; thumbAt = -1e9; }	// dragged: under the finger
 +			else if (target != thumbTo)
 +			{
 +				// a glide cut short starts the next one from where it was going: started from where it was, a held
@@ -3827,6 +4022,8 @@ index 00000000..6d9b7b70
 +			// face buttons
 +			drawFace(g.left, 18, g.leftW, pressedAction && pressedSide == 0);
 +			drawFace(g.right, 622 - g.rightW, g.rightW, pressedAction && pressedSide == 1 && g.right.kind != 2);
++			if (railDrag && v == LIBRARY && n > 0)
++				drawLetter(20 + thumbValue());
 +			be->endScreen();
 +		}
 +
@@ -3915,8 +4112,12 @@ index 00000000..6d9b7b70
 +			if (in(18, 422, g.leftW, 40)) { side = 0; return g.left.action; }
 +			if (in(622 - g.rightW, 422, g.rightW, 40)) { side = 1; return g.right.action; }
 +			if (v == LAUNCH) return ACT_NONE;
-+			if (in(18, 21, 258, 24)) return ACT_PREV;
-+			if (in(364, 21, 258, 24)) return ACT_NEXT;
++			// the shoulders (with a game list's arrows): each half of the row, from the screen's edge and as tall as the
++			// gap over the bubble, for a finger
++			if (in(0, 10, 276, 46)) return ACT_PREV;
++			if (in(364, 10, 276, 46)) return ACT_NEXT;
++			// a game list's rail, from the reel's foot to the face buttons: a tap jumps there, a drag scrubs the list
++			if (v == LIBRARY && count() > 0 && in(12, 384, 604 - g.countW, 36)) return ACT_RAIL;
 +			if (in(320 - g.startW / 2, g.reelY + 120, g.startW, 32)) return ACT_OPEN;
 +			if (!in(10, g.reelY, 620, g.reelH)) return ACT_NONE;
 +			// topmost slot first
@@ -3962,6 +4163,7 @@ index 00000000..6d9b7b70
 +		d->be = be;
 +		d->dir = assetDir;
 +		d->s = scale;
++		d->budget = (size_t)(BUDGET_1X * (double)scale * scale);
 +		d->loadAssets();
 +	}
 +
@@ -4048,14 +4250,24 @@ index 00000000..6d9b7b70
 +		{
 +			d->pointerDown = true;
 +			d->downX = cx; d->downY = cy;
++			d->pressedAction = 0; d->pressedSide = -1; d->pressedArrow = -1; d->railDrag = false;	// a lift that never came
 +			int slot, side;
 +			int a = d->hit(cx, cy, slot, side);
 +			if ((a == ACT_FAV || a == ACT_RESUME || a == ACT_BACK) && side >= 0) { d->pressedAction = a; d->pressedSide = side; }
++			if ((a == ACT_PREV || a == ACT_NEXT) && mView == LIBRARY) d->pressedArrow = a == ACT_PREV ? 0 : 1;
++			// the rail: the cursor jumps under the finger, and follows it until it lifts (touchMove)
++			if (a == ACT_RAIL) { d->railDrag = true; d->railTo(cx); }
 +			return true;
 +		}
 +		if (!d->pointerDown) return false;
 +		d->pointerDown = false;
-+		d->pressedAction = 0; d->pressedSide = -1;
++		d->pressedAction = 0; d->pressedSide = -1; d->pressedArrow = -1;
++		if (d->railDrag)
++		{
++			d->railDrag = false;
++			if (x >= 0 && y >= 0) d->railTo(cx);	// (-1, -1): lifted off the panel, where the last move left it
++			return true;
++		}
 +		float dx = cx - d->downX, dy = cy - d->downY;
 +		if (std::fabs(dx) > 56 && std::fabs(dx) > std::fabs(dy) * 1.2f)
 +		{
@@ -4068,24 +4280,18 @@ index 00000000..6d9b7b70
 +		return true;
 +	}
 +
++	bool UI::touchMove(int screen, float x, float)
++	{
++		if (screen != 1 || !d->pointerDown || !d->railDrag) return false;	// taps and swipes act when the finger lifts
++		d->railTo(x / d->s);
++		return true;
++	}
++
 +	void UI::update(double nowMs)
 +	{
 +		d->now = nowMs;
 +		d->holdStill = !d->src->topMotion();
-+		{
-+			std::vector<Done> ready;
-+			{
-+				std::lock_guard<std::mutex> l(d->qlock);
-+				ready.swap(d->done);
-+			}
-+			for (auto& r : ready)
-+			{
-+				if (r.bmp.empty()) { CacheEntry& e = d->cache[r.key]; e.group = r.group; e.used = d->frame; continue; }
-+				bool box = r.group == G_BOX;
-+				CacheEntry& e = d->put(r.key, r.group, r.bmp, r.smooth, box ? (int)r.cssW : 0, box ? (int)r.cssH : 0);
-+				if (!box) { e.cssW = r.cssW; e.cssH = r.cssH; }
-+			}
-+		}
++		d->absorb();
 +		if (mView == LAUNCH && d->launchAt >= 0 && nowMs >= d->launchAt && !d->launched)
 +		{
 +			d->launched = true;
@@ -4096,6 +4302,7 @@ index 00000000..6d9b7b70
 +
 +	void UI::render()
 +	{
++		d->absorb();	// ES draws the view under its menus without updating it: what the worker finished goes in here
 +		d->frame++;
 +		d->requestedThisFrame = false;
 +		d->drawTop();
@@ -4138,7 +4345,7 @@ index 00000000..6d9b7b70
 +		{
 +			std::lock_guard<std::mutex> l(d->qlock);
 +			if (d->jobs.empty()) return false;
-+			job = d->jobs.front();
++			job = std::move(d->jobs.front());
 +			d->jobs.pop_front();
 +		}
 +		Done r;
@@ -4146,12 +4353,32 @@ index 00000000..6d9b7b70
 +		r.bmp = job.fn(r.cssW, r.cssH);
 +		{
 +			std::lock_guard<std::mutex> l(d->qlock);
-+			d->queued.erase(job.key);
-+			d->done.push_back(std::move(r));
++			d->done.push_back(std::move(r));	// its key stays queued until absorb() takes it
 +		}
 +		if (d->onFinished) d->onFinished();
 +		return true;
 +	}
++
++	UI::CacheStats UI::cacheStats() const
++	{
++		CacheStats st;
++		st.budget = d->budget;
++		for (auto& kv : d->cache)
++		{
++			const CacheEntry& e = kv.second;
++			st.entries++; st.bytes += e.bytes;
++			st.groupEntries[e.group]++; st.groupBytes[e.group] += e.bytes;
++			if (e.used == d->frame) { st.frameEntries++; st.frameBytes += e.bytes; }
++		}
++		std::lock_guard<std::mutex> l(d->qlock);
++		st.jobs = d->jobs.size();
++		st.done = d->done.size();
++		for (auto& r : d->done) st.doneBytes += r.bmp.px.size();
++		st.queued = d->queued.size();
++		return st;
++	}
++
++	void UI::setLog(std::function<void(const std::string&)> log) { d->log = log; }
 +
 +	void UI::setNotifiers(std::function<void()> queued, std::function<void()> finished)
 +	{
@@ -4163,10 +4390,10 @@ index 00000000..6d9b7b70
 +}
 diff --git a/es-app/src/rnds/RndsUI.h b/es-app/src/rnds/RndsUI.h
 new file mode 100644
-index 00000000..7eb4f9f5
+index 00000000..c38ca9d0
 --- /dev/null
 +++ b/es-app/src/rnds/RndsUI.h
-@@ -0,0 +1,165 @@
+@@ -0,0 +1,178 @@
 +#pragma once
 +// ROCKNIXDS rnds engine: the ROCKNIXDS menu mockup (mockup/index.html) as a native two-screen UI. Three views: home
 +// (the system shelf), library (a system's games as cartridges) and the ready screen. Layout, colours, fonts and
@@ -4242,7 +4469,7 @@ index 00000000..7eb4f9f5
 +		virtual void toggleSystemFav(int sys) = 0;
 +		virtual void toggleGameFav(int game) = 0;
 +		virtual int resumeGame(int sys) = 0;	// library index of the system's resume game, opening that list; -1 none
-+		virtual void cue(const std::string& name) {}	// a theme sound for a moment of an animation ("insert")
++		virtual void cue(const std::string& /*name*/) {}	// a theme sound for a moment of an animation ("insert")
 +		// the library with no games: what the bubble says ("No games yet") and the hint under it ("Copy .nds files to
 +		// roms/nds"); the host knows where the games go
 +		virtual std::string emptyTitle() { return "No games yet"; }
@@ -4310,6 +4537,7 @@ index 00000000..7eb4f9f5
 +		bool press(Button b);
 +		void jumpTo(int game);					// the library's cursor straight to a game (jump to a letter)
 +		bool touch(int screen, float x, float y, bool down);	// device px of that screen
++		bool touchMove(int screen, float x, float y);			// the finger moved while down (drags the game list's rail)
 +
 +		void update(double nowMs);
 +		void render();
@@ -4324,6 +4552,18 @@ index 00000000..7eb4f9f5
 +		void setNotifiers(std::function<void()> queued, std::function<void()> finished);
 +		bool animating() const;
 +		bool settled() const;	// nothing queued, nothing waiting to be uploaded, the last frame was complete
++
++		// the texture cache: entries and bytes per group (text, boxes, icons, cartridges, photos), its byte budget
++		// (scaled with the panel's area), what the last frame drew, and the worker's queues
++		struct CacheStats
++		{
++			size_t entries = 0, bytes = 0, budget = 0, frameEntries = 0, frameBytes = 0;
++			size_t groupEntries[5] = {}, groupBytes[5] = {};
++			size_t jobs = 0, done = 0, doneBytes = 0, queued = 0;
++		};
++		CacheStats cacheStats() const;
++		// one-off notes for the host's log (the cache reaching its byte budget)
++		void setLog(std::function<void(const std::string&)> log);
 +
 +	private:
 +		struct Impl;
@@ -4577,10 +4817,10 @@ index 59153c8c..9bd152a5 100644
  
 diff --git a/es-app/src/views/gamelist/RndsGameListView.cpp b/es-app/src/views/gamelist/RndsGameListView.cpp
 new file mode 100644
-index 00000000..82f94309
+index 00000000..0cb2b167
 --- /dev/null
 +++ b/es-app/src/views/gamelist/RndsGameListView.cpp
-@@ -0,0 +1,239 @@
+@@ -0,0 +1,257 @@
 +#include "views/gamelist/RndsGameListView.h"
 +
 +#include "rnds/RndsEs.h"
@@ -4802,6 +5042,13 @@ index 00000000..82f94309
 +	rnds::EsHost::get(mWindow)->showLibrary(this);
 +}
 +
++void RndsGameListView::onHide()
++{
++	ISimpleGameListView::onHide();
++	if (mWindow->hasMouseCapture(this))	// a finger's lift that never came (onMouseClick)
++		mWindow->releaseMouseCapture();
++}
++
 +bool RndsGameListView::hitTest(int x, int y, Transform4x4f& parentTransform, std::vector<GuiComponent*>* pResult)
 +{
 +	// only the view: the engine takes every touch, the header components it doesn't draw must not
@@ -4818,14 +5065,25 @@ index 00000000..82f94309
 +
 +bool RndsGameListView::onMouseClick(int button, bool pressed, int x, int y)
 +{
-+	return rnds::EsHost::get(mWindow)->mouse(button, pressed, x, y);
++	// while the finger is down its moves come here (the engine's rail follows it), wherever they go
++	if (button == 1 && !pressed && mWindow->hasMouseCapture(this))
++		mWindow->releaseMouseCapture();
++	bool used = rnds::EsHost::get(mWindow)->mouse(button, pressed, x, y);
++	if (button == 1 && pressed && used)
++		mWindow->setMouseCapture(this);
++	return used;
++}
++
++void RndsGameListView::onMouseMove(int x, int y)
++{
++	rnds::EsHost::get(mWindow)->mouseMove(x, y);
 +}
 diff --git a/es-app/src/views/gamelist/RndsGameListView.h b/es-app/src/views/gamelist/RndsGameListView.h
 new file mode 100644
-index 00000000..99a669c3
+index 00000000..d802ad66
 --- /dev/null
 +++ b/es-app/src/views/gamelist/RndsGameListView.h
-@@ -0,0 +1,60 @@
+@@ -0,0 +1,62 @@
 +#pragma once
 +#ifndef ES_APP_VIEWS_GAME_LIST_RNDS_GAME_LIST_VIEW_H
 +#define ES_APP_VIEWS_GAME_LIST_RNDS_GAME_LIST_VIEW_H
@@ -4858,7 +5116,9 @@ index 00000000..99a669c3
 +	virtual void update(int deltaTime) override;
 +	virtual void render(const Transform4x4f& parentTrans) override;
 +	virtual void onShow() override;
++	virtual void onHide() override;
 +	virtual bool onMouseClick(int button, bool pressed, int x, int y) override;
++	virtual void onMouseMove(int x, int y) override;
 +	virtual bool hitTest(int x, int y, Transform4x4f& parentTransform, std::vector<GuiComponent*>* pResult = nullptr) override;
 +	virtual std::vector<HelpPrompt> getHelpPrompts() override { return std::vector<HelpPrompt>(); }
 +
