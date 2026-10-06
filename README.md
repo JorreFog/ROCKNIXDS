@@ -120,8 +120,8 @@ One release for both handhelds; the full notes are [v1.6.md](docs/releases/v1.6.
 - **Clean starts and quits:** plain black between the menu and the game, no terminal cursor, no leftover frame; the
   menu shows once it draws again.
 - **RetroAchievements without network** keeps the saved login and retries in the background.
-- **The menu's memory:** ROCKNIXDS Pixel no longer grows while a menu is open over a game list (the likely cause of
-  a 713 MB menu), and its picture cache has a size limit. Freed image memory goes back to the system, the memory is
+- **The menu's memory:** ROCKNIXDS Pixel can no longer grow while a menu is open over a game list (a possible cause
+  of a 713 MB menu), and its picture cache has a size limit. Freed image memory goes back to the system, the memory is
   logged (`es-mem.log`), and the menu restarts by itself before it could take the handheld's memory. Two quick
   launches start the game once.
 - **From the reports:** the options file is checked before it is replaced (#36, #37); zipped games get their
