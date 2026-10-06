@@ -154,8 +154,9 @@ C, about 10,000 lines, no libraries but libc, libm and libdrm (SDL2 and libasoun
 | `src/hud.c`, `src/menu.c` | the bottom screen, the title, pause, settings, how to play, game over and the high scores |
 | `art/*.txt`, `art/build_art.py` | every sprite, drawn as text (one character a pixel); the script writes `src/art_data.c` |
 
-A frame takes about 1 ms on a desktop core; `DK_PROFILE=1` writes the time per frame to the log every 10 s, to see
-it on the handheld. Settings, the high score list (`scores.txt`) and the log (`dodakvarter.log`) are in
+A frame takes about 1 ms on a desktop core (the night's lighting, the heaviest part, runs eight pixels at a time
+with NEON on the handheld); `DK_PROFILE=1` writes the time per frame to the log every 10 s, to see it on the
+handheld, and `DK_PROFILE=2` every frame over 2 ms. Settings, the high score list (`scores.txt`) and the log (`dodakvarter.log`) are in
 `/storage/.config/rocknixds/dodakvarter/data` on the device (`DK_DATA` elsewhere).
 
 **On the RG DS.** `device/` has the Ports entry (`Doda Kvarter.sh`), `launch.sh` (starts the session in a systemd
@@ -175,7 +176,9 @@ python3 tools/screenshots.py     # the README's pictures and the Ports entry's, 
 ```
 
 `bin/dodakvarter-aarch64` is the build the installer puts on the device. `./build/dodakvarter --bot` lets the
-computer play, `--seed N` replays a town, `--start` skips the title.
+computer play, `--seed N` replays a run (the town and its season), `--start` skips the title. For testing deep
+rounds: `DK_DEBUG_ROUND=N`, `DK_DEBUG_KR=N`, `DK_DEBUG_POWER=1`, `DK_DEBUG_OPEN=1` (every barricade gone),
+`DK_DEBUG_GOD=1` (nothing hurts) and `DK_DEBUG_ZLOG=1` (where every zombie is, every 10 s, in the log).
 
 ## Credits
 
