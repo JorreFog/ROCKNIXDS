@@ -20,7 +20,7 @@ NETS="104.16.0.0/12 172.64.0.0/13"      # Cloudflare, where retroachievements.or
 cleanup() {
     for n in $NETS; do ip route del unreachable $n 2>/dev/null; done
     systemctl unset-environment DSFLIP_SPREAD_THREADS DSFLIP_STALL_QUIT 2>/dev/null
-    rm -f /tmp/rocknixds-testing /tmp/rocknixds-testing-resume "$RSTATE"
+    rm -f /tmp/rocknixds-testing /tmp/rocknixds-testing-resume /tmp/dsflip-hold "$RSTATE"
     [ -f "$RSTATE.freeze-repro" ] && mv "$RSTATE.freeze-repro" "$RSTATE"
 }
 trap cleanup EXIT; trap 'exit 1' HUP INT TERM
@@ -45,8 +45,10 @@ dump() {
         echo "${t##*/} $(cat $t/comm) $(sed 's/.*) //' $t/stat | awk '{print $1, $12+$13}') $(grep Cpus_allowed_list $t/status | cut -f2) | $(cut -c1-60 $t/syscall 2>/dev/null)"
     done >> $REP
     log "=== backtraces"
+    touch /tmp/dsflip-hold          # gdb stops every thread: session.sh would take that for a wedge after 15 s
     timeout 90 gdb -p $P -batch -ex "set pagination off" -ex "thread apply all bt 16" 2>&1 |
         grep -v '^\[New LWP\|^warning\|^Reading\|^$\|^\[Thread debugging\|^Using host\|No such file' | cut -c1-210 | head -n 220 >> $REP
+    rm -f /tmp/dsflip-hold
     grep -a 'CPU placement\|power profile\|resuming' $D/last-session.log | tail -n 5 >> $REP
 }
 log "freeze-repro: $GAME, $RUNS runs, mode $MODE (ROCKNIXDS $(cat /storage/.config/rocknixds-version 2>/dev/null), libdsflip $(head -c 200 $D/dsflip.log | sed -n 's/.*libdsflip //p' | head -n1))"
