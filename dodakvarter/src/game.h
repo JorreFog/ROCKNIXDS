@@ -480,6 +480,7 @@ enum {
     SFX_BEEP, SFX_GULP, SFX_STEP, SFX_KABOOM, SFX_THUNDER,
     SFX_ROAR, SFX_HORN, SFX_SWOOSH, SFX_SLAM, SFX_FIDDLE, SFX_SPLASH, SFX_HISS, SFX_FANFARE,   /* the bosses */
     SFX_SQUEAL, SFX_CACKLE, SFX_CREAK, SFX_HOWL,
+    SFX_STING,                          /* JorreFog productions */
     SFX_JINGLE, SFX_COUNT = SFX_JINGLE + PK_COUNT          /* each perk machine's jingle */
 };
 enum { MUS_NONE, MUS_TITLE, MUS_BOX, MUS_GAMEOVER, MUS_SONG, MUS_BOSS };

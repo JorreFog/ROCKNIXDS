@@ -255,6 +255,44 @@ static void synth_all(void) {
             b[i] = (bandpass(&a, v, 700 + 300 * MIN(1.0f, t / 0.55f), 0.6f) * 1.2f + bandpass(&a2, v, 1600, 0.8f) * 0.4f + v * 0.3f) * e;
         }
         finish(SFX_HOWL, b, n, 0.85f); }
+    /* (original) the splash, JorreFog productions: a swell out of the fog; at 0.7 s a deep note and a bell chord in
+       E minor ringing on; a glassy note as each letter of JORREFOG lands, a pentatonic run up; a shimmer with the
+       light that runs over them */
+    b = buf_new(4.0f, &n); { SVF sw = { 0 }, sh = { 0 }; LP th = { 0 }; float ph_r = 0, ph_b = 0, ph[6] = { 0 }, ph2[6] = { 0 };
+        static const int chord[6] = { 52, 59, 64, 66, 67, 71 }, run[8] = { 76, 78, 80, 83, 85, 88, 90, 92 };
+        for (int i = 0; i < n; i++) {
+            float t = (float)i / RATE, v = 0;
+            if (t < 0.72f) {                                /* the swell, and a tone rising under it */
+                float k = t / 0.7f;
+                v += bandpass(&sw, noise(), 300 + 2700 * k * k, 0.6f) * k * k * 0.9f;
+                ph_r += (110 + 110 * k) / RATE; ph_r -= floorf(ph_r);
+                v += sinf(2 * PI_F * ph_r) * k * k * 0.25f;
+            }
+            if (t >= 0.7f) {
+                float u = t - 0.7f;
+                ph_b += (36 + 26 * expf(-u * 5)) / RATE; ph_b -= floorf(ph_b);   /* the deep note, falling */
+                v += sinf(2 * PI_F * ph_b) * expf(-u / 0.9f) * 1.1f;
+                v += lp(&th, noise(), 400) * expf(-u / 0.12f) * 1.6f;            /* its thump */
+                for (int c = 0; c < 6; c++) {               /* the bell chord: each note and an unharmonic partial, a little apart */
+                    float f = midi(chord[c]) * (1 + (c - 2.5f) * 0.0012f);
+                    ph[c] += f / RATE; ph[c] -= floorf(ph[c]); ph2[c] += f * 2.76f / RATE; ph2[c] -= floorf(ph2[c]);
+                    float e = MIN(1.0f, u / 0.01f) * expf(-u / (1.9f - c * 0.15f));
+                    v += (sinf(2 * PI_F * ph[c]) + 0.3f * sinf(2 * PI_F * ph2[c]) * expf(-u / 0.4f)) * e * 0.13f;
+                }
+            }
+            for (int l = 0; l < 8; l++) {                   /* the letters landing */
+                float u = t - (1.08f + l * 0.075f);
+                if (u < 0 || u > 0.4f) continue;
+                float f = midi(run[l]);
+                v += (sinf(2 * PI_F * f * u) + 0.4f * sinf(4 * PI_F * f * u)) * expf(-u / 0.07f) * 0.22f;
+            }
+            if (t > 1.55f && t < 2.3f) {                    /* the light running over them */
+                float k = (t - 1.55f) / 0.75f;
+                v += bandpass(&sh, noise(), 3000 + 4000 * k, 0.3f) * sinf(PI_F * k) * 0.18f;
+            }
+            b[i] = v * MIN(1.0f, (float)(n - i) / (0.1f * RATE));
+        }
+        finish(SFX_STING, b, n, 0.9f); }
     /* reload: click, slide, click */
     b = buf_new(0.5f, &n); { LP l = { 0 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE; float x = noise(); float c1 = env(t, 0.0005f, 0.006f), c2 = t > 0.18f ? env(t - 0.18f, 0.02f, 0.05f) * 0.4f : 0, c3 = t > 0.36f ? env(t - 0.36f, 0.0005f, 0.008f) : 0; b[i] = (x - lp(&l, x, 1500)) * (c1 + c3) + x * c2 * 0.5f; } finish(SFX_RELOAD, b, n, 0.6f); }
     b = buf_new(0.05f, &n); for (int i = 0; i < n; i++) b[i] = noise() * env((float)i / RATE, 0.0005f, 0.004f); finish(SFX_EMPTY, b, n, 0.5f);

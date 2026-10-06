@@ -9,6 +9,7 @@
 //   - a boss every twentieth round, in turn: Insta-Kill and Kaboom don't kill it, the round waits for it, each one's
 //     moves hurt you, and killed it leaves a legendary weapon, Max Ammo and money
 #include "../src/game.h"
+#include "../src/menu.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -240,6 +241,19 @@ int main(void) {
         Zombie *z = &G->z[G->boss.zi];
         float vx = z->x - G->camx, vy = z->y - G->camy;
         CHECK(G->boss.on && vx > 0 && vx < G->view_w && vy > 20 && vy < G->view_h, "town %d: the boss greeted you out of sight (%.0f, %.0f)", towns[i], vx, vy);
+    }
+    /* the splash when the game starts: over by itself in five seconds, at once with a button; then the title */
+    {
+        Input pa; memset(&pa, 0, sizeof pa); pa.held = BIT(B_A);
+        A.state = ST_SPLASH; A.t = 0;
+        int t = 0;
+        for (; t < 60 * 6 && A.state == ST_SPLASH; t++) app_update(&none, &none, 1.0f / 60);
+        CHECK(A.state == ST_TITLE && t > 60 * 4 && t < 60 * 5, "the splash: state %d after %.1f s", A.state, t / 60.0f);
+        A.state = ST_SPLASH; A.t = 0;
+        for (t = 0; t < 60; t++) app_update(&none, &none, 1.0f / 60);
+        app_update(&pa, &none, 1.0f / 60);
+        for (t = 0; t < 60 * 2 && A.state == ST_SPLASH; t++) app_update(&none, &none, 1.0f / 60);
+        CHECK(A.state == ST_TITLE && t < 30, "a button didn't cut the splash short (%d frames more)", t);
     }
     char rm[640]; snprintf(rm, sizeof rm, "rm -rf '%s'", dir);
     if (system(rm)) printf("(couldn't remove %s)\n", dir);

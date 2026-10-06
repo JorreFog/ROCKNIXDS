@@ -105,6 +105,7 @@ void bot_input(Input *in) {
     memset(in, 0, sizeof *in);
     int tap = frame & 1;
     switch (A.state) {
+    case ST_SPLASH: if (A.t > 0.5f && tap) in->held |= BIT(B_A); return;
     case ST_TITLE: if (A.t > 0.5f && tap) in->held |= BIT(B_A); return;
     case ST_GAMEOVER: if (A.t > 2.5f && tap) in->held |= BIT(B_A); return;
     case ST_NAME: if (tap) in->held |= BIT(B_A); return;

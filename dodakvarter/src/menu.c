@@ -449,7 +449,11 @@ void app_update(const Input *in, const Input *prev, float dt) {
     /* the night outside, under a run: rain in autumn, wind in winter, crickets and birds at midsummer */
     audio_ambience(!app_run_in_progress() ? AMB_NONE : G->season == SEASON_WINTER ? AMB_WIND : G->season == SEASON_SUMMER ? AMB_SUMMER : AMB_RAIN);
     int up = pressed(in, prev, B_UP), down = pressed(in, prev, B_DOWN), left = pressed(in, prev, B_LEFT), right = pressed(in, prev, B_RIGHT);
+    if (A.fade > 0) A.fade -= dt;
     switch (A.state) {
+    case ST_SPLASH:
+        if (splash_update(in, prev)) { A.state = ST_TITLE; A.t = 0; A.sel = 0; A.fade = 0.6f; music_play(MUS_TITLE); }
+        break;
     case ST_TITLE: {
         if (!A.save_checked) { refresh_save_info(); A.save_checked = 1; }
         int acts[8], n = title_items(acts, 0);
@@ -577,6 +581,9 @@ void app_update(const Input *in, const Input *prev, float dt) {
 
 void app_render(Surf *top, Surf *bot) {
     switch (A.state) {
+    case ST_SPLASH:
+        splash_render(top, bot);
+        return;
     case ST_TITLE: case ST_SCORES: case ST_HOWTO:
         if (A.state == ST_HOWTO && A.howto_from == ST_PAUSE) { render_game(top); rect_blend(top, 0, 0, top->w, top->h, 0x000000, 150); }
         else {
@@ -621,5 +628,9 @@ void app_render(Surf *top, Surf *bot) {
         if (A.state == ST_NAME) draw_name(bot); else draw_gameover_bottom(bot);
         break;
     }
+    }
+    if (A.fade > 0) {                                       /* (the title, up out of the splash's black) */
+        int a = (int)(255 * CLAMP(A.fade / 0.6f, 0, 1));
+        rect_blend(top, 0, 0, top->w, top->h, 0x000000, a); rect_blend(bot, 0, 0, bot->w, bot->h, 0x000000, a);
     }
 }

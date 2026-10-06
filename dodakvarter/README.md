@@ -43,6 +43,12 @@ On ROCKNIXDS it's in **Ports > Döda Kvarter** (the installer puts it there; `--
 switches the panels over to the game like a DS game does, and quitting brings the menu back. ROCKNIX's exit hotkey
 works too.
 
+<img src="docs/img/splash.png" width="200" align="right" alt="The splash: the JorreFog productions emblem and name over a foggy night, and the same again in dark water on the bottom screen">
+
+It opens with the studio's splash, **JorreFog productions**: fog drifts in over the night, the emblem comes up out of
+it on a deep note, the name falls into place a letter at a time and a light runs over it, and on the bottom screen
+all of it lies again in dark water. Any button (or a touch) skips it; then the title.
+
 | | Classic (the default) | Twin buttons |
 |---|---|---|
 | Move | D-pad (or the left stick) | D-pad |
@@ -265,4 +271,4 @@ rounds: `DK_DEBUG_ROUND=N`, `DK_DEBUG_KR=N`, `DK_DEBUG_POWER=1`, `DK_DEBUG_OPEN=
 Inspired by Call of Duty: Zombies (Treyarch, Activision); this is a fan's homage and isn't affiliated with or endorsed
 by them. Names of guns are the Swedish Armed Forces' designations; shop signs are generic. The research behind the
 rules and the town is in [docs/research.md](docs/research.md). *Vem kan segla förutan vind?* is a traditional Swedish
-folk song. Made for [ROCKNIXDS](../README.md) on [ROCKNIX](https://rocknix.org); MIT licensed like the rest of it.
+folk song. A JorreFog production, made for [ROCKNIXDS](../README.md) on [ROCKNIX](https://rocknix.org); MIT licensed like the rest of it.

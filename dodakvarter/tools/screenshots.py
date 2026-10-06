@@ -51,7 +51,7 @@ def main():
     x2(top(title).crop((60, 14, 260, 96))).save(os.path.join(media, "dodakvarter-marquee.png"), optimize=True)
     # the README: both screens, as the handheld shows them
     shots = {
-        "title": title, "horde-winter": horde, "horde-autumn": render("horde", season=0, seed=9),
+        "title": title, "splash": render("splash", DK_SCENE_T="2.9"), "horde-winter": horde, "horde-autumn": render("horde", season=0, seed=9),
         "midsummer": render("horde", season=2, seed=12), "wolves": render("wolves", season=0, seed=3),
         "moose": render("moose", season=1, seed=8), "box": render("box", season=2, seed=4),
         "loot": render("loot", season=0, seed=6), "gameover": render("gameover", season=1, seed=5),

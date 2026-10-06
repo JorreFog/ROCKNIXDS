@@ -2,7 +2,7 @@
 #pragma once
 #include "save.h"
 
-enum { ST_TITLE, ST_PLAY, ST_PAUSE, ST_GAMEOVER, ST_NAME, ST_SCORES, ST_SETTINGS, ST_HOWTO };
+enum { ST_TITLE, ST_PLAY, ST_PAUSE, ST_GAMEOVER, ST_NAME, ST_SCORES, ST_SETTINGS, ST_HOWTO, ST_SPLASH };
 typedef struct {
     int state, sel, page, settings_from, howto_from;
     float t;
@@ -17,6 +17,7 @@ typedef struct {
     int unnamed;                        /* its high score waits for initials (kept with the letters so far on quitting) */
     int confirm;                        /* NEW RUN or TODAY'S TOWN pressed once: again, and the saved run goes */
     int then;                           /* the run chosen on the title, to start after the saved one's game over */
+    float fade;                         /* the title coming up out of black after the splash */
 } App;
 extern App A;
 
@@ -26,3 +27,5 @@ int app_run_in_progress(void);          /* a run is going on */
 void app_quit(void);                    /* the program is quitting: the run saved, a score kept */
 void app_render(Surf *top, Surf *bot);
 void title_top(Surf *s);
+void splash_render(Surf *top, Surf *bot);   /* splash.c: JorreFog productions, when the game starts */
+int splash_update(const Input *in, const Input *prev);   /* 1: over, the title next */

@@ -46,6 +46,11 @@ int main(int argc, char **argv) {
     render_init();
     A.bot_w = bot.w; A.bot_h = bot.h;
     Input in; memset(&in, 0, sizeof in);
+    if (!strcmp(name, "splash")) {                         /* JorreFog productions, DK_SCENE_T seconds in */
+        A.state = ST_SPLASH; A.t = getenv("DK_SCENE_T") ? (float)atof(getenv("DK_SCENE_T")) : 2.6f;
+        app_render(&top, &bot); shot(out);
+        return 0;
+    }
     if (!strcmp(name, "title") || !strcmp(name, "scores") || !strcmp(name, "settings") || !strcmp(name, "howto") || !strcmp(name, "name")) {
         A.state = !strcmp(name, "title") ? ST_TITLE : !strcmp(name, "scores") ? ST_SCORES : !strcmp(name, "settings") ? ST_SETTINGS : !strcmp(name, "howto") ? ST_HOWTO : ST_NAME;
         A.t = 3.3f; A.rank = -1; A.page = getenv("DK_SCENE_PAGE") ? atoi(getenv("DK_SCENE_PAGE")) : 1;

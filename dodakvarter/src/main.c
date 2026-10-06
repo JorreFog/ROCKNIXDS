@@ -54,10 +54,10 @@ int main(int argc, char **argv) {
     render_init();
     audio_init();
     audio_set_volume(S.volume);
-    A.state = ST_TITLE; A.rank = -1; A.seed_override = seed;
+    A.state = getenv("DK_NO_SPLASH") ? ST_TITLE : ST_SPLASH; A.rank = -1; A.seed_override = seed;   /* JorreFog productions first */
     A.bot_w = pi.bot_w; A.bot_h = pi.bot_h;
     if (test) { int r = selftest(&pi, &top, &bot_s, &stop); plat_shutdown(); return r; }
-    music_play(MUS_TITLE);
+    if (A.state == ST_TITLE) music_play(MUS_TITLE);       /* (after the splash, else) */
     if (start) app_new_run();
     Input in, prev; memset(&in, 0, sizeof in); memset(&prev, 0, sizeof prev);
     double t0 = plat_now(), acc = 0, fps_t = t0;
