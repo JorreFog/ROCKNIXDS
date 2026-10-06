@@ -56,6 +56,7 @@ def main():
         "moose": render("moose", season=1, seed=8), "box": render("box", season=2, seed=4),
         "loot": render("loot", season=0, seed=6), "gameover": render("gameover", season=1, seed=5),
         "scores": render("scores", sv=True), "plus": render("horde", season=1, seed=5, size="1024x768"),
+        "trap": render("trap", season=0, seed=3),
     }
     for k, v in shots.items():
         (v if k == "plus" else x2(v)).save(os.path.join(img, k + ".png"), optimize=True)

@@ -15,6 +15,10 @@ is a new town with loot that gets better as the rounds get harder.
   <img src="docs/img/moose.png" width="260" alt="The zombie moose, about to charge">
   <img src="docs/img/gameover.png" width="260" alt="YOU SURVIVED 14 ROUNDS">
 </p>
+<p align="center">
+  <img src="docs/img/trap.png" width="260" alt="The elstängsel on: arcs across a gap between districts, a shocked zombie on the ground">
+  <img src="docs/img/scores.png" width="260" alt="The high score list in Swedish, a star by today's town">
+</p>
 
 It runs natively: a C program that draws every pixel itself and puts both screens straight onto the panels through
 DRM/KMS (no compositor, no GL), the way ROCKNIXDS runs DS games, at 60 frames a second. Pixel art at the panels'
@@ -128,7 +132,10 @@ Health comes back by itself 2.4 s after the last hit (5 s when you're below a fi
 
 A new town every run, with its own name (Björkhagen, Sjövik, Tallsta...), in one of three seasons (autumn rain,
 winter snow, or the bright midsummer night), made of districts: usually twelve, four by three, sometimes nine big
-ones, fifteen narrow ones or sixteen in four rows; a district bigger than usual gets more of its own things:
+ones, fifteen narrow ones or sixteen in four rows; a district bigger than usual gets more of its own things.
+Some of the dead dress for the season: in winter the nurse walks as Lucia with her crown of candles lit (they
+light the snow around her), at midsummer some wear flower wreaths and fireflies blink over the grass, in the
+autumn rain yellow sydvästar. The districts:
 
 | District | What's in it |
 |---|---|

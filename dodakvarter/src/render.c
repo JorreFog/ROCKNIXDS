@@ -228,6 +228,33 @@ static const Img *zombie_img(Zombie *z, int *flip) {
     return art_pal(name, pal);
 }
 
+/* some of the dead dress for the season: in winter the nurse walks as Lucia, candles lit in her crown; at
+   midsummer a flower wreath; in the autumn rain a yellow sydväst */
+enum { DRESS_NONE, DRESS_LUCIA, DRESS_WREATH, DRESS_SYDVAST };
+static int dress(const Zombie *z) {
+    if (z->type != ZT_WALKER) return DRESS_NONE;
+    if (G->season == SEASON_WINTER) return z->variant == 5 ? DRESS_LUCIA : DRESS_NONE;
+    if (G->season == SEASON_SUMMER) return z->variant == 1 || z->variant == 4 ? DRESS_WREATH : DRESS_NONE;
+    return z->variant == 0 || z->variant == 7 ? DRESS_SYDVAST : DRESS_NONE;
+}
+/* the head's top centre, where the sprite was drawn */
+static void head_top(const Zombie *z, int *hx, int *hy) { *hx = z->rx + (z->dir >= 2 ? (z->rflip ? 9 : 7) : 8); *hy = z->ry + 1; }
+static void draw_dress(Surf *s, const Zombie *z) {
+    int d = dress(z);
+    if (!d || !z->rimg) return;
+    int x, y; head_top(z, &x, &y);
+    if (d == DRESS_LUCIA) {                                  /* a lingonberry-green crown; the candles glow after the light */
+        hline(s, x - 4, x + 3, y + 1, 0x2a6a2a); pset(s, x - 3, y, 0x3a8a3a); pset(s, x + 2, y, 0x3a8a3a); pset(s, x, y + 1, 0xc82020);
+        for (int k = 0; k < 4; k++) vline(s, x - 4 + k * 2 + (k > 1), y - 2, y, 0xf2f0ea);
+    } else if (d == DRESS_WREATH) {                          /* midsommarkrans */
+        static const uint32_t fl[4] = { 0xf0d040, 0xf2f0f0, 0x9a6ad0, 0xe84a6a };
+        hline(s, x - 5, x + 4, y + 1, 0x3a7a2a); hline(s, x - 4, x + 3, y, 0x4a8a3a);
+        for (int i = -5; i <= 4; i++) if ((i + 5) % 2 == 0) pset(s, x + i, y + ((i + 5) % 4 == 0 ? 0 : 1), fl[((i + 5) / 2 + z->variant) & 3]);
+    } else {                                                 /* sydväst: yellow, the brim wide over the shoulders */
+        hline(s, x - 3, x + 2, y - 1, 0xe8c020); hline(s, x - 4, x + 3, y, 0xe8c020); hline(s, x - 5, x + 4, y + 2, 0xd8a818);
+        hline(s, x - 4, x + 3, y + 1, 0xf0d040);
+    }
+}
 static void draw_shadow(Surf *s, int x, int y, int rx) { ellipse_blend(s, x, y, rx, MAX(1, rx / 3), 0x000000, 90); }
 
 static void draw_zombie(Surf *s, Zombie *z) {
@@ -269,6 +296,7 @@ static void draw_zombie(Surf *s, Zombie *z) {
     int bob = (z->type == ZT_WALKER && ((int)z->anim & 1)) ? 1 : 0;
     blit_ex(s, im, ox + lx, oy + ly + bob, flip, tint, amt, 255);
     z->rimg = im; z->rx = (int16_t)(ox + lx); z->ry = (int16_t)(oy + ly + bob); z->rflip = (uint8_t)flip; z->rclip = 0x7fff;
+    draw_dress(s, z);
     if (z->state == ZS_ATTACK && z->t < 0.15f) {           /* the claws */
         int ax = sx + (z->dir == 2 ? 9 : z->dir == 3 ? -9 : 0), ay = sy - 9 + (z->dir == 0 ? 6 : z->dir == 1 ? -8 : 0);
         for (int k = -1; k <= 1; k++) line(s, ax - 3, ay - 3 + k * 3, ax + 3, ay + 3 + k * 3, 0xe8e8e8);
@@ -551,6 +579,10 @@ void render_game(Surf *s) {
     light_alloc((s->w + ls - 1) / ls, (s->h + ls - 1) / ls);
     int ar, ag, ab; ambient(&ar, &ag, &ab);
     for (size_t i = 0; i < (size_t)lw * lh; i++) { lr[i] = (uint16_t)ar; lg[i] = (uint16_t)ag; lb[i] = (uint16_t)ab; }
+    for (int i = 0; i < MAX_ZOMBIES; i++) {                /* Lucia's candles */
+        Zombie *z = &G->z[i];
+        if (z->alive && z->state != ZS_DEAD && z->state != ZS_RISE && dress(z) == DRESS_LUCIA) add_light(z->x, z->y - 22, 46, 0xffc870, 0.75f + 0.1f * sinf(G->time * 9 + i));
+    }
     for (int i = 0; i < G->nlights; i++) {
         Light *L = &G->lights[i];
         if (L->power && !powered_at(L->x, L->y)) continue;
@@ -582,6 +614,29 @@ void render_game(Surf *s) {
     apply_light(s);
     /* ---- what glows ---- */
     for (int i = 0; i < MAX_ZOMBIES; i++) if (G->z[i].alive) zombie_eyes(s, &G->z[i]);
+    for (int i = 0; i < MAX_ZOMBIES; i++) {                /* the candle flames */
+        Zombie *z = &G->z[i];
+        if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE || !z->rimg || dress(z) != DRESS_LUCIA) continue;
+        int x, y; head_top(z, &x, &y);
+        for (int k = 0; k < 4; k++) {
+            int fx = x - 4 + k * 2 + (k > 1), fy = y - 3 - ((int)(G->time * 12 + k * 3 + i) & 1);
+            pset(s, fx, fy, 0xfff0a0); padd(s, fx, fy - 1, 0x806020);
+        }
+    }
+    if (G->season == SEASON_SUMMER) {                      /* fireflies over the grass, blinking, drifting */
+        for (int k = 0; k < 40; k++) {
+            uint32_t h = hash3(k, 17, 4242);
+            float wx = cx - 40 + (h % (unsigned)(s->w + 80)) + sinf(G->time * 0.7f + k) * 18;
+            float wy = cy - 30 + ((h >> 10) % (unsigned)(s->h + 60)) + cosf(G->time * 0.5f + k * 1.3f) * 14;
+            Tile *t = tile_at((int)(wx / TS), (int)(wy / TS));
+            if (!t || (t->g != G_GRASS && t->g != G_FOREST)) continue;
+            float b = sinf(G->time * (1.5f + (h >> 20) % 7 * 0.2f) + k);
+            if (b < 0.3f) continue;
+            int px = (int)wx - cx, py = (int)wy - cy;
+            pset(s, px, py, b > 0.8f ? 0xe8ff90 : 0xa0d860);
+            if (b > 0.7f) { padd(s, px - 1, py, 0x203010); padd(s, px + 1, py, 0x203010); padd(s, px, py - 1, 0x203010); padd(s, px, py + 1, 0x203010); }
+        }
+    }
     for (int i = 0; i < G->nit; i++) {                    /* an elstängsel that's on: arcs across its gap, post to post */
         Inter *it = &G->it[i];
         if (it->type != IT_TRAP || it->state != 1 || it->a < 0) continue;
