@@ -340,6 +340,28 @@ static void zombie_eyes(Surf *s, Zombie *z) {
         }
 }
 
+/* lock-on: four corners round the one aimed at, closing in when it's taken, after the light so it shows at night */
+static void lock_marker(Surf *s) {
+    Player *p = &G->p;
+    if (!p->lock || !lock_target_ok(p->lock - 1)) return;
+    Zombie *z = &G->z[p->lock - 1];
+    int big = z->type == ZT_BOSS, hw = big ? 22 : z->type == ZT_MOOSE ? 16 : 9, hh = big ? 44 : z->type == ZT_MOOSE ? 26 : 20;
+    if (big && G->boss.hidden) return;
+    float k = p->lock_t < 0.2f ? 1 - p->lock_t / 0.2f : 0;          /* closing in */
+    int g = (int)(k * 10) + ((int)(G->time * 4) & 1);
+    int cx = (int)(z->x - G->camx), top = (int)(z->y - G->camy) - hh - g, bot = (int)(z->y - G->camy) + 3 + g;
+    int l = cx - hw - g, r = cx + hw + g, a = 5;
+    uint32_t c = 0xff4030;
+    for (int t = 0; t < 2; t++) {                                  /* a dark edge under it, then the red */
+        uint32_t col = t ? c : 0x200000; int o = t ? 0 : 1;
+        rectf(s, l - o, top - o, a + o, 1 + o, col); rectf(s, l - o, top - o, 1 + o, a + o, col);
+        rectf(s, r - a + 1, top - o, a + o, 1 + o, col); rectf(s, r, top - o, 1 + o, a + o, col);
+        rectf(s, l - o, bot, a + o, 1 + o, col); rectf(s, l - o, bot - a + 1, 1 + o, a + o, col);
+        rectf(s, r - a + 1, bot, a + o, 1 + o, col); rectf(s, r, bot - a + 1, 1 + o, a + o, col);
+    }
+    pset(s, cx, top - 3 - g, c); pset(s, cx - 1, top - 4 - g, c); pset(s, cx + 1, top - 4 - g, c);   /* a little arrow over it */
+}
+
 static void draw_player(Surf *s) {
     Player *p = &G->p;
     int sx = (int)(p->x - G->camx), sy = (int)(p->y - G->camy);
@@ -641,6 +663,7 @@ void render_game(Surf *s) {
     /* ---- what glows ---- */
     for (int i = 0; i < MAX_ZOMBIES; i++) if (G->z[i].alive) zombie_eyes(s, &G->z[i]);
     boss_air_glow(s);
+    lock_marker(s);
     for (int i = 0; i < MAX_ZOMBIES; i++) {                /* the candle flames */
         Zombie *z = &G->z[i];
         if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE || !z->rimg || dress(z) != DRESS_LUCIA) continue;

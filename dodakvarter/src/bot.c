@@ -151,8 +151,15 @@ void bot_input(Input *in) {
         if (crowd >= 5 && p->grenades > 0 && (frame % 60) == 0) in->held |= BIT(bind_of(ACT_GRENADE));
     }
     /* health: use something from the bag */
-    if (p->hp < p->maxhp * 0.4f && (frame % 30) == 0) {
-        for (int i = 0; i < BAG_SLOTS; i++) if (p->bag[i].id == C_FORBAND || p->bag[i].id == C_PLASTER) { p->bag_sel = i; if (bind_of(ACT_ITEM) >= 0) in->held |= BIT(bind_of(ACT_ITEM)); break; }
+    static int using;                                       /* no item button (classic): next is held to use it */
+    if (using > 0) { using--; if (bind_of(ACT_NEXT) >= 0) in->held |= BIT(bind_of(ACT_NEXT)); }
+    else if (p->hp < p->maxhp * 0.4f && (frame % 30) == 0) {
+        for (int i = 0; i < BAG_SLOTS; i++) if (p->bag[i].id == C_FORBAND || p->bag[i].id == C_PLASTER) {
+            p->bag_sel = i;
+            if (bind_of(ACT_ITEM) >= 0) in->held |= BIT(bind_of(ACT_ITEM));
+            else using = 26;
+            break;
+        }
     }
     int dry = 1;                                            /* out of ammo: go and get some even with them around */
     for (int j = 0; j < p->nslots; j++) if (p->w[j].def >= 0 && (p->w[j].mag > 0 || p->w[j].reserve > 0)) dry = 0;

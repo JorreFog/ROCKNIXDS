@@ -130,7 +130,7 @@ static void boss_appear(void) {
     if (!z) return;
     /* about half a minute of a good gun at round 20; it grows slower than the zombies' (they're ten times as hard
        by round 40, a boss three) */
-    float hp = 40000.0f * powf(G->round / 20.0f, 1.6f) * BD[b->kind].hp;
+    float hp = 40000.0f * powf(G->round / 20.0f, 1.6f) * BD[b->kind].hp * diff_hp();
     if (getenv("DK_DEBUG_BOSS_HP")) hp *= (float)atof(getenv("DK_DEBUG_BOSS_HP"));
     z->hp = z->maxhp = hp;
     z->speed = BD[b->kind].speed; z->variant = b->kind;

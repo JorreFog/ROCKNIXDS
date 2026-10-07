@@ -10,6 +10,7 @@ typedef struct {
     long long date;
     char town[32];
     int daily;                          /* the date of the day's town it was played in, else 0 */
+    int diff;                           /* the difficulty it was played on */
 } Score;
 extern Score scores[MAX_SCORES];
 extern int nscores;

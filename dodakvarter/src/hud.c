@@ -185,7 +185,11 @@ static void bag(Surf *s) {
         text_ol(s, FONT_SMALL, bx + bw - 2 - text_w(FONT_SMALL, b), by + bh - 6, 0xffffff, 0x000000, b);
     }
     if (p->bag[p->bag_sel].id >= 0) {
-        char b[48]; snprintf(b, sizeof b, "%s: %s", S.scheme == 1 ? "TOUCH" : btn_name(bind_of(ACT_ITEM)), CONS[p->bag[p->bag_sel].id].name);
+        char k[24];
+        if (S.scheme == 1) snprintf(k, sizeof k, "TOUCH");
+        else if (bind_of(ACT_ITEM) >= 0) snprintf(k, sizeof k, "%s", btn_name(bind_of(ACT_ITEM)));
+        else snprintf(k, sizeof k, S.lang != LANG_EN ? "HÅLL %s" : "HOLD %s", btn_name(bind_of(ACT_NEXT)));
+        char b[48]; snprintf(b, sizeof b, "%s: %s", k, CONS[p->bag[p->bag_sel].id].name);
         text(s, FONT_SMALL, x + 4, y + 29, DIM, b);
     }
 }
@@ -268,7 +272,9 @@ static void legend(Surf *s) {
     } else {
         snprintf(h1, sizeof h1, sv ? "%s: SKJUT  %s: ANVÄND  %s: LADDA" : "%s: FIRE  %s: USE  %s: RELOAD", BN(ACT_FIRE), BN(ACT_USE), BN(ACT_RELOAD));
         snprintf(h2, sizeof h2, sv ? "%s: BYT  %s: KNIV  %s: SPRING" : "%s: SWAP  %s: KNIFE  %s: SPRINT", BN(ACT_SWAP), BN(ACT_KNIFE), BN(ACT_SPRINT));
-        snprintf(h3, sizeof h3, sv ? "%s: GRANAT  %s: SAK  %s: NÄSTA" : "%s: GRENADE  %s: ITEM  %s: NEXT", BN(ACT_GRENADE), BN(ACT_ITEM), BN(ACT_NEXT));
+        if (bind_of(ACT_ITEM) >= 0)
+            snprintf(h3, sizeof h3, sv ? "%s: GRANAT  %s: SAK  %s: NÄSTA" : "%s: GRENADE  %s: ITEM  %s: NEXT", BN(ACT_GRENADE), BN(ACT_ITEM), BN(ACT_NEXT));
+        else snprintf(h3, sizeof h3, sv ? "%s: GRANAT  %s: LÅS SIKTET  %s: SAK" : "%s: GRENADE  %s: LOCK ON  %s: ITEM", BN(ACT_GRENADE), BN(ACT_LOCK), BN(ACT_NEXT));
     }
     #undef BN
     text(s, FONT_SMALL, x + 4, y + h - 22, 0x5a6476, h1);

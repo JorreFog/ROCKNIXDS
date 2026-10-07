@@ -19,6 +19,7 @@ typedef struct {
     int then;                           /* the run chosen on the title, to start after the saved one's game over */
     float fade;                         /* the title coming up out of black after the splash */
     int capture;                        /* Settings > Buttons: the action waiting for a button, -1 none */
+    int upd_confirm, upd_known;         /* Game updates: pressed once over a saved run; a version was found */
 } App;
 extern App A;
 

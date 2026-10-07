@@ -9,14 +9,14 @@
 #include <unistd.h>
 #include <pthread.h>
 
-Settings S = { .volume = 80, .music = 1, .shake = 1, .assist = 2, .scheme = 0, .season = 0, .lang = LANG_EN, .swap_ab = 0, .show_fps = 0, .touch_aim = 1,
-               .bind = { { B_A, B_B, B_Y, B_X, B_R1, B_L1, B_R2, B_L2, B_SELECT }, { -1, B_R1, B_SELECT, B_R2, -1, B_L1, B_L2, -1, -1 } } };
+Settings S = { .volume = 80, .music = 1, .shake = 1, .assist = 2, .scheme = 0, .season = 0, .lang = LANG_EN, .swap_ab = 0, .show_fps = 0, .touch_aim = 1, .diff = DIFF_MEDIUM,
+               .bind = { { B_A, B_B, B_Y, B_X, B_R1, B_L1, B_L2, -1, B_SELECT, B_R2 }, { -1, B_R1, B_SELECT, B_R2, -1, B_L1, B_L2, -1, -1, -1 } } };
 
 /* ---------------------------------------------------------------- the buttons */
-static const int DEFAULT_BIND[LAYOUT_COUNT][ACT_COUNT] = { { B_A, B_B, B_Y, B_X, B_R1, B_L1, B_R2, B_L2, B_SELECT }, { -1, B_R1, B_SELECT, B_R2, -1, B_L1, B_L2, -1, -1 } };
+static const int DEFAULT_BIND[LAYOUT_COUNT][ACT_COUNT] = { { B_A, B_B, B_Y, B_X, B_R1, B_L1, B_L2, -1, B_SELECT, B_R2 }, { -1, B_R1, B_SELECT, B_R2, -1, B_L1, B_L2, -1, -1, -1 } };
 static const char *BIND_KEY[LAYOUT_COUNT][ACT_COUNT] = {
-    { "c_fire", "c_use", "c_reload", "c_swap", "c_knife", "c_sprint", "c_grenade", "c_item", "c_next" },
-    { 0, "t_use", "t_reload", "t_swap", 0, "t_sprint", "t_grenade", 0, 0 },
+    { "c_fire", "c_use", "c_reload", "c_swap", "c_knife", "c_sprint", "c_grenade", "c_item", "c_next", "c_lock" },
+    { 0, "t_use", "t_reload", "t_swap", 0, "t_sprint", "t_grenade", 0, 0, 0 },
 };
 void binds_default(int layout) { memcpy(S.bind[layout], DEFAULT_BIND[layout], sizeof S.bind[layout]); }
 int bind_allowed(int layout, int b) {
@@ -44,7 +44,7 @@ const char *btn_name(int b) {
     return b >= 0 && b < B_COUNT ? n[b] : "-";
 }
 const char *act_name(int act) {
-    static const char *n[ACT_COUNT] = { "Fire", "Use", "Reload", "Swap weapon", "Knife", "Sprint", "Grenade", "Use item", "Next item" };
+    static const char *n[ACT_COUNT] = { "Fire", "Use", "Reload", "Swap weapon", "Knife", "Sprint", "Grenade", "Use item", "Next item (hold: use)", "Lock on" };
     return act >= 0 && act < ACT_COUNT ? n[act] : "";
 }
 Score scores[MAX_SCORES]; int nscores;
@@ -73,6 +73,7 @@ void settings_load(void) {
         else if (!strcmp(k, "show_fps")) S.show_fps = !!v;
         else if (!strcmp(k, "touch_aim")) S.touch_aim = !!v;
         else if (!strcmp(k, "effects")) S.effects = CLAMP(v, 0, 2);
+        else if (!strcmp(k, "difficulty")) S.diff = CLAMP(v, 0, DIFF_COUNT - 1);
     }
     fclose(f);
     for (int l = 0; l < LAYOUT_COUNT; l++) if (!binds_valid(l)) binds_default(l);   /* a file edited by hand, or an older one */
@@ -84,8 +85,8 @@ void settings_save(void) {
     char p[600], t[610]; path(p, sizeof p, "settings.txt"); snprintf(t, sizeof t, "%s.tmp", p);
     FILE *f = fopen(t, "w");
     if (!f) return;
-    fprintf(f, "volume %d\nmusic %d\nshake %d\nassist %d\nscheme %d\nseason %d\nlang %d\nswap_ab %d\nshow_fps %d\ntouch_aim %d\neffects %d\n",
-            S.volume, S.music, S.shake, S.assist, S.scheme, S.season, S.lang, S.swap_ab, S.show_fps, S.touch_aim, S.effects);
+    fprintf(f, "volume %d\nmusic %d\nshake %d\nassist %d\nscheme %d\nseason %d\nlang %d\nswap_ab %d\nshow_fps %d\ntouch_aim %d\neffects %d\ndifficulty %d\n",
+            S.volume, S.music, S.shake, S.assist, S.scheme, S.season, S.lang, S.swap_ab, S.show_fps, S.touch_aim, S.effects, S.diff);
     for (int l = 0; l < LAYOUT_COUNT; l++)
         for (int a = 0; a < ACT_COUNT; a++)
             if (BIND_KEY[l][a]) fprintf(f, "%s %d\n", BIND_KEY[l][a], S.bind[l][a]);
@@ -103,8 +104,10 @@ void scores_load(void) {
     while (nscores < MAX_SCORES && fgets(line, sizeof line, f)) {
         Score *s = &scores[nscores];
         memset(s, 0, sizeof *s);
+        s->diff = DIFF_HARD;                            /* (0.1 had no difficulty: its game is hard) */
         unsigned long long seed; long long date;
-        if (sscanf(line, "%15s %d %d %d %d %d %llu %lld %31s %d", s->name, &s->round, &s->kills, &s->kr, &s->secs, &s->season, &seed, &date, s->town, &s->daily) >= 8) {
+        if (sscanf(line, "%15s %d %d %d %d %d %llu %lld %31s %d %d", s->name, &s->round, &s->kills, &s->kr, &s->secs, &s->season, &seed, &date, s->town, &s->daily, &s->diff) >= 8) {
+            s->diff = CLAMP(s->diff, 0, DIFF_COUNT - 1);
             s->seed = seed; s->date = date;
             for (char *c = s->town; *c; c++) if (*c == '_') *c = ' ';
             nscores++;
@@ -121,8 +124,8 @@ void scores_save(void) {
         Score *s = &scores[i];
         char town[32]; snprintf(town, sizeof town, "%s", s->town[0] ? s->town : "-");
         for (char *c = town; *c; c++) if (*c == ' ') *c = '_';
-        fprintf(f, "%s %d %d %d %d %d %llu %lld %s %d\n", s->name[0] ? s->name : "???", s->round, s->kills, s->kr, s->secs, s->season,
-                (unsigned long long)s->seed, (long long)s->date, town, s->daily);
+        fprintf(f, "%s %d %d %d %d %d %llu %lld %s %d %d\n", s->name[0] ? s->name : "???", s->round, s->kills, s->kr, s->secs, s->season,
+                (unsigned long long)s->seed, (long long)s->date, town, s->daily, s->diff);
     }
     fclose(f);
     rename(t, p);

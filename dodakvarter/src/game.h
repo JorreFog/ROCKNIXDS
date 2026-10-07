@@ -207,6 +207,8 @@ typedef struct {
     float last_hit_t;
     float stamina; int sprinting;
     int repair_kr;                      /* board money this round (capped at 50 x round, 500 at most) */
+    int lock;                           /* lock-on: the zombie aimed at, its index + 1 (0: none) */
+    float lock_t, lock_held, next_held; /* the marker's animation; how long the lock and next-item buttons are held */
 } Player;
 
 /* ---------------------------------------------------------------- effects */
@@ -263,6 +265,7 @@ typedef struct {
     /* run */
     uint64_t seed; int season;
     int daily;                          /* today's town: the date (YYYYMMDD), else 0 */
+    int diff;                           /* the difficulty the run was started on: DIFF_EASY, _MEDIUM, _HARD */
     Rng rng, fx;
     float time;
     int round, rstate; float rtime;
@@ -303,6 +306,7 @@ typedef struct {
 
 extern Game *G;
 /* can it be hit: up, and not under the ground or the water (a boss diving) */
+int lock_target_ok(int i);               /* lock-on (game.c): still worth aiming at */
 static inline int zombie_hittable(const Zombie *z) { return z->alive && z->state != ZS_DEAD && z->state != ZS_RISE && !(z->type == ZT_BOSS && G->boss.hidden); }
 extern const WeaponDef WEAPONS[W_COUNT];
 extern const ArmorDef ARMORS[A_COUNT];
@@ -313,10 +317,17 @@ extern const uint32_t RARITY_COL[RAR_COUNT];
 
 /* settings (save.c). The buttons (Settings > Buttons): an action's button in each layout (B_*, -1 for an action the
    layout does without), a permutation of the layout's buttons, so one button never does two things */
+/* the difficulty (Settings > Difficulty, taken by a run when it starts): hard is the game as it was in 0.1 */
+enum { DIFF_EASY, DIFF_MEDIUM, DIFF_HARD, DIFF_COUNT };
+float diff_hurt(void);      /* what a hit on the player is multiplied by */
+float diff_hp(void);        /* the dead's health, bosses' too */
+float diff_count(void);     /* how many come in a round */
+float diff_pace(void);      /* how quickly they turn into runners and sprinters, round by round */
+
 enum { LAYOUT_CLASSIC, LAYOUT_TWIN, LAYOUT_COUNT };
-enum { ACT_FIRE, ACT_USE, ACT_RELOAD, ACT_SWAP, ACT_KNIFE, ACT_SPRINT, ACT_GRENADE, ACT_ITEM, ACT_NEXT, ACT_COUNT };
+enum { ACT_FIRE, ACT_USE, ACT_RELOAD, ACT_SWAP, ACT_KNIFE, ACT_SPRINT, ACT_GRENADE, ACT_ITEM, ACT_NEXT, ACT_LOCK, ACT_COUNT };
 typedef struct {
-    int volume, music, shake, assist, scheme, season, lang, swap_ab, show_fps, touch_aim, effects;
+    int volume, music, shake, assist, scheme, season, lang, swap_ab, show_fps, touch_aim, effects, diff;
     int bind[LAYOUT_COUNT][ACT_COUNT];
 } Settings;
 extern Settings S;

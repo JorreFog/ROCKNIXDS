@@ -1,0 +1,51 @@
+# Döda Kvarter's own releases (dodakvarter/): a dodakvarter-v<version> tag publishes the game as a GitHub pre-release,
+# for the game's Settings > Game updates (dodakvarter/device/update.sh) to install without a ROCKNIXDS release.
+# Like the bank's, these are pre-releases and never "latest": ROCKNIXDS's installer and updater skip pre-releases and
+# (from 1.6) take only v* tags, so a game release is never taken for a ROCKNIXDS one.
+# The package holds bin/dodakvarter-aarch64 as committed (the build ROCKNIXDS installs, checked on a handheld), after the
+# tests pass and a build from the same sources for the RG DS links as the committed one must (glibc 2.38 at most).
+name: dodakvarter-release
+on:
+  push:
+    tags: ['dodakvarter-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends clang lld llvm gcc libc6-dev libdrm-dev libsdl2-dev python3 ca-certificates curl binutils
+      - name: The tag matches dodakvarter/VERSION, and the committed game is that version
+        run: |
+          V=$(cat dodakvarter/VERSION)
+          if [ "$GITHUB_REF_TYPE" = tag ]; then test "${GITHUB_REF_NAME#dodakvarter-v}" = "$V"; fi
+          llvm-readelf -h dodakvarter/bin/dodakvarter-aarch64 | grep -q AArch64
+          strings dodakvarter/bin/dodakvarter-aarch64 | grep -qx "$V" || { echo "bin/dodakvarter-aarch64 isn't $V: rebuild it"; exit 1; }
+          newest=$(llvm-readelf -V dodakvarter/bin/dodakvarter-aarch64 | grep -o 'GLIBC_2\.[0-9]*' | sort -uV | tail -n1)
+          [ "$(printf '%s\nGLIBC_2.38\n' "$newest" | sort -V | tail -n1)" = GLIBC_2.38 ] || { echo "needs glibc newer than 2.38"; exit 1; }
+      - name: Tests
+        run: CC=gcc sh dodakvarter/tests/run.sh
+      - name: Package
+        run: sh dodakvarter/tools/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dodakvarter-package
+          path: dodakvarter/dist/
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/dodakvarter-v')
+        with:
+          name: Döda Kvarter ${{ github.ref_name }}
+          body_path: dodakvarter/RELEASE.md
+          prerelease: true
+          make_latest: false
+          files: |
+            dodakvarter/dist/dodakvarter-*-aarch64.tar.gz
+            dodakvarter/dist/dodakvarter-*-aarch64.tar.gz.sha256
