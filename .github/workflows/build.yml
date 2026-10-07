@@ -41,7 +41,7 @@ jobs:
       - name: Toolchain and arm64 sysroot
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends clang lld llvm gcc libc6-dev libdrm-dev libsdl2-dev python3 ca-certificates
+          apt-get install -y --no-install-recommends clang lld llvm gcc libc6-dev libdrm-dev libsdl2-dev python3 ca-certificates curl
           dpkg --add-architecture arm64
           apt-get update
           mkdir -p /tmp/deb && cd /tmp/deb
