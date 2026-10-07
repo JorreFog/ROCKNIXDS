@@ -3,6 +3,7 @@
 #include "game.h"
 #include "save.h"
 #include "menu.h"
+#include "update.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -186,53 +187,103 @@ static void draw_title_bottom(Surf *s) {
     if (nscores) { snprintf(b, sizeof b, "%s: %s - %s %d", tr("HIGH SCORES"), scores[0].name, tr("Round"), scores[0].round); text_center(s, FONT_SMALL, s->w / 2, s->h - 30, 0xd8b040, 0, b); }
     snprintf(b, sizeof b, "v%s", DK_VERSION);
     text(s, FONT_SMALL, 4, s->h - 8, 0x4a5262, b);
+    {   /* a newer version of the game: where to get it */
+        char v[24]; int u = update_state(v, sizeof v, 0, 0);
+        if (u == UPD_AVAILABLE) {
+            snprintf(b, sizeof b, S.lang ? "v%s finns: Inställningar > Uppdatera" : "v%s is out: Settings > Update", v);
+            text_center(s, FONT_SMALL, s->w / 2, s->h - 19, ((int)(A.t * 2) & 1) ? 0xffe070 : 0xd8b040, 0, b);
+        }
+    }
     text(s, FONT_SMALL, s->w - 4 - text_w(FONT_SMALL, "ROCKNIXDS"), s->h - 8, 0x4a5262, "ROCKNIXDS");
 }
 
-#define SETTINGS_N 11                   /* rows, BACK the last */
+#define SETTINGS_N 13                   /* rows, BACK the last */
 #define SETTINGS_BACK (SETTINGS_N - 1)
-#define SETTINGS_BUTTONS 4              /* the row that opens Settings > Buttons */
-#define SETTINGS_ROW 19
+#define SETTINGS_BUTTONS 5              /* the row that opens Settings > Buttons */
+#define SETTINGS_UPDATE 11              /* Game updates */
+#define SETTINGS_ROW 17
+/* the Game updates row: what it says */
+static void update_row(char *out, int n) {
+    char v[24], st[48]; int u = update_state(v, sizeof v, st, sizeof st);
+    char b[64];
+    switch (u) {
+    case UPD_UNSUPPORTED: snprintf(b, sizeof b, "%s", tr("Not here")); break;
+    case UPD_CHECKING: snprintf(b, sizeof b, "%s", tr("Checking...")); break;
+    case UPD_LATEST: snprintf(b, sizeof b, "%s (v%s)", tr("Up to date"), DK_VERSION); break;
+    case UPD_OFFLINE: snprintf(b, sizeof b, "%s", tr("No network")); break;
+    case UPD_AVAILABLE:
+        if (A.state == ST_SETTINGS && A.settings_from != ST_TITLE) snprintf(b, sizeof b, S.lang ? "v%s: från titeln" : "v%s: from the title", v);
+        else if (A.upd_confirm) snprintf(b, sizeof b, "%s", S.lang ? "Sparat spel går förlorat: igen" : "Ends the saved run: again");
+        else snprintf(b, sizeof b, S.lang ? "Uppdatera till v%s" : "Update to v%s", v);
+        break;
+    case UPD_INSTALLING: snprintf(b, sizeof b, "%s", st); break;
+    case UPD_DONE: snprintf(b, sizeof b, "%s", S.lang ? "Klart: startar om" : "Done: restarting"); break;
+    case UPD_FAILED: snprintf(b, sizeof b, "%s", st); break;
+    default: snprintf(b, sizeof b, "%s", tr("Check now")); break;
+    }
+    if (u == UPD_INSTALLING || u == UPD_FAILED || u == UPD_AVAILABLE || u == UPD_DONE) snprintf(out, (size_t)n, "%s", b);
+    else snprintf(out, (size_t)n, "%s: %s", tr("Game updates"), b);
+}
+/* a press on it: look again, or update (from the title only: the run in progress would be saved for this version) */
+static void update_press(void) {
+    int u = update_state(0, 0, 0, 0);
+    if (u == UPD_UNSUPPORTED || u == UPD_CHECKING || u == UPD_INSTALLING || u == UPD_DONE) return;
+    if (u == UPD_AVAILABLE || (u == UPD_FAILED && A.upd_known)) {
+        if (A.settings_from != ST_TITLE) { sfx(SFX_MENU_BACK, 0.4f, 0); return; }
+        if (A.has_save && !A.upd_confirm) { A.upd_confirm = 1; sfx(SFX_MENU_MOVE, 0.5f, 0); return; }
+        A.upd_confirm = 0;
+        if (A.has_save) run_discard();
+        A.has_save = 0;
+        update_install();
+    } else update_check();
+    sfx(SFX_MENU_OK, 0.6f, 0);
+}
 static void draw_settings(Surf *s) {
     bg_bottom(s);
     static const char *assist[3] = { "Off", "Low", "High" }, *season[4] = { "Random", "Autumn", "Winter", "Midsummer" };
     static const char *effects[3] = { "Auto", "Full", "Light" };
     char items[SETTINGS_N][48];
-    snprintf(items[0], 48, "%s: %d", tr("Volume"), S.volume);
-    snprintf(items[1], 48, "%s: %s", tr("Music"), tr(S.music ? "On" : "Off"));
-    snprintf(items[2], 48, "%s: %s", tr("Screen shake"), tr(S.shake ? "On" : "Off"));
-    snprintf(items[3], 48, "%s: %s", tr("Aim assist"), tr(assist[S.assist]));
-    snprintf(items[4], 48, "%s: %s...", tr("Buttons"), tr(S.scheme ? "Twin buttons" : "Classic"));
-    snprintf(items[5], 48, "%s: %s", tr("Touch aiming"), tr(S.touch_aim ? "On" : "Off"));
-    snprintf(items[6], 48, "%s: %s", tr("Season"), tr(season[S.season]));
-    snprintf(items[7], 48, "%s: %s", tr("Language"), S.lang ? "Svenska" : "English");
-    snprintf(items[8], 48, "%s: %s", tr("Show FPS"), tr(S.show_fps ? "On" : "Off"));
-    snprintf(items[9], 48, "%s: %s%s", tr("Effects"), tr(effects[S.effects]), S.effects == FX_AUTO && render_fx_light() ? tr(" (light now)") : "");
+    static const char *diff[DIFF_COUNT] = { "Easy", "Medium", "Hard" };
+    snprintf(items[0], 48, "%s: %s", tr("Difficulty"), tr(diff[S.diff]));
+    snprintf(items[1], 48, "%s: %d", tr("Volume"), S.volume);
+    snprintf(items[2], 48, "%s: %s", tr("Music"), tr(S.music ? "On" : "Off"));
+    snprintf(items[3], 48, "%s: %s", tr("Screen shake"), tr(S.shake ? "On" : "Off"));
+    snprintf(items[4], 48, "%s: %s", tr("Aim assist"), tr(assist[S.assist]));
+    snprintf(items[5], 48, "%s: %s...", tr("Buttons"), tr(S.scheme ? "Twin buttons" : "Classic"));
+    snprintf(items[6], 48, "%s: %s", tr("Touch aiming"), tr(S.touch_aim ? "On" : "Off"));
+    snprintf(items[7], 48, "%s: %s", tr("Season"), tr(season[S.season]));
+    snprintf(items[8], 48, "%s: %s", tr("Language"), S.lang ? "Svenska" : "English");
+    snprintf(items[9], 48, "%s: %s", tr("Show FPS"), tr(S.show_fps ? "On" : "Off"));
+    snprintf(items[10], 48, "%s: %s%s", tr("Effects"), tr(effects[S.effects]), S.effects == FX_AUTO && render_fx_light() ? tr(" (light now)") : "");
+    update_row(items[SETTINGS_UPDATE], 48);
     snprintf(items[SETTINGS_BACK], 48, "%s", tr("BACK"));
     const char *p[SETTINGS_N]; for (int i = 0; i < SETTINGS_N; i++) p[i] = items[i];
     /* compact rows */
     int y0 = 6;
     for (int i = 0; i < SETTINGS_N; i++) {
         int y = y0 + i * SETTINGS_ROW, w = 240, cx = s->w / 2;
-        if (i == A.sel) { rectf(s, cx - w / 2, y, w, 17, 0x3a1416); rect_line(s, cx - w / 2, y, w, 17, 0xc81818); }
-        else rect_line(s, cx - w / 2, y, w, 17, 0x2a3040);
-        text_center(s, FONT_NORMAL, cx, y + 4, i == A.sel ? 0xffffff : 0xa0a8b8, 0, p[i]);
-        if (i == A.sel && i < SETTINGS_BACK && i != SETTINGS_BUTTONS) { text(s, FONT_NORMAL, cx - w / 2 + 4, y + 4, 0xc81818, "\xe2\x97\x80"); text(s, FONT_NORMAL, cx + w / 2 - 9, y + 4, 0xc81818, "\xe2\x96\xb6"); }
-        if (i == A.sel && i == SETTINGS_BUTTONS) text(s, FONT_NORMAL, cx + w / 2 - 9, y + 4, 0xc81818, "\xe2\x96\xb6");
+        if (i == A.sel) { rectf(s, cx - w / 2, y, w, 15, 0x3a1416); rect_line(s, cx - w / 2, y, w, 15, 0xc81818); }
+        else rect_line(s, cx - w / 2, y, w, 15, 0x2a3040);
+        uint32_t ink = i == A.sel ? 0xffffff : 0xa0a8b8;
+        if (i == SETTINGS_UPDATE && update_state(0, 0, 0, 0) == UPD_AVAILABLE) ink = i == A.sel ? 0xffe070 : 0xd8b040;
+        text_center(s, FONT_NORMAL, cx, y + 3, ink, 0, p[i]);
+        if (i == A.sel && i < SETTINGS_BACK && i != SETTINGS_BUTTONS && i != SETTINGS_UPDATE) { text(s, FONT_NORMAL, cx - w / 2 + 4, y + 3, 0xc81818, "\xe2\x97\x80"); text(s, FONT_NORMAL, cx + w / 2 - 9, y + 3, 0xc81818, "\xe2\x96\xb6"); }
+        if (i == A.sel && i == SETTINGS_BUTTONS) text(s, FONT_NORMAL, cx + w / 2 - 9, y + 3, 0xc81818, "\xe2\x96\xb6");
     }
 }
 
 static void settings_change(int i, int d) {
     switch (i) {
-    case 0: S.volume = CLAMP(S.volume + d * 10, 0, 100); audio_set_volume(S.volume); break;
-    case 1: S.music = !S.music; music_play(S.music ? (A.state == ST_SETTINGS && A.settings_from == ST_TITLE ? MUS_TITLE : MUS_NONE) : MUS_NONE); break;
-    case 2: S.shake = !S.shake; break;
-    case 3: S.assist = (S.assist + d + 3) % 3; break;
-    case 5: S.touch_aim = !S.touch_aim; break;
-    case 6: S.season = (S.season + d + 4) % 4; break;
-    case 7: S.lang = !S.lang; break;
-    case 8: S.show_fps = !S.show_fps; break;
-    case 9: S.effects = (S.effects + d + 3) % 3; break;
+    case 0: S.diff = (S.diff + d + DIFF_COUNT) % DIFF_COUNT; break;
+    case 1: S.volume = CLAMP(S.volume + d * 10, 0, 100); audio_set_volume(S.volume); break;
+    case 2: S.music = !S.music; music_play(S.music ? (A.state == ST_SETTINGS && A.settings_from == ST_TITLE ? MUS_TITLE : MUS_NONE) : MUS_NONE); break;
+    case 3: S.shake = !S.shake; break;
+    case 4: S.assist = (S.assist + d + 3) % 3; break;
+    case 6: S.touch_aim = !S.touch_aim; break;
+    case 7: S.season = (S.season + d + 4) % 4; break;
+    case 8: S.lang = !S.lang; break;
+    case 9: S.show_fps = !S.show_fps; break;
+    case 10: S.effects = (S.effects + d + 3) % 3; break;
     }
     sfx(SFX_MENU_MOVE, 0.5f, 0);
     settings_save();
@@ -362,6 +413,11 @@ static void draw_scores(Surf *s) {
         snprintf(b, sizeof b, "%d", i + 1); text(s, FONT_NORMAL, x + 4, yy + 1, c, b);
         text(s, FONT_NORMAL, x + 22, yy + 1, hl ? 0xffffff : c, sc->name);
         snprintf(b, sizeof b, "%d", sc->round); text(s, FONT_NORMAL, x + 70, yy + 1, 0xd81818, b);
+        {   /* the difficulty it was played on: a letter after the round */
+            static const char *en = "EMH", *sv = "LMS"; static const uint32_t dc[DIFF_COUNT] = { 0x60c060, 0xd8b040, 0xd85030 };
+            char d[2] = { (S.lang ? sv : en)[CLAMP(sc->diff, 0, 2)], 0 };
+            text(s, FONT_SMALL, x + 100, yy + 3, dc[CLAMP(sc->diff, 0, 2)], d);
+        }
         snprintf(b, sizeof b, "%d", sc->kills); text(s, FONT_NORMAL, x + 118, yy + 1, c, b);
         fmt_num(b, sc->kr); text(s, FONT_NORMAL, x + 160, yy + 1, c, b);
         Surf cl = *s; surf_clip(&cl, x + 212, yy - 2, 86, 14);
@@ -480,7 +536,7 @@ static void count_run(void) {
     G->over = 1;
     memset(&A.last, 0, sizeof A.last);
     A.last.round = G->round; A.last.kills = G->p.kills; A.last.kr = G->p.kr_total; A.last.secs = (int)G->time;
-    A.last.season = G->season; A.last.seed = G->seed; A.last.date = (long long)time(0); A.last.daily = G->daily;
+    A.last.season = G->season; A.last.seed = G->seed; A.last.date = (long long)time(0); A.last.daily = G->daily; A.last.diff = G->diff;
     stats_add_run();
     snprintf(A.last.town, sizeof A.last.town, "%s", G->town);
     A.rank = score_rank(&A.last);
@@ -507,6 +563,13 @@ void app_update(const Input *in, const Input *prev, float dt) {
     audio_ambience(!app_run_in_progress() ? AMB_NONE : G->season == SEASON_WINTER ? AMB_WIND : G->season == SEASON_SUMMER ? AMB_SUMMER : AMB_RAIN);
     int up = pressed(in, prev, B_UP), down = pressed(in, prev, B_DOWN), left = pressed(in, prev, B_LEFT), right = pressed(in, prev, B_RIGHT);
     if (A.fade > 0) A.fade -= dt;
+    {   /* game updates: one look per start, on the title; when one is in place, quit and the session starts it */
+        static int looked; static float done_t;
+        if (!looked && A.state == ST_TITLE && A.t > 1.0f) { looked = 1; update_check(); }
+        int u = update_state(0, 0, 0, 0);
+        if (u == UPD_AVAILABLE) A.upd_known = 1;
+        if (u == UPD_DONE && (done_t += dt) > 1.2f) A.quit = 2;
+    }
     switch (A.state) {
     case ST_SPLASH:
         if (splash_update(in, prev)) { A.state = ST_TITLE; A.t = 0; A.sel = 0; A.fade = 0.6f; music_play(MUS_TITLE); }
@@ -570,10 +633,12 @@ void app_update(const Input *in, const Input *prev, float dt) {
         if (down) { A.sel = (A.sel + 1) % SETTINGS_N; sfx(SFX_MENU_MOVE, 0.5f, 0); }
         if (in->touch[1] && !prev->touch[1]) {
             int r = (in->ty[1] - 6) / SETTINGS_ROW;
-            if (r >= 0 && r < SETTINGS_N) { A.sel = r; if (r == SETTINGS_BUTTONS) goto settings_buttons; if (r < SETTINGS_BACK) settings_change(r, in->tx[1] < A.bot_w / 2 ? -1 : 1); else goto settings_back; }
+            if (r >= 0 && r < SETTINGS_N) { A.sel = r; if (r == SETTINGS_BUTTONS) goto settings_buttons; if (r == SETTINGS_UPDATE) update_press(); else if (r < SETTINGS_BACK) settings_change(r, in->tx[1] < A.bot_w / 2 ? -1 : 1); else goto settings_back; }
         }
-        if (A.sel < SETTINGS_BACK && A.sel != SETTINGS_BUTTONS && (left || right)) settings_change(A.sel, left ? -1 : 1);
-        if (A.sel < SETTINGS_BACK && A.sel != SETTINGS_BUTTONS && pressed(in, prev, btn_ok())) settings_change(A.sel, 1);
+        if (A.sel != SETTINGS_UPDATE) A.upd_confirm = 0;
+        if (A.sel < SETTINGS_BACK && A.sel != SETTINGS_BUTTONS && A.sel != SETTINGS_UPDATE && (left || right)) settings_change(A.sel, left ? -1 : 1);
+        if (A.sel < SETTINGS_BACK && A.sel != SETTINGS_BUTTONS && A.sel != SETTINGS_UPDATE && pressed(in, prev, btn_ok())) settings_change(A.sel, 1);
+        if (A.sel == SETTINGS_UPDATE && pressed(in, prev, btn_ok())) update_press();
         if (A.sel == SETTINGS_BUTTONS && (pressed(in, prev, btn_ok()) || right)) {
         settings_buttons:
             sfx(SFX_MENU_OK, 0.6f, 0);

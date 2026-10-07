@@ -40,10 +40,15 @@ ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
   trap 'kill -TERM $P 2>/dev/null; sleep 0.5; kill -9 $P 2>/dev/null; echo "$(date) stopped by the unit"; exit 0' TERM INT
   cd $D
   OUT=$D/data/game.out; [ "$1" = --selftest ] && OUT=$D/data/selftest.txt && : > $OUT
-  XDG_RUNTIME_DIR=/var/run/0-runtime-dir DK_DATA=$D/data ./dodakvarter --backend kms "$@" >> $OUT 2>&1 &
-  P=$!
-  wait $P; rc=$?
-  echo "$(ms) ms: the game exited: $rc"
+  while :; do
+    # DK_UPDATER: Settings > Game updates runs it; after an update the game exits with 75 and the new one starts here
+    XDG_RUNTIME_DIR=/var/run/0-runtime-dir DK_DATA=$D/data DK_UPDATER=$D/update.sh ./dodakvarter --backend kms "$@" >> $OUT 2>&1 &
+    P=$!
+    wait $P; rc=$?
+    echo "$(ms) ms: the game exited: $rc"
+    [ $rc = 75 ] && [ "$1" != --selftest ] && [ -x $D/dodakvarter ] || break
+    echo "$(ms) ms: updated to $(cat $D/VERSION 2>/dev/null): starting it"
+  done
   case $rc in
     0|143) ;;                                       # quit from the menu, or the exit hotkey
     3) echo "Döda Kvarter couldn't take over the screens. Its log: $D/data/dodakvarter.log" > $NOTICE ;;

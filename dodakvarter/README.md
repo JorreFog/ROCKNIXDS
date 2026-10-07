@@ -56,13 +56,14 @@ all of it lies again in dark water. Any button (or a touch) skips it; then the t
 | Move | D-pad (or the left stick) | D-pad |
 | Fire | **A**. Holding it keeps you facing the way you fired: walk backwards and shoot | **X Y A B** fire up, left, right, down; two of them for the diagonals |
 | Aim | where you walk, with aim assist; the right stick if there is one | the face buttons |
+| Lock on | **R2**: locks the aim on the nearest zombie in sight; again, the next nearest; held, it lets go. When the one you locked on falls, the aim moves to the nearest by itself | - |
 | Use, buy, take | **B** (hold it to repair a window or search a bin) | **R** |
 | Reload | **Y** | **SELECT** (it reloads by itself when the magazine is empty) |
 | Switch weapon | **X** | **R2** |
 | Knife | **R** | by itself, when you fire at a zombie right next to you |
 | Sprint | hold **L** (or click the left stick) | hold **L** (or click the left stick) |
-| Grenade | **R2** | **L2** |
-| Bag | **L2** uses the item, **SELECT** picks the next one; or tap it | tap it on the bottom screen |
+| Grenade | **L2** | **L2** |
+| Bag | **SELECT** picks the next item, held it uses it; or tap it | tap it on the bottom screen |
 | Pause (save and quit, or give up) | **START** | **START** |
 
 Those are the defaults. **Settings > Buttons** has the layout, and a row for each action with its button: select a
@@ -70,8 +71,21 @@ row, press the new button, and the action that had it takes the old one (so one 
 help lines on the bottom screen and the prompts follow. *Menus* there picks whether A or B confirms in the menus.
 The touchscreens work: tap a bag item to pick it (tap again to use it), tap a weapon to switch to it, and touch the
 top screen to fire where you touch (*Touch aiming* in the settings).
-On a computer: arrows or WASD, J or Z to fire, K or X to use, U reload, I switch, E knife, Q sprint, 1 item,
-3 grenade, Tab next item, Enter pause; the mouse aims (left button fires) and clicks the bottom screen.
+On a computer: arrows or WASD, J or Z to fire, K or X to use, U reload, I switch, E knife, Q sprint, 1 grenade,
+3 lock on, Tab next item (held: use it), Enter pause; the mouse aims (left button fires) and clicks the bottom screen.
+
+**Settings > Difficulty**: *Easy*, *Medium* (the default) or *Hard*, taken by a run when it starts. Hard is the game
+as 0.1 had it (Black Ops' own numbers); Medium takes 30% off what the dead (and the bosses) do to you, 20% off their
+health and 15% off how many come in a round, and they turn into runners and sprinters more slowly; Easy takes 55%,
+40% and 30%, and slower still. The high score list shows each run's difficulty after its round (E, M, H).
+
+**Settings > Game updates**: the game updates itself, without a ROCKNIXDS update. On the title it looks once for a
+newer version (with Wi-Fi on; the title says when there is one); the row updates it (from the title, not in the
+middle of a run): it downloads it, checks it, puts it in place and starts it. High scores and settings stay; a run
+saved in the old version doesn't carry over (the row asks first). Over ssh: `/storage/.config/rocknixds/dodakvarter/update.sh
+check` or `install`. New versions are pre-releases tagged `dodakvarter-v<version>` on GitHub
+(`.github/workflows/dodakvarter-release.yml`, from the `VERSION` file and `bin/dodakvarter-aarch64`; `tools/package.sh`
+makes the package); ROCKNIXDS's own installer never puts back an older game than the one there.
 
 *Today's town* on the title is the same town (and season) for everyone on the same day; its runs get a star in the
 high score list. The list's second page (left or right) adds up everything you've played: runs, zombies, rounds,

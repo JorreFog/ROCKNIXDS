@@ -19,6 +19,11 @@ int zombies_for_round(int r) {
     if (r == 1) n *= 0.25f; else if (r == 2) n *= 0.3f; else if (r == 3) n *= 0.5f; else if (r == 4) n *= 0.7f; else if (r == 5) n *= 0.9f;
     return (int)n;
 }
+/* the difficulty: hard is Black Ops' numbers as they are */
+float diff_hurt(void)  { static const float k[DIFF_COUNT] = { 0.45f, 0.7f, 1.0f }; return k[CLAMP(G->diff, 0, DIFF_COUNT - 1)]; }
+float diff_hp(void)    { static const float k[DIFF_COUNT] = { 0.6f, 0.8f, 1.0f };  return k[CLAMP(G->diff, 0, DIFF_COUNT - 1)]; }
+float diff_count(void) { static const float k[DIFF_COUNT] = { 0.7f, 0.85f, 1.0f }; return k[CLAMP(G->diff, 0, DIFF_COUNT - 1)]; }
+float diff_pace(void)  { static const float k[DIFF_COUNT] = { 4.5f, 6.0f, 8.0f };  return k[CLAMP(G->diff, 0, DIFF_COUNT - 1)]; }
 static float spawn_delay(int r) { float d = 2.0f * powf(0.95f, (float)(r - 1)); return d < 0.08f ? 0.08f : d; }
 #define MAX_ALIVE 24
 
@@ -101,8 +106,8 @@ Zombie *zombie_at_spot(int type, float x, float y) {
     int r = G->round;
     z->alive = 1; z->type = type; z->x = x; z->y = y; z->window = -1;
     z->variant = rng_int(&G->rng, 8);
-    z->hp = z->maxhp = zombie_hp_for_round(r);
-    int roll = 8 * (r - 1) + rng_int(&G->rng, 36);
+    z->hp = z->maxhp = zombie_hp_for_round(r) * diff_hp();
+    int roll = (int)(diff_pace() * (r - 1)) + rng_int(&G->rng, 36);
     z->speed = roll <= 35 ? 24 : roll <= 70 ? 46 : 62;
     z->lastx = x; z->lasty = y;
     z->state = ZS_RISE; z->t = 1.3f;
@@ -123,7 +128,7 @@ void spawn_zombie(int type) {
     z->dir = 0;
     float hp = zombie_hp_for_round(r);
     /* speed: a roll from 8(R-1) to 8(R-1)+35: up to 35 walks, to 70 runs, over that sprints */
-    int roll = 8 * (r - 1) + rng_int(&G->rng, 36);
+    int roll = (int)(diff_pace() * (r - 1)) + rng_int(&G->rng, 36);
     float sp = roll <= 35 ? 22 + rng_rangef(&G->rng, 0, 6) : roll <= 70 ? 44 + rng_rangef(&G->rng, 0, 6) : 60 + rng_rangef(&G->rng, 0, 8);
     switch (type) {
     case ZT_BRUTE: hp *= 3; sp = 26 + rng_rangef(&G->rng, 0, 4); break;
@@ -135,7 +140,7 @@ void spawn_zombie(int type) {
     }
     case ZT_MOOSE: hp = MIN(22500.0f, 5000.0f + 1000.0f * G->moose_count); sp = 36; z->variant = 0; break;
     }
-    z->hp = z->maxhp = hp; z->speed = sp;
+    z->hp = z->maxhp = hp * diff_hp(); z->speed = sp;
     z->lastx = z->x; z->lasty = z->y;
     if (s->type == SP_WINDOW && type != ZT_MOOSE && type != ZT_WOLF) {
         z->state = ZS_WINDOW; z->window = s->inter; z->t = 0;
@@ -168,7 +173,7 @@ void round_start(int n) {
         banner(0x8ab0ff, tr("WOLF NIGHT"), 0);
         sfx(SFX_WOLF, 1, 0);
     } else {
-        G->to_spawn = zombies_for_round(n);
+        G->to_spawn = MAX(1, (int)(zombies_for_round(n) * diff_count()));
         if (boss >= 0) G->to_spawn = getenv("DK_DEBUG_BOSS_ONLY") ? 0 : G->to_spawn / 2;   /* a boss round: fewer of the rest */
         else if (n == G->moose_next) { G->moose_pending = 1; G->moose_next = n + rng_range(&G->rng, 4, 5); }
     }

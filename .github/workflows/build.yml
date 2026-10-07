@@ -25,7 +25,7 @@ jobs:
           tar tzf sd.tar.gz | grep -q '/shaders/ds-crisp.frag$'
       - name: Scripts parse
         run: |
-          for f in install.sh dsflip/device/*.sh dsflip/device/fast-switch dsflip/device/powerstate dsflip/device/battery-led-status tools/*.sh dodakvarter/device/*.sh dodakvarter/*.sh dodakvarter/tests/*.sh; do
+          for f in install.sh dsflip/device/*.sh dsflip/device/fast-switch dsflip/device/powerstate dsflip/device/battery-led-status tools/*.sh dodakvarter/device/*.sh dodakvarter/*.sh dodakvarter/tests/*.sh dodakvarter/tools/*.sh; do
             case "$(head -n1 "$f")" in *bash*) bash -n "$f" ;; *) sh -n "$f" ;; esac || { echo "syntax error in $f"; exit 1; }
           done
 

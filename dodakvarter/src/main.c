@@ -5,6 +5,7 @@
 //               [--snap DIR --snap-every N] [--size WxH] [--selftest]
 #include "game.h"
 #include "menu.h"
+#include "update.h"
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
@@ -126,5 +127,5 @@ int main(int argc, char **argv) {
     settings_save();
     plat_shutdown();
     plat_log("bye");
-    return 0;
+    return A.quit == 2 ? UPDATE_EXIT : 0;                  /* updated: the session starts the new one */
 }

@@ -8,8 +8,14 @@
 //   - a perk machine plays its jingle now and then to whoever stands by it, once the power is on
 //   - a boss every twentieth round, in turn: Insta-Kill and Kaboom don't kill it, the round waits for it, each one's
 //     moves hurt you, and killed it leaves a legendary weapon, Max Ammo and money
+//   - the difficulty: what a hit does, the dead's health and number, by Easy, Medium and Hard
+//   - lock-on (R2): the nearest in sight, then the next nearest, round again; the aim follows it; held, it lets go;
+//     the one locked on falls and the nearest is next; one behind a wall isn't taken
 #include "../src/game.h"
 #include "../src/menu.h"
+#include "../src/update.h"
+#include <unistd.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -32,6 +38,7 @@ int main(void) {
     char dir[] = "/tmp/dk-test-rules-XXXXXX";                 /* (its log, not in the player's data) */
     if (!mkdtemp(dir)) { perror("mkdtemp"); return 1; }
     setenv("DK_DATA", dir, 1);
+    S.diff = DIFF_HARD;                                     /* the rules below at the game's own numbers */
     G = calloc(1, sizeof *G); G->view_w = 320; G->view_h = 240;
     fire.held = BIT(B_A);
     int seed = 1;
@@ -282,6 +289,97 @@ int main(void) {
         settings_load();
         CHECK(bind_of(ACT_FIRE) == B_A && bind_of(ACT_USE) == B_B, "a broken table wasn't put back to the defaults (fire %d use %d)", bind_of(ACT_FIRE), bind_of(ACT_USE));
         binds_default(LAYOUT_CLASSIC); settings_save();
+    }
+    /* the difficulty */
+    {
+        float hurt[DIFF_COUNT], hp[DIFF_COUNT]; int count[DIFF_COUNT];
+        for (int d = 0; d < DIFF_COUNT; d++) {
+            S.diff = d; game_new(11, 0); calm(); G->rstate = RS_ACTIVE; G->round = 9;
+            CHECK(G->diff == d, "the run didn't take the difficulty (%d, not %d)", G->diff, d);
+            Player *p = &G->p; G->over = 0; p->invuln = 0; p->hp = 100; G->god = 0;
+            player_hurt(40, p->x + 10, p->y); hurt[d] = 100 - p->hp;
+            Zombie *z = zombie_at_spot(ZT_WALKER, p->x + 40, p->y); hp[d] = z ? z->maxhp : 0;
+            G->round = 1; G->rstate = RS_BREAK; G->rtime = 0; G->to_spawn = G->spawned = 0;
+            calm(); G->wolf_next = G->moose_next = 999; round_start(30); count[d] = G->to_spawn;
+        }
+        CHECK(hurt[DIFF_HARD] > 39 && hurt[DIFF_HARD] < 41, "a 40 hit on hard took %.1f", hurt[DIFF_HARD]);
+        CHECK(hurt[DIFF_EASY] < hurt[DIFF_MEDIUM] && hurt[DIFF_MEDIUM] < hurt[DIFF_HARD], "hits by difficulty: %.1f %.1f %.1f", hurt[0], hurt[1], hurt[2]);
+        CHECK(hp[DIFF_EASY] < hp[DIFF_MEDIUM] && hp[DIFF_MEDIUM] < hp[DIFF_HARD] && hp[DIFF_HARD] == zombie_hp_for_round(9), "health by difficulty: %.0f %.0f %.0f", hp[0], hp[1], hp[2]);
+        CHECK(count[DIFF_EASY] < count[DIFF_MEDIUM] && count[DIFF_MEDIUM] < count[DIFF_HARD] && count[DIFF_HARD] == zombies_for_round(30), "round 30's count by difficulty: %d %d %d", count[0], count[1], count[2]);
+        S.diff = DIFF_HARD;
+    }
+    /* lock-on */
+    {
+        binds_default(LAYOUT_CLASSIC); S.scheme = 0;
+        CHECK(bind_of(ACT_LOCK) == B_R2 && bind_of(ACT_GRENADE) == B_L2 && bind_of(ACT_ITEM) < 0, "classic defaults: lock %d grenade %d item %d", bind_of(ACT_LOCK), bind_of(ACT_GRENADE), bind_of(ACT_ITEM));
+        game_new(7, 0); calm(); G->rstate = RS_ACTIVE; G->round = 1; G->god = 1;
+        Player *p = &G->p;
+        G->camx = p->x - G->view_w / 2; G->camy = p->y - G->view_h / 2;
+        /* three in the open round the player (the start zone's middle), at 30, 50 and 70 px */
+        Zombie *a = 0, *b = 0, *c = 0;
+        float ang[3] = { 0, 2.1f, 4.2f }, dist[3] = { 30, 50, 70 };
+        Zombie **zs[3] = { &a, &b, &c };
+        for (int k = 0; k < 3; k++) {
+            float x = p->x + cosf(ang[k]) * dist[k], y = p->y + sinf(ang[k]) * dist[k];
+            if (shot_clear(p->x, p->y - 6, x, y - 6)) *zs[k] = zombie_at(x, y, ZS_CHASE), (*zs[k])->speed = 0;
+        }
+        Input r2; memset(&r2, 0, sizeof r2); r2.held = BIT(B_R2);
+        int ia = a ? (int)(a - G->z) + 1 : -1, ib = b ? (int)(b - G->z) + 1 : -1, ic = c ? (int)(c - G->z) + 1 : -1;
+        CHECK(a && b && c, "the start zone has walls in the way of the test's zombies (%d %d %d)", ia, ib, ic);
+        if (a && b && c) {
+            game_update(&r2, &none, 1.0f / 60); game_update(&none, &r2, 1.0f / 60);
+            CHECK(p->lock == ia, "a press locked on %d, not the nearest %d", p->lock, ia);
+            float want = atan2f((a->y - 6) - (p->y - 6), a->x - p->x);
+            CHECK(fabsf(angdiff(p->aim, want)) < 0.05f, "the aim doesn't follow the lock (%.2f, not %.2f)", p->aim, want);
+            game_update(&r2, &none, 1.0f / 60); game_update(&none, &r2, 1.0f / 60);
+            CHECK(p->lock == ib, "the second press: %d, not the next nearest %d", p->lock, ib);
+            game_update(&r2, &none, 1.0f / 60); game_update(&none, &r2, 1.0f / 60);
+            CHECK(p->lock == ic, "the third press: %d, not %d", p->lock, ic);
+            game_update(&r2, &none, 1.0f / 60); game_update(&none, &r2, 1.0f / 60);
+            CHECK(p->lock == ia, "past the farthest: %d, not the nearest again %d", p->lock, ia);
+            a->alive = 0;                                   /* it falls: the nearest of the rest */
+            game_update(&none, &none, 1.0f / 60);
+            CHECK(p->lock == ib, "after the locked one fell: %d, not %d", p->lock, ib);
+            for (int t = 0; t < 40; t++) game_update(&r2, t ? &r2 : &none, 1.0f / 60);
+            CHECK(p->lock == 0, "holding R2 didn't let go (%d)", p->lock);
+            game_update(&none, &r2, 1.0f / 60);
+            /* SELECT: a tap is the next item, held it's used */
+            p->bag[0].id = C_FORBAND; p->bag[0].n = 2; p->bag[1].id = C_PLASTER; p->bag[1].n = 1; p->bag_sel = 0;
+            Input sel; memset(&sel, 0, sizeof sel); sel.held = BIT(B_SELECT);
+            game_update(&sel, &none, 1.0f / 60); game_update(&none, &sel, 1.0f / 60);
+            CHECK(p->bag_sel == 1 && p->bag[1].n == 1, "a tap on SELECT: slot %d, %d left", p->bag_sel, p->bag[1].n);
+            p->hp = 30; G->god = 0;
+            for (int t = 0; t < 30; t++) game_update(&sel, t ? &sel : &none, 1.0f / 60);
+            game_update(&none, &sel, 1.0f / 60);
+            CHECK(p->bag[1].id < 0 && p->hp > 55, "holding SELECT didn't use the item (slot 1: id %d n %d, hp %.0f)", p->bag[1].id, p->bag[1].n, p->hp);
+        }
+    }
+    /* Settings > Game updates, with a stand-in for device/update.sh: the title looks once, says there's a newer one,
+       the row (from the title) installs it, asking first over a saved run, and the game quits for the session to
+       start the new one (status 75) */
+    {
+        char up[700]; snprintf(up, sizeof up, "%s/update.sh", dir);
+        FILE *f = fopen(up, "w");
+        if (f) { fprintf(f, "#!/bin/sh\necho \"$1\" >> '%s/calls'\ncase $1 in check) echo 'UPDATE 9.1.0' ;; install) echo 'STEP Downloading v9.1.0'; sleep 0.3; echo 'DONE 9.1.0' ;; esac\n", dir); fclose(f); }
+        chmod(up, 0755);
+        setenv("DK_UPDATER", up, 1);
+        A.state = ST_TITLE; A.t = 0; A.quit = 0; A.has_save = 1; A.save_checked = 1;
+        int t = 0;
+        char v[24];
+        for (; t < 60 * 5 && update_state(v, sizeof v, 0, 0) != UPD_AVAILABLE; t++) { app_update(&none, &none, 1.0f / 60); usleep(2000); }
+        CHECK(update_state(v, sizeof v, 0, 0) == UPD_AVAILABLE && !strcmp(v, "9.1.0"), "the title didn't find the update (state %d, '%s')", update_state(0, 0, 0, 0), v);
+        A.state = ST_SETTINGS; A.settings_from = ST_TITLE; A.sel = 11;
+        Input ok; memset(&ok, 0, sizeof ok); ok.held = BIT(btn_ok());
+        app_update(&ok, &none, 1.0f / 60); app_update(&none, &ok, 1.0f / 60);
+        CHECK(A.upd_confirm && update_state(0, 0, 0, 0) == UPD_AVAILABLE, "over a saved run, the first press updated (confirm %d, state %d)", A.upd_confirm, update_state(0, 0, 0, 0));
+        app_update(&ok, &none, 1.0f / 60); app_update(&none, &ok, 1.0f / 60);
+        for (t = 0; t < 60 * 6 && !A.quit; t++) { app_update(&none, &none, 1.0f / 60); usleep(2000); }
+        CHECK(A.quit == 2, "after the update the game didn't quit to restart (quit %d, state %d)", A.quit, update_state(0, 0, 0, 0));
+        char cp[700]; snprintf(cp, sizeof cp, "%s/calls", dir);
+        FILE *c = fopen(cp, "r"); char l1[16] = "", l2[16] = "";
+        if (c) { if (fscanf(c, "%15s %15s", l1, l2) != 2) l2[0] = 0; fclose(c); }
+        CHECK(!strcmp(l1, "check") && !strcmp(l2, "install"), "the updater was called '%s', '%s'", l1, l2);
+        A.quit = 0; unsetenv("DK_UPDATER");
     }
     char rm[640]; snprintf(rm, sizeof rm, "rm -rf '%s'", dir);
     if (system(rm)) printf("(couldn't remove %s)\n", dir);

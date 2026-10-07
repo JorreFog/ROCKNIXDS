@@ -215,6 +215,35 @@ static float aim_assist(float aim) {
     return out;
 }
 
+/* ---------------------------------------------------------------- lock-on (Settings > Buttons: Lock on, R2 by default)
+   A press locks the aim on the nearest of the dead in sight; another press moves it to the next nearest, and round
+   again. Held, it lets go. When the one locked on falls, the aim moves to the nearest by itself. */
+#define LOCK_RANGE 260
+int lock_target_ok(int i) {                         /* still worth aiming at */
+    if (i < 0 || i >= MAX_ZOMBIES) return 0;
+    const Zombie *z = &G->z[i];
+    if (!z->alive || z->state == ZS_DEAD || z->state == ZS_RISE) return 0;
+    if (z->type == ZT_BOSS) return 1;               /* (a boss under the ground or the water: the aim waits for it) */
+    return dist2f(z->x, z->y, G->p.x, G->p.y) < (LOCK_RANGE + 60) * (LOCK_RANGE + 60);
+}
+static int lock_pick(int cur) {                     /* the next one out from cur (index + 1; 0: the nearest), as index + 1 */
+    Player *p = &G->p;
+    float cd = -1;
+    if (cur > 0 && lock_target_ok(cur - 1)) cd = sqrtf(dist2f(G->z[cur - 1].x, G->z[cur - 1].y, p->x, p->y));
+    int best = 0, first = 0; float bd = 1e9f, fd = 1e9f;
+    for (int i = 0; i < MAX_ZOMBIES; i++) {
+        Zombie *z = &G->z[i];
+        if (!zombie_hittable(z) || i == cur - 1) continue;
+        float sx = z->x - G->camx, sy = z->y - G->camy;   /* on the screen */
+        if (sx < -8 || sy < 0 || sx > G->view_w + 8 || sy > G->view_h + 24) continue;
+        float d = sqrtf(dist2f(z->x, z->y, p->x, p->y));
+        if (d > LOCK_RANGE || !shot_clear(p->x, p->y - 6, z->x, z->y - 6)) continue;
+        if (d < fd) { fd = d; first = i + 1; }
+        if (d >= cd && d < bd) { bd = d; best = i + 1; }
+    }
+    return best ? best : first;                     /* past the farthest: the nearest again */
+}
+
 static void player_down(void) {
     Player *p = &G->p;
     p->downs++;
@@ -241,6 +270,7 @@ static void player_down(void) {
 void player_hurt(float dmg, float fx, float fy) {
     Player *p = &G->p;
     if (p->invuln > 0 || p->downed || G->over || G->god) return;
+    dmg *= diff_hurt();
     /* armour takes its share first: the vest more than the helmet */
     float share[2] = { 0.3f, 0.6f };
     for (int k = 0; k < 2; k++) {
@@ -326,7 +356,25 @@ static void player_update(const Input *in, const Input *prev, float dt) {
         float tx = G->camx + in->mx, ty = G->camy + in->my;
         aim = atan2f(ty - (p->y - 8), tx - p->x); aim_locked = 1;
     }
-    if (!aim_locked) {
+    /* lock-on: a press locks on (the next one), a hold lets go */
+    int lb = bind_of(ACT_LOCK);
+    if (lb >= 0 && held(in, lb)) {
+        float was = p->lock_held; p->lock_held += dt;
+        if (pressed(in, prev, lb)) {
+            int n = lock_pick(p->lock);
+            if (n && n != p->lock) { p->lock = n; p->lock_t = 0; sfx(SFX_MENU_MOVE, 0.6f, 0); }
+            else if (!n) sfx(SFX_MENU_BACK, 0.3f, 0);
+        }
+        if (was < 0.5f && p->lock_held >= 0.5f && p->lock) { p->lock = 0; sfx(SFX_MENU_BACK, 0.5f, 0); }
+    } else p->lock_held = 0;
+    if (p->lock && !lock_target_ok(p->lock - 1)) {          /* it fell (or got away): the nearest next */
+        p->lock = lock_pick(0); p->lock_t = 0;
+    }
+    if (p->lock) p->lock_t += dt;
+    if (p->lock && !aim_locked) {                          /* the stick, a touch or the twin buttons still aim themselves */
+        Zombie *t = &G->z[p->lock - 1];
+        aim = atan2f((t->y - 6) - (p->y - 6), t->x - p->x);
+    } else if (!aim_locked) {
         if (!fire_held && ml > 0.1f) aim = atan2f(my, mx);  /* facing follows walking, until you fire: then you strafe */
         else if (fire_held && ml > 0.1f && !held(prev, btn_fire())) aim = atan2f(my, mx);
         if (fire_held) aim = aim_assist(aim);
@@ -405,7 +453,18 @@ static void player_update(const Input *in, const Input *prev, float dt) {
     if (pressed(in, prev, bind_of(ACT_KNIFE)) && p->melee_cd <= 0) melee_attack();   /* (the twin layout: the knife comes by itself, below) */
     if (pressed(in, prev, bind_of(ACT_GRENADE)) && p->grenades > 0) throw_grenade(C_GRANAT);
     if (pressed(in, prev, bind_of(ACT_ITEM))) bag_use(p->bag_sel);
-    if (pressed(in, prev, bind_of(ACT_NEXT))) {              /* next item in the bag */
+    int nb = bind_of(ACT_NEXT), next = 0;
+    if (nb >= 0 && bind_of(ACT_ITEM) >= 0) next = pressed(in, prev, nb);
+    else if (nb >= 0) {                                      /* no button of its own for the item: hold next to use it */
+        if (held(in, nb)) {
+            float was = p->next_held; p->next_held += dt;
+            if (was < 0.35f && p->next_held >= 0.35f) bag_use(p->bag_sel);
+        } else {
+            next = p->next_held > 0 && p->next_held < 0.35f;   /* a tap: the next one */
+            p->next_held = 0;
+        }
+    }
+    if (next) {                                               /* next item in the bag */
         for (int k = 1; k <= BAG_SLOTS; k++) { int c = (p->bag_sel + k) % BAG_SLOTS; if (p->bag[c].id >= 0) { p->bag_sel = c; break; } }
     }
     if (fire_held && !p->sprinting && p->swap_t <= 0 && p->melee_t <= 0) {
@@ -454,7 +513,7 @@ void game_new(uint64_t seed, int season) {
     game_free();
     memset(G, 0, sizeof *G);
     G->view_w = vw; G->view_h = vh;
-    G->seed = seed; G->season = season;
+    G->seed = seed; G->season = season; G->diff = S.diff;
     G->storm_t = 20;                                        /* (the first lightning comes a while in) */
     rng_seed(&G->rng, seed, 1); rng_seed(&G->fx, seed, 2);
     map_generate(seed, season);

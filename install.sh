@@ -600,9 +600,18 @@ if [ $GAME_ON = 1 ] && [ -f "$SRC/dodakvarter/bin/dodakvarter-aarch64" ]; then
     systemctl stop dodakvarter-game.service 2>/dev/null || true
     DK=/storage/.config/rocknixds/dodakvarter
     mkdir -p $DK/data
-    cp "$SRC/dodakvarter/bin/dodakvarter-aarch64" $DK/dodakvarter
-    for f in launch.sh session.sh restore.sh selftest.sh gamelist.py; do cp "$SRC/dodakvarter/device/$f" $DK/; done
-    chmod +x $DK/dodakvarter $DK/launch.sh $DK/session.sh $DK/restore.sh $DK/selftest.sh
+    # The game updates itself from 0.2 on (Settings > Game updates: dodakvarter/device/update.sh): one newer than the
+    # copy in this ROCKNIXDS stays as it is. (0.1.0, in 1.6, has no VERSION file.)
+    DK_HAVE=$(cat $DK/VERSION 2>/dev/null || echo 0.1.0) DK_SHIP=$(cat "$SRC/dodakvarter/VERSION")
+    if [ -x $DK/dodakvarter ] && [ "$DK_HAVE" != "$DK_SHIP" ] &&
+       [ "$(printf '%s\n%s\n' "$DK_HAVE" "$DK_SHIP" | sort -V | tail -n1)" = "$DK_HAVE" ]; then
+        say "Döda Kvarter $DK_HAVE is newer than this ROCKNIXDS's $DK_SHIP: kept"
+    else
+        cp "$SRC/dodakvarter/bin/dodakvarter-aarch64" $DK/dodakvarter
+        for f in launch.sh session.sh restore.sh selftest.sh gamelist.py update.sh; do cp "$SRC/dodakvarter/device/$f" $DK/; done
+        cp "$SRC/dodakvarter/VERSION" $DK/VERSION
+        chmod +x $DK/dodakvarter $DK/launch.sh $DK/session.sh $DK/restore.sh $DK/selftest.sh $DK/update.sh
+    fi
     # Its entry in the menu: a tile of its own on the shelf where this ROCKNIXDS lists it as a system
     # (es_systems_rocknixds.cfg, installed with the theme from 1.6 on; the tile's icon is the theme's), else a line in
     # Ports as in 0.1. An entry left in the other place by an earlier install goes.
