@@ -56,7 +56,7 @@ all of it lies again in dark water. Any button (or a touch) skips it; then the t
 | Move | D-pad (or the left stick) | D-pad |
 | Fire | **A**. Holding it keeps you facing the way you fired: walk backwards and shoot | **X Y A B** fire up, left, right, down; two of them for the diagonals |
 | Aim | where you walk, with aim assist; the right stick if there is one | the face buttons |
-| Lock on | **R2**: locks the aim on the nearest zombie in sight; again, the next nearest; held, it lets go. When the one you locked on falls, the aim moves to the nearest by itself | - |
+| Lock on | hold **R2**: the aim stays locked on the nearest zombie in sight until you let go. Let go and hold it again at once for the next nearest. When the one you locked on falls, the aim moves to the nearest by itself | - |
 | Use, buy, take | **B** (hold it to repair a window or search a bin) | **R** |
 | Reload | **Y** | **SELECT** (it reloads by itself when the magazine is empty) |
 | Switch weapon | **X** | **R2** |

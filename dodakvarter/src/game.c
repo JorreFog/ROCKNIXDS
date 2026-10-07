@@ -216,8 +216,9 @@ static float aim_assist(float aim) {
 }
 
 /* ---------------------------------------------------------------- lock-on (Settings > Buttons: Lock on, R2 by default)
-   A press locks the aim on the nearest of the dead in sight; another press moves it to the next nearest, and round
-   again. Held, it lets go. When the one locked on falls, the aim moves to the nearest by itself. */
+   Held, the aim stays locked on the nearest of the dead in sight; let go, it's free again. Let go and held again
+   quickly, it locks on the next nearest instead (and round again). When the one locked on falls while the button
+   is held, the aim moves to the nearest by itself. */
 #define LOCK_RANGE 260
 int lock_target_ok(int i) {                         /* still worth aiming at */
     if (i < 0 || i >= MAX_ZOMBIES) return 0;
@@ -356,21 +357,21 @@ static void player_update(const Input *in, const Input *prev, float dt) {
         float tx = G->camx + in->mx, ty = G->camy + in->my;
         aim = atan2f(ty - (p->y - 8), tx - p->x); aim_locked = 1;
     }
-    /* lock-on: a press locks on (the next one), a hold lets go */
+    /* lock-on: held, locked; let go, free; held again within 0.4 s, the next nearest */
     int lb = bind_of(ACT_LOCK);
     if (lb >= 0 && held(in, lb)) {
-        float was = p->lock_held; p->lock_held += dt;
-        if (pressed(in, prev, lb)) {
-            int n = lock_pick(p->lock);
+        if (pressed(in, prev, lb) || !p->lock) {
+            int from = pressed(in, prev, lb) && p->lock_off < 0.4f && p->lock_last && lock_target_ok(p->lock_last - 1) ? p->lock_last : 0;
+            int n = lock_pick(from);
             if (n && n != p->lock) { p->lock = n; p->lock_t = 0; sfx(SFX_MENU_MOVE, 0.6f, 0); }
-            else if (!n) sfx(SFX_MENU_BACK, 0.3f, 0);
+            else if (!n && pressed(in, prev, lb)) sfx(SFX_MENU_BACK, 0.3f, 0);
         }
-        if (was < 0.5f && p->lock_held >= 0.5f && p->lock) { p->lock = 0; sfx(SFX_MENU_BACK, 0.5f, 0); }
-    } else p->lock_held = 0;
-    if (p->lock && !lock_target_ok(p->lock - 1)) {          /* it fell (or got away): the nearest next */
-        p->lock = lock_pick(0); p->lock_t = 0;
+        if (p->lock && !lock_target_ok(p->lock - 1)) { p->lock = lock_pick(0); p->lock_t = 0; }   /* it fell: the nearest next */
+    } else {
+        if (p->lock) { p->lock_last = p->lock; p->lock_off = 0; p->lock = 0; }
+        p->lock_off += dt;
     }
-    if (p->lock) p->lock_t += dt;
+    if (p->lock) p->lock_t += dt;   /* (also held with nobody in sight: the first to come into it is taken) */
     if (p->lock && !aim_locked) {                          /* the stick, a touch or the twin buttons still aim themselves */
         Zombie *t = &G->z[p->lock - 1];
         aim = atan2f((t->y - 6) - (p->y - 6), t->x - p->x);

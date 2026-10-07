@@ -44,7 +44,7 @@ const char *btn_name(int b) {
     return b >= 0 && b < B_COUNT ? n[b] : "-";
 }
 const char *act_name(int act) {
-    static const char *n[ACT_COUNT] = { "Fire", "Use", "Reload", "Swap weapon", "Knife", "Sprint", "Grenade", "Use item", "Next item (hold: use)", "Lock on" };
+    static const char *n[ACT_COUNT] = { "Fire", "Use", "Reload", "Swap weapon", "Knife", "Sprint", "Grenade", "Use item", "Next item (hold: use)", "Lock on (hold)" };
     return act >= 0 && act < ACT_COUNT ? n[act] : "";
 }
 Score scores[MAX_SCORES]; int nscores;
