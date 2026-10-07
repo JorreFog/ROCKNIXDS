@@ -9,8 +9,8 @@
 //   - a boss every twentieth round, in turn: Insta-Kill and Kaboom don't kill it, the round waits for it, each one's
 //     moves hurt you, and killed it leaves a legendary weapon, Max Ammo and money
 //   - the difficulty: what a hit does, the dead's health and number, by Easy, Medium and Hard
-//   - lock-on (R2): the nearest in sight, then the next nearest, round again; the aim follows it; held, it lets go;
-//     the one locked on falls and the nearest is next; one behind a wall isn't taken
+//   - lock-on (R2): held, the nearest in sight, and the aim follows it; let go, free; let go and held again at once,
+//     the next nearest, round again; the one locked on falls and the nearest is next
 #include "../src/game.h"
 #include "../src/menu.h"
 #include "../src/update.h"
@@ -327,22 +327,27 @@ int main(void) {
         int ia = a ? (int)(a - G->z) + 1 : -1, ib = b ? (int)(b - G->z) + 1 : -1, ic = c ? (int)(c - G->z) + 1 : -1;
         CHECK(a && b && c, "the start zone has walls in the way of the test's zombies (%d %d %d)", ia, ib, ic);
         if (a && b && c) {
-            game_update(&r2, &none, 1.0f / 60); game_update(&none, &r2, 1.0f / 60);
-            CHECK(p->lock == ia, "a press locked on %d, not the nearest %d", p->lock, ia);
+            for (int t = 0; t < 5; t++) game_update(&r2, t ? &r2 : &none, 1.0f / 60);
+            CHECK(p->lock == ia, "held, locked on %d, not the nearest %d", p->lock, ia);
             float want = atan2f((a->y - 6) - (p->y - 6), a->x - p->x);
             CHECK(fabsf(angdiff(p->aim, want)) < 0.05f, "the aim doesn't follow the lock (%.2f, not %.2f)", p->aim, want);
-            game_update(&r2, &none, 1.0f / 60); game_update(&none, &r2, 1.0f / 60);
-            CHECK(p->lock == ib, "the second press: %d, not the next nearest %d", p->lock, ib);
-            game_update(&r2, &none, 1.0f / 60); game_update(&none, &r2, 1.0f / 60);
-            CHECK(p->lock == ic, "the third press: %d, not %d", p->lock, ic);
-            game_update(&r2, &none, 1.0f / 60); game_update(&none, &r2, 1.0f / 60);
-            CHECK(p->lock == ia, "past the farthest: %d, not the nearest again %d", p->lock, ia);
-            a->alive = 0;                                   /* it falls: the nearest of the rest */
-            game_update(&none, &none, 1.0f / 60);
-            CHECK(p->lock == ib, "after the locked one fell: %d, not %d", p->lock, ib);
-            for (int t = 0; t < 40; t++) game_update(&r2, t ? &r2 : &none, 1.0f / 60);
-            CHECK(p->lock == 0, "holding R2 didn't let go (%d)", p->lock);
             game_update(&none, &r2, 1.0f / 60);
+            CHECK(p->lock == 0, "let go, still locked on %d", p->lock);
+            for (int t = 0; t < 60; t++) game_update(&none, &none, 1.0f / 60);
+            game_update(&r2, &none, 1.0f / 60);
+            CHECK(p->lock == ia, "held again a second later: %d, not the nearest %d", p->lock, ia);
+            game_update(&none, &r2, 1.0f / 60); game_update(&none, &none, 1.0f / 60);
+            game_update(&r2, &none, 1.0f / 60);
+            CHECK(p->lock == ib, "let go and held again at once: %d, not the next nearest %d", p->lock, ib);
+            game_update(&none, &r2, 1.0f / 60); game_update(&r2, &none, 1.0f / 60);
+            CHECK(p->lock == ic, "and again: %d, not %d", p->lock, ic);
+            game_update(&none, &r2, 1.0f / 60); game_update(&r2, &none, 1.0f / 60);
+            CHECK(p->lock == ia, "past the farthest: %d, not the nearest again %d", p->lock, ia);
+            a->alive = 0;                                   /* it falls while held: the nearest of the rest */
+            game_update(&r2, &r2, 1.0f / 60);
+            CHECK(p->lock == ib, "after the locked one fell: %d, not %d", p->lock, ib);
+            game_update(&none, &r2, 1.0f / 60);
+            CHECK(p->lock == 0, "let go at the end: still %d", p->lock);
             /* SELECT: a tap is the next item, held it's used */
             p->bag[0].id = C_FORBAND; p->bag[0].n = 2; p->bag[1].id = C_PLASTER; p->bag[1].n = 1; p->bag_sel = 0;
             Input sel; memset(&sel, 0, sizeof sel); sel.held = BIT(B_SELECT);

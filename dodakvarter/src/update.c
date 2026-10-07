@@ -30,23 +30,30 @@ static void *run(void *arg) {
     const char *u = getenv("DK_UPDATER");
     char cmd[700]; snprintf(cmd, sizeof cmd, "'%s' %s 2>/dev/null", u, install ? "install" : "check");
     FILE *f = popen(cmd, "r");
-    int got = 0;
+    /* the steps show as they come; the answer only once the updater is done, with busy cleared in the same step,
+       so a press on what it says always finds the updater free */
+    int st = install ? UPD_FAILED : UPD_OFFLINE; char v[24] = "", why[48] = "";
+    snprintf(why, sizeof why, "%s", install ? "the update didn't run" : "");
     if (f) {
         char l[160];
         while (fgets(l, sizeof l, f)) {
             trim(l);
-            if (!strncmp(l, "UPDATE ", 7)) { set(UPD_AVAILABLE, l + 7, 0); got = 1; }
-            else if (!strncmp(l, "UPTODATE", 8)) { set(UPD_LATEST, l[8] ? l + 9 : 0, 0); got = 1; }
-            else if (!strncmp(l, "OFFLINE", 7)) { set(UPD_OFFLINE, 0, 0); got = 1; }
+            if (!strncmp(l, "UPDATE ", 7)) { st = UPD_AVAILABLE; snprintf(v, sizeof v, "%s", l + 7); }
+            else if (!strncmp(l, "UPTODATE", 8)) { st = UPD_LATEST; snprintf(v, sizeof v, "%s", l[8] ? l + 9 : ""); }
+            else if (!strncmp(l, "OFFLINE", 7)) st = UPD_OFFLINE;
             else if (!strncmp(l, "STEP ", 5)) set(UPD_INSTALLING, 0, l + 5);
-            else if (!strncmp(l, "DONE", 4)) { set(UPD_DONE, l[4] ? l + 5 : 0, 0); got = 1; }
-            else if (!strncmp(l, "FAIL", 4)) { set(UPD_FAILED, 0, l[4] ? l + 5 : "the update failed"); got = 1; }
+            else if (!strncmp(l, "DONE", 4)) { st = UPD_DONE; snprintf(v, sizeof v, "%s", l[4] ? l + 5 : ""); }
+            else if (!strncmp(l, "FAIL", 4)) { st = UPD_FAILED; snprintf(why, sizeof why, "%s", l[4] ? l + 5 : "the update failed"); }
         }
         pclose(f);
     }
-    if (!got) set(install ? UPD_FAILED : UPD_OFFLINE, 0, install ? "the update didn't run" : 0);
-    plat_log("update %s: state %d %s %s", install ? "install" : "check", state, ver, step);
-    pthread_mutex_lock(&mu); busy = 0; pthread_mutex_unlock(&mu);
+    pthread_mutex_lock(&mu);
+    state = st;
+    if (v[0]) snprintf(ver, sizeof ver, "%s", v);
+    if (st == UPD_FAILED) snprintf(step, sizeof step, "%s", why);
+    busy = 0;
+    pthread_mutex_unlock(&mu);
+    plat_log("update %s: state %d %s %s", install ? "install" : "check", st, v, why);
     return 0;
 }
 

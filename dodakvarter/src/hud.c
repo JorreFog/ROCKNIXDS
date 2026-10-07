@@ -274,7 +274,7 @@ static void legend(Surf *s) {
         snprintf(h2, sizeof h2, sv ? "%s: BYT  %s: KNIV  %s: SPRING" : "%s: SWAP  %s: KNIFE  %s: SPRINT", BN(ACT_SWAP), BN(ACT_KNIFE), BN(ACT_SPRINT));
         if (bind_of(ACT_ITEM) >= 0)
             snprintf(h3, sizeof h3, sv ? "%s: GRANAT  %s: SAK  %s: NÄSTA" : "%s: GRENADE  %s: ITEM  %s: NEXT", BN(ACT_GRENADE), BN(ACT_ITEM), BN(ACT_NEXT));
-        else snprintf(h3, sizeof h3, sv ? "%s: GRANAT  %s: LÅS SIKTET  %s: SAK" : "%s: GRENADE  %s: LOCK ON  %s: ITEM", BN(ACT_GRENADE), BN(ACT_LOCK), BN(ACT_NEXT));
+        else snprintf(h3, sizeof h3, sv ? "%s: GRANAT  HÅLL %s: LÅS  %s: SAK" : "%s: GRENADE  HOLD %s: LOCK  %s: ITEM", BN(ACT_GRENADE), BN(ACT_LOCK), BN(ACT_NEXT));
     }
     #undef BN
     text(s, FONT_SMALL, x + 4, y + h - 22, 0x5a6476, h1);

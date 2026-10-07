@@ -207,8 +207,9 @@ typedef struct {
     float last_hit_t;
     float stamina; int sprinting;
     int repair_kr;                      /* board money this round (capped at 50 x round, 500 at most) */
-    int lock;                           /* lock-on: the zombie aimed at, its index + 1 (0: none) */
-    float lock_t, lock_held, next_held; /* the marker's animation; how long the lock and next-item buttons are held */
+    int lock;                           /* lock-on: the zombie aimed at while the button is held, its index + 1 (0: none) */
+    int lock_last; float lock_off;      /* the one locked on before the button was let go, and how long ago */
+    float lock_t, next_held;            /* the marker's animation; how long the next-item button is held */
 } Player;
 
 /* ---------------------------------------------------------------- effects */
