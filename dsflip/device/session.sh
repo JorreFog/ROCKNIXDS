@@ -94,7 +94,14 @@ stuck_report() {
   GPU=/sys/class/devfreq/fde60000.gpu
   GPU_GOV=$(cat $GPU/governor 2>/dev/null)
   GPU_MIN=$(cat $GPU/min_freq 2>/dev/null)
-  case "${DSHOOK_SHADER:-none}" in
+  # A shader picked for this game in SuperDrastic's in-game menu (menu.cfg: shader.<game>=<pick> <the frontend's
+  # shader it was picked over>) is what runs while ES still asks for the shader it was picked over; the clock follows it.
+  SH=${DSHOOK_SHADER:-none}; [ "$SH" = bilinear ] && SH=none
+  G=$(basename "$ROM"); G=${G%.*}
+  PICK=$(awk -v k="shader.$G=" 'index($0, k) == 1 { v = substr($0, length(k) + 1) } END { print v }' \
+         "${DSFLIP_DATA:-/storage/.config/drastic/dsflip}/menu.cfg" 2>/dev/null)
+  [ -n "$PICK" ] && [ "${PICK#* }" = "$SH" ] && SH=${PICK%% *} && echo "shader picked in the in-game menu: $SH"
+  case "$SH" in
     none|bilinear) GOV=powersave; MIN= ;;
     # ds-fsr (FSR 1.0) needs ~9.5 ms of GPU per frame on the RG DS (~14 ms on the Plus, where it draws 3x the DS
     # screen, 768x576, and the display controller scales the rest; SuperDrastic's shaders/ds-fsr.frag): under
