@@ -8,12 +8,13 @@
 #
 #   tools/image/build-image.sh [--rocknix 20261001] [--rgds v1.5.3] [--plus v1.5.3-plus] [--out DIR]
 #
+# --rocknix: the ROCKNIX nightly to build on (default: the one this checkout was verified on, the repo's ROCKNIX file).
 # --rgds/--plus: git refs of this repo (default: the newest vX.Y and vX.Y-plus tags); "worktree" packs the working
 # tree as it is (tracked files), for testing; "none" builds no image for that handheld.
 # Needs: git, curl, mtools, gzip, sha256sum, sfdisk.
 # Output: DIR/rocknixds-<ref>-rocknix-<rocknix>.img.gz (+ .sha256) per handheld. Cache: DIR/cache.
 set -e
-ROCKNIX=20261001
+ROCKNIX=
 RGDS_REF= PLUS_REF= OUT=$PWD/image-out
 while [ $# -gt 0 ]; do
     case $1 in
@@ -30,6 +31,8 @@ die() { printf '\033[1;31mERROR:\033[0m %s\n' "$*"; exit 1; }
 for t in git curl mcopy mmd mtype gzip sha256sum sfdisk; do command -v $t >/dev/null || die "needs $t"; done
 REPO=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
 HERE=$REPO/tools/image
+[ -n "$ROCKNIX" ] || ROCKNIX=$(grep -v '^#' "$REPO/ROCKNIX" 2>/dev/null | grep -o '^[0-9]\{8\}' | head -n1)
+[ -n "$ROCKNIX" ] || die "no ROCKNIX version: pass --rocknix YYYYMMDD (the repo's ROCKNIX file has none)"
 [ -n "$RGDS_REF" ] || RGDS_REF=$(git -C "$REPO" tag -l 'v[0-9]*' --sort=-v:refname | grep -v plus | head -n1)
 [ -n "$PLUS_REF" ] || PLUS_REF=$(git -C "$REPO" tag -l 'v[0-9]*-plus' --sort=-v:refname | head -n1)
 mkdir -p "$OUT/cache"; OUT=$(cd "$OUT" && pwd)

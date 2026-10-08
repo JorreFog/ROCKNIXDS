@@ -270,7 +270,7 @@ if [ $UNINSTALL = 1 ]; then
     rm -rf $DRASTIC/dsflip
     [ -f $BACKUP/.shaders-added ] && while read -r b; do rm -f "$DRASTIC/shaders/$b"; done < $BACKUP/.shaders-added
     [ -e $BACKUP/.esf-created ] && rm -f $ESF $ESF.rocknixds-old
-    rm -f /storage/.config/autostart/rocknixds-es-features
+    rm -f /storage/.config/autostart/rocknixds-es-features /storage/.config/autostart/rocknixds-os
     # lockdown and updates: ROCKNIX's DS emulators and settings menus again
     systemctl stop rocknixds-update-check.timer 2>/dev/null
     rm -f /storage/.config/system.d/rocknixds-update-check.service /storage/.config/system.d/rocknixds-update-check.timer \
@@ -590,6 +590,13 @@ if [ $WITH_60HZ = 1 ]; then
     sh "$SRC/dii-ess-aye/device/apply-60hz-dtb.sh" || say "60 Hz step skipped (see message above)"
     NEED_REBOOT=1
 fi
+# A ROCKNIX update puts its own device tree back: the first boot on a new ROCKNIX (autostart-rocknixds-os) re-applies
+# the 60 Hz one from this copy, where it was chosen (--with-60hz now, or a tree that has it from an earlier install).
+mkdir -p /storage/.config/rocknixds
+cp "$SRC/dii-ess-aye/device/apply-60hz-dtb.sh" /storage/.config/rocknixds/apply-60hz-dtb.sh
+if [ $WITH_60HZ = 1 ] || [ "$(sh "$SRC/dii-ess-aye/device/apply-60hz-dtb.sh" --check 2>/dev/null)" = 60hz ]; then
+    touch /storage/.config/rocknixds/.with-60hz
+fi
 
 # ---- Döda Kvarter: a game made for both screens -----------------------------------------------------------
 # A zombie roguelike in a Swedish suburb at night (dodakvarter/): the top screen is the game, the bottom one the
@@ -642,6 +649,15 @@ RD=/storage/.config/rocknixds
 mkdir -p $RD
 cp "$SRC/dsflip/device/rocknixds-update" $RD/ && chmod +x $RD/rocknixds-update
 themes_allow > $RD/themes.allow
+# The base ROCKNIX (UPDATES & DOWNLOADS > ROCKNIX (BASE SYSTEM), rocknixds-update os-*): the nightly this release was
+# verified on, and the boot hook that puts back what a ROCKNIX update undoes. The ROCKNIX running now is the one
+# ROCKNIXDS was just installed on: the hook acts only once that changes.
+grep -v '^#' "$SRC/ROCKNIX" 2>/dev/null | grep -o '^[0-9]\{8\}' | head -n1 > $RD/rocknix-verified
+mkdir -p /storage/.config/autostart
+cp "$SRC/dsflip/device/autostart-rocknixds-os" /storage/.config/autostart/rocknixds-os
+chmod +x /storage/.config/autostart/rocknixds-os
+(. /etc/os-release; echo "$OS_VERSION") > $RD/os-version
+rm -f $RD/os-pending
 [ -f $SYSCFG ] && backup_once $SYSCFG
 [ -f $SYSCFG ] && sed -i '/^nds\(\[.*\]\)\{0,1\}\.\(emulator\|core\)=/d' $SYSCFG       # a per-game RetroArch/melonDS choice
 # The update channel follows what was installed, unless the player already chose one in the menu (which stores
