@@ -1,0 +1,12 @@
+{
+ "id": "myapp",
+ "check": "myapp",
+ "executable": [
+  "myapp"
+ ],
+ "keep": [
+  "data"
+ ],
+ "entry": "My App.sh",
+ "icon": "icon.png"
+}
