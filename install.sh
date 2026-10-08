@@ -274,7 +274,8 @@ if [ $UNINSTALL = 1 ]; then
     rm -rf $DRASTIC/dsflip
     [ -f $BACKUP/.shaders-added ] && while read -r b; do rm -f "$DRASTIC/shaders/$b"; done < $BACKUP/.shaders-added
     [ -e $BACKUP/.esf-created ] && rm -f $ESF $ESF.rocknixds-old
-    rm -f /storage/.config/autostart/rocknixds-es-features /storage/.config/autostart/rocknixds-os
+    rm -f /storage/.config/autostart/rocknixds-es-features /storage/.config/autostart/rocknixds-os \
+          /storage/.config/autostart/rocknixds-audio
     # lockdown and updates: ROCKNIX's DS emulators and settings menus again
     systemctl stop rocknixds-update-check.timer 2>/dev/null
     rm -f /storage/.config/system.d/rocknixds-update-check.service /storage/.config/system.d/rocknixds-update-check.timer \
@@ -663,6 +664,9 @@ cp "$SRC/dsflip/device/autostart-rocknixds-os" /storage/.config/autostart/rockni
 chmod +x /storage/.config/autostart/rocknixds-os
 (. /etc/os-release; echo "$OS_VERSION") > $RD/os-version
 rm -f $RD/os-pending
+# #53: the boot check of the sound card's output path and PipeWire's default output (autostart-rocknixds-audio)
+cp "$SRC/dsflip/device/autostart-rocknixds-audio" /storage/.config/autostart/rocknixds-audio
+chmod +x /storage/.config/autostart/rocknixds-audio
 [ -f $SYSCFG ] && backup_once $SYSCFG
 [ -f $SYSCFG ] && sed -i '/^nds\(\[.*\]\)\{0,1\}\.\(emulator\|core\)=/d' $SYSCFG       # a per-game RetroArch/melonDS choice
 # The update channel follows what was installed, unless the player already chose one in the menu (which stores
