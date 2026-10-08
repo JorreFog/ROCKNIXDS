@@ -8,6 +8,21 @@
 # Off switch: touch /storage/.config/drastic/nodsflip (or DSFLIP=0) -> the previous launcher
 # (drastic.dvsync: drastouch touch/shaders + dvsync pacing under sway).
 D=/storage/.config/drastic
+GAME=$(basename "$1")
+# Where the DS saves and savestates go (ES: Nintendo DS > save files / save states; #42, #56): ROCKNIX's
+# start_drastic.sh has just pointed DraStic's backup/ and savestates/ at its own places, and save-dirs.sh points them
+# where the options say, moving the files along, before DraStic starts.
+[ -f $D/dsflip/save-dirs.sh ] && sh $D/dsflip/save-dirs.sh
+# "Apply recommended settings" (#45): start_drastic.sh has already written the game's hires 3D, threaded 3D and follow
+# 3D renderer into drastic.cfg and exported its shader; with it on, the recommended ones instead (nds-settings.sh). The
+# 3D renderer, resolution, texture filter and power profile are session.sh's.
+if [ -f $D/dsflip/nds-settings.sh ] && . $D/dsflip/nds-settings.sh && nds_recommended_on "$GAME"; then
+    DSHOOK_SHADER=$(nds_get "$GAME" shader)
+    for kv in hires_3d:hires_3d threaded_3d:threaded_3d follow_3d_renderer:fix_main_2d_screen; do
+        val=$(nds_get "$GAME" ${kv%%:*})
+        case "$val" in 0|1) sed -i "s/^${kv#*:} = .*/${kv#*:} = $val/" $D/config/drastic.cfg ;; esac
+    done
+fi
 # VT mode (fast switching, on by default since 1.5.13; dsflip/fast-switch off turns it off): ES and sway stay up; the
 # session switches the console to another VT so seatd takes the display from sway, and back afterwards. The menu is
 # back about a second after a quit, whatever the size of the library: nothing restarts and nothing is reloaded.

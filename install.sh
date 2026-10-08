@@ -265,6 +265,8 @@ if [ $UNINSTALL = 1 ]; then
         else printf '#!/bin/sh\nexec /storage/.config/drastic/drastic.real "$@"\n' > $DRASTIC/drastic; chmod +x $DRASTIC/drastic; fi
     fi
     sed -i '/<bool name="HideWindow" /d' $ES_SETTINGS 2>/dev/null      # fast-switch on (up to 1.5.12) set it; ROCKNIX's default again
+    # the DS saves and savestates back where ROCKNIX's launcher looks for them (the save files / save states options)
+    [ -f $DRASTIC/dsflip/save-dirs.sh ] && sh $DRASTIC/dsflip/save-dirs.sh --stock
     # ROCKNIX's DS emulators again (lockdown), while es-features.sh is still there
     [ -f $DRASTIC/dsflip/es-features.sh ] && sh $DRASTIC/dsflip/es-features.sh --unlock-nds
     rm -rf $DRASTIC/dsflip
@@ -505,6 +507,7 @@ if [ $DSFLIP_ON = 1 ]; then
        "$SRC/dsflip/device/es-share-logs.sh" "$SRC/dsflip/device/menu-power.sh" \
        "$SRC/dsflip/device/battery-led-status" "$SRC/dsflip/device/powerstate" \
        "$SRC/dsflip/device/media-auto.sh" "$SRC/dsflip/device/preload-guard.so" "$SRC/dsflip/device/drastic-launch" \
+       "$SRC/dsflip/device/save-dirs.sh" "$SRC/dsflip/device/nds-settings.sh" "$SRC/dsflip/device/recommended.cfg" \
        $WORK/dsflip/
     sh $WORK/dsflip/install.sh
     # fast switching (dsflip/fast-switch): ES and sway stay up during a DS game, which runs on another VT, so the menu

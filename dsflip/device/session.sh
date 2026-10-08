@@ -139,10 +139,19 @@ stuck_report() {
   # player's slots) and quits; the next start of the game loads it, once. A resume state older than the game's own
   # save file is dropped: loading it would put back an older in-game save too (backup_in_savestates).
   CFG=/storage/.config/system/configs/system.cfg GAME=$(basename "$ROM")
-  RES=$(grep -F "nds[\"$GAME\"].resume_on_quit=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  [ -n "$RES" ] || RES=$(grep "^nds.resume_on_quit=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  # The game's settings, else the DS system's; with "Apply recommended settings" on, the recommended picture and speed
+  # settings instead (nds-settings.sh, recommended.cfg; #45)
+  if [ -f $D/dsflip/nds-settings.sh ]; then . $D/dsflip/nds-settings.sh
+  else
+    nds_get() { _nv=$(grep -F "nds[\"$1\"].$2=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2); [ -n "$_nv" ] || _nv=$(grep "^nds\.$2=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2); echo "$_nv"; }
+    nds_chosen() { grep -qF "nds[\"$1\"].$2=" $CFG 2>/dev/null; }
+    nds_recommended_on() { false; }
+  fi
+  nds_recommended_on "$GAME" && echo "recommended settings: on (the game's own picture and speed settings are not used)"
+  RES=$(nds_get "$GAME" resume_on_quit)
   if [ "$RES" != 0 ] && { [ ! -e /tmp/rocknixds-testing ] || [ -e /tmp/rocknixds-testing-resume ]; }; then
-    RSTATE="/storage/roms/savestates/nds/${GAME%.*}.resume.dss" DSV="$(dirname "$ROM")/${GAME%.*}.dsv"
+    # DraStic's savestates and saves folders (links: ROCKNIX's start_drastic.sh, then save-dirs.sh, decide where)
+    RSTATE="$D/savestates/${GAME%.*}.resume.dss" DSV="$D/backup/${GAME%.*}.dsv"
     RLOAD=0
     if [ -f "$RSTATE" ]; then
       if [ -f "$DSV" ] && [ "$DSV" -nt "$RSTATE" ]; then rm -f "$RSTATE"; echo "resume state older than the game's save: dropped"
@@ -170,17 +179,14 @@ stuck_report() {
   # Platinum with a shader) below full speed for 38-83% of their play at the clocks the governor held; a bound that
   # slows the game down saves nothing worth it.
   # DSFLIP_* already in the environment (tests, systemctl set-environment) win over the profile.
-  PROF=$(grep -F "nds[\"$GAME\"].power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  [ -n "$PROF" ] || PROF=$(grep "^nds.power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  PROF=$(nds_get "$GAME" power_profile)
   # 3D resolution (ES: the game's or DS system's "3D resolution", nds.resolution3d; Gengis Engine only, read with the
   # renderer below): 3x draws the 3D at three times the DS's size and brings it down to the 2x frame (smoother edges,
   # the same layout). It costs CPU, so the power profile is performance unless this game has its own set: HeartGold
   # walking held 59.8-60.2 fps at 1992 MHz in the 3x test build; the balanced profile's 1416 MHz cap would not.
-  RES=$(grep -F "nds[\"$GAME\"].resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  [ -n "$RES" ] || RES=$(grep "^nds.resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  RND=$(grep -F "nds[\"$GAME\"].renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  [ -n "$RND" ] || RND=$(grep "^nds.renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  if [ "$RES" = 3x ] && [ "$RND" != drastic ] && [ "${DSFLIP_RAST:-1}" != 0 ] && ! grep -qF "nds[\"$GAME\"].power_profile=" $CFG 2>/dev/null; then
+  RES=$(nds_get "$GAME" resolution3d)
+  RND=$(nds_get "$GAME" renderer)
+  if [ "$RES" = 3x ] && [ "$RND" != drastic ] && [ "${DSFLIP_RAST:-1}" != 0 ] && ! nds_chosen "$GAME" power_profile; then
     PROF=performance
   fi
   case "$PROF" in
@@ -216,8 +222,7 @@ stuck_report() {
   case "$RND" in drastic) ;; superdrastic|""|auto) export DSFLIP_RAST=${DSFLIP_RAST:-1} ;; esac
   [ "$DSFLIP_RAST" = 0 ] && unset DSFLIP_RAST
   case "$RES" in 3x|3) [ -n "$DSFLIP_RAST" ] && export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-3} ;; 2x|2) [ -n "$DSFLIP_RAST" ] && export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-2} ;; esac
-  TF=$(grep -F "nds[\"$GAME\"].texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  [ -n "$TF" ] || TF=$(grep "^nds.texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  TF=$(nds_get "$GAME" texture_filter)
   case "$TF" in bilinear) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-1} ;; sharp) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-2} ;; esac
   if [ -n "$DSFLIP_RAST" ]; then echo "3D renderer: Gengis Engine (${RND:-Auto}; scale ${DSFLIP_RAST_SCALE:-2}, texture filter ${DSFLIP_RAST_TEXFILTER:-0})"; else echo "3D renderer: DraStic"; fi
   # Wi-Fi online play is parked for 1.6 (it doesn't get past the game's own Wi-Fi setup yet): ES no longer offers

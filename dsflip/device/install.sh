@@ -29,6 +29,8 @@ fi
 [ -f "$HERE/powerstate" ] && cp "$HERE/powerstate" $D/dsflip/ && chmod +x $D/dsflip/powerstate
 [ -f "$HERE/fast-switch" ] && cp "$HERE/fast-switch" $D/dsflip/ && chmod +x $D/dsflip/fast-switch
 [ -f "$HERE/media-auto.sh" ] && cp "$HERE/media-auto.sh" $D/dsflip/
+# where the DS saves go, and the recommended settings (drastic-wrapper.sh and session.sh read them)
+for f in save-dirs.sh nds-settings.sh recommended.cfg; do if [ -f "$HERE/$f" ]; then cp "$HERE/$f" $D/dsflip/; fi; done
 chmod +x $D/dsflip/*.sh
 ln -sf ../drastic.real $D/dsflip/drastic          # named 'drastic' so the exit hotkey (killall drastic) matches
 [ -e $D/drastic.dvsync ] || cp -p $D/drastic $D/drastic.dvsync

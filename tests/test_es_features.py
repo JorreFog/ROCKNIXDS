@@ -183,6 +183,13 @@ class EsFeaturesTest(unittest.TestCase):
             [value for tag, _, value in feats["share performance logs"]["kids"]],
             ["1", "0"],
         )
+        # #45, #42/#56: the keys the launcher reads (nds-settings.sh, save-dirs.sh)
+        self.assertEqual(feats["apply recommended settings"]["value"], "recommended")
+        self.assertEqual([value for tag, _, value in feats["apply recommended settings"]["kids"]], ["1", "0"])
+        self.assertEqual(feats["save files"]["value"], "saves_dir")
+        self.assertEqual([value for tag, _, value in feats["save files"]["kids"]], ["roms", "saves"])
+        self.assertEqual(feats["save states"]["value"], "states_dir")
+        self.assertEqual([value for tag, _, value in feats["save states"]["kids"]], ["savestates", "saves"])
         shader_values = [value for tag, _, value in feats["shader"]["kids"]]
         self.assertIn("none", shader_values)
         self.assertIn("ds-crisp", shader_values)
