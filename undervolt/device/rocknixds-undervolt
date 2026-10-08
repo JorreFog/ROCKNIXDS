@@ -1,0 +1,225 @@
+#!/bin/sh
+# ROCKNIXDS undervolt: lower the RG DS's CPU (and optionally GPU) voltages in the device tree, test them with a
+# stress test that checks its results, and keep them only if they pass. Run ON the handheld as root.
+#
+#   rocknixds-undervolt status              the voltages in use, against stock, and the trial's state
+#   rocknixds-undervolt plan SPEC...        what apply would write, without writing it
+#   rocknixds-undervolt apply SPEC...       write SPEC to the DTB as a trial; reboot, then run test
+#   rocknixds-undervolt test [MINUTES]      stress every lowered CPU clock (default 5 min each), then confirm
+#   rocknixds-undervolt confirm             keep the trial without testing it (not recommended)
+#   rocknixds-undervolt off                 back to stock voltages (reboot to use them)
+#
+# SPEC: a CPU preset, then optional single OPPs (MHz=mV):
+#   l1, l2, l3    Rockchip's own voltages for its better-binned chips (the vendor kernel's opp-microvolt-L1..L3;
+#                 L3 is what Anbernic's firmware runs on an L3 chip). ROCKNIX runs every chip at L0 (= stock).
+#   gpu=l1..l3    the GPU's table from the same presets (left at stock unless asked: nothing checks GPU results)
+#   cpu1992=1000  one OPP, in 12.5 mV steps, never over stock, never under 800 mV (GPU: 825, its regulator's min)
+# e.g.  rocknixds-undervolt apply l3            rocknixds-undervolt apply l3 cpu1992=1050 cpu1800=1012.5
+#
+# Safety: apply backs up the DTB to /flash/rocknixds-undervolt/ (readable from any computer: RECOVERY.txt there)
+# and boots the trial with cpufreq.default_governor=powersave, so the CPU stays at 408 MHz until the boot guard
+# (rocknixds-undervolt-guard.service) has run. A trial that boots a second time without passing test (a crash,
+# a hang, a restart) is reverted by the guard to the DTB from before apply, and the handheld restarts once.
+# A ROCKNIX update replaces the DTB, which puts the voltages back to stock: apply again after one.
+set -e
+D=$(dirname "$(readlink -f "$0")")
+FLASH=${UV_FLASH:-/flash}               # (UV_*: a fake tree, for the host tests)
+ST=${UV_STATE:-/storage/.config/rocknixds-undervolt}
+SYS=${UV_SYS:-/sys}
+FB=$FLASH/rocknixds-undervolt
+EXT=$FLASH/extlinux/extlinux.conf
+TRIAL_ARG=cpufreq.default_governor=powersave
+POL=$SYS/devices/system/cpu/cpufreq/policy0
+PY="python3 $D/uvdtb.py"
+
+say() { echo "rocknixds-undervolt: $*"; }
+die() { say "$*" >&2; exit 1; }
+log() { mkdir -p $ST; echo "$(date '+%F %T') $*" >> $ST/log; }
+
+dtb() {         # the DTB u-boot loads: extlinux.conf's FDT line
+    local f
+    f=$(sed -n 's/^[[:space:]]*FDT[[:space:]][[:space:]]*\([^[:space:]]*\).*/\1/p' $EXT 2>/dev/null | head -n1)
+    [ -n "$f" ] && [ -f "$FLASH$f" ] && { echo "$FLASH$f"; return; }
+    for f in rk3568-anbernic-rg-ds-plus.dtb rk3568-anbernic-rg-ds.dtb; do
+        [ -f $FLASH/device_trees/$f ] && { echo $FLASH/device_trees/$f; return; }
+    done
+    die "no RG DS device tree in $FLASH: not touching anything"
+}
+
+flash_rw() { [ -n "$UV_FLASH" ] || mount -o remount,rw $FLASH; }
+flash_ro() { sync; [ -n "$UV_FLASH" ] || mount -o remount,ro $FLASH; }
+
+put_dtb() {     # put_dtb FILE: FILE becomes the boot DTB (flash must be rw), checked byte for byte
+    local t
+    t=$(dtb)
+    cp "$1" "$t.uvnew" && sync && mv "$t.uvnew" "$t" && sync
+    cmp -s "$1" "$t" || die "the DTB on $FLASH doesn't read back as written: restore $FB/previous.dtb (RECOVERY.txt)"
+}
+
+trial_arg() {   # trial_arg on|off: the powersave boot argument on extlinux.conf's APPEND lines
+    [ -f $EXT ] || return 0
+    if [ "$1" = on ]; then
+        grep -q "$TRIAL_ARG" $EXT || sed -i "s/^\([[:space:]]*APPEND[[:space:]].*\)\$/\1 $TRIAL_ARG/" $EXT
+    else
+        sed -i "s/ $TRIAL_ARG//g" $EXT
+    fi
+}
+
+recovery_txt() {
+    cat > $FB/RECOVERY.txt <<EOF
+ROCKNIXDS undervolt: if the handheld doesn't start after an undervolt, put this SD card in a computer.
+On its ROCKNIX partition (the small one a computer can read), copy
+
+    rocknixds-undervolt/stock.dtb     over     ${1#$FLASH/}
+
+and in extlinux/extlinux.conf delete " $TRIAL_ARG" from the APPEND line if it's there.
+That is ROCKNIX's own device tree with its stock voltages. previous.dtb is the one from before the last apply.
+EOF
+}
+
+regulator() {   # regulator vdd_cpu: its sysfs directory
+    local r
+    for r in $SYS/class/regulator/regulator.*; do
+        [ "$(cat $r/name 2>/dev/null)" = "$1" ] && { echo $r; return; }
+    done
+}
+
+cmd=${1:-status}; [ $# -gt 0 ] && shift
+case $cmd in
+status)
+    T=$(dtb)
+    say "device tree: $T"
+    $PY show "$T"
+    if [ -f $ST/trial ]; then
+        say "TRIAL: not tested yet. Run: $0 test   (a restart before it passes puts the old voltages back)"
+    elif [ -f $ST/reverted ]; then
+        say "the last trial was reverted: $(cat $ST/reverted)"
+    fi
+    R=$(regulator vdd_cpu)
+    [ -n "$R" ] && say "now: vdd_cpu $(($(cat $R/microvolts) / 1000)) mV at $(($(cat $POL/scaling_cur_freq) / 1000)) MHz" || true
+    ;;
+plan)
+    $PY plan "$(dtb)" "$@"
+    ;;
+apply)
+    [ $# -gt 0 ] || die "apply what? e.g. $0 apply l3   (see $0 help)"
+    [ -z "$UV_FLASH" ] && [ "$(id -u)" != 0 ] && die "run as root"
+    T=$(dtb)
+    $PY check "$T" || die "$T isn't an RG DS device tree this tool knows: not touching it"
+    mkdir -p $ST
+    $PY patch "$T" $ST/new.dtb "$@" || exit 1
+    cmp -s $ST/new.dtb "$T" && { say "that is what the DTB already has: nothing to do"; exit 0; }
+    flash_rw
+    mkdir -p $FB
+    # stock.dtb: ROCKNIX's own DTB, refreshed whenever the boot DTB has stock voltages (a ROCKNIX update brings a
+    # new one); previous.dtb: what the guard puts back if this trial fails (a trial applied over an untested one
+    # keeps the one from before both)
+    $PY isstock "$T" && cp "$T" $FB/stock.dtb
+    [ -f $ST/trial ] && [ -f $FB/previous.dtb ] || cp "$T" $FB/previous.dtb
+    recovery_txt "$T"
+    put_dtb $ST/new.dtb
+    trial_arg on
+    flash_ro
+    echo 0 > $ST/trial; rm -f $ST/reverted
+    echo "$*" > $ST/spec
+    log "apply $*"
+    say "written as a trial. Reboot, then run: $0 test"
+    say "(if the handheld crashes or restarts before the test passes, the next start puts the old voltages back)"
+    ;;
+guard)          # rocknixds-undervolt-guard.service, early at boot
+    [ -f $ST/trial ] || exit 0
+    n=$(cat $ST/trial 2>/dev/null || echo 1)
+    if [ "$n" = 0 ]; then
+        echo 1 > $ST/trial
+        log "guard: trial boot ($(cat $ST/spec 2>/dev/null))"
+        exit 0
+    fi
+    flash_rw
+    if [ -f $FB/previous.dtb ]; then put_dtb $FB/previous.dtb
+    else $PY patch "$(dtb)" $ST/new.dtb stock >/dev/null && put_dtb $ST/new.dtb; fi
+    trial_arg off
+    flash_ro
+    rm -f $ST/trial
+    echo "$(date '+%F %T') $(cat $ST/spec 2>/dev/null): restarted before its test passed" > $ST/reverted
+    log "guard: trial not confirmed, reverted to previous.dtb; restarting"
+    [ -n "$UV_FLASH" ] || systemctl --no-block reboot
+    ;;
+confirm)
+    [ -f $ST/trial ] || { say "no trial to confirm"; exit 0; }
+    flash_rw; trial_arg off; flash_ro
+    rm -f $ST/trial
+    log "confirm $(cat $ST/spec 2>/dev/null)"
+    say "kept: $(cat $ST/spec 2>/dev/null)"
+    ;;
+off)
+    T=$(dtb)
+    $PY patch "$T" $ST/new.dtb stock >/dev/null || exit 1
+    flash_rw
+    cmp -s $ST/new.dtb "$T" || put_dtb $ST/new.dtb
+    trial_arg off
+    flash_ro
+    rm -f $ST/trial $ST/spec
+    log "off"
+    say "stock voltages written; reboot to use them"
+    ;;
+test)
+    MIN=${1:-5}
+    case $MIN in ''|*[!0-9]*) die "test [MINUTES per clock]" ;; esac
+    SECS=$((MIN * 60))
+    systemctl is-active -q dsflip-game.service 2>/dev/null && die "a DS game is running: quit it first"
+    T=$(dtb)
+    [ "$(cat $ST/trial 2>/dev/null)" = 0 ] && die "reboot first: the trial isn't running yet"
+    R=$(regulator vdd_cpu)
+    [ -n "$R" ] || die "no vdd_cpu regulator in sysfs"
+    CLOCKS=$($PY lowered "$T")
+    [ -n "$CLOCKS" ] && say "testing $(echo "$CLOCKS" | wc -l) lowered clock(s), $MIN min each, then $MIN min of load steps" \
+        || say "no CPU clock is lowered: only the load-step test"
+    GOV=$(cat $POL/scaling_governor); LO=$(cat $POL/scaling_min_freq); HI=$(cat $POL/scaling_max_freq)
+    MINF=$(cat $POL/cpuinfo_min_freq); AVAIL=" $(cat $POL/scaling_available_frequencies) "
+    restore() { echo $MINF > $POL/scaling_min_freq; echo $HI > $POL/scaling_max_freq; echo $LO > $POL/scaling_min_freq
+                echo $GOV > $POL/scaling_governor; }
+    trap 'restore 2>/dev/null' EXIT
+    fail() {
+        restore
+        log "test FAILED at $1: $2 ($(cat $ST/spec 2>/dev/null))"
+        say "FAILED at $1: $2"
+        if [ -f $ST/trial ]; then
+            flash_rw; put_dtb $FB/previous.dtb; trial_arg off; flash_ro
+            rm -f $ST/trial
+            echo "$(date '+%F %T') $(cat $ST/spec 2>/dev/null): test failed at $1" > $ST/reverted
+            say "the old voltages are written back: reboot to use them."
+        fi
+        say "Raise that clock by two steps (25 mV) over the failing value and test again."
+        exit 1
+    }
+    echo performance > $POL/scaling_governor
+    echo "$CLOCKS" | while read -r mhz uv; do
+        [ -n "$mhz" ] || continue
+        case $AVAIL in *" $((mhz * 1000)) "*) ;; *) say "$mhz MHz: not offered by cpufreq here, skipped"; continue ;; esac
+        echo $MINF > $POL/scaling_min_freq; echo $((mhz * 1000)) > $POL/scaling_max_freq
+        echo $((mhz * 1000)) > $POL/scaling_min_freq
+        sleep 1
+        cur=$(($(cat $POL/scaling_cur_freq) / 1000)); got=$(cat $R/microvolts)
+        [ "$cur" = "$mhz" ] || die "the CPU runs at $cur MHz, can't hold $mhz (too hot?): nothing changed, test again later"
+        [ "$got" = "$uv" ] || die "vdd_cpu is $got uV at $mhz MHz, the DTB says $uv: reboot so the new DTB is in use"
+        say "$mhz MHz at $((uv / 1000)) mV (vdd_cpu reads $got uV): $MIN min"
+        $D/uvstress -t $SECS || fail "$mhz MHz" "wrong results under load"
+        $D/uvstress -b -t 60 || fail "$mhz MHz" "wrong results under bursts"
+    done || exit 1
+    restore
+    echo schedutil > $POL/scaling_governor
+    say "load steps across every clock (schedutil): $MIN min"
+    $D/uvstress -b -t $SECS || fail "load steps" "wrong results while the clock moves"
+    restore
+    log "test passed ($MIN min per clock): $(cat $ST/spec 2>/dev/null)"
+    say "PASSED."
+    [ -f $ST/trial ] && "$0" confirm
+    say "Play for a while before trusting it: a game that freezes or resets means raise the voltages a step."
+    ;;
+help|-h|--help)
+    sed -n '2,/^set -e/p' "$0" | sed '$d; s/^# \{0,1\}//'
+    ;;
+*)
+    die "unknown command $cmd (see $0 help)"
+    ;;
+esac

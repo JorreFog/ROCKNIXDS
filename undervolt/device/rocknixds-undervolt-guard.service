@@ -1,0 +1,17 @@
+# ROCKNIXDS undervolt: puts the DTB from before an undervolt trial back when the trial boots a second time without
+# having passed its test (rocknixds-undervolt test), and restarts once. Does nothing when no trial is pending.
+# Runs before ROCKNIX's cpufreq.service sets the governor, while the trial's boot argument still holds the CPU at
+# its lowest clock.
+[Unit]
+Description=ROCKNIXDS undervolt boot guard
+DefaultDependencies=no
+RequiresMountsFor=/flash /storage
+Before=cpufreq.service basic.target
+ConditionPathExists=/storage/.config/rocknixds-undervolt/trial
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /storage/.config/rocknixds/undervolt/rocknixds-undervolt guard
+
+[Install]
+WantedBy=basic.target
