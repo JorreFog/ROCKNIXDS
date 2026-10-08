@@ -213,6 +213,98 @@ class StoreTest(unittest.TestCase):
         self.assertTrue((self.cfg / "rocknixds/apps/myapp/My App.sh").exists())
         self.assertIn("store-myapp.png", (self.sb.theme / "systems.cfg").read_text())
 
+    # ---- updates: what's new, the menu told ----
+    def test_list_carries_release_notes_as_plain_text(self):
+        self.sb.legacy_dodakvarter("0.2.0")
+        self.run_cli("refresh")
+        r, _ = self.run_cli("list")
+        notes = [l.split("\t", 2)[2] for l in r.stdout.splitlines() if l.startswith("NOTES\tdodakvarter\t")]
+        self.assertEqual(len(notes), 1)
+        self.assertIn("- Lock-on is held", notes[0])
+        self.assertIn("Easy, Medium and Hard (details)", notes[0])     # the link's text, not its URL
+        self.assertNotIn("**", notes[0])
+        self.assertNotIn("http", notes[0])
+
+    def _menu(self):
+        """the menu's notify API: what it was sent"""
+        import http.server
+        import threading
+        got = []
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                got.append(self.rfile.read(int(self.headers["Content-Length"])).decode())
+                self.send_response(200)
+                self.end_headers()
+
+            def log_message(self, *a):
+                pass
+        srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.server_close)
+        self.addCleanup(srv.shutdown)
+        return got, "http://127.0.0.1:%d/notify" % srv.server_port
+
+    def run_notify(self, url):
+        env = dict(self.sb.env(), RNDS_STORE_NOTIFY=url)
+        r = subprocess.run([sys.executable, str(CLI), "notify"], env=env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return r.stdout
+
+    def test_notify_tells_the_menu_once_per_update(self):
+        self.sb.legacy_dodakvarter("0.2.0")
+        got, url = self._menu()
+        self.assertIn("NOTIFIED", self.run_notify(url))
+        self.assertEqual(got, ["An update in the Store: Döda Kvarter 0.3.0"])
+        self.run_notify(url)                                       # the same update: not again
+        self.assertEqual(len(got), 1)
+        self.sb.publish_dodakvarter("0.4.0")                       # a newer one: again
+        self.run_notify(url)
+        self.assertEqual(got[-1], "An update in the Store: Döda Kvarter 0.4.0")
+
+    def test_notify_names_every_update_and_respects_the_switch(self):
+        self.sb.legacy_dodakvarter("0.2.0")
+        self.run_cli("install", "hello")
+        self.sb.publish_hello("1.1.0")
+        cfg = self.cfg / "system" / "configs" / "system.cfg"
+        cfg.parent.mkdir(parents=True)
+        cfg.write_text("rocknixds.autocheck=0\n")
+        got, url = self._menu()
+        out = self.run_notify(url)
+        self.assertIn("UPDATES Döda Kvarter 0.3.0, Hello 1.1.0", out)
+        self.assertEqual(got, [])                                  # switched off: the menu isn't told
+        cfg.write_text("rocknixds.autocheck=1\n")
+        self.run_notify(url)
+        self.assertEqual(got, ["2 updates in the Store: Döda Kvarter 0.3.0, Hello 1.1.0"])
+
+    def test_notify_when_up_to_date_or_menu_away(self):
+        got, url = self._menu()
+        self.assertIn("UPTODATE", self.run_notify(url))
+        self.sb.legacy_dodakvarter("0.2.0")
+        self.assertNotIn("NOTIFIED", self.run_notify("http://127.0.0.1:9/notify"))   # menu away (a game runs)
+        self.run_notify(url)                                       # told at the next check
+        self.assertEqual(len(got), 1)
+
+    def test_update_all_does_the_store_last(self):
+        """the Store's own update restarts it: every other update is done first"""
+        st = self.cfg / "rocknixds" / "store"
+        st.mkdir(parents=True)
+        (st / "rocknixds-store").write_text("old\n")
+        (st / "VERSION").write_text("0.1.0\n")
+        self.sb.publish("JorreFog/ROCKNIXDS", "store-v0.2.0", "rocknixds-store-0.2.0-aarch64.tar.gz",
+                        {"store": b"bin", "rocknixds-store": b"new", "ROCKNIXDS Store.sh": b"#!/bin/bash\n"}, "store")
+        self.sb.legacy_dodakvarter("0.2.0")
+        self.run_cli("install", "hello")
+        self.sb.publish_hello("1.1.0")
+        self.run_cli("refresh")
+        r, last = self.run_cli("update")
+        order = [l[len("STEP Downloading "):] for l in r.stdout.splitlines() if l.startswith("STEP Downloading")]
+        self.assertEqual(order[-1], "0.2.0")                       # the Store's
+        self.assertEqual(sorted(order[:-1]), ["0.3.0", "1.1.0"])
+        self.assertEqual(last, "DONE 0.2.0")
+        self.assertEqual((st / "rocknixds-store").read_text(), "new")
+        self.assertEqual({v[7] for v in self.states().values() if v[5]}, {"installed"})
+
     # ---- remove, relink ----
     def test_remove_takes_tile_away_and_keeps_saves(self):
         self.run_cli("refresh")

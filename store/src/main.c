@@ -50,6 +50,7 @@ typedef struct {
     char pending[160], pending_what[96];/* a job waiting for the refresh to end */
     char toast[160]; int toast_t;
     int changed;                        /* something was installed or removed: ES shows it when it's back */
+    int moved;                          /* the person changed tab: a refresh doesn't take them to Updates */
     int frame;
     int W, H, BW, BH;
 } UI;
@@ -117,6 +118,9 @@ static void refresh(void) {
     U.refreshing = 1;
 }
 
+static void set_tab(int t);
+static void updates_found(void);
+
 /* ---- input --------------------------------------------------------------------------------------------------------- */
 static void press_a(void) {
     App *a = cur();
@@ -148,8 +152,8 @@ static void handle(uint32_t pressed, const Input *in, const Input *prev) {
     int n = U.nview, *sel = &U.sel[U.tab];
     if (pressed & BIT(B_UP) && n) *sel = (*sel + n - 1) % n;
     if (pressed & BIT(B_DOWN) && n) *sel = (*sel + 1) % n;
-    if (pressed & (BIT(B_LEFT) | BIT(B_L1))) { U.tab = (U.tab + TAB_COUNT - 1) % TAB_COUNT; build_view(); U.about = 0; }
-    if (pressed & (BIT(B_RIGHT) | BIT(B_R1))) { U.tab = (U.tab + 1) % TAB_COUNT; build_view(); U.about = 0; }
+    if (pressed & (BIT(B_LEFT) | BIT(B_L1))) { set_tab((U.tab + TAB_COUNT - 1) % TAB_COUNT); U.moved = 1; }
+    if (pressed & (BIT(B_RIGHT) | BIT(B_R1))) { set_tab((U.tab + 1) % TAB_COUNT); U.moved = 1; }
     if (pressed & BIT(B_A)) press_a();
     if (pressed & BIT(B_X)) {
         App *a = cur();
@@ -166,7 +170,7 @@ static void handle(uint32_t pressed, const Input *in, const Input *prev) {
     /* touch on the bottom screen: a tab, a row, the row's button */
     if (in->touch[1] && !prev->touch[1]) {
         int x = in->tx[1], y = in->ty[1];
-        if (y < 20) { int t = x * TAB_COUNT / U.BW; if (t != U.tab) { U.tab = CLAMP(t, 0, TAB_COUNT - 1); build_view(); U.about = 0; } }
+        if (y < 20) { int t = x * TAB_COUNT / U.BW; if (t != U.tab) { set_tab(t); U.moved = 1; } }
         else if (y >= 22 && y < U.BH - 16) {
             int row = (y - 22) / 36 + U.scroll[U.tab];
             if (row < n) {
@@ -174,12 +178,28 @@ static void handle(uint32_t pressed, const Input *in, const Input *prev) {
                 *sel = row;
             }
         } else if (y >= U.BH - 16) {
-            if (x < U.BW / 4) press_a(); else if (x > U.BW - 48) stop = 1;
+            /* the help bar: A's word, Y's (update all) in the middle, B's (quit) at the end */
+            if (x > U.BW - 48) stop = 1;
+            else if (x < U.BW / 4) press_a();
+            else if (updates_count(&U.cat)) start_job("update", 0);
         }
     }
     if (*sel < U.scroll[U.tab]) U.scroll[U.tab] = *sel;
     int rows = (U.BH - 16 - 22) / 36;
     if (*sel >= U.scroll[U.tab] + rows) U.scroll[U.tab] = *sel - rows + 1;
+}
+
+static void set_tab(int t) { U.tab = CLAMP(t, 0, TAB_COUNT - 1); build_view(); U.about = 0; }
+
+/* updates out: the Updates tab, unless the person has already gone somewhere else, and a word about Y */
+static void updates_found(void) {
+    int n = updates_count(&U.cat);
+    if (!n) return;
+    if (!U.moved) set_tab(TAB_UPDATES);
+    char t[96];
+    if (n == 1) snprintf(t, sizeof t, "An update is out: A updates it");
+    else snprintf(t, sizeof t, "%d updates are out: Y updates them all", n);
+    toast(t);
 }
 
 /* a job that ended: what it did, and the shelf read again */
@@ -194,6 +214,7 @@ static void job_poll(void) {
         reload();
         if (U.pending[0]) { job_start(U.pending, U.pending_what); U.pending[0] = 0; }
         else if (U.offline) toast("No network: showing what the Store knew");
+        else updates_found();
         return;
     }
     if (!U.modal) { job_ack(); return; }
@@ -253,8 +274,18 @@ static void draw_top(Surf *s) {
     App *a = cur();
     if (!a) {
         text_big(s, 16, 20, 2, C_TEXT, 0, "ROCKNIXDS Store");
-        text_wrap(s, FONT_NORMAL, 16, 56, W - 32, C_DIM,
-                  U.cat.n ? "Nothing here yet." : "The catalog isn't here yet. Connect to Wi-Fi and press START.");
+        if (U.tab == TAB_UPDATES && U.cat.n) {
+            int inst = 0; for (int i = 0; i < U.cat.n; i++) inst += U.cat.apps[i].have[0] != 0;
+            char t[160];
+            if (inst == 1) snprintf(t, sizeof t, "Your app from the Store is up to date.");
+            else snprintf(t, sizeof t, "All %d apps from the Store are up to date.", inst);
+            text_wrap(s, FONT_NORMAL, 16, 56, W - 32, U.offline ? C_DIM : C_TEXT,
+                      U.offline ? "No network: the Store can't check for updates. Connect to Wi-Fi and press START." : t);
+            text_wrap(s, FONT_NORMAL, 16, 84, W - 32, C_DIM,
+                      "The Store also looks for updates every few hours by itself, and the menu says when one is out.");
+        } else
+            text_wrap(s, FONT_NORMAL, 16, 56, W - 32, C_DIM,
+                      U.cat.n ? "Nothing here yet." : "The catalog isn't here yet. Connect to Wi-Fi and press START.");
         return;
     }
     uint32_t acc = a->accent;
@@ -285,7 +316,14 @@ static void draw_top(Surf *s) {
     /* below: the screenshot and the summary, or the whole description */
     int y0 = 92;
     surf_clip(s, 0, y0, W, H - 14 - y0);
-    if (U.about || !a->shot.px) {
+    if (!U.about && a->state == ST_UPDATE) {
+        /* an update out: what's new in it, from its release notes */
+        char h[96]; snprintf(h, sizeof h, "What's new in %s", a->latest);
+        text(s, FONT_NORMAL, 10, y0, C_YELLOW, h);
+        text_wrap(s, FONT_NORMAL, 10, y0 + 14, W - 20, C_TEXT,
+                  a->notes[0] ? a->notes : "Its release says nothing more. A updates it; what it keeps (saves, "
+                                           "settings) stays.");
+    } else if (U.about || !a->shot.px) {
         int y = y0;
         if (!U.about) { y += text_wrap(s, FONT_NORMAL, 10, y, W - 20, C_TEXT, a->summary) + 4; }
         text_wrap(s, FONT_NORMAL, 10, y, W - 20, U.about ? C_TEXT : C_DIM, a->desc[0] ? a->desc : a->summary);
@@ -330,7 +368,7 @@ static void draw_bottom(Surf *s) {
     int W = s->w, H = s->h;
     fill(s, C_BG);
     /* tabs */
-    static const char *names[TAB_COUNT] = { "Games", "Apps", "Installed" };
+    static const char *names[TAB_COUNT] = { "Games", "Apps", "Installed", "Updates" };
     int nup = updates_count(&U.cat);
     for (int t = 0; t < TAB_COUNT; t++) {
         int x0 = t * W / TAB_COUNT, x1 = (t + 1) * W / TAB_COUNT;
@@ -338,18 +376,22 @@ static void draw_bottom(Surf *s) {
         rectf(s, x0, 0, x1 - x0, 19, on ? C_PANEL2 : C_PANEL);
         if (on) rectf(s, x0, 17, x1 - x0, 2, C_GREEN);
         char lb[32]; snprintf(lb, sizeof lb, "%s", names[t]);
-        int tw = text_w(FONT_NORMAL, lb) + (t == TAB_INSTALLED && nup ? 14 : 0);
+        int tw = text_w(FONT_NORMAL, lb) + (t == TAB_UPDATES && nup ? 14 : 0);
         int x = text(s, FONT_NORMAL, (x0 + x1) / 2 - tw / 2, 5, on ? C_TEXT : C_DIM, lb);
-        if (t == TAB_INSTALLED && nup) {
+        if (t == TAB_UPDATES && nup) {
             char nb[8]; snprintf(nb, sizeof nb, "%d", nup);
             circlef(s, x + 7, 8, 5, C_YELLOW);
             text_center(s, FONT_SMALL, x + 7, 6, 0x101010, 0, nb);
         }
     }
-    vline(s, W / TAB_COUNT, 2, 16, C_LINE); vline(s, 2 * W / TAB_COUNT, 2, 16, C_LINE);
+    for (int t = 1; t < TAB_COUNT; t++) vline(s, t * W / TAB_COUNT, 2, 16, C_LINE);
     /* rows */
     int rows = (H - 16 - 22) / 36;
-    if (!U.nview) {
+    if (!U.nview && U.tab == TAB_UPDATES) {
+        text_center(s, FONT_NORMAL, W / 2, H / 2 - 22, C_TEXT, 0,
+                    U.refreshing ? "Checking for updates..." : U.offline ? "No network: connect to Wi-Fi" : "Everything is up to date.");
+        text_center(s, FONT_NORMAL, W / 2, H / 2 - 6, C_DIM, 0, "START checks again.");
+    } else if (!U.nview) {
         const char *e = U.tab == TAB_INSTALLED ? "Nothing installed from the Store yet." :
                         U.tab == TAB_GAMES ? "No games in the catalog yet." : "No apps in the catalog yet.";
         text_center(s, FONT_NORMAL, W / 2, H / 2 - 10, C_DIM, 0, e);
@@ -426,6 +468,8 @@ static void draw_bottom(Surf *s) {
             } else if (st == JOB_DONE) {
                 if (U.restart) snprintf(t, sizeof t, "The Store is updated. A starts the new one.");
                 else if (!strncmp(job_args(), "remove", 6)) snprintf(t, sizeof t, "Removed.");
+                else if (!strcmp(job_args(), "update ")) snprintf(t, sizeof t, "Everything is up to date.");
+                else if (!strncmp(job_args(), "update", 6)) snprintf(t, sizeof t, "Updated to version %s. What it keeps (saves, settings) stayed.", step);
                 else snprintf(t, sizeof t, "Done%s%s. Its tile is on the menu's home screen when you leave the Store.",
                               step[0] ? ": version " : "", step);
                 rectf(s, bx + 10, by + 30, 6, 6, C_GREEN);
@@ -497,6 +541,7 @@ int main(int argc, char **argv) {
     surf_alloc(&bot, pi.bot_w, pi.bot_h);
     U.W = pi.top_w; U.H = pi.top_h; U.BW = pi.bot_w; U.BH = pi.bot_h;
     reload();
+    if (updates_count(&U.cat)) set_tab(TAB_UPDATES);       /* the last check found updates: they come first */
     if (!getenv("RNDS_STORE_NO_REFRESH")) refresh();
     Script sc = {0};
     if (script) { snprintf(sc.buf, sizeof sc.buf, "%s", script); sc.p = sc.buf; }
