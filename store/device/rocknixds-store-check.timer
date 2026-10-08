@@ -1,0 +1,11 @@
+# ROCKNIXDS Store: app updates, a few minutes after boot (after ROCKNIXDS's own check), then every 6 hours
+[Unit]
+Description=ROCKNIXDS Store update check
+
+[Timer]
+OnBootSec=6min
+OnUnitActiveSec=6h
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target
