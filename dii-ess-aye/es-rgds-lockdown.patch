@@ -10,13 +10,17 @@ developer options, factory reset and the standalone emulator config reset (it wi
 the DS system's emulator choice, the theme downloader and ROCKNIX's own OS updates. The theme list offers
 only the themes in /storage/.config/rocknixds/themes.allow. UPDATES & DOWNLOADS gets a ROCKNIXDS section
 (installed version, stable/beta channel, automatic checks, check now + install) driven by
-/storage/.config/rocknixds/rocknixds-update. touch /storage/.config/rocknixds/unlocked shows everything.
+/storage/.config/rocknixds/rocknixds-update, and a ROCKNIX (BASE SYSTEM) section for the ROCKNIX nightly under
+ROCKNIXDS (rocknixds.os: the nightly verified for ROCKNIXDS, the latest one or one picked from the list; installed
+and verified versions; update now, with a warning for an unverified nightly, then reboot now or later) driven by
+rocknixds-update's os-current, os-verified, os-list, os-check and os-install. touch
+/storage/.config/rocknixds/unlocked shows everything.
 ---
- es-app/src/guis/GuiMenu.cpp | 108 ++++++++++++++++++++++++++++--------
- 1 file changed, 84 insertions(+), 24 deletions(-)
+ es-app/src/guis/GuiMenu.cpp | 206 +++++++++++++++++++++++++++++++-----
+ 1 file changed, 182 insertions(+), 24 deletions(-)
 
 diff --git a/es-app/src/guis/GuiMenu.cpp b/es-app/src/guis/GuiMenu.cpp
-index b06e8fb20..03dcb641f 100644
+index b06e8fb2..a944eeb3 100644
 --- a/es-app/src/guis/GuiMenu.cpp
 +++ b/es-app/src/guis/GuiMenu.cpp
 @@ -36,6 +36,23 @@
@@ -79,7 +83,7 @@ index b06e8fb20..03dcb641f 100644
  	{
  		updateGui->addEntry(_("THEMES"), true, [this]
  		{
-@@ -1314,7 +1331,46 @@ void GuiMenu::openUpdatesSettings(bool selectTorrentService)
+@@ -1314,7 +1331,144 @@ void GuiMenu::openUpdatesSettings(bool selectTorrentService)
  		});
  	}
  
@@ -121,13 +125,111 @@ index b06e8fb20..03dcb641f 100644
 +					window->pushGui(new GuiMsgBox(window, result.empty() ? _("COULDN'T CHECK FOR UPDATES") : result, _("OK"), nullptr));
 +			}));
 +		});
++
++		// The ROCKNIX nightly under ROCKNIXDS: rocknixds.os in system.cfg = verified (the nightly this ROCKNIXDS release
++		// was verified on, the default), latest, or a YYYYMMDD picked from the nightlies offered for this handheld.
++		// rocknixds-update's os-* commands stage it with ROCKNIX's own rocknix-update; it installs on the next start,
++		// and ROCKNIXDS sets itself up again on the new ROCKNIX.
++		updateGui->addGroup(_("ROCKNIX (BASE SYSTEM)"));
++		auto isNightly = [](const std::string& v) { return v.size() == 8 && v.find_first_not_of("0123456789") == std::string::npos; };
++		std::string osCurrent = rgdsRun(RGDS_UPDATER " os-current");
++		std::string osVerified = rgdsRun(RGDS_UPDATER " os-verified");
++		updateGui->addWithLabel(_("INSTALLED ROCKNIX"), std::make_shared<TextComponent>(mWindow, osCurrent.empty() ? "?" : osCurrent, theme->Text.font, theme->Text.color));
++		updateGui->addWithLabel(_("VERIFIED FOR ROCKNIXDS"), std::make_shared<TextComponent>(mWindow, osVerified.empty() ? "?" : osVerified, theme->Text.font, theme->Text.color));
++		auto osChoice = std::make_shared<OptionListComponent<std::string>>(mWindow, _("ROCKNIX VERSION"), false);
++		std::string os = SystemConf::getInstance()->get("rocknixds.os");
++		osChoice->add(_("VERIFIED FOR ROCKNIXDS"), "verified", os != "latest" && !isNightly(os));
++		osChoice->add(_("LATEST NIGHTLY"), "latest", os == "latest");
++		if (isNightly(os))
++			osChoice->add(os, os, true);
++		updateGui->addWithLabel(_("ROCKNIX VERSION"), osChoice);
++		updateGui->addSaveFunc([osChoice] { SystemConf::getInstance()->set("rocknixds.os", osChoice->getSelected()); });
++		updateGui->addEntry(_("CHOOSE A NIGHTLY..."), true, [this, osChoice, osCurrent, osVerified, isNightly]
++		{
++			if (!checkNetwork())
++				return;
++			Window* window = mWindow;
++			window->pushGui(new GuiLoading<std::string>(window, _("GETTING THE LIST OF NIGHTLIES"), [](auto gui)
++			{
++				return rgdsRun(RGDS_UPDATER " os-list");
++			}, [window, osChoice, osCurrent, osVerified, isNightly](std::string result)
++			{
++				std::vector<std::string> versions;
++				for (auto v : Utils::String::split(result, ' ', true))
++					if (isNightly(v))
++						versions.push_back(v);
++				if (versions.empty())
++				{
++					window->pushGui(new GuiMsgBox(window, result.empty() ? _("COULDN'T GET THE LIST OF NIGHTLIES") : result, _("OK"), nullptr));
++					return;
++				}
++				GuiSettings* picker = new GuiSettings(window, _("CHOOSE A NIGHTLY"));
++				for (auto v : versions)
++				{
++					std::string label = v;
++					if (v == osVerified) label += " " + _("(VERIFIED)");
++					if (v == osCurrent) label += " " + _("(INSTALLED)");
++					picker->addEntry(label, false, [picker, osChoice, v]
++					{
++						SystemConf::getInstance()->set("rocknixds.os", v);
++						SystemConf::getInstance()->saveSystemConf();
++						osChoice->selectNone();
++						osChoice->remove(v);
++						osChoice->add(v, v, true);
++						picker->close();
++					});
++				}
++				window->pushGui(picker);
++			}));
++		});
++		updateGui->addEntry(_("UPDATE ROCKNIX NOW"), false, [this, osChoice, osVerified]
++		{
++			if (!checkNetwork())
++				return;
++			SystemConf::getInstance()->set("rocknixds.os", osChoice->getSelected());
++			SystemConf::getInstance()->saveSystemConf();
++			Window* window = mWindow;
++			window->pushGui(new GuiLoading<std::string>(window, _("CHECKING FOR UPDATES"), [](auto gui)
++			{
++				return rgdsRun(RGDS_UPDATER " os-check");
++			}, [window, osVerified](std::string result)
++			{
++				if (!Utils::String::startsWith(result, "UPDATE "))
++				{
++					window->pushGui(new GuiMsgBox(window, result.empty() ? _("COULDN'T CHECK FOR UPDATES") : result, _("OK"), nullptr));
++					return;
++				}
++				std::string what = result.substr(7);
++				std::string version = what.substr(0, what.find(' '));
++				std::string msg = _("UPDATE ROCKNIX TO") + "\n" + what + "?\n\n";
++				if (version != osVerified)
++					msg += _("NOT VERIFIED FOR ROCKNIXDS: SOME ROCKNIXDS FEATURES MAY BREAK.") + "\n\n";
++				msg += _("IT INSTALLS WHEN THE HANDHELD RESTARTS.");
++				window->pushGui(new GuiMsgBox(window, msg, _("YES"), [window]
++				{
++					window->pushGui(new GuiLoading<std::string>(window, _("DOWNLOADING ROCKNIX"), [](auto gui)
++					{
++						return rgdsRun(RGDS_UPDATER " os-install");
++					}, [window](std::string result)
++					{
++						if (Utils::String::startsWith(result, "READY "))
++							window->pushGui(new GuiMsgBox(window, _("ROCKNIX") + " " + result.substr(6) + " " +
++								_("IS READY. IT INSTALLS ON THE NEXT START, THEN ROCKNIXDS SETS ITSELF UP AGAIN.") + "\n\n" + _("RESTART NOW?"),
++								_("RESTART NOW"), [] { Utils::Platform::quitES(Utils::Platform::QuitMode::REBOOT); },
++								_("LATER"), nullptr));
++						else
++							window->pushGui(new GuiMsgBox(window, result.empty() ? _("COULDN'T DOWNLOAD THE UPDATE") : result, _("OK"), nullptr));
++					}));
++				}, _("NO"), nullptr));
++			}));
++		});
 +	}
 +
 +	if (ApiSystem::getInstance()->isScriptingSupported(ApiSystem::UPGRADE) && !rgdsLocked())   // ROCKNIX OS updates: ROCKNIXDS's updater decides
  	{
  		updateGui->addGroup(_("SOFTWARE UPDATES"));
  
-@@ -1378,7 +1434,7 @@ void GuiMenu::openUpdatesSettings(bool selectTorrentService)
+@@ -1378,7 +1532,7 @@ void GuiMenu::openUpdatesSettings(bool selectTorrentService)
  		  }
  	}
  
@@ -136,7 +238,7 @@ index b06e8fb20..03dcb641f 100644
  	{
  	  updateGui->addGroup(_("SOFTWARE UPDATES VIA TORRENT"));
  
-@@ -1862,7 +1918,7 @@ void GuiMenu::openSystemSettings()
+@@ -1862,7 +2016,7 @@ void GuiMenu::openSystemSettings()
  		if (!bottomScreenType->hasSelection())
  			bottomScreenType->selectFirstItem();
  
@@ -145,7 +247,7 @@ index b06e8fb20..03dcb641f 100644
  		s->addSaveFunc([bottomScreenType]
  		{
  			if (bottomScreenType->changed())
-@@ -1905,7 +1961,7 @@ void GuiMenu::openSystemSettings()
+@@ -1905,7 +2059,7 @@ void GuiMenu::openSystemSettings()
          if (!cfound)
              optionsDisplayModes->add(selectedDisplayMode, selectedDisplayMode, true);
  
@@ -154,7 +256,7 @@ index b06e8fb20..03dcb641f 100644
          s->addSaveFunc([selectedDisplayMode, optionsDisplayModes]
          {
              if (optionsDisplayModes->changed())
-@@ -1998,7 +2054,7 @@ void GuiMenu::openSystemSettings()
+@@ -1998,7 +2152,7 @@ void GuiMenu::openSystemSettings()
  		for(std::stringstream ss(Utils::Platform::GetShOutput(R"(/usr/bin/device-switch --options)")); getline(ss, a, ' '); ) {
  			optionsDeviceSwitch->add(a, a, a == selectedDevice);
  		}
@@ -163,7 +265,7 @@ index b06e8fb20..03dcb641f 100644
  
  		s->addSaveFunc([this, window, devSwitchScript, optionsDeviceSwitch, selectedDevice] {
  			if (optionsDeviceSwitch->changed()) {
-@@ -2075,7 +2131,7 @@ void GuiMenu::openSystemSettings()
+@@ -2075,7 +2229,7 @@ void GuiMenu::openSystemSettings()
  		optionsFanProfile->add(_("MODERATE"),"moderate", selectedFanProfile == "moderate");
  		optionsFanProfile->add(_("AGGRESSIVE"),"aggressive", selectedFanProfile == "aggressive");
  		optionsFanProfile->add(_("CUSTOM"),"custom", selectedFanProfile == "custom");
@@ -172,7 +274,7 @@ index b06e8fb20..03dcb641f 100644
  		s->addSaveFunc([this, optionsFanProfile, selectedFanProfile]
  		{
  			if (optionsFanProfile->changed()) {
-@@ -2100,7 +2156,7 @@ void GuiMenu::openSystemSettings()
+@@ -2100,7 +2254,7 @@ void GuiMenu::openSystemSettings()
  	}
  	if (!cfound)
  		optionsGovernors->add(selectedGovernors, selectedGovernors, true);
@@ -181,7 +283,7 @@ index b06e8fb20..03dcb641f 100644
  	s->addSaveFunc([selectedGovernors, optionsGovernors]
  	{
  		if (optionsGovernors->changed()) {
-@@ -2130,7 +2186,7 @@ void GuiMenu::openSystemSettings()
+@@ -2130,7 +2284,7 @@ void GuiMenu::openSystemSettings()
  	if (!selectedGpuGovernorFound)
  		optionsGpuGovernors->selectFirstItem(); // Preselect 'default' 
  
@@ -190,7 +292,7 @@ index b06e8fb20..03dcb641f 100644
  	s->addSaveFunc([selectedGpuGovernor, optionsGpuGovernors]
  	{
  		if (optionsGpuGovernors->changed()) {
-@@ -2230,7 +2286,7 @@ void GuiMenu::openSystemSettings()
+@@ -2230,7 +2384,7 @@ void GuiMenu::openSystemSettings()
  		for(std::stringstream ss(Utils::Platform::GetShOutput(R"(/usr/bin/gpudriver --options)")); getline(ss, a, ' '); ) {
  			optionsGpuDriver->add(a, a, a == selectedGpuDriver);
  		}
@@ -199,7 +301,7 @@ index b06e8fb20..03dcb641f 100644
  		s->addSaveFunc([this, window, gpuDriverScript, optionsGpuDriver, selectedGpuDriver] {
  			if (optionsGpuDriver->changed()) {
  				Utils::Platform::runSystemCommand(gpuDriverScript + " " + optionsGpuDriver->getSelected(), "", nullptr);
-@@ -2242,7 +2298,7 @@ void GuiMenu::openSystemSettings()
+@@ -2242,7 +2396,7 @@ void GuiMenu::openSystemSettings()
  		});
          }
  
@@ -208,7 +310,7 @@ index b06e8fb20..03dcb641f 100644
  		s->addGroup(_("TWEAKS"));
  		dtbOverlayItem(mWindow, s, "undervolt-cpu");
  		dtbOverlayItem(mWindow, s, "custom");
-@@ -2415,7 +2471,7 @@ void GuiMenu::openSystemSettings()
+@@ -2415,7 +2569,7 @@ void GuiMenu::openSystemSettings()
  	if (ApiSystem::getInstance()->isScriptingSupported(ApiSystem::RESOLUTION))
  	{
  	    auto videoModeOptionList = createVideoResolutionModeOptionList(mWindow, "es", "resolution");
@@ -217,7 +319,7 @@ index b06e8fb20..03dcb641f 100644
  	    s->addSaveFunc([this, videoModeOptionList] { SystemConf::getInstance()->set("es.resolution", videoModeOptionList->getSelected()); });
  	}
  #endif
-@@ -2547,7 +2603,7 @@ void GuiMenu::openSystemSettings()
+@@ -2547,7 +2701,7 @@ void GuiMenu::openSystemSettings()
  	optionsRotation->add(_("180 DEGREES"),    "2", selectedRotation == "2");
  	optionsRotation->add(_("270 DEGREES"),        "3", selectedRotation == "3");
  
@@ -226,7 +328,7 @@ index b06e8fb20..03dcb641f 100644
  
  	s->addSaveFunc([this, optionsRotation, selectedRotation, s]
  	{
-@@ -2763,7 +2819,7 @@ void GuiMenu::openSystemSettings()
+@@ -2763,7 +2917,7 @@ void GuiMenu::openSystemSettings()
  #endif
  
  #ifdef BATOCERA
@@ -235,7 +337,7 @@ index b06e8fb20..03dcb641f 100644
  #endif
  
  #ifdef BATOCERA
-@@ -3037,7 +3093,7 @@ void GuiMenu::openSystemSettings()
+@@ -3037,7 +3191,7 @@ void GuiMenu::openSystemSettings()
  	
  	// Developer options
  	if (isFullUI) {
@@ -244,7 +346,7 @@ index b06e8fb20..03dcb641f 100644
  
  		// Security
  		s->addEntry(_("SECURITY"), true, [this, s]
-@@ -3130,7 +3186,7 @@ void GuiMenu::dtbOverlayItem(Window* mWindow, GuiSettings *s, const std::string
+@@ -3130,7 +3284,7 @@ void GuiMenu::dtbOverlayItem(Window* mWindow, GuiSettings *s, const std::string
  		optionsDtb->add(option, option, option == selectedDtb);
  	}
  
@@ -253,7 +355,7 @@ index b06e8fb20..03dcb641f 100644
  
  	s->addSaveFunc([this, mWindow, overlayScript, setDtb, optionsDtb] {
  	if (optionsDtb->changed()) {
-@@ -3201,7 +3257,7 @@ void GuiMenu::openSystemOptionsConfiguration(Window* mWindow, std::string config
+@@ -3201,7 +3355,7 @@ void GuiMenu::openSystemOptionsConfiguration(Window* mWindow, std::string config
  	if (!cfound)
  		optionsGovernors->add(selectedGovernors, selectedGovernors, true);
  
@@ -262,7 +364,7 @@ index b06e8fb20..03dcb641f 100644
  
  	guiSystemOptions->addSaveFunc([configName, selectedGovernors, optionsGovernors]
  	{
-@@ -3231,7 +3287,7 @@ void GuiMenu::openSystemOptionsConfiguration(Window* mWindow, std::string config
+@@ -3231,7 +3385,7 @@ void GuiMenu::openSystemOptionsConfiguration(Window* mWindow, std::string config
  	if (!selectedGpuGovernorFound)
  		optionsGpuGovernors->selectFirstItem(); // Preselect 'default' 
  	
@@ -271,7 +373,7 @@ index b06e8fb20..03dcb641f 100644
  	guiSystemOptions->addSaveFunc([configName, selectedGpuGovernor, optionsGpuGovernors]
  	{
  		if (optionsGpuGovernors->changed()) {
-@@ -5065,8 +5121,12 @@ void GuiMenu::openUISettings()
+@@ -5065,8 +5219,12 @@ void GuiMenu::openUISettings()
  		auto theme_set = std::make_shared<OptionListComponent<std::string> >(mWindow, _("THEME SET"), false);
  
  		std::vector<std::string> themeList;
@@ -285,7 +387,7 @@ index b06e8fb20..03dcb641f 100644
  
  		std::sort(themeList.begin(), themeList.end(), [](const std::string& a, const std::string& b) -> bool { return Utils::String::toLower(a).compare(Utils::String::toLower(b)) < 0; });
  
-@@ -6183,7 +6243,7 @@ void GuiMenu::popSpecificConfigurationGui(Window* mWindow, std::string title, st
+@@ -6183,7 +6341,7 @@ void GuiMenu::popSpecificConfigurationGui(Window* mWindow, std::string title, st
  
  		});
  
@@ -294,7 +396,7 @@ index b06e8fb20..03dcb641f 100644
  	}
  
  	// System settings
-@@ -6203,7 +6263,7 @@ void GuiMenu::popSpecificConfigurationGui(Window* mWindow, std::string title, st
+@@ -6203,7 +6361,7 @@ void GuiMenu::popSpecificConfigurationGui(Window* mWindow, std::string title, st
  	if (systemData->isFeatureSupported(currentEmulator, currentCore, EmulatorFeatures::videomode))
  	{
  		auto videoResolutionMode_choice = createVideoResolutionModeOptionList(mWindow, configName);
