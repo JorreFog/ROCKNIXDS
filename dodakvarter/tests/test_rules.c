@@ -373,7 +373,7 @@ int main(void) {
         char v[24];
         for (; t < 60 * 5 && update_state(v, sizeof v, 0, 0) != UPD_AVAILABLE; t++) { app_update(&none, &none, 1.0f / 60); usleep(2000); }
         CHECK(update_state(v, sizeof v, 0, 0) == UPD_AVAILABLE && !strcmp(v, "9.1.0"), "the title didn't find the update (state %d, '%s')", update_state(0, 0, 0, 0), v);
-        A.state = ST_SETTINGS; A.settings_from = ST_TITLE; A.sel = 11;
+        A.state = ST_SETTINGS; A.settings_from = ST_TITLE; A.sel = 12;
         Input ok; memset(&ok, 0, sizeof ok); ok.held = BIT(btn_ok());
         app_update(&ok, &none, 1.0f / 60); app_update(&none, &ok, 1.0f / 60);
         CHECK(A.upd_confirm && update_state(0, 0, 0, 0) == UPD_AVAILABLE, "over a saved run, the first press updated (confirm %d, state %d)", A.upd_confirm, update_state(0, 0, 0, 0));
@@ -385,6 +385,46 @@ int main(void) {
         if (c) { if (fscanf(c, "%15s %15s", l1, l2) != 2) l2[0] = 0; fclose(c); }
         CHECK(!strcmp(l1, "check") && !strcmp(l2, "install"), "the updater was called '%s', '%s'", l1, l2);
         A.quit = 0; unsetenv("DK_UPDATER");
+    }
+    /* Kert Barlsson on the radio: every line fits his box in both languages; his introduction once, then a greeting;
+       lines one at a time; the power on is something he talks about; Settings > Radio off keeps him quiet */
+    {
+        static uint32_t px[320 * 400]; Surf t = { 254, 400, 254, px, 0, 0, 254, 400 };
+        for (int lang = 0; lang < 2; lang++) {
+            S.lang = lang;
+            for (int i = 0; i < radio_lines() + radio_tips(); i++) {
+                int id = i < radio_lines() ? i : 1000 + i - radio_lines();
+                int h = text_wrap(&t, FONT_NORMAL, 0, 0, 254 - 6, 0xffffff, radio_text(id));
+                CHECK(h <= 38, "radio line %d (%s) is %d px tall, the box has 38: %.40s...", id, lang ? "sv" : "en", h, radio_text(id));
+            }
+        }
+        S.lang = LANG_EN;
+        S.radio = 1; S.radio_heard = 0; S.radio_tip = 0;
+        game_new(21, 0); calm(); G->rstate = RS_ACTIVE; G->round = 1; G->god = 1;
+        int on = -1;
+        for (int k = 0; k < 60 * 4 && on < 0; k++) { game_update(&none, &none, 1.0f / 60); if (G->radio.cur >= 0) on = G->radio.cur; }
+        CHECK(on == 0 && S.radio_heard, "the first run didn't start with his introduction (line %d, heard %d)", on, S.radio_heard);
+        int seen = 0, last = -1;
+        for (int k = 0; k < 60 * 90; k++) {
+            game_update(&none, &none, 1.0f / 60);
+            if (G->radio.cur >= 0 && G->radio.cur != last) { seen++; last = G->radio.cur; }
+            if (G->radio.cur < 0) last = -1;
+        }
+        CHECK(seen >= 4 && G->radio.nq == 0 && G->radio.cur < 0, "the introduction: %d lines on air, %d waiting", seen, G->radio.nq);
+        G->power_on = 1;
+        int power = 0;
+        for (int k = 0; k < 60 * 30 && !power; k++) { game_update(&none, &none, 1.0f / 60); power = G->radio.cur >= 0; }
+        CHECK(power, "the power came on and Kert said nothing");
+        game_new(22, 0); calm(); G->rstate = RS_ACTIVE; G->round = 1; G->god = 1;
+        on = -1;
+        for (int k = 0; k < 60 * 4 && on < 0; k++) { game_update(&none, &none, 1.0f / 60); if (G->radio.cur >= 0) on = G->radio.cur; }
+        CHECK(on > 3 && on < 10, "the second run: line %d, not a greeting (the introduction once is enough)", on);
+        S.radio = 0;
+        game_new(23, 0); calm(); G->rstate = RS_ACTIVE; G->round = 1; G->god = 1; G->power_on = 1;
+        int any = 0;
+        for (int k = 0; k < 60 * 20; k++) { game_update(&none, &none, 1.0f / 60); any |= G->radio.cur >= 0; }
+        CHECK(!any, "Settings > Radio off, and he talked anyway");
+        S.radio = 1;
     }
     char rm[640]; snprintf(rm, sizeof rm, "rm -rf '%s'", dir);
     if (system(rm)) printf("(couldn't remove %s)\n", dir);

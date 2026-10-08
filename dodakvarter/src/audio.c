@@ -20,7 +20,7 @@ static Voice voices[NVOICES];
 typedef struct { int id; float vol, pan, rate; } Cmd;
 static Cmd ring[256];
 static volatile unsigned rhead, rtail;
-static int master = 80, want_music = MUS_NONE, want_amb = AMB_NONE;   /* set by the game, read by the mixer: atomics */
+static int master = 80, want_music = MUS_NONE, want_amb = AMB_NONE, in_run;   /* set by the game, read by the mixer: atomics */
 static int ready;
 
 /* ---------------------------------------------------------------- synthesis helpers */
@@ -293,6 +293,18 @@ static void synth_all(void) {
             b[i] = v * MIN(1.0f, (float)(n - i) / (0.1f * RATE));
         }
         finish(SFX_STING, b, n, 0.9f); }
+    /* Kert's radio: a burst of static as the channel opens, then the squelch's two-tone chirp; off: a click and a hiss */
+    b = buf_new(0.42f, &n); { SVF f = { 0 }; float ph = 0;
+        for (int i = 0; i < n; i++) {
+            float t = (float)i / RATE, v = 0;
+            v += bandpass(&f, noise(), 1800 + 600 * sinf(t * 40), 0.5f) * (t < 0.22f ? (1 - t / 0.22f) : 0) * 0.55f;
+            if (t > 0.2f && t < 0.36f) { float fr = t < 0.28f ? 1250 : 1650; ph += fr / RATE; v += (fmodf(ph, 1) < 0.5f ? 0.16f : -0.16f) * env(t - 0.2f, 0.004f, 0.15f); }
+            b[i] = v;
+        }
+        finish(SFX_RADIO, b, n, 0.5f); }
+    b = buf_new(0.16f, &n); { SVF f = { 0 };
+        for (int i = 0; i < n; i++) { float t = (float)i / RATE; b[i] = noise() * env(t, 0.0005f, 0.006f) * 0.8f + bandpass(&f, noise(), 2400, 0.6f) * env(t, 0.002f, 0.1f) * 0.35f; }
+        finish(SFX_RADIO_OFF, b, n, 0.45f); }
     /* reload: click, slide, click */
     b = buf_new(0.5f, &n); { LP l = { 0 }; for (int i = 0; i < n; i++) { float t = (float)i / RATE; float x = noise(); float c1 = env(t, 0.0005f, 0.006f), c2 = t > 0.18f ? env(t - 0.18f, 0.02f, 0.05f) * 0.4f : 0, c3 = t > 0.36f ? env(t - 0.36f, 0.0005f, 0.008f) : 0; b[i] = (x - lp(&l, x, 1500)) * (c1 + c3) + x * c2 * 0.5f; } finish(SFX_RELOAD, b, n, 0.6f); }
     b = buf_new(0.05f, &n); for (int i = 0; i < n; i++) b[i] = noise() * env((float)i / RATE, 0.0005f, 0.004f); finish(SFX_EMPTY, b, n, 0.5f);
@@ -446,6 +458,12 @@ static void music_tick(int16_t *out, int frames) {
         mus = want; mus_note = 0; mus_left = 0; mus_env = 0; __atomic_store_n(&tune_over, 0, __ATOMIC_RELAXED);
         song_t = 0; song_ev = 0; for (int k = 0; k < NMV; k++) if (want != MUS_NONE) mv[k].on = 0;   /* (stopping lets notes ring out) */
     }
+    {   /* the songs (music.c) where there is one for what's asked: the synthesized tune for it stays quiet */
+        int over = 0, run = __atomic_load_n(&in_run, __ATOMIC_RELAXED);
+        int sung = music_mp3_mix(out, frames, mus, run, vol, &over);
+        if (over) __atomic_store_n(&tune_over, 1, __ATOMIC_RELAXED);
+        if (sung && mus != MUS_NONE) return;
+    }
     if (mus == MUS_BOX) { song_tick(out, frames, BOX_SONG, ARRAY_LEN(BOX_SONG), 3.6f, 0, 2.0f, vol); return; }
     if (mus == MUS_BOSS) { song_tick(out, frames, BOSS_SONG, ARRAY_LEN(BOSS_SONG), 4.8f, 0, 1.5f, vol); return; }
     if (mus == MUS_GAMEOVER) { song_tick(out, frames, OVER_SONG, ARRAY_LEN(OVER_SONG), 0, 1, 1.0f, vol); return; }
@@ -579,12 +597,13 @@ static void mix(int16_t *out, int frames) {
 }
 
 void audio_init(void) {
-    synth_all(); song_build();
+    synth_all(); song_build(); music_mp3_init();
     ready = plat_audio_start(RATE, mix) == 0;
     plat_log("audio: %s", ready ? "on" : "off");
 }
 /* tests/sounds.c: the mixer without a sound card, run by the caller */
-void audio_offline(void) { synth_all(); song_build(); ready = 1; }
+void audio_offline(void) { synth_all(); song_build(); music_mp3_init(); ready = 1; }
+void audio_in_run(int on) { __atomic_store_n(&in_run, on, __ATOMIC_RELAXED); }
 void audio_render(int16_t *out, int frames) { mix(out, frames); }
 void audio_set_volume(int v) { __atomic_store_n(&master, CLAMP(v, 0, 100), __ATOMIC_RELAXED); }
 

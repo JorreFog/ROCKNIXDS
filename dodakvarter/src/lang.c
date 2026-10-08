@@ -22,7 +22,7 @@ static const char *SV[][2] = {
     {"ROUND", "RUNDA"}, {"YOU SURVIVED", "DU ÖVERLEVDE"}, {"ROUNDS", "RUNDOR"}, {"ROUND ONE", "EN RUNDA"},
     {"PAUSED", "PAUS"}, {"Kills", "Döda"}, {"Score", "Poäng"}, {"Round", "Runda"}, {"Rounds", "Rundor"},
     {"Difficulty", "Svårighet"}, {"Easy", "Lätt"}, {"Medium", "Medel"}, {"Hard", "Svår"},
-    {"Next item (hold: use)", "Nästa sak (håll: använd)"}, {"Lock on (hold)", "Lås siktet (håll)"}, {"Lock on", "Lås siktet"},
+    {"Next item (hold: use)", "Nästa sak (håll: använd)"}, {"Lock on (hold)", "Lås siktet (håll)"}, {"Lock on", "Lås siktet"}, {"Radio (Kert)", "Radio (Kert)"},
     {"Game updates", "Uppdateringar"}, {"Check now", "Sök nu"}, {"Checking...", "Söker..."}, {"Up to date", "Senaste"},
     {"No network", "Inget nät"}, {"Not here", "Inte här"},
     {"Volume", "Volym"}, {"Music", "Musik"}, {"Screen shake", "Skakningar"}, {"Aim assist", "Siktstöd"},

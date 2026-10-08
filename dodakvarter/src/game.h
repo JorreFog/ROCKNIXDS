@@ -242,6 +242,14 @@ typedef struct {
 enum { HZ_RING, HZ_ROCK, HZ_NOTE, HZ_VENOM, HZ_POOL, HZ_CLEAVE, HZ_SPLASH,
        HZ_SPINE, HZ_BOLT, HZ_POTION, HZ_BREW, HZ_ROOT, HZ_SNARE, HZ_DECOY };
 typedef struct { int alive, kind; float x, y, vx, vy, z, t, dur, r, dmg, a; int hit; float x0, y0; } Hazard;
+#define RADIO_QUEUE 8
+typedef struct {                        /* Kert Barlsson on the radio (radio.c) */
+    int cur;                            /* the line on the air, -1 none (story lines by number, tips 1000 + n) */
+    float t, gap;                       /* how long it's been on; the pause before the next */
+    int16_t q[RADIO_QUEUE]; int nq;     /* lines waiting */
+    uint64_t said;                      /* the story lines said this run */
+    int started, round, zones, boss_kills, tip_round, tip_base, tips;
+} Radio;
 #define MAX_HAZARDS 128
 
 enum { SEASON_AUTUMN, SEASON_WINTER, SEASON_SUMMER, SEASON_COUNT };
@@ -282,6 +290,7 @@ typedef struct {
     float storm_t, lightning_t, thunder_t;   /* autumn: the next flash, the flash, the thunder after it */
     int god;                            /* tests: DK_DEBUG_GOD */
     Boss boss; int boss_kills;
+    Radio radio;                        /* Kert Barlsson on the radio (radio.c) */
     Hazard hz[MAX_HAZARDS];
     /* actors */
     Player p;
@@ -329,6 +338,7 @@ enum { LAYOUT_CLASSIC, LAYOUT_TWIN, LAYOUT_COUNT };
 enum { ACT_FIRE, ACT_USE, ACT_RELOAD, ACT_SWAP, ACT_KNIFE, ACT_SPRINT, ACT_GRENADE, ACT_ITEM, ACT_NEXT, ACT_LOCK, ACT_COUNT };
 typedef struct {
     int volume, music, shake, assist, scheme, season, lang, swap_ab, show_fps, touch_aim, effects, diff;
+    int radio, radio_heard, radio_tip;  /* Kert on the radio; his introduction heard once; the tip he's on */
     int bind[LAYOUT_COUNT][ACT_COUNT];
 } Settings;
 extern Settings S;
@@ -440,6 +450,12 @@ void boss_glow(Surf *s, Zombie *z);     /* after the light: eyes, fire, venom */
 void boss_lights(void);
 void hazards_draw_ground(Surf *s);
 void hazards_draw_air(Surf *s);
+void radio_update(float dt);            /* radio.c: Kert Barlsson */
+void radio_draw(Surf *s);
+int radio_on_air(void);
+const char *radio_text(int id);         /* (tests) a line, story by number, tips 1000 + n */
+int radio_lines(void);
+int radio_tips(void);
 void boss_overlay(Surf *s);             /* the health bar on top of the screen, an arrow when it's off screen */
 const char *boss_name(int kind);
 float boss_hit_radius(const Zombie *z, float *cy);   /* how big it is to bullets, and its middle's height */
@@ -506,9 +522,13 @@ enum {
     SFX_ROAR, SFX_HORN, SFX_SWOOSH, SFX_SLAM, SFX_FIDDLE, SFX_SPLASH, SFX_HISS, SFX_FANFARE,   /* the bosses */
     SFX_SQUEAL, SFX_CACKLE, SFX_CREAK, SFX_HOWL,
     SFX_STING,                          /* JorreFog productions */
+    SFX_RADIO, SFX_RADIO_OFF,           /* Kert's radio: on (static, a chirp), off (a click) */
     SFX_JINGLE, SFX_COUNT = SFX_JINGLE + PK_COUNT          /* each perk machine's jingle */
 };
 enum { MUS_NONE, MUS_TITLE, MUS_BOX, MUS_GAMEOVER, MUS_SONG, MUS_BOSS };
+int music_mp3_mix(int16_t *out, int frames, int want, int in_run, int vol, int *over);   /* music.c: the songs */
+void music_mp3_init(void);
+void audio_in_run(int on);              /* a run is on: the play's song under it */
 int music_now(void);                    /* what the music is told to play */
 
 /* lang.c */

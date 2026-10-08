@@ -197,11 +197,11 @@ static void draw_title_bottom(Surf *s) {
     text(s, FONT_SMALL, s->w - 4 - text_w(FONT_SMALL, "ROCKNIXDS"), s->h - 8, 0x4a5262, "ROCKNIXDS");
 }
 
-#define SETTINGS_N 13                   /* rows, BACK the last */
+#define SETTINGS_N 14                   /* rows, BACK the last */
 #define SETTINGS_BACK (SETTINGS_N - 1)
 #define SETTINGS_BUTTONS 5              /* the row that opens Settings > Buttons */
-#define SETTINGS_UPDATE 11              /* Game updates */
-#define SETTINGS_ROW 17
+#define SETTINGS_UPDATE 12              /* Game updates */
+#define SETTINGS_ROW 16
 /* the Game updates row: what it says */
 static void update_row(char *out, int n) {
     char v[24], st[48]; int u = update_state(v, sizeof v, st, sizeof st);
@@ -255,6 +255,7 @@ static void draw_settings(Surf *s) {
     snprintf(items[8], 48, "%s: %s", tr("Language"), S.lang ? "Svenska" : "English");
     snprintf(items[9], 48, "%s: %s", tr("Show FPS"), tr(S.show_fps ? "On" : "Off"));
     snprintf(items[10], 48, "%s: %s%s", tr("Effects"), tr(effects[S.effects]), S.effects == FX_AUTO && render_fx_light() ? tr(" (light now)") : "");
+    snprintf(items[11], 48, "%s: %s", tr("Radio (Kert)"), tr(S.radio ? "On" : "Off"));
     update_row(items[SETTINGS_UPDATE], 48);
     snprintf(items[SETTINGS_BACK], 48, "%s", tr("BACK"));
     const char *p[SETTINGS_N]; for (int i = 0; i < SETTINGS_N; i++) p[i] = items[i];
@@ -284,6 +285,7 @@ static void settings_change(int i, int d) {
     case 8: S.lang = !S.lang; break;
     case 9: S.show_fps = !S.show_fps; break;
     case 10: S.effects = (S.effects + d + 3) % 3; break;
+    case 11: S.radio = !S.radio; break;
     }
     sfx(SFX_MENU_MOVE, 0.5f, 0);
     settings_save();
@@ -349,6 +351,7 @@ static void buttons_act(int row, int d) {
 
 /* how to play: pages of text on the bottom screen, a picture on the top */
 static const char *HOWTO_EN[] = {
+    "THE STORY\n\nYou wake up in a world that isn't yours any more. The dead walk, and Mörkret, the forces of evil, has woken the old ones from the stories: eight Väktare that hold the land.\n\nKert Barlsson talks to you on the radio. Take it back: street by street, Väktare by Väktare.",
     "SURVIVE\n\nThe dead come in rounds, more and tougher each time. Survive as many rounds as you can: that is your score.\n\nEvery hit is +10 kr, a kill +60, a critical +100, the knife +130.\n\nQuitting keeps the run: Continue it from the title.",
     "SPEND YOUR KRONOR\n\nClear barriers to open new districts. Chalk outlines on walls are guns for sale. Lådan (the Mystery Box, 950 kr) gives a random weapon, until the Dalahäst carries it away.",
     "THE POWER\n\nFind the Elcentral and switch the power on. Then the perk machines and Smedjan (5 000 kr: Pack-a-Punch) work, the street lamps light up, and the elstängsel by a gap between districts (1 000 kr) shocks whatever crosses it.",
@@ -356,19 +359,25 @@ static const char *HOWTO_EN[] = {
     "LOOT\n\nSearch bins, cars, mailboxes and sheds. Rarity: grey, green, blue, purple, gold. It gets better every round. Helmets and vests take hits for you. Wolves come on Vargnatt, and the moose... runs.",
 };
 static const char *HOWTO_SV[] = {
+    "BERÄTTELSEN\n\nDu vaknar i en värld som inte är din längre. De döda går, och Mörkret, ondskans makter, har väckt de gamla ur sagorna: åtta Väktare som håller landet.\n\nKert Barlsson pratar med dig på radion. Ta tillbaka det: gata för gata, Väktare för Väktare.",
     "ÖVERLEV\n\nDe döda kommer i rundor, fler och starkare varje gång. Överlev så många rundor du kan: det är din poäng.\n\nVarje träff ger +10 kr, att döda +60, en kritisk träff +100, kniven +130.\n\nAvslutar du sparas spelet: fortsätt från titelskärmen.",
     "SPENDERA KRONOR\n\nRöj barrikader för att öppna nya kvarter. Kritkonturer på väggarna är vapen till salu. Lådan (950 kr) ger ett slumpvapen, tills Dalahästen bär iväg den.",
     "STRÖMMEN\n\nHitta elcentralen och slå på strömmen. Då fungerar automaterna och Smedjan (5 000 kr: uppgradera vapnet), gatlyktorna tänds, och elstängslet vid en passage mellan kvarteren (1 000 kr) ger alla som går igenom en stöt.",
     "FÖRMÅNER (max 4)\n\nJulmust 2 500: 250 hälsa. Snabbkaffe 3 000: snabb omladdning. Salmiak 2 000: skjut snabbare, hårdare. Kanelbulle 500: res dig igen. Blåbärssoppa 2 000: spring. Lingondricka 2 000: stöt vid omladdning. Kaviar 4 000: ett tredje vapen.",
     "BYTE\n\nSök i soptunnor, bilar, brevlådor och bodar. Sällsynthet: grå, grön, blå, lila, guld. Det blir bättre varje runda. Hjälmar och västar tar träffar åt dig. Vargarna kommer på Vargnatt, och älgen... springer.",
 };
-#define HOWTO_PAGES 5
+#define HOWTO_PAGES 6
 
 static void draw_howto(Surf *s) {
     bg_bottom(s);
     const char *t = (S.lang ? HOWTO_SV : HOWTO_EN)[A.page];
     rect_line(s, 8, 8, s->w - 16, s->h - 30, 0x2a3040);
     text_wrap(s, FONT_NORMAL, 16, 16, s->w - 32, 0xd8dce4, t);
+    if (A.page == 0) {                                  /* the story: Kert on his radio, in the corner */
+        const Img *k = art(((int)(A.t * 2) % 7) == 6 ? "kert_2" : "kert_0");
+        if (k) { int kx = s->w - 16 - 46, ky = s->h - 30 - 50; rectf(s, kx, ky, 42, 44, 0x1e2a36); blit(s, k, kx + 1, ky, 0); rect_line(s, kx - 1, ky - 1, 44, 46, 0x3a4652);
+                 text(s, FONT_SMALL, kx - 4 - text_w(FONT_SMALL, "KERT BARLSSON"), ky + 38, 0xe0b040, "KERT BARLSSON"); }
+    }
     char b[32]; snprintf(b, sizeof b, "\xe2\x97\x80 %d / %d \xe2\x96\xb6", A.page + 1, HOWTO_PAGES);
     text_center(s, FONT_NORMAL, s->w / 2, s->h - 17, 0xa0a8b8, 0, b);
 }
@@ -563,6 +572,7 @@ void app_update(const Input *in, const Input *prev, float dt) {
     audio_ambience(!app_run_in_progress() ? AMB_NONE : G->season == SEASON_WINTER ? AMB_WIND : G->season == SEASON_SUMMER ? AMB_SUMMER : AMB_RAIN);
     int up = pressed(in, prev, B_UP), down = pressed(in, prev, B_DOWN), left = pressed(in, prev, B_LEFT), right = pressed(in, prev, B_RIGHT);
     if (A.fade > 0) A.fade -= dt;
+    audio_in_run(app_run_in_progress() && (A.state == ST_PLAY || A.state == ST_PAUSE));
     {   /* game updates: one look per start, on the title; when one is in place, quit and the session starts it */
         static int looked; static float done_t;
         if (!looked && A.state == ST_TITLE && A.t > 1.0f) { looked = 1; update_check(); }
