@@ -94,11 +94,11 @@ class Sandbox:
         return c
 
     # ---- releases and packages ----
-    def publish(self, repo, tag, asset, body_files, root, size=None, exec_=()):
+    def publish(self, repo, tag, asset, body_files, root, size=None, exec_=(), notes=""):
         p = self.dl / tag / asset
         tar_package(str(p), root, body_files, exec_)
         self.releases.setdefault(repo, []).insert(0, {
-            "tag_name": tag, "draft": False, "prerelease": True,
+            "tag_name": tag, "draft": False, "prerelease": True, "body": notes,
             "assets": [{"name": asset, "size": size or p.stat().st_size}]})
         f = self.rel / (repo + ".json")
         f.parent.mkdir(parents=True, exist_ok=True)
@@ -113,8 +113,10 @@ class Sandbox:
                  "selftest.sh": b"#!/bin/sh\n", "gamelist.py": b"", "update.sh": b"#!/bin/sh\n",
                  "Doda Kvarter.sh": (REPO / "dodakvarter" / "device" / "Doda Kvarter.sh").read_bytes()}
         files.update(media)
+        notes = ("## Döda Kvarter %s\n\n- **Lock-on** is held: R2 held keeps the aim on the nearest zombie\n"
+                 "- Easy, Medium and Hard ([details](https://example.invalid))\n- The game updates itself\n" % v)
         return self.publish("JorreFog/ROCKNIXDS", "dodakvarter-v" + v, "dodakvarter-%s-aarch64.tar.gz" % v, files,
-                            "dodakvarter", exec_=("dodakvarter",))
+                            "dodakvarter", exec_=("dodakvarter",), notes=notes)
 
     def publish_bank(self, v):
         files = {"rocknixds-bank": b"\x7fELF fake", "rocknixds-bank.sh": b"#!/bin/sh\n", "VERSION": (v + "\n").encode(),

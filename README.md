@@ -817,11 +817,12 @@ dark-background and a light-background version, a stacked version for small squa
 
 ## `store/`: ROCKNIXDS Store
 
-<p align="center"><img src="store/docs/img/store-games.png" width="300" alt="The ROCKNIXDS Store: Döda Kvarter with an update out on the top screen, the Games tab on the bottom screen"></p>
+<p align="center"><img src="store/docs/img/store-updates.png" width="300" alt="The ROCKNIXDS Store: what's new in Döda Kvarter 0.3.0 on the top screen, the Updates tab on the bottom screen"></p>
 
 Games and apps for ROCKNIXDS, installed and updated from the menu: the green shopping bag on the home page. Döda
 Kvarter, ROCKNIXDS Bank & Trade and every app that comes later install with one press, each with a tile of its own,
-and update without a ROCKNIXDS release. `install.sh` installs the Store with ROCKNIXDS (`--no-store` leaves it out).
+and update without a ROCKNIXDS release: its Updates tab lists what's out with what's new in it, Y updates everything,
+and a check every few hours tells the menu when an update is out. `install.sh` installs the Store with ROCKNIXDS (`--no-store` leaves it out).
 
 A new app needs no ROCKNIXDS release: package it (`store/tools/package-app.sh`), publish it as a GitHub release, and
 add an entry to [`store/catalog.json`](store/catalog.json); the Store gives it its own ES system and its icon and

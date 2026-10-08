@@ -294,8 +294,10 @@ if [ $UNINSTALL = 1 ]; then
     rm -f "/storage/roms/ports/Doda Kvarter.sh" /storage/roms/ports/images/dodakvarter-*.png
     # the Store: its Ports entry before 1.6 (what it installed goes with /storage/.config/rocknixds; the lines it
     # added to ROCKNIXDS Pixel's systems.cfg go with the theme)
-    systemctl stop rocknixds-store.service 2>/dev/null || true
-    rm -f "/storage/roms/ports/ROCKNIXDS Store.sh"
+    systemctl stop rocknixds-store.service rocknixds-store-check.timer 2>/dev/null || true
+    rm -f "/storage/roms/ports/ROCKNIXDS Store.sh" /storage/.config/system.d/rocknixds-store-check.service \
+          /storage/.config/system.d/rocknixds-store-check.timer /storage/.config/system.d/timers.target.wants/rocknixds-store-check.timer
+    rmdir /storage/.config/system.d/timers.target.wants 2>/dev/null; systemctl daemon-reload
     rm -rf /storage/.config/rocknixds
     [ -f $SYSCFG ] && sed -i '/^rocknixds\./d' $SYSCFG      # the update channel and the media and update switches
     [ -e $ES_THEMES/canvas-ds/.rocknixds-commit ] && rm -rf $ES_THEMES/canvas-ds      # the one this installer downloaded
@@ -699,6 +701,11 @@ if [ $STORE_ON = 1 ] && [ -f "$SRC/store/bin/store-aarch64" ]; then
     mkdir -p "$STE"
     cp "$STORE/ROCKNIXDS Store.sh" "$STE/ROCKNIXDS Store.sh"
     chmod +x "$STE/ROCKNIXDS Store.sh"
+    # app updates: checked in the background, the menu told once per new one (the same switch as ROCKNIXDS's check)
+    mkdir -p /storage/.config/system.d/timers.target.wants
+    cp "$SRC/store/device/rocknixds-store-check.service" "$SRC/store/device/rocknixds-store-check.timer" /storage/.config/system.d/
+    ln -sf ../rocknixds-store-check.timer /storage/.config/system.d/timers.target.wants/rocknixds-store-check.timer
+    systemctl daemon-reload; systemctl start rocknixds-store-check.timer 2>/dev/null || true
 fi
 # Apps installed from the Store that this ROCKNIXDS doesn't list get their tile from the Store: the theme was just put
 # back as it ships, so their lines in its systems.cfg (and their ES systems) are written again
