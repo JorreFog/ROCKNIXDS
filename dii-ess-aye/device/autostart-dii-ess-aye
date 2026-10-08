@@ -1,6 +1,7 @@
 #!/bin/bash
-# Dual-screen themes: put the ES launcher in place at boot, but only while one of them
-# is selected -- switching ThemeSet back in the menu undoes this on next boot.
+# Dual-screen themes: put the ES launcher in place at boot, but only while one of them, or another theme the locked menu
+# offers (rocknixds/themes.allow: ROCKNIX's own Art Book Next, #48, which the launcher gives ROCKNIX's one-screen
+# layout), is selected -- switching ThemeSet to any other theme undoes this on next boot (stock ROCKNIX).
 # ROCKNIX 111-sway-init regenerates /storage/.config/sway/config on every boot
 # (stock layout: ES fullscreen on one panel, DSI-1 powered off), which blacks out
 # the wide ES window -- so the theme sway config is restored here too.
@@ -9,8 +10,9 @@ DUAL_THEMES="dii-ess-aye canvas-ds rocknixds-pixel-dark rocknixds-pixel-light"
 LAUNCHER=/storage/.config/emulationstation/themes/dii-ess-aye/scripts/start_es_rgds.sh
 SWAYCFG=/storage/dii-ess-aye-backup/sway-config.theme
 THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
-dual=0; case " $DUAL_THEMES " in *" $THEME_SET "*) dual=1 ;; esac
-if [ -x "$LAUNCHER" ] && [ "$dual" = 1 ]; then
+ours=0; case " $DUAL_THEMES " in *" $THEME_SET "*) ours=1 ;; esac
+[ -n "$THEME_SET" ] && grep -qxF "$THEME_SET" /storage/.config/rocknixds/themes.allow 2>/dev/null && ours=1
+if [ -x "$LAUNCHER" ] && [ "$ours" = 1 ]; then
     grep -q " /usr/bin/start_es.sh " /proc/mounts || mount --bind "$LAUNCHER" /usr/bin/start_es.sh
     [ -s "$SWAYCFG" ] && cp "$SWAYCFG" /storage/.config/sway/config
 fi

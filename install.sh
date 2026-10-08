@@ -169,7 +169,9 @@ es_set() {        # es_set <key> <value> in the live es_settings.cfg
         sed -i "s|<string name=\"$1\" value=\"[^\"]*\" />|<string name=\"$1\" value=\"$2\" />|" $ES_SETTINGS
     else sed -i "s|</config>|\t<string name=\"$1\" value=\"$2\" />\n</config>|" $ES_SETTINGS; fi
 }
-themes_allow() { printf 'rocknixds-pixel-light\nrocknixds-pixel-dark\ndii-ess-aye\ncanvas-ds\n'; }   # pickable in the patched ES
+# pickable in the patched ES: the four dual-screen themes, and ROCKNIX's own default theme (Art Book Next, #48), which
+# gets ROCKNIX's one-screen layout (start_es_rgds.sh: the top panel, the bottom one off)
+themes_allow() { printf 'rocknixds-pixel-light\nrocknixds-pixel-dark\ndii-ess-aye\ncanvas-ds\nes-theme-art-book-next\n'; }
 es_setb() {       # es_setb <key> true|false: a <bool name=...> setting in the live es_settings.cfg
     if grep -q "<bool name=\"$1\"" $ES_SETTINGS 2>/dev/null; then
         sed -i "s|<bool name=\"$1\" value=\"[^\"]*\" />|<bool name=\"$1\" value=\"$2\" />|" $ES_SETTINGS

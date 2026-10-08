@@ -166,9 +166,14 @@ esac
 
 
 class RepoFilesTest(unittest.TestCase):
-    def test_the_verified_rocknix(self):
+    def test_the_verified_rocknix_and_the_themes_offered(self):
+        import re
         lines = [l for l in (ROOT / "ROCKNIX").read_text().splitlines() if l and not l.startswith("#")]
         self.assertRegex(lines[0], r"^20[0-9]{6}$")
+        out = subprocess.run(["sh", "-c", re.search(r"^themes_allow\(\).*$", (ROOT / "install.sh").read_text(), re.M)
+                              .group(0) + "\nthemes_allow"], capture_output=True, text=True, check=True).stdout.split()
+        self.assertIn("es-theme-art-book-next", out)          # ROCKNIX's own default theme (#48)
+        self.assertIn("rocknixds-pixel-light", out)
 
 
 if __name__ == "__main__":
