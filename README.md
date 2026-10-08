@@ -119,51 +119,38 @@ Mali-G52); the RG DS Plus has two 1024×768 panels. ROCKNIXDS (formerly `rgds-ro
 - **ROCKNIXDS Bank & Trade** (new, in `bank/`): a Pokémon bank, PKHeX legality checks and Wi-Fi trading between two
   handhelds, on both screens. See [below](#bank-rocknixds-bank--trade).
 
-### New in 1.6 (draft, not released)
+### New in 1.6
 
-One release for both handhelds; the full notes are [v1.6.md](docs/releases/v1.6.md), the device checks
-[`docs/handoff-local.md`](docs/handoff-local.md).
+The last big update, on both handhelds: the RG DS release is [v1.6.1](docs/releases/v1.6.1.md) (1.6 and 1.6.1 in
+one), the RG DS Plus's [v1.6-plus](docs/releases/v1.6-plus.md) and [v1.6.1-plus](docs/releases/v1.6.1-plus.md).
 
-- **A stuck game never needs a restart.** 5 s without a picture (outside DraStic's menu and the in-game menu): a card
-  says so, the exit hotkey quits at once and the log records what every thread was doing. 20 s: the game is closed
-  with a message. The exit hotkey always ends the game, and a game frozen solid is ended from outside. New threads
-  start on every CPU (the RG DS Plus's CPU placement could leave one unable to run: the likely cause of a freeze
-  after a resume load).
-- **The in-game menu on the RG DS** (the RG DS Plus has had it since 1.5.13 beta 1): L3 opens Resume, Save and Load
-  with slot pictures and Undo, Quick settings, DraStic's menu and Quit, at the RG DS's native 640×480. Never run on an
-  RG DS yet.
+- **A stuck game never needs a restart.** The freeze at a game's start is found and fixed (DraStic started helper
+  threads before the locks they wait on existed; SuperDrastic holds them at the door): 4 of 25 starts froze on a Plus
+  before, 0 of 40 after. And a watch for anything else: 5 s without a picture, a card says so and the exit hotkey quits
+  at once; 20 s, the game is closed with a message; a game frozen solid is ended from outside.
+- **3× internal resolution** (*Nintendo DS settings > 3D resolution*): Gengis Engine draws the 3D at three times the
+  DS's size and brings it down to the 2× picture, on the performance profile.
+- **ROCKNIXDS Bank & Trade** ([`bank/`](bank)): a Pokémon bank, PKHeX legality checks and Wi-Fi trading between two
+  handhelds, on both screens; a separate install with a tile of its own on the home page.
+- **Döda Kvarter** ([`dodakvarter/`](dodakvarter)): a zombie roguelike made for both screens, with a tile of its own;
+  Settings > Buttons sets its layout and every button.
+- **The in-game menu for everyone** (Plus beta testers have had it since 1.5.13 beta 1): L3 in a game opens Resume,
+  Save and Load with slot pictures and Undo, Quick settings, DraStic's menu and Quit, in ROCKNIXDS Pixel's look, at
+  the RG DS's native 640×480 on the RG DS.
 - **Clean starts and quits:** plain black between the menu and the game, no terminal cursor, no leftover frame; the
-  menu shows once it draws again.
+  menu shows once it draws again, and the first button press after a game is not lost.
+- **The menu:** no cartridge is ever empty (ROCKNIX's SVG pictures for its Tools are drawn; an entry without a picture
+  shows its system's icon), the notice box fits its text, "Not played yet" for a game never started.
 - **RetroAchievements without network** keeps the saved login and retries in the background.
-- **The menu's memory:** ROCKNIXDS Pixel can no longer grow while a menu is open over a game list (a possible cause
-  of a 713 MB menu), and its picture cache has a size limit. Freed image memory goes back to the system, the memory is
-  logged (`es-mem.log`), and the menu restarts by itself before it could take the handheld's memory. Two quick
-  launches start the game once.
+- **The menu's memory:** ROCKNIXDS Pixel can no longer grow while a menu is open over a game list, its picture cache
+  has a size limit, freed image memory goes back to the system, the memory is logged (`es-mem.log`), and the menu
+  restarts by itself before it could take the handheld's memory. Two quick launches start the game once.
 - **From the reports:** the options file is checked before it is replaced (#36, #37); zipped games get their
   RetroAchievements id (#31); the in-game menu's *Blow* follows `drastic.cfg`'s binding (#26); the pixel font's 5, 2,
   Z and B (#34); *View Game Media*, the Save State Manager and *Manual Scrape* fit the bottom screen (#32, #34, #35);
   touch on the Pixel game list: drag or tap its progress bar, tap the ◀ ▶ arrows (#27); an opt-in Pixel setting shows
   a DS game's own ROM icon on its cartridges (#44).
 - **Online play is parked:** the 1.5.13 test builds' *wfc dns* option is gone until it works.
-
-### New: Döda Kvarter
-
-<p align="center">
-  <img src="dodakvarter/docs/img/horde-winter.png" width="248" alt="Döda Kvarter: a horde at night in a miljonprogram yard on the top screen; the gun, health, armour, perks, the bag and the town map on the bottom screen">
-  <img src="dodakvarter/docs/img/title.png" width="248" alt="Döda Kvarter's title: a night skyline of apartment blocks, the dead walking past in the snow; the menu below">
-</p>
-
-**A game made for this handheld**, on its own tile in the menu (*Ports > Döda Kvarter* before 1.6). The top screen is a Swedish suburb at night seen from
-above, the bottom screen your inventory: health and armour, the gun and its ammo, perks, the bag (tap it) and a map
-of the town. It plays like Call of Duty Zombies, with Black Ops' own numbers: endless rounds of the dead, kronor for
-every hit, barricades to buy your way into the next district, wall buys, the Mystery Box (*Lådan*, where a
-Dalahäst takes the place of the teddy bear), the power switch, perks as Swedish food (Julmust, Snabbkaffe,
-Kanelbulle...), the Pack-a-Punch (*Smedjan*), wolf nights and a zombie moose. It's a roguelike too: every run is a
-new town (miljonprogram yards, the centrum with its tunnelbana, Falu red villas, gamla stan, allotments, a church
-and its graveyard...) in autumn rain, winter snow or a midsummer night, and the loot gets rarer and better every round.
-A native program (C, no libraries) that draws both screens straight onto the panels like the DS games, at the
-panels' full resolution: 2× pixels on the RG DS, 3× on the RG DS Plus. Everything about it:
-[dodakvarter/README.md](dodakvarter/README.md). `--no-game` installs without it.
 
 ### New in 1.5
 
