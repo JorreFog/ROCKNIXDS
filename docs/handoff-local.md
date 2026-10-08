@@ -363,7 +363,7 @@ The RG DS line now ships the same SuperDrastic as the Plus (`0.5.0-beta.1-rockni
 
 **Acceptance:** as on the Plus ([v1.5.13 beta 1's notes](https://github.com/JorreFog/ROCKNIXDS/releases/tag/v1.5.13-plus-beta.1)), at 640x480.
 
-## G. Not done tonight: #42, with a plan
+## G. Not done tonight: #42, with a plan (done after 1.6.1: section J)
 
 - **#42, in-game saves in a folder of their own.**
   - ROCKNIX's `start_drastic.sh` runs `rm -rf /storage/.config/drastic/backup; ln -sf /storage/roms/nds ...` on every
@@ -421,6 +421,38 @@ runs):
   frees an array with `delete` (harmless with glibc), a thread race in `FileSystemUtil.cpp`, `Animation` without a
   virtual destructor.
 - **Not covered:** a handheld's decode speed and GPU, a real touchscreen (a mouse stood in), and DraStic itself.
+
+## J. After 1.6.1 (branch `wip/rds-dev`): the base ROCKNIX, saves, recommended settings, sound at boot
+
+Written and tested on a PC only (`sh tests/run.sh`: rocknixds-update's `os-*` against a stubbed `rocknix-update`, the
+re-apply hook, `save-dirs.sh`, `nds-settings.sh`, the audio check against stubbed `amixer`/`pactl`). On a handheld:
+
+1. **The base ROCKNIX** (INTERFACES.md A; the menu's side is `es-rgds-lockdown.patch`'s). Over ssh,
+   `R=/storage/.config/rocknixds/rocknixds-update`: `$R os-current` and `$R os-verified` print `20261001`; `$R os-list`
+   prints dates newest first (if it prints nothing, look at `rocknix-update releases`' raw output: the list is every
+   `20xxxxxx` in it); `$R os-check` says `ROCKNIX IS ON 20261001 (VERIFIED)`. Then
+   `set_setting rocknixds.os latest; $R os-check` (an `UPDATE ...` line) and `$R os-install`: `READY <date>`, the
+   download in `/storage/.update`, `os-pending`. Reboot: ROCKNIX applies it; the next start shows the notification,
+   `os-reapply.log` has the line, `es_features.cfg` and `es_systems.cfg` are files again (not links) with the DS
+   options and only DraStic for the DS. With `--with-60hz` installed, `.with-60hz` exists and one more restart gives
+   `dclk_vop0` 42133334 again (section "Panel timing" in the README). Back: `set_setting rocknixds.os verified`,
+   `$R os-install`. Acceptance: two round trips, the menu and a DS game working after each.
+2. **Saves (#42, #56).** Nintendo DS > *Save files: saves folder*, *Save states: saves folder*. Start a game with a
+   save: `ls -l /storage/.config/drastic/backup /storage/.config/drastic/savestates` point into `roms/saves/nds`, the
+   `.dsv`/`.dss` files are there, `dsflip/save-dirs.log` lists the moves; the game loads its save, the in-game menu's
+   slots show their pictures, *resume on quit* resumes. Set both back to their defaults: the files go back. Then
+   uninstall + reinstall on a spare card: `--uninstall` puts them back in ROCKNIX's places.
+3. **Apply recommended settings (#45).** On a game with a shader and *3D resolution 3x*: switch it on; the next start's
+   `last-session.log` says `recommended settings: on`, `power profile: balanced`, `scale 2`, and `DSHOOK_SHADER`
+   is `none` (its first line).
+4. **Art Book Next (#48).** UI settings > Theme: `es-theme-art-book-next` is offered; picking it restarts ES on the top
+   panel with the bottom one off; a reboot keeps it so (the launcher is still ours: `grep start_es /proc/mounts`);
+   picking ROCKNIXDS Pixel again spans both panels.
+5. **In-game menu switches (INTERFACES.md B).** With *Enable navigation sounds* off in ES, `last-session.log` says
+   `in-game menu: sounds 0, hints 1`; `rocknixds.hints=0` makes it `hints 0`.
+6. **Sound at boot (#53).** `cat /storage/.config/rocknixds/audio-boot.log` after a few cold starts (off for a minute or
+   more): one line each, `path: HP, default: alsa_output...` and no `|` note on a good boot. A boot with a note is
+   the evidence #53 was missing: send the line with `/var/log/boot.log`.
 
 ## Results on an RG DS, 2026-10-08 (the 1.6.1 release)
 
