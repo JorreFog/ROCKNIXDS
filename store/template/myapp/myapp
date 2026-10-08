@@ -1,0 +1,5 @@
+#!/bin/sh
+# The app. A real one is a binary (or a launcher like Döda Kvarter's launch.sh, which takes the panels through KMS);
+# it keeps what must survive an update in data/ ("keep" in app.json).
+mkdir -p /storage/.config/rocknixds/myapp/data
+echo "Hello from My App" > /storage/.config/rocknixds/myapp/data/hello.txt

@@ -14,7 +14,9 @@ static FILE *logf_;
 void plat_log(const char *fmt, ...) {
     va_list ap;
     if (!logf_) {
-        char p[512], old[520]; snprintf(p, sizeof p, "%s/dodakvarter.log", plat_data_dir());
+        /* DK_LOG_NAME: another program on this platform layer (the ROCKNIXDS Store) names its own log */
+        const char *name = getenv("DK_LOG_NAME");
+        char p[512], old[520]; snprintf(p, sizeof p, "%s/%s", plat_data_dir(), name && *name ? name : "dodakvarter.log");
         snprintf(old, sizeof old, "%s.1", p); rename(p, old);   /* the last session's log is kept beside it */
         logf_ = fopen(p, "w");
         if (logf_) setvbuf(logf_, 0, _IOLBF, 0);

@@ -11,6 +11,9 @@ on:
       - 'dsflip/device/rocknixds-update'
       - 'dsflip/device/es-features.sh'
       - 'install.sh'
+      - 'store/device/rocknixds-store'
+      - 'store/catalog.json'
+      - 'store/tests/sandbox.py'
       - '.github/workflows/unit.yml'
   pull_request:
     paths:
@@ -20,6 +23,9 @@ on:
       - 'dsflip/device/rocknixds-update'
       - 'dsflip/device/es-features.sh'
       - 'install.sh'
+      - 'store/device/rocknixds-store'
+      - 'store/catalog.json'
+      - 'store/tests/sandbox.py'
       - '.github/workflows/unit.yml'
   workflow_dispatch:
 
