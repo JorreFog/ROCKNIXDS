@@ -450,6 +450,20 @@ def bank():
     return c.rows()
 
 
+def store():
+    """The ROCKNIXDS Store: a shopping bag, a down arrow on it (something new to install)."""
+    c = Canvas()
+    c.ring(16, 9.5, 4.2, 6, 'm', keep=lambda x, y: y < 10)       # the handle
+    c.poly([(5, 10), (27, 10), (29, 29), (3, 29)], 'p')           # the bag
+    c.poly([(5, 10), (27, 10), (27.3, 13), (4.7, 13)], 'P')       # its fold
+    c.rect(5, 10, 26, 10, 'q')
+    c.poly([(23, 13), (27.3, 13), (29, 29), (24, 29)], 'P')       # shade on its right side
+    c.rect(14, 15, 17, 21, 'w')                                   # the arrow
+    c.poly([(10, 21), (22, 21), (16, 27)], 'w')
+    c.rect(17, 15, 17, 21, 'l'); c.px(19, 22, 'l'); c.px(18, 23, 'l'); c.px(17, 24, 'l')
+    return c.rows()
+
+
 def gear():
     c = Canvas()
     import math
@@ -532,6 +546,7 @@ DRAWN = {
     'dodakvarter': ({'g': rgba('7fae4e'), 'G': rgba('a8d477'), 'h': rgba('4f7f3a'), 'r': rgba('d8322f'), 'R': rgba('ff8a7a'),
                      'y': rgba('e8d44a'), 'p': rgba('5a4a78')}, zombie),
     'bank': ({'b': rgba('3d6fb8'), 'B': rgba('24476f'), 'n': rgba('1f3d6e'), 'y': rgba('f2c94c'), 'Y': rgba('fff0a8')}, bank),
+    'store': ({'p': rgba('2eae62'), 'P': rgba('1e7a44'), 'q': rgba('7fe0a4')}, store),
     'apps': ({'r': rgba('e25a5a'), 'y': rgba('f2c94c'), 'g': rgba('5bb85b'), 'b': rgba('4c8ee0'), 'p': rgba('b07ef0'),
               'o': rgba('e08a4e'), 'c': rgba('44d4ca')}, apps),
     'console': ({'o': rgba('b0703a'), 'O': rgba('7a4a24'), 'r': rgba('e25a5a')}, console),

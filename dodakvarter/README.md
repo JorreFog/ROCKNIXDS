@@ -83,7 +83,8 @@ health and 15% off how many come in a round, and they turn into runners and spri
 newer version (with Wi-Fi on; the title says when there is one); the row updates it (from the title, not in the
 middle of a run): it downloads it, checks it, puts it in place and starts it. High scores and settings stay; a run
 saved in the old version doesn't carry over (the row asks first). Over ssh: `/storage/.config/rocknixds/dodakvarter/update.sh
-check` or `install`. New versions are pre-releases tagged `dodakvarter-v<version>` on GitHub
+check` or `install`. The ROCKNIXDS Store (on the menu's home page, [../store](../store)) updates it as well, and
+installs it on a handheld that left it out (`--no-game`). New versions are pre-releases tagged `dodakvarter-v<version>` on GitHub
 (`.github/workflows/dodakvarter-release.yml`, from the `VERSION` file and `bin/dodakvarter-aarch64`; `tools/package.sh`
 makes the package); ROCKNIXDS's own installer never puts back an older game than the one there.
 

@@ -19,6 +19,9 @@ on:
       - 'dsflip/device/autostart-rocknixds-audio'
       - 'ROCKNIX'
       - 'install.sh'
+      - 'store/device/rocknixds-store'
+      - 'store/catalog.json'
+      - 'store/tests/sandbox.py'
       - '.github/workflows/unit.yml'
   pull_request:
     paths:
@@ -36,6 +39,9 @@ on:
       - 'dsflip/device/autostart-rocknixds-audio'
       - 'ROCKNIX'
       - 'install.sh'
+      - 'store/device/rocknixds-store'
+      - 'store/catalog.json'
+      - 'store/tests/sandbox.py'
       - '.github/workflows/unit.yml'
   workflow_dispatch:
 
