@@ -1,0 +1,10 @@
+# ROCKNIXDS Store: look for app updates and tell the menu once per new one (rocknixds-store notify; off with the
+# menu's UPDATES & DOWNLOADS > ROCKNIXDS > CHECK FOR UPDATES AUTOMATICALLY, as ROCKNIXDS's own update check)
+[Unit]
+Description=ROCKNIXDS Store update check
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /storage/.config/rocknixds/store/rocknixds-store notify

@@ -89,12 +89,16 @@ void catalog_load(Catalog *c) {
         } else if (!strcmp(tag, "DESC")) {
             const char *id = field(&p);
             for (int i = 0; i < c->n; i++) if (!strcmp(c->apps[i].id, id)) cpy(c->apps[i].desc, sizeof c->apps[i].desc, field(&p));
+        } else if (!strcmp(tag, "NOTES")) {
+            const char *id = field(&p);
+            for (int i = 0; i < c->n; i++) if (!strcmp(c->apps[i].id, id)) cpy(c->apps[i].notes, sizeof c->apps[i].notes, field(&p));
         }
     }
     pclose(f);
 }
 
 int app_tab_has(const App *a, int tab) {
+    if (tab == TAB_UPDATES) return a->state == ST_UPDATE;
     if (tab == TAB_INSTALLED) return a->have[0] != 0;
     if (tab == TAB_GAMES) return !strcmp(a->kind, "game");
     return strcmp(a->kind, "game") != 0;

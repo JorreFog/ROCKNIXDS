@@ -6,12 +6,13 @@
 
 #define MAX_APPS 64
 
-enum { TAB_GAMES, TAB_APPS, TAB_INSTALLED, TAB_COUNT };
+enum { TAB_GAMES, TAB_APPS, TAB_INSTALLED, TAB_UPDATES, TAB_COUNT };
 enum { ST_INSTALL, ST_UPDATE, ST_INSTALLED, ST_UNAVAILABLE, ST_UNSUPPORTED, ST_NEEDS };
 
 typedef struct {
     char id[40], kind[12], name[72], dev[56], have[24], latest[24], state_s[32], summary[200], genre[56], players[12];
     char desc[1600];
+    char notes[1300];                   /* what's new in the newest release (its notes, as plain text) */
     long size;
     uint32_t accent;
     int state;

@@ -5,11 +5,11 @@ app that comes later are one press away: no ssh, no commands, and no waiting for
 an update to one. Every app gets a tile of its own on the menu's shelf.
 
 <p align="center">
-  <img src="docs/img/store-games.png" width="300" alt="Top screen: Döda Kvarter's icon, name, maker, 0.2.0 -> 0.3.0 and an UPDATE OUT badge, a screenshot and its summary. Bottom screen: the Games tab with Döda Kvarter and a yellow UPDATE button">
+  <img src="docs/img/store-updates.png" width="300" alt="Top screen: Döda Kvarter 0.2.0 -> 0.3.0, UPDATE OUT, and What's new in 0.3.0 from its release notes. Bottom screen: the Updates tab with Döda Kvarter and a yellow UPDATE button, and a note: An update is out: A updates it">
   <img src="docs/img/store-apps.png" width="300" alt="Top screen: ROCKNIXDS Bank & Trade, 23 MB, its picture and summary. Bottom screen: the Apps tab: the bank, the Store and Hello Handheld, an example app, with INSTALL buttons">
 </p>
-<p align="center"><sub>The Games tab with an update out, and the Apps tab ("Hello Handheld" is the tests' example of an app
-ROCKNIXDS has never heard of). Rendered by the Store's headless test run.</sub></p>
+<p align="center"><sub>The Updates tab with what's new in the update, and the Apps tab ("Hello Handheld" is the tests'
+example of an app ROCKNIXDS has never heard of). Rendered by the Store's headless test run.</sub></p>
 
 ## Using it
 
@@ -19,18 +19,29 @@ checks for new apps and updates when it opens.
 
 | | |
 |---|---|
-| **Left / right**, **L / R** | Games, Apps, Installed (a yellow number: updates out) |
-| **Up / down** | the app; its details on the top screen |
+| **Left / right**, **L / R** | Games, Apps, Installed, Updates (a yellow number: how many are out) |
+| **Up / down** | the app; its details on the top screen (for an update: what's new in it) |
 | **A** | install it, or update it |
 | **X** | remove it (it asks first; what it keeps, like saves and settings, stays on the card) |
-| **Y** | update everything that has an update |
+| **Y** | update everything that has an update (the Store's own last) |
 | **SELECT** | the whole description on the top screen |
 | **START** | check again |
 | **B** | back to the menu |
 
 The touchscreen works too: tap a tab, an app, then its button. A new app's tile is on the home page once you leave the
-Store (the menu reads its list of systems when it starts). The Store updates itself the same way: it restarts into the
-new version.
+Store (the menu reads its list of systems when it starts).
+
+### Updates
+
+- **The Updates tab** lists every installed app with a newer version out, with what's new in it (its release notes) on
+  the top screen. The Store opens on it when updates are waiting. A updates the one under the cursor, Y all of them.
+- **An update keeps what the app keeps**: Döda Kvarter's high scores and settings, the bank's boxes (they're in
+  `/storage/roms/rocknixds-bank`). A download that doesn't match its checksum changes nothing.
+- **The Store looks by itself** a few minutes after the handheld starts and every 6 hours after
+  (`rocknixds-store-check.timer`), and the menu says so once per new update: *An update in the Store: Döda Kvarter
+  0.3.0*. It follows the menu's *Updates & downloads > ROCKNIXDS > Check for updates automatically* switch, as
+  ROCKNIXDS's own update check does.
+- **The Store updates itself** the same way: it restarts into the new version.
 
 Over ssh, the same as root:
 
@@ -39,7 +50,8 @@ S=/storage/.config/rocknixds/store/rocknixds-store
 $S refresh            # the catalog, the newest versions, the pictures
 $S status             # what's installed, what can be updated
 $S install bank       # install or update one (--version X for a given one)
-$S update             # update everything
+$S update             # update everything (or: update bank)
+$S notify             # check, and tell the menu about updates out (what the timer runs)
 $S remove bank
 $S relink             # put the tiles of apps installed from the Store back (install.sh does this itself)
 ```
