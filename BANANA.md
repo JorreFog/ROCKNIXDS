@@ -42,7 +42,7 @@ The logs to send back are the same as always: `/storage/.config/drastic/dsflip/d
    - **#49:** in the in-game menu, a brightness slider for each screen, and the brightness card on Menu + volume.
    - **#26:** a blow on the microphone is detected in a game that uses it.
 2. **Store (#55).** The Store tile (a green bag) is on the menu's shelf and opens on both panels. Touch and buttons
-   work in the Games / Apps / Installed tabs. Install, update and remove an app; the Store refuses to install or
+   work in the Games / Apps / Installed tabs, and the Updates tab lists apps with a newer version and what's new in it. Install, update and remove an app; the Store refuses to install or
    remove an app while it is running. ES comes back with the right tiles afterwards. Not expected to work yet: Döda Kvarter
    shows "SOON" on a handheld that doesn't have it, and the Store's self-update is unavailable (no `store-v0.1.0`
    release yet).
