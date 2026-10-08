@@ -164,7 +164,8 @@ void radio_update(float dt) {
     Player *p = &G->p;
     if (!S.radio || G->over) { r->cur = -1; r->nq = 0; return; }
     /* what happened: each event speaks once a run */
-    if (!r->started && G->time > 1.5f) {
+    if (!r->started) {                                  /* (nothing before his first words: they come first) */
+        if (G->time <= 1.5f) return;
         r->started = 1;
         r->tip_base = S.radio_tip;
         int open = 0; for (int z = 0; z < G->nzones; z++) open += G->zones[z].open;
