@@ -229,6 +229,20 @@ stuck_report() {
   # "wfc dns" and libdsflip ignores nds.wfc_dns. Only the test switch turns it on (systemctl set-environment
   # DSFLIP_WFC=kaeru DSFLIP_WFC_DEBUG=1; docs/handoff-local.md, section 4).
   echo "wifi: ${DSFLIP_WFC:-off}"
+  # The in-game menu's navigation sounds follow ES's (Sound settings > Enable navigation sounds:
+  # EnableSounds in es_settings.cfg, off unless set), and its hint toasts ("Y to undo load" and the like) are on unless
+  # rocknixds.hints=0 in system.cfg. The menu's own saved choice wins over these (SuperDrastic's docs/INTEGRATION.md);
+  # DSFLIP_MENU_* already in the environment win over both.
+  if [ -z "$DSFLIP_MENU_SOUNDS" ]; then
+    DSFLIP_MENU_SOUNDS=0
+    grep -q '<bool name="EnableSounds" value="true"' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null && DSFLIP_MENU_SOUNDS=1
+  fi
+  if [ -z "$DSFLIP_MENU_HINTS" ]; then
+    DSFLIP_MENU_HINTS=1
+    [ "$(grep '^rocknixds\.hints=' $CFG 2>/dev/null | tail -n1 | cut -d= -f2)" = 0 ] && DSFLIP_MENU_HINTS=0
+  fi
+  export DSFLIP_MENU_SOUNDS DSFLIP_MENU_HINTS
+  echo "in-game menu: sounds $DSFLIP_MENU_SOUNDS, hints $DSFLIP_MENU_HINTS"
   # The real microphone presses DraStic's "fake microphone" control (Scroll Lock, code 327 in the keyboard set).
   # ROCKNIX's drastic.cfg for the RG DS binds it in both control sets since 2026-02-04, but a config/drastic.cfg that
   # dates from an earlier nightly has it unbound (65535), and ROCKNIX copies its template only once: then blowing
