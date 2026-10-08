@@ -119,6 +119,10 @@ Mali-G52); the RG DS Plus has two 1024×768 panels. ROCKNIXDS (formerly `rgds-ro
   stress-test ROM) behind all the numbers below.
 - **ROCKNIXDS Bank & Trade** (new, in `bank/`): a Pokémon bank, PKHeX legality checks and Wi-Fi trading between two
   handhelds, on both screens. See [below](#bank-rocknixds-bank--trade).
+- **An undervolt tool** (new, advanced, opt-in, ssh only): ROCKNIX runs every RG DS at Rockchip's worst-case (L0)
+  voltages, 50–100 mV over what a better-binned chip gets from Anbernic's own firmware at the clocks DS games use.
+  `rocknixds-undervolt` writes lower CPU voltages to the device tree as a trial. It checks them with a stress test
+  that checks its own results, and a boot guard reverts a trial that crashes. See [`undervolt/`](undervolt).
 
 ### New in 1.6
 

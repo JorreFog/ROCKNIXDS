@@ -283,6 +283,19 @@ if [ $UNINSTALL = 1 ]; then
         python3 /storage/.config/rocknixds/dodakvarter/gamelist.py remove /storage/roms/ports 2>/dev/null || true
     fi
     rm -f "/storage/roms/ports/Doda Kvarter.sh" /storage/roms/ports/images/dodakvarter-*.png
+    # undervolt: stock voltages back in the DTB (they take effect at the next boot), and the boot guard gone
+    if [ -x /storage/.config/rocknixds/undervolt/rocknixds-undervolt ]; then
+        UVS=/storage/.config/rocknixds/undervolt/rocknixds-undervolt
+        DT=$(sed -n 's/^[[:space:]]*FDT[[:space:]][[:space:]]*\([^[:space:]]*\).*/\1/p' /flash/extlinux/extlinux.conf | head -n1)
+        if [ -f /storage/.config/rocknixds-undervolt/trial ] || \
+           { [ -n "$DT" ] && ! python3 /storage/.config/rocknixds/undervolt/uvdtb.py isstock "/flash$DT" 2>/dev/null; }; then
+            sh $UVS off && UV_REBOOT=1 || say "couldn't put the stock voltages back: see /flash/rocknixds-undervolt/RECOVERY.txt"
+        fi
+    fi
+    rm -f /storage/.config/system.d/rocknixds-undervolt-guard.service \
+          /storage/.config/system.d/basic.target.wants/rocknixds-undervolt-guard.service
+    rmdir /storage/.config/system.d/basic.target.wants 2>/dev/null; systemctl daemon-reload
+    rm -rf /storage/.config/rocknixds-undervolt
     rm -rf /storage/.config/rocknixds
     [ -f $SYSCFG ] && sed -i '/^rocknixds\./d' $SYSCFG      # the update channel and the media and update switches
     [ -e $ES_THEMES/canvas-ds/.rocknixds-commit ] && rm -rf $ES_THEMES/canvas-ds      # the one this installer downloaded
@@ -295,6 +308,7 @@ if [ $UNINSTALL = 1 ]; then
     es_start
     mv $BACKUP $BACKUP.undone-$(date +%Y%m%d-%H%M%S)
     say "Done. (The 60 Hz DTB, if applied, stays: restore /storage/rg-ds.dtb.bak to /flash by hand to undo it.)"
+    [ -n "$UV_REBOOT" ] && say "The undervolt is undone in the device tree: reboot for the stock voltages." || true
     exit 0
 fi
 
@@ -590,6 +604,18 @@ if [ $WITH_60HZ = 1 ]; then
     sh "$SRC/dii-ess-aye/device/apply-60hz-dtb.sh" || say "60 Hz step skipped (see message above)"
     NEED_REBOOT=1
 fi
+
+# ---- undervolt tool (opt-in) ------------------------------------------------------------------------------
+# rocknixds-undervolt lowers the CPU/GPU voltages in the DTB as a trial, stress-tests them and keeps them only if they
+# pass (undervolt/README.md). Installing it changes no voltage; its boot guard does nothing until a trial is pending.
+say "Installing the undervolt tool (off until you run it)"
+UV=/storage/.config/rocknixds/undervolt
+mkdir -p $UV /storage/.config/system.d/basic.target.wants
+cp "$SRC/undervolt/device/rocknixds-undervolt" "$SRC/undervolt/device/uvdtb.py" "$SRC/undervolt/device/uvstress" $UV/
+chmod +x $UV/rocknixds-undervolt $UV/uvdtb.py $UV/uvstress
+cp "$SRC/undervolt/device/rocknixds-undervolt-guard.service" /storage/.config/system.d/
+ln -sf ../rocknixds-undervolt-guard.service /storage/.config/system.d/basic.target.wants/rocknixds-undervolt-guard.service
+systemctl daemon-reload
 
 # ---- Döda Kvarter: a game made for both screens -----------------------------------------------------------
 # A zombie roguelike in a Swedish suburb at night (dodakvarter/): the top screen is the game, the bottom one the
