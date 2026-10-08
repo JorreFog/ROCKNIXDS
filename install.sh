@@ -169,7 +169,9 @@ es_set() {        # es_set <key> <value> in the live es_settings.cfg
         sed -i "s|<string name=\"$1\" value=\"[^\"]*\" />|<string name=\"$1\" value=\"$2\" />|" $ES_SETTINGS
     else sed -i "s|</config>|\t<string name=\"$1\" value=\"$2\" />\n</config>|" $ES_SETTINGS; fi
 }
-themes_allow() { printf 'rocknixds-pixel-light\nrocknixds-pixel-dark\ndii-ess-aye\ncanvas-ds\n'; }   # pickable in the patched ES
+# pickable in the patched ES: the four dual-screen themes, and ROCKNIX's own default theme (Art Book Next, #48), which
+# gets ROCKNIX's one-screen layout (start_es_rgds.sh: the top panel, the bottom one off)
+themes_allow() { printf 'rocknixds-pixel-light\nrocknixds-pixel-dark\ndii-ess-aye\ncanvas-ds\nes-theme-art-book-next\n'; }
 es_setb() {       # es_setb <key> true|false: a <bool name=...> setting in the live es_settings.cfg
     if grep -q "<bool name=\"$1\"" $ES_SETTINGS 2>/dev/null; then
         sed -i "s|<bool name=\"$1\" value=\"[^\"]*\" />|<bool name=\"$1\" value=\"$2\" />|" $ES_SETTINGS
@@ -265,12 +267,15 @@ if [ $UNINSTALL = 1 ]; then
         else printf '#!/bin/sh\nexec /storage/.config/drastic/drastic.real "$@"\n' > $DRASTIC/drastic; chmod +x $DRASTIC/drastic; fi
     fi
     sed -i '/<bool name="HideWindow" /d' $ES_SETTINGS 2>/dev/null      # fast-switch on (up to 1.5.12) set it; ROCKNIX's default again
+    # the DS saves and savestates back where ROCKNIX's launcher looks for them (the save files / save states options)
+    [ -f $DRASTIC/dsflip/save-dirs.sh ] && sh $DRASTIC/dsflip/save-dirs.sh --stock
     # ROCKNIX's DS emulators again (lockdown), while es-features.sh is still there
     [ -f $DRASTIC/dsflip/es-features.sh ] && sh $DRASTIC/dsflip/es-features.sh --unlock-nds
     rm -rf $DRASTIC/dsflip
     [ -f $BACKUP/.shaders-added ] && while read -r b; do rm -f "$DRASTIC/shaders/$b"; done < $BACKUP/.shaders-added
     [ -e $BACKUP/.esf-created ] && rm -f $ESF $ESF.rocknixds-old
-    rm -f /storage/.config/autostart/rocknixds-es-features
+    rm -f /storage/.config/autostart/rocknixds-es-features /storage/.config/autostart/rocknixds-os \
+          /storage/.config/autostart/rocknixds-audio
     # lockdown and updates: ROCKNIX's DS emulators and settings menus again
     systemctl stop rocknixds-update-check.timer 2>/dev/null
     rm -f /storage/.config/system.d/rocknixds-update-check.service /storage/.config/system.d/rocknixds-update-check.timer \
@@ -505,6 +510,7 @@ if [ $DSFLIP_ON = 1 ]; then
        "$SRC/dsflip/device/es-share-logs.sh" "$SRC/dsflip/device/menu-power.sh" \
        "$SRC/dsflip/device/battery-led-status" "$SRC/dsflip/device/powerstate" \
        "$SRC/dsflip/device/media-auto.sh" "$SRC/dsflip/device/preload-guard.so" "$SRC/dsflip/device/drastic-launch" \
+       "$SRC/dsflip/device/save-dirs.sh" "$SRC/dsflip/device/nds-settings.sh" "$SRC/dsflip/device/recommended.cfg" \
        $WORK/dsflip/
     sh $WORK/dsflip/install.sh
     # fast switching (dsflip/fast-switch): ES and sway stay up during a DS game, which runs on another VT, so the menu
@@ -590,6 +596,13 @@ if [ $WITH_60HZ = 1 ]; then
     sh "$SRC/dii-ess-aye/device/apply-60hz-dtb.sh" || say "60 Hz step skipped (see message above)"
     NEED_REBOOT=1
 fi
+# A ROCKNIX update puts its own device tree back: the first boot on a new ROCKNIX (autostart-rocknixds-os) re-applies
+# the 60 Hz one from this copy, where it was chosen (--with-60hz now, or a tree that has it from an earlier install).
+mkdir -p /storage/.config/rocknixds
+cp "$SRC/dii-ess-aye/device/apply-60hz-dtb.sh" /storage/.config/rocknixds/apply-60hz-dtb.sh
+if [ $WITH_60HZ = 1 ] || [ "$(sh "$SRC/dii-ess-aye/device/apply-60hz-dtb.sh" --check 2>/dev/null)" = 60hz ]; then
+    touch /storage/.config/rocknixds/.with-60hz
+fi
 
 # ---- Döda Kvarter: a game made for both screens -----------------------------------------------------------
 # A zombie roguelike in a Swedish suburb at night (dodakvarter/): the top screen is the game, the bottom one the
@@ -642,6 +655,18 @@ RD=/storage/.config/rocknixds
 mkdir -p $RD
 cp "$SRC/dsflip/device/rocknixds-update" $RD/ && chmod +x $RD/rocknixds-update
 themes_allow > $RD/themes.allow
+# The base ROCKNIX (UPDATES & DOWNLOADS > ROCKNIX (BASE SYSTEM), rocknixds-update os-*): the nightly this release was
+# verified on, and the boot hook that puts back what a ROCKNIX update undoes. The ROCKNIX running now is the one
+# ROCKNIXDS was just installed on: the hook acts only once that changes.
+grep -v '^#' "$SRC/ROCKNIX" 2>/dev/null | grep -o '^[0-9]\{8\}' | head -n1 > $RD/rocknix-verified
+mkdir -p /storage/.config/autostart
+cp "$SRC/dsflip/device/autostart-rocknixds-os" /storage/.config/autostart/rocknixds-os
+chmod +x /storage/.config/autostart/rocknixds-os
+(. /etc/os-release; echo "$OS_VERSION") > $RD/os-version
+rm -f $RD/os-pending
+# #53: the boot check of the sound card's output path and PipeWire's default output (autostart-rocknixds-audio)
+cp "$SRC/dsflip/device/autostart-rocknixds-audio" /storage/.config/autostart/rocknixds-audio
+chmod +x /storage/.config/autostart/rocknixds-audio
 [ -f $SYSCFG ] && backup_once $SYSCFG
 [ -f $SYSCFG ] && sed -i '/^nds\(\[.*\]\)\{0,1\}\.\(emulator\|core\)=/d' $SYSCFG       # a per-game RetroArch/melonDS choice
 # The update channel follows what was installed, unless the player already chose one in the menu (which stores

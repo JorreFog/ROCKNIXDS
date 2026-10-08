@@ -1,7 +1,12 @@
 # The SuperDrastic release install.sh installs (https://github.com/JorreFog/SuperDrastic): version and the sha256 of
 # superdrastic-<version>-aarch64.tar.gz. Bump both together. This release ships the package in dsflip/.
-# 0.5.0-beta.1-rocknixds.7 is SuperDrastic v0.5.0-beta.1 (the in-game menu) plus
-# dsflip/superdrastic-0.5.0-beta.1-rocknixds.7.patch (SuperDrastic branch claude/1-6-prep-work-kwq9lc and two commits
+# 0.5.0-beta.1-rocknixds.8 is .7 plus the open issues after 1.6.1 (SuperDrastic branch
+# claude/open-issues-rocknix-nightly-1l4s4w): the in-game menu's own picture per save slot and both screens (SD #4),
+# a shader row kept per game, the performance overlay, a brightness slider per screen, menu sounds and tips switches,
+# the brightness card on Menu + volume, the microphone's blow detection (#26) and 3x's lines (#47). The whole series
+# from v0.5.0-beta.1 is dsflip/superdrastic-0.5.0-beta.1-rocknixds.8.patch.
+# .7 was SuperDrastic v0.5.0-beta.1 (the in-game menu) plus
+# its patch (SuperDrastic branch claude/1-6-prep-work-kwq9lc and two commits
 # made on an RG DS Plus, local branch 1.6-freeze-fix): 1.5.13's four
 # commits (shader output sizes with ds-fsr at 3x on the RG DS Plus; the Wi-Fi / Nintendo WFC path; its pre-device
 # fixes; the microphone's tunables, logs and joystick-button fallback) and 1.6's (the stall watch and a quit that works
@@ -12,4 +17,4 @@
 # Built with build.sh (clang 23 + lld, an Ubuntu noble arm64 sysroot: libc6 2.39, libdrm 2.4.125) and
 # package.sh; it needs glibc 2.38 like the release. Once the patch is in a SuperDrastic release, pin that release here
 # instead and drop the patch.
-0.5.0-beta.1-rocknixds.7 0baff98d895f8d733722c04b00354cf785732eb380107979862a68aab286b678
+0.5.0-beta.1-rocknixds.8 3f66f6eb43c14ad84e3186bdf2ee422ce9d33cb9343676876bed6d31f2efb733

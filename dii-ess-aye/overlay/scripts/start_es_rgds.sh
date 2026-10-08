@@ -33,7 +33,8 @@ REVEAL_DELAY=1          # stock ES only: after it answers its API, before its wi
                         # The patched ES says when its first view is complete instead ($RGDS_ES_DRAWN).
 
 # Which layout: the dual-screen themes span one 1920x480 canvas over both panels. Any other theme is drawn for one
-# 640x480 screen, so it gets stock ROCKNIX's layout: ES fullscreen on the top panel, the bottom panel off. (1.3
+# 640x480 screen, so it gets stock ROCKNIX's layout: ES fullscreen on the top panel, the bottom panel off: ROCKNIX's
+# own default theme (es-theme-art-book-next, which the locked menu offers since #48) among them. (1.3
 # forced the 1920 canvas on every theme, stretching them over both screens.) theme-changed.sh restarts ES when the
 # choice switches between the two. Dark and light share the canvas, so that switch does not restart ES.
 # Keep the list in sync with theme-changed.sh.

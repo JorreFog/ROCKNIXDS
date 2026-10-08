@@ -98,10 +98,24 @@ erased**), and a computer with an SD card reader.
    | Hires 3D, Threaded 3D | **on** (the installer sets them) | off: 1× resolution; the 3D on the emulation thread |
 
    The same settings can be changed for a single game: highlight it, press **X** for its options and choose the
-   game's advanced settings.
+   game's advanced settings. There, **Apply recommended settings** (#45) sets that game back to the recommended
+   picture and speed settings above, whatever its own (and the system's) say, plus the few games' own lines in
+   [`dsflip/device/recommended.cfg`](dsflip/device/recommended.cfg) (the performance profile for Call of Duty - World
+   at War and The 4 Heroes of Light, from the 1.5 performance logs). Resume on quit, the microphone and the
+   performance logs stay the game's own.
 
-Updates come through the menu: *Updates & downloads > ROCKNIXDS*. Already running ROCKNIX?
-See [Install](#install) for the one-line install over ssh.
+   **Where the saves go** (#42, #56), under the same Nintendo DS settings. *Save files*: next to the games
+   (`roms/nds`, ROCKNIX's) or a saves folder (`roms/saves/nds`). *Save states*: ROCKNIX's folder
+   (`roms/savestates/nds`) or the saves folder (`roms/saves/nds/states`). With both on the saves folder, everything
+   the DS writes is in `roms/saves/nds`, one folder to sync. The files move along at the next game start, and never
+   over a newer one (the older copy stays next to it as `<name>.older-<date>`). Left on their defaults, nothing is
+   touched. These are DraStic's own `.dsv` saves and `.dss` savestates, the ones the in-game menu's Save and Load use;
+   RetroArch's settings don't apply to them (and ROCKNIX sets RetroArch's own savestate folder to
+   `roms/savestates/<system>` at every launch, whatever `retroarch.cfg` says; ES's Save State Manager reads that
+   folder, and only for RetroArch games).
+
+Updates come through the menu: *Updates & downloads > ROCKNIXDS* (see [Updates](#updates)). Already running
+ROCKNIX? See [Install](#install) for the one-line install over ssh.
 
 The Anbernic RG DS is a clamshell handheld with two 640×480 touch panels and an RK3566 (4× Cortex-A55,
 Mali-G52); the RG DS Plus has two 1024×768 panels. ROCKNIXDS (formerly `rgds-rocknix`) is everything I changed on its [ROCKNIX](https://rocknix.org) install:
@@ -406,6 +420,29 @@ its art, the theme draws a card with the game's name or box art.
 Pass options like this: `curl -fsSL …/install.sh | sh -s -- --with-60hz`.
 To go back to the stock DraStic display path without uninstalling: `touch /storage/.config/drastic/nodsflip`.
 
+### Updates
+
+**ROCKNIXDS** updates itself from *Updates & downloads > ROCKNIXDS*: the stable releases for your handheld or the
+beta, checked every 6 hours (a notification once per update; switch it off there).
+
+**ROCKNIX, the system underneath**, has its own group there, *ROCKNIX (base system)*. Each ROCKNIXDS release is
+verified on one ROCKNIX nightly (the [`ROCKNIX`](ROCKNIX) file: 20261001 today; the SD card images are built on it).
+The group shows the installed ROCKNIX and the verified one, and *ROCKNIX version* chooses what *Update ROCKNIX now*
+installs: *Verified for ROCKNIXDS* (the default), *Latest nightly*, or one nightly picked from the list ROCKNIX's
+update server offers this handheld. A nightly that isn't the verified one can break ROCKNIXDS features (the patched
+menu is built for one ROCKNIX: on another it runs only if it still links, else stock EmulationStation runs, and says
+so), and the menu warns before it installs one. The update is ROCKNIX's own (`rocknix-update <version>`: download and
+checksum into `/storage/.update`, applied while restarting); its log is `/storage/.config/rocknixds/os-update.log`.
+From ssh: `/storage/.config/rocknixds/rocknixds-update os-check`, `os-list`, `os-install [verified|latest|YYYYMMDD]`;
+the choice is `rocknixds.os` in `system.cfg`.
+
+A ROCKNIX update replaces `/flash` and links ES's options files back to ROCKNIX's own; everything else ROCKNIXDS
+installs is in `/storage` and stays. The first start on the new ROCKNIX puts back what it undid, with no network: the
+DS options and the DS system's lock (every start), and the 60 Hz panel timing if you installed with `--with-60hz`
+(one more restart applies it; the menu says so). Its log is `/storage/.config/rocknixds/os-reapply.log`.
+ROCKNIX's own update check stays off (`updates.enabled=0`), as before: its *update available* pill had no menu
+behind it.
+
 ---
 
 ## What was achieved
@@ -497,7 +534,9 @@ It's installed as the default DraStic launcher: start any DS game from Emulation
   button DraStic's own menu is bound to, opens it instead of DraStic's, on both panels while the game waits: Resume,
   Save and Load (eight slots with a picture each, *Undo last load* with Y), Quick settings (volume, brightness, the
   microphone's live meter and *Blow*), DraStic's menu, Quit. The d-pad, the left stick and touch all work; A picks, B
-  goes back, L3 or START closes it. `systemctl set-environment DSFLIP_MENU=0` gives DraStic's own menu back.
+  goes back, L3 or START closes it. `systemctl set-environment DSFLIP_MENU=0` gives DraStic's own menu back. Its
+  navigation sounds follow ES's *Enable navigation sounds* (`DSFLIP_MENU_SOUNDS`), and `rocknixds.hints=0` in
+  `system.cfg` turns its hints off (`DSFLIP_MENU_HINTS`); its own setting, once saved, wins.
 - To quit, use the ROCKNIX exit hotkey, *Quit game* in the in-game menu or *Exit DraStic* in DraStic's own menu.
   With *resume on quit* the hotkey saves first; since 1.6 a second press, or a game that doesn't take the save
   within 3 s, quits at once. A game that stops showing frames for 5 s gets a card saying so (the hotkey then quits
@@ -781,6 +820,7 @@ the top panel, the bottom panel, and an unused third.
     ~1390 -> ~530 MHz, GPU at its lowest clock.
 - **Other themes** (since 1.4): pick any theme that is not `dii-ess-aye`, `canvas-ds`, `rocknixds-pixel-light` or
   `rocknixds-pixel-dark` and ES restarts in stock ROCKNIX's layout, the top panel at 640x480 with the bottom panel off.
+  The locked menu offers ROCKNIX's own default theme, **Art Book Next** (`es-theme-art-book-next`, #48), that way.
   Pick one of those four again and it spans both panels. Switching between dark and light does not restart ES:
   they share a canvas. 1.3 stretched every theme across both screens. (`theme-changed.sh` does the restart when
   the canvas has to change.)
@@ -863,6 +903,16 @@ app in `bank/` is GPL-3.0 (it links PKHeX.Core).
 - **Heavy stretches at 2× can still drop frames** (up to ~10/s in one run). There, DraStic's own frame
   times vary so much that its frames arrive spread over the whole refresh cycle, and no latch position can
   separate them. Calm stretches drop about one frame every 8 s.
+- **No sound at all after some cold starts, until a restart** (#53, RG DS). Not reproduced here. ROCKNIX sets the
+  codec's output path and PipeWire's volume once at boot without waiting for the sound card; ROCKNIXDS changes no
+  audio setting at boot. A boot check now waits for the card, sets the path if it isn't what ROCKNIX asks for,
+  restarts WirePlumber once if the default output is the dummy one, and unmutes it; each boot writes one line to
+  `/storage/.config/rocknixds/audio-boot.log`. If it happens again, that file (and `/var/log/boot.log`) says which.
+- **Volume keys in a DS game** (#49): ROCKNIX's `input_sense` handles them (a new `volume` process, `pactl` and a
+  rewrite of `system.cfg` every 0.1 s while held), which is where the stutter and the lag come from; *Menu* + volume
+  changes the brightness, but SuperDrastic's on-screen card shows *Volume* for any volume key. Both are outside
+  ROCKNIXDS's scripts (ROCKNIX's `input_sense` and `volume`; SuperDrastic's `volume.c`). The in-game menu's sliders
+  don't have either problem.
 - Starting a DS game takes ~3.5 s, 2.3 s of them in ROCKNIX's own launch scripts. (Quitting used to restart ES, ~4.3 s
   plus every game it had to load again; since 1.5.13 ES stays up and the menu is back about a second after a quit.)
 

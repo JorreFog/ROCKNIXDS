@@ -25,10 +25,10 @@ index 218e787a..0bbc370f 100644
      ${CMAKE_CURRENT_SOURCE_DIR}/src/views/gamelist/IGameListView.cpp
      ${CMAKE_CURRENT_SOURCE_DIR}/src/views/gamelist/ISimpleGameListView.cpp
 diff --git a/es-app/src/guis/GuiMenu.cpp b/es-app/src/guis/GuiMenu.cpp
-index 03dcb641..ab755254 100644
+index a944eeb3..1cf5a63b 100644
 --- a/es-app/src/guis/GuiMenu.cpp
 +++ b/es-app/src/guis/GuiMenu.cpp
-@@ -5265,6 +5265,14 @@ void GuiMenu::openUISettings()
+@@ -5363,6 +5363,14 @@ void GuiMenu::openUISettings()
  	if (Utils::Platform::queryBatteryInformation().hasBattery)
  		s->addOptionList(_("SHOW BATTERY STATUS"), { { _("NO"), "" },{ _("ICON"), "icon" },{ _("ICON AND TEXT"), "text" } }, "ShowBattery", true);
  

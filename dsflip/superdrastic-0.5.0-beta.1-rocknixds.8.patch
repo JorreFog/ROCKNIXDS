@@ -1,7 +1,7 @@
 From 02b181f40a019b94299b02b8dc5f334ca74781c4 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 15:21:56 +0000
-Subject: [PATCH 01/15] Shaders can draw a smaller buffer than the panel;
+Subject: [PATCH 01/27] Shaders can draw a smaller buffer than the panel;
  ds-fsr draws 3x on the RG DS Plus
 
 A shader's source may say "// dsflip-output: Nx" (N times the DS screen's 256x192) or "dsflip-output: WxH": its
@@ -312,7 +312,7 @@ index 1939acf..e7dd4a9 100644
 From 3de78751408ed7350c4f6d726775267571fcfd5a Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 17:39:05 +0000
-Subject: [PATCH 02/15] Port the Wi-Fi (Nintendo WFC) path from ROCKNIXDS
+Subject: [PATCH 02/27] Port the Wi-Fi (Nintendo WFC) path from ROCKNIXDS
  cursor/drastic-wfc-dns into SuperDrastic
 
 Ported, unchanged in logic, from ROCKNIXDS commit b1a4564 (branch origin/cursor/drastic-wfc-dns-24ad,
@@ -2196,7 +2196,7 @@ index 0000000..535fe1c
 From 0861654f97441d280960ff3a1757773aa49064be Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 17:56:24 +0000
-Subject: [PATCH 03/15] Wi-Fi: ARP only for the gateway, RX records with their
+Subject: [PATCH 03/27] Wi-Fi: ARP only for the gateway, RX records with their
  FCS and W_RXLEN_CROP, a probe of DraStic's W_IF store;
  0.4.0-beta.2-rocknixds.2
 
@@ -2413,7 +2413,7 @@ index 535fe1c..a90f87d 100644
 From d8291e0d67a1a77942bc6ea7dabb2cd5b90e5a9c Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 18:07:03 +0000
-Subject: [PATCH 04/15] Microphone: tunables and logs for the handheld, a
+Subject: [PATCH 04/27] Microphone: tunables and logs for the handheld, a
  joystick-button fallback for the fake microphone; 0.4.0-beta.2-rocknixds.3
 
 A real blow does nothing on the RG DS (ROCKNIXDS issue 26). The mic thread can now be tuned and watched without a
@@ -2633,7 +2633,7 @@ index 9892be8..f397894 100644
 From fe2c56f1a6a455a5c776ac5dbdf15c6c92678f81 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 22:54:27 +0000
-Subject: [PATCH 05/15] Stall watch, a quit that works on a stuck game,
+Subject: [PATCH 05/27] Stall watch, a quit that works on a stuck game,
  RetroAchievements logins that survive no network
 
 2026-10-05, an RG DS Plus: Black 2 started with its resume state, DraStic stopped presenting frames a few seconds
@@ -3134,7 +3134,7 @@ index f397894..1e31a47 100644
 From bb4f885cfbd1e7f5fa0b0818a62567a81e67292b Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 22:54:27 +0000
-Subject: [PATCH 06/15] Online play parked for ROCKNIXDS 1.6: only DSFLIP_WFC
+Subject: [PATCH 06/27] Online play parked for ROCKNIXDS 1.6: only DSFLIP_WFC
  turns the Wi-Fi hook on
 
 nds.wfc_dns from system.cfg (ES's "wfc dns", offered by the 1.5.13 test builds) is read only with
@@ -3203,7 +3203,7 @@ index 7ba0b7a..888b56a 100644
 From b874a209b2e70875fd1716ceea146deec4494795 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 23:09:32 +0000
-Subject: [PATCH 07/15] In-game menu's Blow presses DraStic's fake microphone
+Subject: [PATCH 07/27] In-game menu's Blow presses DraStic's fake microphone
  the way its binding asks (ROCKNIXDS issue 26)
 
 The Microphone page's Blow held the keyboard control (Scroll Lock, 327) only. A drastic.cfg whose keyboard set has no
@@ -3301,7 +3301,7 @@ index fd02359..b3be979 100644
 From 09c5054a6c56610ad0c4a34ee49242df0138147d Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 23:10:02 +0000
-Subject: [PATCH 08/15] 0.5.0-beta.1-rocknixds.4: the ROCKNIXDS 1.6 test build
+Subject: [PATCH 08/27] 0.5.0-beta.1-rocknixds.4: the ROCKNIXDS 1.6 test build
  (both handhelds)
 
 v0.5.0-beta.1 plus the 1.5.13 commits (ds-fsr 3x, the parked Wi-Fi path off by default, microphone tunables) and
@@ -3329,7 +3329,7 @@ index 08c0d0c..b560c44 100644
 From f81578546546e5f6d2d004cf20ed6b297a6201af Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 23:15:36 +0000
-Subject: [PATCH 09/15] DSFLIP_STALL_TEST: DraStic's main thread stops after
+Subject: [PATCH 09/27] DSFLIP_STALL_TEST: DraStic's main thread stops after
  that many seconds, to test the stall watch on a handheld
 
 The 2026-10-05 freeze (DraStic alive, its main thread no longer presenting) can't be made on purpose: SIGSTOP stops
@@ -3380,7 +3380,7 @@ index b7be2fd..9e82449 100644
 From d5900155f037aafaddb585f0611db842525186ca Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 23:19:16 +0000
-Subject: [PATCH 10/15] Stall card: 15 s at a time while the stall lasts, so it
+Subject: [PATCH 10/27] Stall card: 15 s at a time while the stall lasts, so it
  doesn't outstay a stall that ends; the menu's Quit timestamps its request
 
 The card was posted for 10 minutes: a stall that ended (a long pause, not a hang) left it over the game. It is now
@@ -3451,7 +3451,7 @@ index 1e31a47..51152b7 100644
 From 212712c1ffb195ca1211e05f043ba430dbd20161 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 5 Oct 2026 23:19:35 +0000
-Subject: [PATCH 11/15] 0.5.0-beta.1-rocknixds.5: the ROCKNIXDS 1.6 test build,
+Subject: [PATCH 11/27] 0.5.0-beta.1-rocknixds.5: the ROCKNIXDS 1.6 test build,
  with the stall test switch and the shorter stall card
 
 .4 plus DSFLIP_STALL_TEST (DraStic's main thread stops on purpose, to test the stall watch on a handheld), the stall
@@ -3477,7 +3477,7 @@ index b560c44..b400b70 100644
 From c8bc8604a6f6828c227c1ae4e3919d9bfcb7192e Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 6 Oct 2026 00:55:26 +0000
-Subject: [PATCH 12/15] In-game menu at 640x480: pixel text on Pixelify Sans's
+Subject: [PATCH 12/27] In-game menu at 640x480: pixel text on Pixelify Sans's
  grid, a readable selected empty slot, dates without a double space
 
 Rendered on the build machine at both panel sizes (every screen and pop-up): at 640x480 nothing runs out of its box,
@@ -3604,7 +3604,7 @@ index b3be979..2ef2875 100644
 From 44d6e1be7e12265d5b9e2dbfb411eb72b890d94c Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 6 Oct 2026 00:55:26 +0000
-Subject: [PATCH 13/15] 0.5.0-beta.1-rocknixds.6: the ROCKNIXDS 1.6 test build,
+Subject: [PATCH 13/27] 0.5.0-beta.1-rocknixds.6: the ROCKNIXDS 1.6 test build,
  with the in-game menu right at 640x480
 
 .5 plus the in-game menu's pixel text on the font's grid on the RG DS's 640x480 panels, a readable selected empty
@@ -3630,7 +3630,7 @@ index b400b70..1fdcbf1 100644
 From 5e14c95a2cbcd8d9abad95a52703b0ecebb24532 Mon Sep 17 00:00:00 2001
 From: JorreFog <JorreFog@users.noreply.github.com>
 Date: Tue, 6 Oct 2026 18:35:51 +0200
-Subject: [PATCH 14/15] DraStic's helper threads wait until their locks exist:
+Subject: [PATCH 14/27] DraStic's helper threads wait until their locks exist:
  the freeze at a game's start
 
 DraStic r2.5.2.2 starts four of its helper threads before it initialises what each of them waits on: pthread_create,
@@ -3783,7 +3783,7 @@ index e390b9e..94b4815 100644
 From 85e87196025670d68c84e0f29aae442fd558d080 Mon Sep 17 00:00:00 2001
 From: JorreFog <JorreFog@users.noreply.github.com>
 Date: Tue, 6 Oct 2026 18:35:51 +0200
-Subject: [PATCH 15/15] 0.5.0-beta.1-rocknixds.7: the ROCKNIXDS 1.6 test build,
+Subject: [PATCH 15/27] 0.5.0-beta.1-rocknixds.7: the ROCKNIXDS 1.6 test build,
  without the freeze at a game's start
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
@@ -3799,6 +3799,2844 @@ index 1fdcbf1..f8a456d 100644
 @@ -1 +1 @@
 -0.5.0-beta.1-rocknixds.6
 +0.5.0-beta.1-rocknixds.7
+-- 
+2.43.0
+
+
+From af8944a5025f94ff74c9a99bd43b3c0c45401054 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 8 Oct 2026 18:22:35 +0000
+Subject: [PATCH 16/27] In-game menu: each slot keeps its own picture, both
+ screens behind L / R, "LAST" on this session's save (issue 4)
+
+The pictures all showed the same scene after a restart with a resume state (SuperDrastic issue 4). The menu read the
+slot files through SuperDrastic's own fopen (resume.c), which points every <game>_<n>.dss at the state being loaded
+while a load runs: the resume load at a game's start (2 s in, for 2.5 s) or one of the menu's own. A menu opened then
+read the resume state's picture for all eight slots, and the cache, keyed by the files' times, kept them for the rest
+of the session. The pictures are now read with libc's fopen, the cache also checks the file's size and inode, and the
+menu button does nothing until the resume state is in.
+
+The picture reader checks the header's flags (byte 0x24 of DraStic r2.5.2.2's header: bit 0 compressed, bit 1 a
+snapshot first; its save_state copies both screens there, 98,304 bytes each) and reads uncompressed states too, and
+keeps both screens: L or R on the Save and Load pages switch every picture between the top and the bottom screen
+(Phantom Hourglass plays on the bottom one).
+
+"LAST" (and the main page's "last: slot N") is the slot saved to this session once there is one, instead of the
+newest file time only: a save whose file time is older than another slot's (a clock set back) no longer leaves the
+label on the slot that was newest when the game started.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PBVcHtDJUrUv4eL8Vsmzy9
+---
+ src/menu.c   | 45 +++++++++++++++++++++++++++++++++------------
+ src/resume.c |  1 +
+ 2 files changed, 34 insertions(+), 12 deletions(-)
+
+diff --git a/src/menu.c b/src/menu.c
+index 2ef2875..427dce9 100644
+--- a/src/menu.c
++++ b/src/menu.c
+@@ -12,7 +12,7 @@
+ // wrong slot never costs progress ("Undo last load", Y on the Load page). While a load runs DraStic's frames and
+ // sound are held back (dsflip_hold, audio_mute) and the menu's "Loading" screen stays up. Slot pictures come from the
+ // savestates themselves: a DraStic .dss starts (after a 0x44-byte header) with a zlib stream whose first 196,608
+-// bytes are both DS screens, 256x384 RGB565.
++// bytes are both DS screens, 256x384 RGB565; L / R on the Save and Load pages switch between the top and the bottom.
+ //
+ // DSFLIP_MENU=0: DraStic's own menu, as before. DSFLIP_MENU_TEST=<n> opens the menu 3 s in, on the main page (1),
+ // Save (2), Load (3), Quick settings (4) or the quit question (5), for tests.
+@@ -70,6 +70,7 @@ void resume_press(int b);
+ int resume_quit(void);
+ int resume_on(void);
+ int resume_quit_pending(void);
++int resume_loading(void);
+ 
+ static long long now_ms(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000LL + t.tv_nsec / 1000000; }
+ 
+@@ -285,12 +286,14 @@ static int wrap2(font *F, const char *t, float px, float maxw, char *l1, char *l
+ 
+ /* ---------- the game, its saves ---------- */
+ #define NSLOT 8
+-typedef struct { int used; time_t mt; uint16_t *pic; int pic_tried; } slot;
++typedef struct { int used; time_t mt; off_t size; ino_t ino; uint16_t *pic; int pic_tried; } slot;   /* pic: both screens */
+ static slot SL[NSLOT];
+ static char rom[512], gbase[256], gtitle[200], ggenre[100], sdir[512], undo_path[600];
+ static int undo_ok;                 /* the undo file holds the game from before this session's last menu load */
+ static long long session_t0;
+ static int last_slot = -1;          /* the slot this session saved to or loaded last */
++static int saved_slot = -1;         /* the slot this session saved to last: "LAST" whatever the files' clocks say */
++static int pic_bottom;              /* the slot pictures show the bottom screen (L / R on the Save and Load pages) */
+ 
+ static void game_info(void) {
+     FILE *f = fopen("/proc/self/cmdline", "rb");
+@@ -346,19 +349,29 @@ typedef struct {
+ } zs_t;
+ static int (*z_init)(zs_t *, const char *, int), (*z_inflate)(zs_t *, int), (*z_end)(zs_t *);
+ #define PIC_BYTES (256 * 192 * 2)
+-/* the top DS screen saved in a .dss: 256x192 RGB565, or 0 */
++/* both DS screens saved in a .dss (DraStic's snapshot: top, then bottom, 256x192 RGB565 each), or 0. Read with libc's
++ * own fopen: ours (resume.c) points every slot file at the state being loaded while a load runs, and a picture read
++ * then (the menu opened during the resume load at a game's start) was that state's, for every slot, and stayed in
++ * the cache for the session (SuperDrastic issue 4) */
+ static uint16_t *read_pic(const char *path) {
++    static FILE *(*fopen_libc)(const char *, const char *);
++    if (!fopen_libc && !(*(void **)&fopen_libc = dlsym(RTLD_NEXT, "fopen"))) return 0;
+     if (!z_init) {
+         void *h = dlopen("libz.so.1", RTLD_NOW | RTLD_LOCAL); if (!h) return 0;
+         *(void **)&z_init = dlsym(h, "inflateInit_"); *(void **)&z_inflate = dlsym(h, "inflate"); *(void **)&z_end = dlsym(h, "inflateEnd");
+         if (!z_init || !z_inflate || !z_end) { z_init = 0; return 0; }
+     }
+-    FILE *f = fopen(path, "rb"); if (!f) return 0;
++    FILE *f = fopen_libc(path, "rb"); if (!f) return 0;
+     uint8_t hdr[0x44], in[32768]; uint16_t *out = 0;
+-    if (fread(hdr, 1, sizeof hdr, f) == sizeof hdr && !memcmp(hdr, "DraStic-SaveState", 17) && (out = malloc(PIC_BYTES))) {
++    /* the header's flags (byte 0x24): bit 0 compressed (a 4-byte length, then zlib), bit 1 a snapshot of the screens
++     * comes first */
++    int hdr_ok = fread(hdr, 1, sizeof hdr, f) == sizeof hdr && !memcmp(hdr, "DraStic-SaveState", 17) && (hdr[0x24] & 2);
++    if (hdr_ok && !(hdr[0x24] & 1) && (out = malloc(2 * PIC_BYTES))) {    /* stored as it is, from byte 0x40 */
++        if (fseek(f, 0x40, SEEK_SET) || fread(out, 1, 2 * PIC_BYTES, f) != 2 * PIC_BYTES) { free(out); out = 0; }
++    } else if (hdr_ok && (out = malloc(2 * PIC_BYTES))) {
+         zs_t z; memset(&z, 0, sizeof z);
+         if (z_init(&z, "1.2.11", (int)sizeof z) == 0) {
+-            z.next_out = (uint8_t *)out; z.avail_out = PIC_BYTES;
++            z.next_out = (uint8_t *)out; z.avail_out = 2 * PIC_BYTES;
+             int r = 0;
+             while (z.avail_out && r == 0) {
+                 if (!z.avail_in) { size_t n = fread(in, 1, sizeof in, f); if (!n) break; z.next_in = in; z.avail_in = (unsigned)n; }
+@@ -375,12 +388,14 @@ static void scan_slots(int pics) {
+     for (int n = 0; n < NSLOT; n++) {
+         char p[700]; slot_path(n, p, sizeof p); struct stat st;
+         int used = !stat(p, &st) && st.st_size > 0x44;
+-        if (!used || st.st_mtime != SL[n].mt) { free(SL[n].pic); SL[n].pic = 0; SL[n].pic_tried = 0; }
+-        SL[n].used = used; SL[n].mt = used ? st.st_mtime : 0;
++        if (!used || st.st_mtime != SL[n].mt || st.st_size != SL[n].size || st.st_ino != SL[n].ino) { free(SL[n].pic); SL[n].pic = 0; SL[n].pic_tried = 0; }
++        SL[n].used = used; SL[n].mt = used ? st.st_mtime : 0; SL[n].size = used ? st.st_size : 0; SL[n].ino = used ? st.st_ino : 0;
+         if (pics && used && !SL[n].pic_tried) { SL[n].pic_tried = 1; SL[n].pic = read_pic(p); }
+     }
+ }
+ static int newest_slot(void) {
++    if (saved_slot >= 0 && SL[saved_slot].used) return saved_slot;   /* saved this session: newest, even if a file's
++                                                                          time says otherwise (a clock set back) */
+     int b = -1; for (int n = 0; n < NSLOT; n++) if (SL[n].used && (b < 0 || SL[n].mt > SL[b].mt)) b = n;
+     return b;
+ }
+@@ -558,6 +573,8 @@ static void draw_pic(canvas *c, const uint16_t *pic, int x0, int y0, int w, int
+         }
+     }
+ }
++/* the screen of a slot's picture that the Save and Load pages show (L / R switch) */
++static const uint16_t *slot_pic(const slot *s) { return s->pic ? s->pic + (pic_bottom ? 256 * 192 : 0) : 0; }
+ static void hatch(canvas *c, int x0, int y0, int x1, int y1, uint32_t a, uint32_t b) {   /* an empty slot */
+     int k = S(6) > 1 ? S(6) : 2;
+     for (int y = y0; y < y1; y++) for (int x = x0; x < x1; x++) blendpx(c, x, y, ((x + y) / k) & 1 ? a : b, 1.0f);
+@@ -608,7 +625,7 @@ static void draw_top(void) {
+         slot *s = &SL[sel_slot];
+         int pw_ = S(384), ph_ = S(288), px = (c->w - pw_) / 2, py = S(68);
+         box(c, px - S(3), py - S(3), px + pw_ + S(3), py + ph_ + S(3), S(6), S(3), C_LIGHT, C_DARK);
+-        if (s->used && s->pic) draw_pic(c, s->pic, px, py, pw_, ph_);
++        if (s->used && s->pic) draw_pic(c, slot_pic(s), px, py, pw_, ph_);
+         else if (s->used) { fill(c, px, py, px + pw_, py + ph_, C_PANEL, 1.0f); text(c, &F_REG, "No picture in this save", c->w / 2.0f, py + ph_ / 2 - S(10), S(18), C_GREY, 0, 1); }
+         else { hatch(c, px, py, px + pw_, py + ph_, 0x1a222c, 0x202a36); text(c, &F_MED, "Empty slot", c->w / 2.0f, py + ph_ / 2 - S(12), S(22), C_GREY, 0, 1); }
+         char t[48]; snprintf(t, sizeof t, "Slot %d", sel_slot + 1);
+@@ -764,7 +781,7 @@ static void draw_bottom(void) {
+             text(c, &F_REG, h, x + tw / 2.0f, y + S(118), S(14), sub2, tw - S(16), 1);
+         }
+     } else if (s == SC_SAVE || s == SC_LOAD) {
+-        char sub[48]; snprintf(sub, sizeof sub, "Slot %d of %d", sel_slot + 1, NSLOT);
++        char sub[48]; snprintf(sub, sizeof sub, "Slot %d of %d, L/R: %s screen", sel_slot + 1, NSLOT, pic_bottom ? "bottom" : "top");
+         draw_header(c, s == SC_SAVE ? "Save" : "Load", sub, 1);
+         int gap = S(10), cw = (gx1 - gx0 - 3 * gap) / 4, ch = (gy1 - gy0 - gap) / 2, nb = newest_slot();
+         for (int n = 0; n < NSLOT; n++) {
+@@ -777,7 +794,7 @@ static void draw_bottom(void) {
+             const char *tag = n == nb ? "LAST" : "";
+             if (*tag) text(c, &F_MED, tag, x + cw - S(10), y + S(10), S(13), sel ? 0xffffff : C_CYAN, 0, 2);
+             int tx0 = x + S(8), tx1 = x + cw - S(8), tth = (tx1 - tx0) * 3 / 4, ty0 = y + S(36);
+-            if (sl->used && sl->pic) draw_pic(c, sl->pic, tx0, ty0, tx1 - tx0, tth);
++            if (sl->used && sl->pic) draw_pic(c, slot_pic(sl), tx0, ty0, tx1 - tx0, tth);
+             else if (sl->used) fill(c, tx0, ty0, tx1, ty0 + tth, 0x2c3a4c, 1.0f);
+             else hatch(c, tx0, ty0, tx1, ty0 + tth, dim ? 0x161d26 : 0x1a222c, dim ? 0x1a222c : 0x202a36);
+             char w[48]; if (sl->used) when_text(sl->mt, w, sizeof w); else snprintf(w, sizeof w, "Empty");
+@@ -899,7 +916,7 @@ static void busy(const char *msg) {
+ static void do_save(int n) {
+     char p[700], m[64]; slot_path(n, p, sizeof p); snprintf(m, sizeof m, "Saved to slot %d", n + 1);
+     if (resume_menu_save(p, m, gtitle)) { dsflip_toast("Couldn't save", "DraStic's Save state control has no button", 0xff7a4a, 4000); }
+-    else last_slot = n;
++    else last_slot = saved_slot = n;
+     play(SND_SELECT); close_menu();
+ }
+ static void do_load(int n) {
+@@ -1055,6 +1072,9 @@ static void handle_sdl(const uint8_t *e) {
+         else if (b == b_up) dir_press(0, -1); else if (b == b_down) dir_press(0, 1);
+         else if (b == b_left) dir_press(-1, 0); else if (b == b_right) dir_press(1, 0);
+         else if (b == b_l && scr == SC_SET) adjust(-1); else if (b == b_r && scr == SC_SET) adjust(1);
++        else if ((b == b_l || b == b_r) && (scr == SC_SAVE || scr == SC_LOAD)) {   /* the pictures: top / bottom screen */
++            pic_bottom = !pic_bottom; play(SND_MOVE); dirty_top = dirty_bot = 1;
++        }
+     } else if (type == 0x602) {                     /* SDL_JOYHATMOTION */
+         int v = e[13];
+         if (!v) { dir_release(); return; }
+@@ -1145,6 +1165,7 @@ int menu_event(void *ev) {
+     int b = e[12], down = type == 0x603;
+     if (is_menu_btn(b)) {
+         if (dsflip_drastic_menu() || resume_menu_busy()) return 0;   /* DraStic's own menu is up: its button */
++        if (resume_loading()) { pending = 0; return 1; }             /* the resume state is going in: a moment */
+         if (down) { pending = 1; other = 0; return 1; }
+         int go = pending && !other; pending = 0;
+         if (go) menu_run(SC_MAIN);
+diff --git a/src/resume.c b/src/resume.c
+index 51152b7..13a5fcb 100644
+--- a/src/resume.c
++++ b/src/resume.c
+@@ -288,6 +288,7 @@ int resume_control_button(const char *name) { return control_button_any(name); }
+ int resume_on(void) { return resume_path[0] && btn_save >= 0; }
+ int resume_quit_pending(void) { return want_save; }   /* the exit hotkey came while the menu was open */
+ int resume_menu_busy(void) { return m_saving || m_loading || m_load_next[0] || saving; }
++int resume_loading(void) { return want_load || loading; }   /* the resume state is due or going in (the menu waits) */
+ /* press a DraStic control's button (held 40 frames, after any press before it) */
+ void resume_press(int b) {
+     if (b < 0) return;
+-- 
+2.43.0
+
+
+From ff14e103bab712287f1373579ec71caf797fd401 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 8 Oct 2026 18:24:57 +0000
+Subject: [PATCH 17/27] In-game menu: a brightness slider per screen, menu
+ sounds and tips switches, tips shown only the first times
+
+Quick settings (ROCKNIXDS issue 49, SuperDrastic issue 5):
+- Top screen / Bottom screen brightness, each on its own panel, where ROCKNIX's brightness script addresses them
+  separately (two /sys/class/backlight entries: "brightness set <n> <pct>", settings display.brightness and
+  display.brightness2). The top panel is the screen numbered like DSFLIP_TOP's connector (DSI-2 = dsi1 = backlight1
+  = screen 2 on the RG DS, whose device tree pairs backlight0 with dsi0 and backlight1 with dsi1), or
+  DSFLIP_BACKLIGHT_TOP=<n>. Anything else keeps the one slider for both.
+- Menu sounds On / Off: the menu's navigation sounds. Starts from DSFLIP_MENU_SOUNDS (default 1; ROCKNIXDS sets it from
+  ES's navigation sounds).
+- Tips On / Off: the tutorial toasts. Starts from DSFLIP_MENU_HINTS (default 1).
+- The page scrolls once it has more rows than fit (a bar on the right shows where).
+
+The menu keeps its own settings in <DSFLIP_DATA>/menu.cfg. A switch flipped in the menu holds until the environment's
+value changes (the frontend's setting was changed after it), which then wins again.
+
+Tips: "Resumed where you left off" shows the first three resumes only (it came at every start), and the undo tip after
+a load the first three loads, worded for where Y works: "Wrong one? Open Load and press Y to undo". Neither shows with
+the tips off.
+
+Picking "DraStic menu" no longer brings up the time and battery card that DraStic's menu shows when it opens: the
+in-game menu's top screen had both already.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PBVcHtDJUrUv4eL8Vsmzy9
+---
+ src/dsflip.c |   2 +
+ src/menu.c   | 194 +++++++++++++++++++++++++++++++++++++++++----------
+ src/resume.c |   4 +-
+ 3 files changed, 163 insertions(+), 37 deletions(-)
+
+diff --git a/src/dsflip.c b/src/dsflip.c
+index 94b4815..c08ef86 100644
+--- a/src/dsflip.c
++++ b/src/dsflip.c
+@@ -510,8 +510,10 @@ static int battery_pct(int *charging) {
+     }
+     return pct;
+ }
++int menu_opened_drastic(void);
+ static void status_card(void) {
+     const char *e = getenv("DSFLIP_STATUS_CARD"); if (e && *e == '0') return;
++    if (menu_opened_drastic()) return;             /* from the in-game menu (menu.c), which showed them already */
+     char l1[64], l2[96]; time_t t = time(0); struct tm lt; localtime_r(&t, &lt);
+     strftime(l1, sizeof l1, "%H:%M", &lt);
+     int chg, pct = battery_pct(&chg);
+diff --git a/src/menu.c b/src/menu.c
+index 427dce9..9563350 100644
+--- a/src/menu.c
++++ b/src/menu.c
+@@ -175,6 +175,10 @@ static const char *const IC_SUN[12] = { ".....##.....", ".#...##...#.", "..#....
+     "##.######.##", "...######...", "....####....", "..#......#..", ".#...##...#.", ".....##....." };
+ static const char *const IC_MIC[12] = { "....####....", "...######...", "...######...", "...######...", "...######...", ".#.######.#.",
+     ".#..####..#.", "..#......#..", "...######...", ".....##.....", ".....##.....", "...######..." };
++static const char *const IC_NOTE[12] = { "............", "......#####.", "......#...#.", "......#...#.", "......#...#.", "......#...#.",
++    "......#...#.", "...###..###.", "..####.####.", "..####.####.", "...##...##..", "............" };
++static const char *const IC_TIP[12] = { "....####....", "...#....#...", "..#......#..", "..#......#..", "...#....#...", "....#..#....",
++    "....#..#....", ".....##.....", "....####....", "....####....", ".....##.....", "............" };
+ /* the slot numbers' 5x7 face (the same shapes as ROCKNIXDS's Pixelify Sans after its issue #34 fix) */
+ static const char *const DIG[10][7] = {
+     { ".###.", "#...#", "#..##", "#.#.#", "##..#", "#...#", ".###." }, { "..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###." },
+@@ -409,6 +413,62 @@ static void when_text(time_t t, char *out, size_t n) {
+     else { char d[16]; strftime(d, sizeof d, "%b %-d", &a); snprintf(out, n, "%s %s", d, hm); }   /* "Oct 3", not "Oct  3" */
+ }
+ 
++/* ---------- the menu's own settings: <DSFLIP_DATA>/menu.cfg, one "key=value" a line ----------
++ * sounds, hints: "<value> <the environment's value when it was set>" (DSFLIP_MENU_SOUNDS / DSFLIP_MENU_HINTS: the
++ * menu's own choice holds until the environment's value changes, i.e. the frontend's setting was changed since);
++ * seen.<hint>: how often a tip was shown; preview: 1 = the slot pictures show the bottom screen; perf: the overlay */
++static char mcfg_path[600];
++static const char *mcfg(void) {
++    if (!mcfg_path[0]) {
++        const char *d = getenv("DSFLIP_DATA"); if (!d || !*d) d = "/storage/.config/drastic/dsflip";
++        snprintf(mcfg_path, sizeof mcfg_path, "%s/menu.cfg", d);
++    }
++    return mcfg_path;
++}
++static int mcfg_get(const char *key, char *val, size_t n) {
++    FILE *f = fopen(mcfg(), "r"); if (!f) return 0;
++    char line[700]; size_t kl = strlen(key); int got = 0;
++    while (fgets(line, sizeof line, f)) if (!strncmp(line, key, kl) && line[kl] == '=') {
++        snprintf(val, n, "%s", line + kl + 1); val[strcspn(val, "\r\n")] = 0; got = 1;
++    }
++    fclose(f);
++    return got;
++}
++static void mcfg_set(const char *key, const char *val) {     /* rewritten whole, then renamed over the old one */
++    char tmp[620], line[700]; snprintf(tmp, sizeof tmp, "%s.new", mcfg());
++    FILE *in = fopen(mcfg(), "r"), *out = fopen(tmp, "w");
++    if (!out) { if (in) fclose(in); dsflip_log("[menu] can't write %s\n", tmp); return; }
++    size_t kl = strlen(key);
++    while (in && fgets(line, sizeof line, in)) if (strncmp(line, key, kl) || line[kl] != '=') fputs(line, out);
++    if (val) fprintf(out, "%s=%s\n", key, val);
++    if (in) fclose(in);
++    if (fclose(out) || rename(tmp, mcfg())) { unlink(tmp); dsflip_log("[menu] can't write %s\n", mcfg()); }
++}
++static int env01(const char *env) { const char *e = getenv(env); return e && *e ? *e != '0' : -1; }
++static int pref(const char *key, const char *env, int def) {
++    char v[64]; int mv, was, ev = env01(env), k;
++    if (mcfg_get(key, v, sizeof v) && (k = sscanf(v, "%d %d", &mv, &was)) >= 1 && (k < 2 || was == ev)) return mv;
++    return ev >= 0 ? ev : def;
++}
++static void pref_set(const char *key, const char *env, int v) { char b[32]; snprintf(b, sizeof b, "%d %d", v, env01(env)); mcfg_set(key, b); }
++static int sounds_on = -1, hints_on = -1;
++static void prefs_load(void) {
++    if (sounds_on >= 0) return;
++    sounds_on = pref("sounds", "DSFLIP_MENU_SOUNDS", 1); hints_on = pref("hints", "DSFLIP_MENU_HINTS", 1);
++    char v[16]; if (mcfg_get("preview", v, sizeof v)) pic_bottom = atoi(v) == 1;
++}
++/* a tip (resume.c's "Resumed where you left off", the menu's undo tip): 1 = show it, the first `times` times only,
++ * never with the tips off */
++int menu_hint(const char *name, int times) {
++    prefs_load();
++    if (!hints_on) return 0;
++    char key[64], v[16]; snprintf(key, sizeof key, "seen.%s", name);
++    int n = mcfg_get(key, v, sizeof v) ? atoi(v) : 0;
++    if (n >= times) return 0;
++    snprintf(v, sizeof v, "%d", n + 1); mcfg_set(key, v);
++    return 1;
++}
++
+ /* ---------- settings: volume and brightness, as ROCKNIX keeps them ---------- */
+ #define SYSCFG "/storage/.config/system/configs/system.cfg"
+ static int cfg_int(const char *key, int def) {
+@@ -418,33 +478,52 @@ static int cfg_int(const char *key, int def) {
+     fclose(f);
+     return v;
+ }
+-static int vol, bri, bri_changed;
++/* brightness: one slider for both panels, or one each where ROCKNIX's brightness script addresses them separately
++ * ("brightness set <n> <pct>", screen n = the n-th /sys/class/backlight entry by name, its setting
++ * display.brightness for 1 and display.brightness<n> after). Which is the top panel: DSFLIP_BACKLIGHT_TOP=<n>, else
++ * the number in DSFLIP_TOP's connector (DSI-2 = dsi1 = backlight1 = screen 2 on the RG DS and the RG DS Plus) */
++static int vol, bri[2], bri_dirty;              /* bri: [0] top, [1] bottom; bri_dirty: 1 top, 2 bottom, 4 both */
++static int bl_scr[2];                           /* ROCKNIX's screen number of the top and bottom panels (0: one slider) */
++static int bl_count(void) { glob_t g; int n = glob("/sys/class/backlight/*/brightness", 0, 0, &g) ? 0 : (int)g.gl_pathc; if (n) globfree(&g); return n; }
++static void bl_map(void) {
++    static int done; if (done) return; done = 1;
++    if (bl_count() != 2) return;
++    const char *e = getenv("DSFLIP_BACKLIGHT_TOP"), *t = getenv("DSFLIP_TOP"); int top = e && *e ? atoi(e) : 0;
++    if (!top) { if (!t || !*t) t = "DSI-2"; const char *d = strrchr(t, '-'); top = d ? atoi(d + 1) : 0; }
++    if (top != 1 && top != 2) return;
++    bl_scr[0] = top; bl_scr[1] = 3 - top;
++    dsflip_log("[menu] brightness: top panel = screen %d, bottom = screen %d\n", bl_scr[0], bl_scr[1]);
++}
++static const char *bri_key(int scrn) { static char k[2][32]; snprintf(k[scrn > 1], sizeof k[0], scrn > 1 ? "display.brightness%d" : "display.brightness", scrn); return k[scrn > 1]; }
+ static pthread_mutex_t wm = PTHREAD_MUTEX_INITIALIZER; static pthread_cond_t wc = PTHREAD_COND_INITIALIZER;
+-static int w_vol = -1, w_bri = -1;
++static int w_vol = -1, w_bri[3] = { -1, -1, -1 };   /* [0] all panels, [1] screen 1, [2] screen 2 */
+ static void *worker(void *a) {       /* ROCKNIX's own scripts (pactl, the settings file): off DraStic's thread */
+     (void)a;
+     for (;;) {
+         pthread_mutex_lock(&wm);
+-        while (w_vol < 0 && w_bri < 0) pthread_cond_wait(&wc, &wm);
+-        int v = w_vol, b = w_bri; w_vol = w_bri = -1;
++        while (w_vol < 0 && w_bri[0] < 0 && w_bri[1] < 0 && w_bri[2] < 0) pthread_cond_wait(&wc, &wm);
++        int v = w_vol, b[3] = { w_bri[0], w_bri[1], w_bri[2] }; w_vol = w_bri[0] = w_bri[1] = w_bri[2] = -1;
+         pthread_mutex_unlock(&wm);
+         char cmd[96];
+         if (v >= 0) { snprintf(cmd, sizeof cmd, "volume %d >/dev/null 2>&1", v); if (system(cmd)) {} }
+-        if (b >= 0) { snprintf(cmd, sizeof cmd, "brightness set all %d >/dev/null 2>&1", b); if (system(cmd)) {} }
++        if (b[0] >= 0) { snprintf(cmd, sizeof cmd, "brightness set all %d >/dev/null 2>&1", b[0]); if (system(cmd)) {} }
++        for (int k = 1; k < 3; k++) if (b[k] >= 0) { snprintf(cmd, sizeof cmd, "brightness set %d %d >/dev/null 2>&1", k, b[k]); if (system(cmd)) {} }
+     }
+     return 0;
+ }
+-static void want(int v, int b) {
++/* v: volume; scrn: 0 all panels, 1 or 2 one of them (b its brightness); -1 for none */
++static void want(int v, int scrn, int b) {
+     static int started;
+     pthread_mutex_lock(&wm);
+     if (!started) { pthread_t t; if (!pthread_create(&t, 0, worker, 0)) { pthread_detach(t); pthread_setname_np(t, "dsf-menu"); started = 1; } }
+-    if (v >= 0) w_vol = v; if (b >= 0) w_bri = b;
++    if (v >= 0) w_vol = v; if (scrn >= 0 && scrn < 3 && b >= 0) w_bri[scrn] = b;
+     pthread_cond_signal(&wc); pthread_mutex_unlock(&wm);
+ }
+-static void backlight(int pct) {     /* at once, straight to the panels; the setting is saved when the menu closes */
++static void backlight(int scrn, int pct) {     /* at once, straight to the panel(s) (scrn 0: all); saved when the menu closes */
+     glob_t g;
+     if (glob("/sys/class/backlight/*/brightness", 0, 0, &g)) return;
+     for (size_t i = 0; i < g.gl_pathc; i++) {
++        if (scrn && (int)i != scrn - 1) continue;
+         char mp[300]; snprintf(mp, sizeof mp, "%.*smax_brightness", (int)(strlen(g.gl_pathv[i]) - 10), g.gl_pathv[i]);
+         FILE *f = fopen(mp, "r"); int mx = 0; if (f) { if (fscanf(f, "%d", &mx) != 1) mx = 0; fclose(f); }
+         if (mx <= 0) continue;
+@@ -478,7 +557,7 @@ static void load_wav(int id, const char *path) {
+     if (n && audio_ui_load(id, pcm, (int)n, rate, ch) == 0) snd_ok[id] = 1;
+     free(pcm);
+ }
+-static void play(int id) { if (snd_ok[id]) audio_ui_play(id); }
++static void play(int id) { if (snd_ok[id] && sounds_on) audio_ui_play(id); }
+ 
+ /* ---------- state ---------- */
+ enum { SC_MAIN, SC_SAVE, SC_LOAD, SC_SET, SC_QUIT, SC_OVERWRITE, SC_BUSY, SC_MIC };
+@@ -487,14 +566,35 @@ static char busy_msg[96];
+ static int btn_menu[2] = { -1, -1 }, b_a = -1, b_b = -1, b_y = -1, b_l = -1, b_r = -1, b_start = -1;
+ static int b_up = -1, b_down = -1, b_left = -1, b_right = -1;
+ static long long mic_until;
++static long long drastic_menu_t;                /* when "DraStic menu" was picked (dsflip.c then skips its status card) */
+ static uint32_t *bgtop;                         /* the game's top frame, dimmed (panel size) */
+ static canvas CV[2];
+ static int pw[2], ph[2];
+ 
+-/* rows of Quick settings that exist on this setup */
+-enum { ROW_VOL, ROW_BRI, ROW_MIC };
+-static int rows[4], nrows;
+-static void make_rows(void) { nrows = 0; rows[nrows++] = ROW_VOL; rows[nrows++] = ROW_BRI; rows[nrows++] = ROW_MIC; }
++/* rows of Quick settings that exist on this setup; ROWS_SHOWN fit the page, the rest scroll */
++enum { ROW_VOL, ROW_BRI, ROW_BRI_TOP, ROW_BRI_BOT, ROW_MIC, ROW_SOUNDS, ROW_HINTS };
++#define MAXROWS 10
++#define ROWS_SHOWN 5
++static int rows[MAXROWS], nrows, set_first;
++static void make_rows(void) {
++    bl_map();
++    nrows = 0; rows[nrows++] = ROW_VOL;
++    if (bl_scr[0]) { rows[nrows++] = ROW_BRI_TOP; rows[nrows++] = ROW_BRI_BOT; } else rows[nrows++] = ROW_BRI;
++    rows[nrows++] = ROW_MIC; rows[nrows++] = ROW_SOUNDS; rows[nrows++] = ROW_HINTS;
++}
++static int is_slider(int id) { return id == ROW_VOL || id == ROW_BRI || id == ROW_BRI_TOP || id == ROW_BRI_BOT; }
++static int is_toggle(int id) { return id == ROW_SOUNDS || id == ROW_HINTS; }
++static int slider_get(int id) { return id == ROW_VOL ? vol : id == ROW_BRI_BOT ? bri[1] : bri[0]; }
++static void slider_set(int id, int v) {         /* a new value, applied at once */
++    if (id == ROW_VOL) { vol = v < 0 ? 0 : v > 100 ? 100 : v; want(vol, -1, -1); return; }
++    v = v < 5 ? 5 : v > 100 ? 100 : v;          /* ROCKNIX's floor: a panel at 0 looks off */
++    if (id == ROW_BRI) { bri[0] = bri[1] = v; backlight(0, v); bri_dirty |= 4; }
++    else { int k = id == ROW_BRI_BOT; bri[k] = v; backlight(bl_scr[k], v); bri_dirty |= 1 << k; }
++}
++static void toggle(int id) {
++    if (id == ROW_SOUNDS) { sounds_on = !sounds_on; pref_set("sounds", "DSFLIP_MENU_SOUNDS", sounds_on); }
++    else if (id == ROW_HINTS) { hints_on = !hints_on; pref_set("hints", "DSFLIP_MENU_HINTS", hints_on); }
++}
+ 
+ static int setup(void) {
+     if (inited) return inited > 0;
+@@ -695,7 +795,7 @@ static void draw_top(void) {
+ 
+ /* ---------- bottom panel ---------- */
+ typedef struct { int x0, y0, x1, y1; } rect;
+-static rect R_TILE[6], R_SLOT[NSLOT], R_ROW[4], R_BAR[4], R_FOOT_L, R_FOOT_R, R_HEAD_B, R_DLG_B, R_DLG_A, R_UNDO;
++static rect R_TILE[6], R_SLOT[NSLOT], R_ROW[MAXROWS], R_BAR[MAXROWS], R_FOOT_L, R_FOOT_R, R_HEAD_B, R_DLG_B, R_DLG_A, R_UNDO;
+ static int in_rect(rect r, int x, int y) { return x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1; }
+ 
+ static void keycap(canvas *c, int x, int y, int sz, const char *k) {   /* the theme's light square with a button letter */
+@@ -774,7 +874,7 @@ static void draw_bottom(void) {
+             case 0: snprintf(h, sizeof h, "or press L3"); break;
+             case 1: snprintf(h, sizeof h, "%d slots", NSLOT); break;
+             case 2: if (nb >= 0) snprintf(h, sizeof h, "last: slot %d", nb + 1); else snprintf(h, sizeof h, "no saves yet"); break;
+-            case 3: snprintf(h, sizeof h, "volume, brightness"); break;
++            case 3: snprintf(h, sizeof h, "volume, brightness, more"); break;
+             case 4: snprintf(h, sizeof h, "cheats, controls"); break;
+             case 5: snprintf(h, sizeof h, resume_on() ? "keeps your spot" : "back to the menu"); break;
+             }
+@@ -801,32 +901,45 @@ static void draw_bottom(void) {
+             text(c, &F_REG, w, x + cw / 2.0f, ty0 + tth + S(8), S(13), dim ? 0x5a6676 : sel ? 0xffffff : 0xc2ccd8, cw - S(12), 1);
+         }
+     } else if (s == SC_SET) {
+-        draw_header(c, "Quick settings", "changes apply at once", 1);
++        draw_header(c, "Quick settings", nrows > ROWS_SHOWN ? "up / down for more" : "changes apply at once", 1);
+         int y = gy0, rh = S(54), gap = S(10);
+-        for (int r = 0; r < nrows; r++) {
++        if (sel_set < set_first) set_first = sel_set;
++        if (sel_set >= set_first + ROWS_SHOWN) set_first = sel_set - ROWS_SHOWN + 1;
++        for (int r = 0; r < nrows; r++) { R_ROW[r] = R_BAR[r] = (rect){ 0, 0, 0, 0 }; }
++        for (int r = set_first; r < nrows && r < set_first + ROWS_SHOWN; r++) {
+             int sel = r == sel_set, id = rows[r];
+-            R_ROW[r] = (rect){ gx0, y, gx1, y + rh }; R_BAR[r] = (rect){ 0, 0, 0, 0 };
++            R_ROW[r] = (rect){ gx0, y, gx1, y + rh };
+             box(c, gx0, y, gx1, y + rh, S(10), bw, sel ? C_LIGHT : C_LINE, sel ? C_BLUE : C_PANEL);
+-            const char *const *ic = id == ROW_VOL ? IC_VOL : id == ROW_BRI ? IC_SUN : IC_MIC;
++            const char *const *ic = id == ROW_VOL ? IC_VOL : id == ROW_MIC ? IC_MIC : id == ROW_SOUNDS ? IC_NOTE : id == ROW_HINTS ? IC_TIP : IC_SUN;
+             int k = S(2) < 2 ? 2 : S(2);
+             bitmap(c, ic, 12, gx0 + S(16), y + (rh - 12 * k) / 2, k, sel ? 0xffffff : C_LIGHT);
+-            const char *lab = id == ROW_VOL ? "Volume" : id == ROW_BRI ? "Brightness" : "Microphone";
++            const char *lab = id == ROW_VOL ? "Volume" : id == ROW_BRI ? "Brightness" : id == ROW_BRI_TOP ? "Top screen" :
++                              id == ROW_BRI_BOT ? "Bottom screen" : id == ROW_MIC ? "Microphone" : id == ROW_SOUNDS ? "Menu sounds" : "Tips";
+             text(c, &F_MED, lab, gx0 + S(56), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? 0xffffff : C_LIGHT, 0, 0);
+             char v[32] = "";
+-            if (id == ROW_VOL || id == ROW_BRI) {
+-                int val = id == ROW_VOL ? vol : bri, bx = gx1 - S(110) - S(146);
++            if (is_slider(id)) {
++                int val = slider_get(id), bx = gx1 - S(110) - S(146);
+                 bar(c, bx, y + (rh - S(20)) / 2, val, sel);
+                 R_BAR[r] = (rect){ bx - S(8), y, bx + S(150), y + rh };
+                 snprintf(v, sizeof v, "%d%%", val);
+-            } else snprintf(v, sizeof v, "Test / blow");
++            } else if (is_toggle(id)) snprintf(v, sizeof v, "%s", (id == ROW_SOUNDS ? sounds_on : hints_on) ? "On" : "Off");
++            else snprintf(v, sizeof v, "Test / blow");
+             text(c, &F_MED, v, gx1 - S(18), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? 0xffffff : C_CYAN, 0, 2);
+             y += rh + gap;
+         }
++        if (nrows > ROWS_SHOWN) {                   /* where the page is in the list: a thin bar on the right */
++            int t0 = gy0, t1 = y - gap, th_ = (t1 - t0) * ROWS_SHOWN / nrows, ty = t0 + (t1 - t0) * set_first / nrows;
++            fill(c, gx1 + S(6), t0, gx1 + S(9), t1, C_LINE, 1.0f);
++            fill(c, gx1 + S(6), ty, gx1 + S(9), ty + th_, C_CYAN, 1.0f);
++        }
+         const char *help = "";
+         switch (rows[sel_set]) {
+         case ROW_VOL: help = "Left / right to change, or tap the bar"; break;
+         case ROW_BRI: help = "Left / right to change, both screens"; break;
++        case ROW_BRI_TOP: case ROW_BRI_BOT: help = "Left / right to change, each screen on its own"; break;
+         case ROW_MIC: help = "A live meter of the mic, and a blow for games that ask for one"; break;
++        case ROW_SOUNDS: help = "The menu's clicks and beeps"; break;
++        case ROW_HINTS: help = "Tips like \"Resumed where you left off\" and the undo tip"; break;
+         }
+         text(c, &F_REG, help, gx0 + S(4), y + S(6), S(16), C_GREY, gx1 - gx0, 0);
+     }
+@@ -878,7 +991,7 @@ static void draw_bottom(void) {
+     int fy = c->h - S(56);
+     const char *bl = s == SC_MAIN ? "Resume" : "Back", *al = "Select", *mid = "";
+     if (s == SC_SAVE) al = "Save"; else if (s == SC_LOAD) al = "Load";
+-    else if (s == SC_SET) al = rows[sel_set] == ROW_MIC ? "Open" : "OK";
++    else if (s == SC_SET) al = rows[sel_set] == ROW_MIC ? "Open" : is_toggle(rows[sel_set]) ? "Switch" : "OK";
+     else if (s == SC_MIC) al = "Blow for 3 s";
+     if (s == SC_MAIN) mid = "D-pad or tap";
+     R_FOOT_L = pill(c, S(20), fy, 0, "B", bl, C_LIGHT, C_LIGHT, C_DARK);
+@@ -926,7 +1039,8 @@ static void do_load(int n) {
+     busy(n < 0 ? "Undoing the load" : "Loading");
+     /* DraStic runs to take the presses; its frames and sound stay hidden until the state is in (resume.c clears it) */
+     dsflip_hold = 1; audio_mute(1);
+-    if (resume_menu_load(p, n >= 0 ? undo_path : 0, m, n >= 0 ? "Wrong one? Load, then Y undoes it" : gtitle)) {
++    /* the undo tip: the first three loads, unless the tips are off */
++    if (resume_menu_load(p, n >= 0 ? undo_path : 0, m, n >= 0 && menu_hint("undo", 3) ? "Wrong one? Open Load and press Y to undo" : gtitle)) {
+         dsflip_hold = 0; audio_mute(0);
+         dsflip_toast("Couldn't load", "DraStic's Load state control has no button", 0xff7a4a, 4000);
+     } else { if (n >= 0) { undo_ok = 1; last_slot = n; } else undo_ok = 0; }
+@@ -944,9 +1058,10 @@ static void activate(void) {
+             sel_slot = last_slot >= 0 ? last_slot : nb >= 0 ? nb : 0;
+             play(SND_SELECT); dirty_top = dirty_bot = 1; break;
+         }
+-        case 3: scr = SC_SET; sel_set = 0; vol = cfg_int("audio.volume", 50); bri = cfg_int("display.brightness", 80);
++        case 3: scr = SC_SET; sel_set = set_first = 0; vol = cfg_int("audio.volume", 50); bri[0] = bri[1] = cfg_int("display.brightness", 80);
++                for (int k = 0; k < 2; k++) if (bl_scr[k]) bri[k] = cfg_int(bri_key(bl_scr[k]), bri[k]);
+                 play(SND_SELECT); dirty_top = dirty_bot = 1; break;
+-        case 4: play(SND_SELECT); close_menu(); resume_press(btn_menu[0] >= 0 ? btn_menu[0] : btn_menu[1]); break;
++        case 4: play(SND_SELECT); close_menu(); drastic_menu_t = now_ms(); resume_press(btn_menu[0] >= 0 ? btn_menu[0] : btn_menu[1]); break;
+         case 5: scr = SC_QUIT; play(SND_SELECT); dirty_bot = 1; break;
+         }
+         break;
+@@ -955,6 +1070,7 @@ static void activate(void) {
+     case SC_LOAD: if (SL[sel_slot].used) do_load(sel_slot); else play(SND_BACK); break;
+     case SC_SET:
+         if (rows[sel_set] == ROW_MIC) { scr = SC_MIC; play(SND_SELECT); dirty_bot = 1; }
++        else if (is_toggle(rows[sel_set])) { toggle(rows[sel_set]); play(SND_SELECT); dirty_bot = 1; }
+         else play(SND_SELECT);
+         break;
+     case SC_MIC:
+@@ -981,8 +1097,8 @@ static void back(void) {
+ }
+ static void adjust(int d) {                     /* left/right on a Quick settings row */
+     int id = rows[sel_set];
+-    if (id == ROW_VOL) { int v = vol + d * 5; v = v < 0 ? 0 : v > 100 ? 100 : v; if (v != vol) { vol = v; want(vol, -1); play(SND_MOVE); dirty_bot = 1; } }
+-    else if (id == ROW_BRI) { int v = bri + d * 5; v = v < 5 ? 5 : v > 100 ? 100 : v; if (v != bri) { bri = v; backlight(bri); bri_changed = 1; play(SND_MOVE); dirty_bot = 1; } }
++    if (is_slider(id)) { int old = slider_get(id); slider_set(id, old + d * 5); if (slider_get(id) != old) { play(SND_MOVE); dirty_bot = 1; } }
++    else if (is_toggle(id)) { toggle(id); play(SND_MOVE); dirty_bot = 1; }
+ }
+ static void nav(int dx, int dy) {
+     int moved = 0;
+@@ -1023,12 +1139,12 @@ static void tap(int px, int py) {               /* a touch-down on the bottom pa
+         for (int r = 0; r < nrows; r++) if (in_rect(R_ROW[r], px, py)) {
+             if (sel_set != r) { sel_set = r; dirty_bot = 1; }
+             int id = rows[r];
+-            if ((id == ROW_VOL || id == ROW_BRI) && in_rect(R_BAR[r], px, py)) {
++            if (is_slider(id) && in_rect(R_BAR[r], px, py)) {
+                 canvas *c = &CV[1];
+-                int v = (px - R_BAR[r].x0 - S(8)) * 100 / S(146); v = (v + 2) / 5 * 5; v = v < 0 ? 0 : v > 100 ? 100 : v;
+-                if (id == ROW_VOL) { vol = v; want(vol, -1); } else { bri = v < 5 ? 5 : v; backlight(bri); bri_changed = 1; }
++                int v = (px - R_BAR[r].x0 - S(8)) * 100 / S(146); v = (v + 2) / 5 * 5;
++                slider_set(id, v);
+                 play(SND_MOVE); dirty_bot = 1;
+-            } else if (id == ROW_MIC) activate();
++            } else if (id == ROW_MIC || is_toggle(id)) activate();
+             else play(SND_MOVE);
+             return;
+         }
+@@ -1073,7 +1189,7 @@ static void handle_sdl(const uint8_t *e) {
+         else if (b == b_left) dir_press(-1, 0); else if (b == b_right) dir_press(1, 0);
+         else if (b == b_l && scr == SC_SET) adjust(-1); else if (b == b_r && scr == SC_SET) adjust(1);
+         else if ((b == b_l || b == b_r) && (scr == SC_SAVE || scr == SC_LOAD)) {   /* the pictures: top / bottom screen */
+-            pic_bottom = !pic_bottom; play(SND_MOVE); dirty_top = dirty_bot = 1;
++            pic_bottom = !pic_bottom; mcfg_set("preview", pic_bottom ? "1" : "0"); play(SND_MOVE); dirty_top = dirty_bot = 1;
+         }
+     } else if (type == 0x602) {                     /* SDL_JOYHATMOTION */
+         int v = e[13];
+@@ -1099,12 +1215,13 @@ static void menu_run(int start) {
+     static int (*poll_real)(void *);
+     if (!poll_real) poll_real = (int (*)(void *))dlsym(RTLD_NEXT, "SDL_PollEvent");
+     if (!gbase[0]) game_info();
++    prefs_load();
+     dsflip_log("[menu] open\n");
+     SDL_PauseAudio(1);
+     audio_mic_quiet(1);             /* the real mic presses nothing while the game is paused */
+     cpugov_boost(800);
+     open_ = 1; scr = SC_MAIN; sel_main = 0; held_dir = 0; axis_dir[0] = axis_dir[1] = 0; tqn = 0;
+-    bri_changed = 0; make_rows();
++    bri_dirty = 0; make_rows();
+     scan_slots(0);
+     load_recent();
+     grab_background();
+@@ -1131,7 +1248,8 @@ static void menu_run(int start) {
+         if (open_) redraw();
+         usleep(8000);
+     }
+-    if (bri_changed) want(-1, bri);
++    if (bri_dirty & 4) want(-1, 0, bri[0]);           /* ROCKNIX's settings, as its own scripts keep them */
++    for (int k = 0; k < 2; k++) if (bri_dirty & (1 << k)) want(-1, bl_scr[k], bri[k]);
+     if (mic_until) audio_mic_hold(1);
+     SDL_PauseAudio(0);
+     audio_mic_quiet(0);
+@@ -1175,6 +1293,10 @@ int menu_event(void *ev) {
+     return 0;
+ }
+ 
++/* dsflip.c, as DraStic's menu opens: 1 if this menu opened it (just now), so the time and battery card stays away;
++ * this menu's top screen had them already */
++int menu_opened_drastic(void) { int r = drastic_menu_t && now_ms() - drastic_menu_t < 3000; drastic_menu_t = 0; return r; }
++
+ /* dsflip.c's stall watch: DraStic waits inside SDL_PollEvent while the menu is up, on purpose */
+ int menu_is_open(void) { return open_; }
+ 
+diff --git a/src/resume.c b/src/resume.c
+index 13a5fcb..758b104 100644
+--- a/src/resume.c
++++ b/src/resume.c
+@@ -38,6 +38,7 @@ void audio_mute(int on);
+ extern volatile int dsflip_hold;
+ extern volatile int dsflip_stalled;      /* dsflip.c: DraStic hasn't shown a frame for a while (not in a menu) */
+ int menu_is_open(void);
++int menu_hint(const char *name, int times);
+ 
+ static char resume_path[512];
+ static int trace;
+@@ -278,7 +279,8 @@ void resume_frame(void) {
+         if (load_redirects) {
+             unlink(resume_path);
+             dsflip_log("[resume] resumed\n");
+-            dsflip_toast("Resumed where you left off", "Quit with the exit hotkey to save your place again", 0x3aa0ff, 3500);
++            if (menu_hint("resumed", 3))           /* a tip: the first three times (menu.c), never with tips off */
++                dsflip_toast("Resumed where you left off", "Quit with the exit hotkey to save your place again", 0x3aa0ff, 3500);
+         } else dsflip_log("[resume] DraStic didn't load the state (control not handled?): kept %s\n", resume_path);
+     }
+ }
+-- 
+2.43.0
+
+
+From 83b4e44fdafd2e3760577f53a5caa78e3957dc06 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 8 Oct 2026 18:25:49 +0000
+Subject: [PATCH 18/27] Volume keys: the brightness indicator when the function
+ key changes the brightness, the top clock while in use
+
+The same keys with ROCKNIX's function key held change the brightness (input_sense), and the indicator showed the volume,
+unchanged, meanwhile (ROCKNIXDS issue 49). volume.c now follows display.brightness as well and shows whichever setting
+the press changed, with a sun for the brightness (ui_brightness); nothing shows until one of them has changed, or for
+400 ms (a press at the end of the scale changes nothing). The settings are read every 50 ms instead of 100 while a
+key is in use.
+
+Quick volume presses stuttered the game's sound and changed the volume seconds late, while the menu's slider was fine
+(issue 49). Every press, and every 100 ms of a held key, runs ROCKNIX's volume script in new processes (a shell,
+pactl, sed on system.cfg), which SuperDrastic's CPU governor doesn't see: at the low clock it had settled on for the
+game they took their time from DraStic's threads and PipeWire's. The menu's slider runs the same script, but with the
+game and its sound paused. The volume keys now boost the CPU to its top clock for as long as they are in use (as a
+savestate does); the governor's windows meanwhile don't count. The process per press is ROCKNIX's.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PBVcHtDJUrUv4eL8Vsmzy9
+---
+ src/cpugov.c |  7 ++++---
+ src/ui.c     | 22 ++++++++++++++--------
+ src/volume.c | 44 +++++++++++++++++++++++++++++++++-----------
+ 3 files changed, 51 insertions(+), 22 deletions(-)
+
+diff --git a/src/cpugov.c b/src/cpugov.c
+index 31a6333..cf5f1fd 100644
+--- a/src/cpugov.c
++++ b/src/cpugov.c
+@@ -222,10 +222,10 @@ static void *gov_thread(void *a) {
+         if (!dt) continue;
+         if (boost_until > t || boosted) {               /* a savestate: the top clock, nothing counts meanwhile */
+             if (boost_until > t) {
+-                if (!boosted) { boosted = cur; dsflip_log("[cpugov] savestate: %d MHz until it's done\n", hwmax_ / 1000); }
++                if (!boosted) { boosted = cur; dsflip_log("[cpugov] boost (a savestate, the menu, the volume keys): %d MHz until it's done\n", hwmax_ / 1000); }
+                 cur = hwmax_;
+             } else {
+-                dsflip_log("[cpugov] savestate done: back to %d MHz\n", boosted / 1000);
++                dsflip_log("[cpugov] boost done: back to %d MHz\n", boosted / 1000);
+                 if (wr_int(POL "scaling_max_freq", boosted) == 0) cur = boosted;
+                 boosted = 0;
+                 for (int k = 0; k < FPS_WINDOWS; k++) { fps_t[k] = 0; peaks[k] = 0; }   /* the stall isn't this clock's */
+@@ -333,7 +333,8 @@ void cpugov_start(void) {
+     if (!pthread_create(&th, 0, gov_thread, 0)) pthread_setname_np(th, "dsf-cpugov");
+ }
+ 
+-/* DraStic is about to save or load a state (resume.c): the top clock now, for ms from now (extends a boost) */
++/* DraStic is about to save or load a state (resume.c), the menu is in use (menu.c), the volume keys are (volume.c):
++ * the top clock now, for ms from now (extends a boost) */
+ void cpugov_boost(int ms) {
+     if (!gov_on) return;
+     struct timespec n; clock_gettime(CLOCK_MONOTONIC, &n);
+diff --git a/src/ui.c b/src/ui.c
+index f7e502d..0a0b12e 100644
+--- a/src/ui.c
++++ b/src/ui.c
+@@ -49,7 +49,7 @@ typedef struct { char l1[128], l2[192]; uint32_t accent; int ms; uint8_t *badge;
+ static popup q[QMAX]; static int qn;                  /* pending pop-ups, q[0] is the one showing */
+ static long long q_until;                              /* when q[0] goes away (0: not shown yet) */
+ static char prog_text[48]; static uint8_t *prog_badge; static int prog_bw, prog_bh, prog_on;
+-static int vol_pct, vol_on; static long long vol_until;    /* the volume indicator: percent, showing, until when */
++static int vol_pct, vol_on, vol_bri; static long long vol_until;   /* the volume (or brightness) indicator: percent, showing, which, until when */
+ static float sc_ = 1.0f;                                    /* layout scale: plane height / 72 */
+ #define S(v) ((int)((v) * sc_ + 0.5f))
+ #define SF(v) ((v) * sc_)
+@@ -206,6 +206,8 @@ static const char *const PX_STAR[9] = { "....#....", "...###...", "#########", "
+ static const char *const PX_INFO[9] = { "...###...", "..#####..", "..##.##..", "....##...", "...##....", "...##....", ".........", "...##....", "...##...." };
+ static const char *const PX_VOL[12] = { "............", ".....#......", "....##...#..", "...###....#.", "####.#..#..#", "#..#.#...#.#",
+     "#..#.#...#.#", "####.#..#..#", "...###....#.", "....##...#..", ".....#......", "............" };
++static const char *const PX_SUN[12] = { ".....##.....", ".#...##...#.", "..#......#..", "....####....", "...######...", "##.######.##",
++    "##.######.##", "...######...", "....####....", "..#......#..", ".#...##...#.", ".....##....." };
+ static const char *const PX_MUTE[12] = { "............", ".....#......", "....##......", "...###.#...#", "####.#..#.#.", "#..#.#...#..",
+     "#..#.#...#..", "####.#..#.#.", "...###.#...#", "....##......", ".....#......", "............" };
+ 
+@@ -235,12 +237,13 @@ static void render_pill(canvas *c) {
+     draw_text(c, prog_text, (float)(x0 + S(12) + bs + (bs ? S(4) : 0)), y0 + S(27), SF(19), P_LIGHT, tw + 2);
+ }
+ 
+-/* the volume indicator: a speaker, the menu's 10-segment bar and the percentage */
+-static void render_volume(canvas *c, int pct) {
++/* the volume indicator: a speaker, the menu's 10-segment bar and the percentage (bri: the brightness, with a sun) */
++static void render_volume(canvas *c, int pct, int bri) {
+     int w = S(310), h = S(42), x0 = (c->w - w) / 2, y0 = S(4), x1 = x0 + w, y1 = y0 + h, cy = (y0 + y1) / 2;
+     card(c, x0, y0, x1, y1, SF(10), P_LIGHT);
+     int k = S(2) < 2 ? 2 : S(2);
+-    pix(c, pct <= 0 ? PX_MUTE : PX_VOL, 12, x0 + S(14), cy - 6 * k, k, pct <= 0 ? 0xff8a96 : P_LIGHT);
++    if (bri) pix(c, PX_SUN, 12, x0 + S(14), cy - 6 * k, k, P_LIGHT);
++    else pix(c, pct <= 0 ? PX_MUTE : PX_VOL, 12, x0 + S(14), cy - 6 * k, k, pct <= 0 ? 0xff8a96 : P_LIGHT);
+     char t[8]; snprintf(t, sizeof t, "%d%%", pct);
+     float tw = text_width(t, SF(19), 8);
+     draw_text(c, t, (float)(x1 - S(14)) - tw, y0 + S(28), SF(19), 0x7ec8ee, tw + 2);
+@@ -262,10 +265,10 @@ static void render(void) {                            /* with mx held */
+         for (int y = 0; y < h; y++) memset((char *)px + y * pitch, 0, (size_t)w * 4);
+         canvas c = { px, pitch, w, h };
+         sc_ = h / 72.0f;
+-        if (vol_on) render_volume(&c, vol_pct); else if (qn) render_popup(&c, &q[0]); else render_pill(&c);
++        if (vol_on) render_volume(&c, vol_pct, vol_bri); else if (qn) render_popup(&c, &q[0]); else render_pill(&c);
+     }
+     dsflip_overlay_end(show);
+-    if (vol_on) dsflip_log("[ui] overlay: volume %d%%\n", vol_pct);
++    if (vol_on) dsflip_log("[ui] overlay: %s %d%%\n", vol_bri ? "brightness" : "volume", vol_pct);
+     else dsflip_log("[ui] overlay: %s\n", qn ? q[0].l2 : prog_on ? prog_text : "hidden");
+ }
+ 
+@@ -361,11 +364,14 @@ void ui_progress(const char *text, const char *badge_png) {
+ }
+ 
+ /* show the volume indicator at pct for 1.5 s (again: refreshed, the time restarts). Thread-safe. */
+-void ui_volume(int pct) {
++static void indicator(int pct, int bri) {
+     pthread_mutex_lock(&mx);
+     if (!ui_start()) { pthread_mutex_unlock(&mx); return; }
+-    vol_pct = pct; vol_on = 1; vol_until = now_ms() + 1500;
++    vol_pct = pct; vol_bri = bri; vol_on = 1; vol_until = now_ms() + 1500;
+     dirty = 1;
+     pthread_cond_signal(&cv);
+     pthread_mutex_unlock(&mx);
+ }
++void ui_volume(int pct) { indicator(pct, 0); }
++/* the same for the brightness (volume.c: the volume keys with ROCKNIX's function key held) */
++void ui_brightness(int pct) { indicator(pct, 1); }
+diff --git a/src/volume.c b/src/volume.c
+index 0744041..b64b28d 100644
+--- a/src/volume.c
++++ b/src/volume.c
+@@ -4,6 +4,17 @@
+ // "Volume: N%" through mako, a desktop notification daemon that stops with sway for a libdsflip session. This
+ // watches the volume keys' evdev device and, after a press, follows audio.volume for a second and shows it in the
+ // overlay (ui.c) as the setting changes. The value shown is ROCKNIX's own, so it matches the menus' indicator.
++//
++// The same keys with ROCKNIX's function key held change the brightness instead (input_sense: "brightness up/down"):
++// display.brightness is followed too, and the indicator shows whichever setting the press changed (it showed the
++// volume, unchanged, while the brightness went up: ROCKNIXDS issue 49). Nothing shows until one of them has changed,
++// or for 400 ms (a press at the end of the scale changes nothing: the volume, as before).
++//
++// While the keys are in use the CPU runs at its top clock (cpugov_boost): input_sense runs ROCKNIX's volume script
++// (a shell, pactl, sed on system.cfg) for every press and every 100 ms of a held key, in processes the governor
++// doesn't see. At the low clock it had settled on for the game they took CPU time from DraStic's threads and
++// PipeWire's, which is the audio stutter and the late volume changes of quick presses in ROCKNIXDS issue 49 (the
++// menu's slider runs the same script, but with the game and its sound paused).
+ #define _GNU_SOURCE
+ #include <errno.h>
+ #include <fcntl.h>
+@@ -18,11 +29,14 @@
+ #include <unistd.h>
+ 
+ void ui_volume(int pct);
++void ui_brightness(int pct);
+ void dsflip_log(const char *fmt, ...);
++void cpugov_boost(int ms);
+ 
+ #define CFG "/storage/.config/system/configs/system.cfg"
+ #define FOLLOW_MS 1200      /* how long after the last key event the setting is watched */
+-#define POLL_MS 100
++#define POLL_MS 50
++#define GUESS_MS 400        /* nothing changed this long after a press: show the volume anyway */
+ 
+ static long long now_ms(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1000LL + t.tv_nsec / 1000000; }
+ 
+@@ -44,20 +58,22 @@ static int open_dev(char *name, size_t nlen) {
+     return -1;
+ }
+ 
+-static int read_volume(void) {
+-    FILE *f = fopen(CFG, "r"); if (!f) return -1;
+-    char line[256]; int v = -1;
+-    while (fgets(line, sizeof line, f))
+-        if (!strncmp(line, "audio.volume=", 13)) v = atoi(line + 13);     /* the last one wins, like get_setting */
++static void read_settings(int *vol, int *bri) {
++    *vol = *bri = -1;
++    FILE *f = fopen(CFG, "r"); if (!f) return;
++    char line[256];
++    while (fgets(line, sizeof line, f)) {                                 /* the last one wins, like get_setting */
++        if (!strncmp(line, "audio.volume=", 13)) *vol = atoi(line + 13);
++        else if (!strncmp(line, "display.brightness=", 19)) *bri = atoi(line + 19);
++    }
+     fclose(f);
+-    return v;
+ }
+ 
+ static void *vol_thread(void *a) {
+     (void)a;
+     char name[64] = "";
+     int fd = -1;
+-    long long until = 0, next = 0; int shown = -1;
++    long long until = 0, next = 0, pressed = 0; int shown = -1, kind = 0, base_v = -1, base_b = -1;   /* kind: 1 volume, 2 brightness */
+     for (;;) {
+         if (fd < 0) {
+             fd = open_dev(name, sizeof name);
+@@ -75,13 +91,19 @@ static void *vol_thread(void *a) {
+             for (ssize_t k = 0; k < n / (ssize_t)sizeof *ev; k++)
+                 if (ev[k].type == EV_KEY && (ev[k].code == KEY_VOLUMEUP || ev[k].code == KEY_VOLUMEDOWN)) {
+                     long long t = now_ms();
+-                    if (!until) { shown = -1; next = t; }          /* a new press: show at once, then follow */
++                    if (!until) { shown = -1; kind = 0; next = t; pressed = t; read_settings(&base_v, &base_b); }   /* a new press: follow */
+                     until = t + FOLLOW_MS;
++                    cpugov_boost(FOLLOW_MS + 300);
+                 }
+         }
+         if (until && now_ms() >= next) {
+-            int v = read_volume();
+-            if (v >= 0 && v != shown) { shown = v; ui_volume(v); }
++            int v, b; read_settings(&v, &b);
++            if (b >= 0 && b != base_b) kind = 2;                         /* the function key: brightness */
++            else if (v >= 0 && v != base_v) kind = 1;
++            else if (!kind && now_ms() - pressed >= GUESS_MS) kind = 1;
++            int val = kind == 2 ? b : v;
++            if (kind && val >= 0 && val != shown) { shown = val; if (kind == 2) ui_brightness(val); else ui_volume(val); }
++            if (kind) { base_v = v; base_b = b; }                        /* what changes from here on */
+             next += POLL_MS;
+             if (now_ms() >= until) until = 0;
+         }
+-- 
+2.43.0
+
+
+From 1efda84bbc950d885a4221a2f67b745b984dc667 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 8 Oct 2026 18:27:19 +0000
+Subject: [PATCH 19/27] Performance overlay: Off / FPS / Detailed / Advanced in
+ the in-game menu's Quick settings (issue 5)
+
+A few lines of 3x5 pixel text in the top screen's top-left corner, drawn into DraStic's finished top frame in
+SDL_RenderPresent before it is queued or shaded: no plane, no thread, a few thousand pixel writes a frame (2x the
+size on DraStic's 512x384 hi-res frames). The numbers are taken once a second:
+- FPS: the new frames the top panel showed in the last second.
+- Detailed: + DraStic's frame time (the average and the longest gap between its presents) and the frames dropped in
+  the last second (any cause: replaced before shading, queue overflow, no buffer).
+- Advanced: + the CPU's clock (cpufreq policy0), the GPU's (the first devfreq *gpu*) and the internal resolution
+  (1x / 2x from DraStic's screen texture; 3x with Gengis Engine at DSFLIP_RAST_SCALE=3).
+
+The choice is kept in <DSFLIP_DATA>/menu.cfg (perf) and applies from the next session's first frame. Nothing is drawn
+while the menu holds DraStic's frames back (a load behind the "Loading" screen).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PBVcHtDJUrUv4eL8Vsmzy9
+---
+ src/dsflip.c | 82 ++++++++++++++++++++++++++++++++++++++++++++++++----
+ src/menu.c   | 36 ++++++++++++++++++-----
+ 2 files changed, 105 insertions(+), 13 deletions(-)
+
+diff --git a/src/dsflip.c b/src/dsflip.c
+index c08ef86..3b9ff5e 100644
+--- a/src/dsflip.c
++++ b/src/dsflip.c
+@@ -152,6 +152,7 @@ void resume_start(void); void resume_frame(void); int resume_poll(void *e); void
+ int menu_event(void *e); void menu_frame(void); int menu_touch_event(int down_change, int down, int x, int y, int xmax, int ymax);   /* menu.c */
+ volatile int dsflip_hold;               /* menu.c: DraStic's frames are dropped, not shown (a load runs behind the menu's screen) */
+ static int st_drop_src, st_drop_q, st_drop_buf;
++static volatile int drops_total, shown_total;   /* frames dropped (any cause) / new frames on the top panel, since start */
+ static long long st_evt_max, st_c2f_max; static int st_c2f_long; /* vblank->event delivery; commit->flip (>1 refresh) */   /* drops by cause: replaced before shading, queue overflow, no buffer */
+ /* shader pass (shader.c) */
+ const char *shader_name(void);
+@@ -443,7 +444,7 @@ static void on_flip(int f, unsigned seq, unsigned sec, unsigned usec, unsigned c
+         }
+         if (!P[i].queued) continue;     /* toast-only flip on this CRTC */
+         if (P[i].last_flip && t - P[i].last_flip > st_iv_max[i]) st_iv_max[i] = t - P[i].last_flip;
+-        P[i].last_flip = t; st_flips[i]++;
++        P[i].last_flip = t; st_flips[i]++; if (!i) shown_total++;
+         if (P[i].scan != P[i].queued) release(P[i].scan);
+         P[i].scan = P[i].queued; P[i].scan->state = SCANOUT; P[i].queued = 0;
+     }
+@@ -611,7 +612,7 @@ static void note_phase(long long tp) {  /* with mu held: where in the refresh cy
+ static void enqueue(int i, dbuf *b, long long t) {
+     if (!P[i].ready) { if (!P[0].ready && !P[1].ready) ready_since = t; P[i].ready = b; return; }
+     if (P[i].nq < queue_depth) { P[i].q[P[i].nq++] = b; return; }
+-    release(P[i].ready); st_drop++; st_drop_q++; dsflip_queue_drops++;
++    release(P[i].ready); st_drop++; drops_total++; st_drop_q++; dsflip_queue_drops++;
+     if (queue_depth) { P[i].ready = dequeue(i); P[i].q[P[i].nq++] = b; } else P[i].ready = b;
+ }
+ 
+@@ -623,7 +624,7 @@ static void shade_pending(void) {
+         st[i] = P[i].src_t; held_any |= P[i].src_held;
+         P[i].src = 0;
+         for (int k = 0; k < NOUT && !dst[i]; k++) if (P[i].out[k].state == FREE) dst[i] = &P[i].out[k];
+-        if (!dst[i] || !src[i]->map) { release(src[i]); src[i] = 0; st_drop++; st_drop_buf++; continue; }
++        if (!dst[i] || !src[i]->map) { release(src[i]); src[i] = 0; st_drop++; drops_total++; st_drop_buf++; continue; }
+         dst[i]->state = WRITING;
+     }
+     unlock(&mu);
+@@ -652,7 +653,7 @@ static void shade_pending(void) {
+     }
+     for (int i = 0; i < 2; i++) if (src[i]) {
+         release(src[i]);
+-        if (bad[i]) { dst[i]->state = FREE; st_drop++; continue; }
++        if (bad[i]) { dst[i]->state = FREE; st_drop++; drops_total++; continue; }
+         dst[i]->state = READY;
+         enqueue(i, dst[i], tr);
+     }
+@@ -1671,6 +1672,73 @@ int SDL_RenderClear(void *rn) {
+     return ok ? 0 : real(rn);
+ }
+ 
++/* ---------- performance overlay (the in-game menu's Quick settings: menu.c) ----------
++ * A few lines of 3x5 pixel text in the top screen's corner, drawn into DraStic's finished frame before it is shown
++ * (or shaded): no plane, no thread, ~1-3 thousand pixel writes a frame. 1 FPS: the frames the top panel showed in
++ * the last second. 2 detailed: + DraStic's frame time (the average and the longest gap between its frames) and the
++ * frames dropped in the last second. 3 advanced: + the CPU's and the GPU's clocks and DraStic's internal resolution.
++ * The numbers are taken once a second. */
++static volatile int perf_mode;
++void dsflip_perf_mode(int m) { perf_mode = m < 0 || m > 3 ? 0 : m; }
++static const char PF_CH[] = "0123456789./ FPSMDROCUGXEHZ";
++static const char *const PF_GL[][5] = {
++    { "###", "#.#", "#.#", "#.#", "###" }, { ".#.", "##.", ".#.", ".#.", "###" }, { "###", "..#", "###", "#..", "###" },
++    { "###", "..#", ".##", "..#", "###" }, { "#.#", "#.#", "###", "..#", "..#" }, { "###", "#..", "###", "..#", "###" },
++    { "###", "#..", "###", "#.#", "###" }, { "###", "..#", "..#", ".#.", ".#." }, { "###", "#.#", "###", "#.#", "###" },
++    { "###", "#.#", "###", "..#", "###" }, { "...", "...", "...", "...", ".#." }, { "..#", "..#", ".#.", "#..", "#.." },
++    { "...", "...", "...", "...", "..." }, { "###", "#..", "##.", "#..", "#.." }, { "##.", "#.#", "##.", "#..", "#.." },
++    { ".##", "#..", ".#.", "..#", "##." }, { "#.#", "###", "###", "#.#", "#.#" }, { "##.", "#.#", "#.#", "#.#", "##." },
++    { "##.", "#.#", "##.", "#.#", "#.#" }, { ".#.", "#.#", "#.#", "#.#", ".#." }, { ".##", "#..", "#..", "#..", ".##" },
++    { "#.#", "#.#", "#.#", "#.#", "###" }, { ".##", "#..", "#.#", "#.#", ".##" }, { "#.#", "#.#", ".#.", "#.#", "#.#" },
++    { "###", "#..", "##.", "#..", "###" }, { "#.#", "#.#", "###", "#.#", "#.#" }, { "###", "..#", ".#.", "#..", "###" } };
++static int rd_khz(const char *path) { int v = -1; FILE *f = fopen(path, "r"); if (f) { if (fscanf(f, "%d", &v) != 1) v = -1; fclose(f); } return v; }
++static void perf_draw(dbuf *b, long long tp) {
++    static long long t0, last, gap_sum, gap_max; static int gaps, shown0, drops0, lines;
++    static char txt[6][16]; static char gpu_path[300]; static int gpu_tried;
++    if (last) { long long g = tp - last; gap_sum += g; gaps++; if (g > gap_max) gap_max = g; }
++    last = tp;
++    if (!t0 || tp - t0 >= 1000000) {                        /* once a second: the numbers */
++        double el = t0 ? (tp - t0) / 1e6 : 0; int sh = shown_total, dr = drops_total;
++        int fps = el > 0 ? (int)((sh - shown0) / el + 0.5) : 0;
++        lines = 0;
++        snprintf(txt[lines++], 16, "%d FPS", fps);
++        if (perf_mode >= 2) {
++            double avg = gaps ? gap_sum / 1000.0 / gaps : 0;
++            snprintf(txt[lines++], 16, "%.1f/%.0f MS", avg, gap_max / 1000.0);
++            snprintf(txt[lines++], 16, "%d DROP", t0 ? dr - drops0 : 0);
++        }
++        if (perf_mode >= 3) {
++            if (!gpu_tried) {
++                gpu_tried = 1; glob_t g;
++                if (!glob("/sys/class/devfreq/*gpu*/cur_freq", 0, 0, &g)) { snprintf(gpu_path, sizeof gpu_path, "%s", g.gl_pathv[0]); globfree(&g); }
++            }
++            int c = rd_khz("/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq"), gf = gpu_path[0] ? rd_khz(gpu_path) : -1;
++            if (c > 0) snprintf(txt[lines++], 16, "CPU %d", c / 1000); else snprintf(txt[lines++], 16, "CPU .");
++            if (gf > 0) snprintf(txt[lines++], 16, "GPU %d", gf / 1000000); else snprintf(txt[lines++], 16, "GPU .");
++            const char *rs = getenv("DSFLIP_RAST_SCALE");
++            int res = dsflip_screen_w >= 512 ? (getenv("DSFLIP_RAST") && rs && atoi(rs) == 3 ? 3 : 2) : 1;
++            snprintf(txt[lines++], 16, "RES %dX", res);
++        }
++        t0 = tp; shown0 = sh; drops0 = dr; gaps = 0; gap_sum = gap_max = 0;
++    }
++    if (!b->map || b->pitch < b->w * 4) return;
++    int k = b->w >= 512 ? 2 : 1, cw = 4 * k, lh = 6 * k, wmax = 0;
++    for (int l = 0; l < lines; l++) { int w = (int)strlen(txt[l]) * cw; if (w > wmax) wmax = w; }
++    int x0 = k, y0 = k, x1 = x0 + wmax + 2 * k, y1 = y0 + lines * lh + k;
++    if (x1 > (int)b->w || y1 > (int)b->h) return;
++    for (int y = y0; y < y1; y++) { uint32_t *d = (uint32_t *)((uint8_t *)b->map + (size_t)y * b->pitch); for (int x = x0; x < x1; x++) d[x] = 0x101418; }
++    for (int l = 0; l < lines; l++)
++        for (int i = 0; txt[l][i]; i++) {
++            const char *p = strchr(PF_CH, txt[l][i]); if (!p) continue;
++            const char *const *gl = PF_GL[p - PF_CH];
++            for (int r = 0; r < 5; r++) for (int col = 0; col < 3; col++) if (gl[r][col] == '#')
++                for (int yy = 0; yy < k; yy++) {
++                    uint32_t *d = (uint32_t *)((uint8_t *)b->map + (size_t)(y0 + k + l * lh + r * k + yy) * b->pitch);
++                    for (int xx = 0; xx < k; xx++) d[x0 + k + i * cw + col * k + xx] = l ? 0xe7eef6 : 0x7ec8ee;
++                }
++        }
++}
++
+ void SDL_RenderPresent(void *rn) {
+     REAL(void, SDL_RenderPresent, void *);
+     if (!ok) { real(rn); return; }
+@@ -1705,6 +1773,10 @@ void SDL_RenderPresent(void *rn) {
+         unlock(&mu);
+     }
+     long long tp = now_us();
++    if (perf_mode && !dsflip_hold) {                /* the performance overlay, into the top screen's new frame */
++        stex *s = pending_route[0];
++        if (s && s->kind == K_SCREEN && s->written >= 0 && s->b[s->written].state == WRITTEN) perf_draw(&s->b[s->written], tp);
++    }
+     {   /* this frame's CPU time on DraStic's main thread (the one presenting) */
+         static long long last; struct timespec ct; clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ct);
+         long long c = ct.tv_sec * 1000000000LL + ct.tv_nsec, w = last ? c - last : 0; last = c;
+@@ -1739,7 +1811,7 @@ void SDL_RenderPresent(void *rn) {
+             if (s->written < 0 || s->b[s->written].state != WRITTEN) continue;
+             b = &s->b[s->written]; s->written = -1; b->state = READY;
+             if (shader_on && s->kind == K_SCREEN) {   /* the presenter shades it into a panel buffer */
+-                if (P[i].src) { release(P[i].src); st_drop++; st_drop_src++; }
++                if (P[i].src) { release(P[i].src); st_drop++; drops_total++; st_drop_src++; }
+                 P[i].src = b; P[i].src_t = tp; P[i].src_held = held;
+                 continue;
+             }
+diff --git a/src/menu.c b/src/menu.c
+index 9563350..f6a48a6 100644
+--- a/src/menu.c
++++ b/src/menu.c
+@@ -51,6 +51,7 @@ void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
+ void dsflip_log(const char *fmt, ...);
+ void cpugov_boost(int ms);
+ void SDL_PauseAudio(int on);
++void dsflip_perf_mode(int m);
+ /* audio.c */
+ void audio_mute(int on);
+ int audio_ui_load(int id, const int16_t *pcm, int frames, int rate, int ch);
+@@ -177,6 +178,8 @@ static const char *const IC_MIC[12] = { "....####....", "...######...", "...####
+     ".#..####..#.", "..#......#..", "...######...", ".....##.....", ".....##.....", "...######..." };
+ static const char *const IC_NOTE[12] = { "............", "......#####.", "......#...#.", "......#...#.", "......#...#.", "......#...#.",
+     "......#...#.", "...###..###.", "..####.####.", "..####.####.", "...##...##..", "............" };
++static const char *const IC_CHART[12] = { "............", "..........#.", "..........#.", "......#...#.", "......#...#.", "......#...#.",
++    "..#...#...#.", "..#...#...#.", "..#...#...#.", "..#...#...#.", "############", "............" };
+ static const char *const IC_TIP[12] = { "....####....", "...#....#...", "..#......#..", "..#......#..", "...#....#...", "....#..#....",
+     "....#..#....", ".....##.....", "....####....", "....####....", ".....##.....", "............" };
+ /* the slot numbers' 5x7 face (the same shapes as ROCKNIXDS's Pixelify Sans after its issue #34 fix) */
+@@ -451,11 +454,13 @@ static int pref(const char *key, const char *env, int def) {
+     return ev >= 0 ? ev : def;
+ }
+ static void pref_set(const char *key, const char *env, int v) { char b[32]; snprintf(b, sizeof b, "%d %d", v, env01(env)); mcfg_set(key, b); }
+-static int sounds_on = -1, hints_on = -1;
++static int sounds_on = -1, hints_on = -1, perf = 0;   /* perf: the overlay, 0 off, 1 FPS, 2 detailed, 3 advanced */
+ static void prefs_load(void) {
+     if (sounds_on >= 0) return;
+     sounds_on = pref("sounds", "DSFLIP_MENU_SOUNDS", 1); hints_on = pref("hints", "DSFLIP_MENU_HINTS", 1);
+     char v[16]; if (mcfg_get("preview", v, sizeof v)) pic_bottom = atoi(v) == 1;
++    if (mcfg_get("perf", v, sizeof v)) perf = atoi(v) < 0 || atoi(v) > 3 ? 0 : atoi(v);
++    dsflip_perf_mode(perf);
+ }
+ /* a tip (resume.c's "Resumed where you left off", the menu's undo tip): 1 = show it, the first `times` times only,
+  * never with the tips off */
+@@ -572,7 +577,8 @@ static canvas CV[2];
+ static int pw[2], ph[2];
+ 
+ /* rows of Quick settings that exist on this setup; ROWS_SHOWN fit the page, the rest scroll */
+-enum { ROW_VOL, ROW_BRI, ROW_BRI_TOP, ROW_BRI_BOT, ROW_MIC, ROW_SOUNDS, ROW_HINTS };
++enum { ROW_VOL, ROW_BRI, ROW_BRI_TOP, ROW_BRI_BOT, ROW_MIC, ROW_PERF, ROW_SOUNDS, ROW_HINTS };
++static const char *const PERF_NAME[4] = { "Off", "FPS", "Detailed", "Advanced" };
+ #define MAXROWS 10
+ #define ROWS_SHOWN 5
+ static int rows[MAXROWS], nrows, set_first;
+@@ -580,10 +586,17 @@ static void make_rows(void) {
+     bl_map();
+     nrows = 0; rows[nrows++] = ROW_VOL;
+     if (bl_scr[0]) { rows[nrows++] = ROW_BRI_TOP; rows[nrows++] = ROW_BRI_BOT; } else rows[nrows++] = ROW_BRI;
+-    rows[nrows++] = ROW_MIC; rows[nrows++] = ROW_SOUNDS; rows[nrows++] = ROW_HINTS;
++    rows[nrows++] = ROW_MIC; rows[nrows++] = ROW_PERF; rows[nrows++] = ROW_SOUNDS; rows[nrows++] = ROW_HINTS;
+ }
+ static int is_slider(int id) { return id == ROW_VOL || id == ROW_BRI || id == ROW_BRI_TOP || id == ROW_BRI_BOT; }
+ static int is_toggle(int id) { return id == ROW_SOUNDS || id == ROW_HINTS; }
++static int is_choice(int id) { return id == ROW_PERF; }            /* left / right (or A) steps through values */
++static void choose(int id, int d) {
++    if (id == ROW_PERF) {
++        perf = (perf + d + 4) % 4; dsflip_perf_mode(perf);
++        char v[8]; snprintf(v, sizeof v, "%d", perf); mcfg_set("perf", v);
++    }
++}
+ static int slider_get(int id) { return id == ROW_VOL ? vol : id == ROW_BRI_BOT ? bri[1] : bri[0]; }
+ static void slider_set(int id, int v) {         /* a new value, applied at once */
+     if (id == ROW_VOL) { vol = v < 0 ? 0 : v > 100 ? 100 : v; want(vol, -1, -1); return; }
+@@ -910,11 +923,13 @@ static void draw_bottom(void) {
+             int sel = r == sel_set, id = rows[r];
+             R_ROW[r] = (rect){ gx0, y, gx1, y + rh };
+             box(c, gx0, y, gx1, y + rh, S(10), bw, sel ? C_LIGHT : C_LINE, sel ? C_BLUE : C_PANEL);
+-            const char *const *ic = id == ROW_VOL ? IC_VOL : id == ROW_MIC ? IC_MIC : id == ROW_SOUNDS ? IC_NOTE : id == ROW_HINTS ? IC_TIP : IC_SUN;
++            const char *const *ic = id == ROW_VOL ? IC_VOL : id == ROW_MIC ? IC_MIC : id == ROW_SOUNDS ? IC_NOTE : id == ROW_HINTS ? IC_TIP :
++                                    id == ROW_PERF ? IC_CHART : IC_SUN;
+             int k = S(2) < 2 ? 2 : S(2);
+             bitmap(c, ic, 12, gx0 + S(16), y + (rh - 12 * k) / 2, k, sel ? 0xffffff : C_LIGHT);
+             const char *lab = id == ROW_VOL ? "Volume" : id == ROW_BRI ? "Brightness" : id == ROW_BRI_TOP ? "Top screen" :
+-                              id == ROW_BRI_BOT ? "Bottom screen" : id == ROW_MIC ? "Microphone" : id == ROW_SOUNDS ? "Menu sounds" : "Tips";
++                              id == ROW_BRI_BOT ? "Bottom screen" : id == ROW_MIC ? "Microphone" : id == ROW_PERF ? "Performance" :
++                              id == ROW_SOUNDS ? "Menu sounds" : "Tips";
+             text(c, &F_MED, lab, gx0 + S(56), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? 0xffffff : C_LIGHT, 0, 0);
+             char v[32] = "";
+             if (is_slider(id)) {
+@@ -923,6 +938,7 @@ static void draw_bottom(void) {
+                 R_BAR[r] = (rect){ bx - S(8), y, bx + S(150), y + rh };
+                 snprintf(v, sizeof v, "%d%%", val);
+             } else if (is_toggle(id)) snprintf(v, sizeof v, "%s", (id == ROW_SOUNDS ? sounds_on : hints_on) ? "On" : "Off");
++            else if (id == ROW_PERF) snprintf(v, sizeof v, "< %s >", PERF_NAME[perf]);
+             else snprintf(v, sizeof v, "Test / blow");
+             text(c, &F_MED, v, gx1 - S(18), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? 0xffffff : C_CYAN, 0, 2);
+             y += rh + gap;
+@@ -938,6 +954,8 @@ static void draw_bottom(void) {
+         case ROW_BRI: help = "Left / right to change, both screens"; break;
+         case ROW_BRI_TOP: case ROW_BRI_BOT: help = "Left / right to change, each screen on its own"; break;
+         case ROW_MIC: help = "A live meter of the mic, and a blow for games that ask for one"; break;
++        case ROW_PERF: help = perf == 3 ? "+ CPU and GPU clocks, internal resolution" : perf == 2 ? "Frames a second, frame time (avg / longest), drops"
++                              : perf == 1 ? "Frames a second, top left of the top screen" : "Left / right: FPS, Detailed, Advanced"; break;
+         case ROW_SOUNDS: help = "The menu's clicks and beeps"; break;
+         case ROW_HINTS: help = "Tips like \"Resumed where you left off\" and the undo tip"; break;
+         }
+@@ -991,7 +1009,7 @@ static void draw_bottom(void) {
+     int fy = c->h - S(56);
+     const char *bl = s == SC_MAIN ? "Resume" : "Back", *al = "Select", *mid = "";
+     if (s == SC_SAVE) al = "Save"; else if (s == SC_LOAD) al = "Load";
+-    else if (s == SC_SET) al = rows[sel_set] == ROW_MIC ? "Open" : is_toggle(rows[sel_set]) ? "Switch" : "OK";
++    else if (s == SC_SET) al = rows[sel_set] == ROW_MIC ? "Open" : is_toggle(rows[sel_set]) || is_choice(rows[sel_set]) ? "Switch" : "OK";
+     else if (s == SC_MIC) al = "Blow for 3 s";
+     if (s == SC_MAIN) mid = "D-pad or tap";
+     R_FOOT_L = pill(c, S(20), fy, 0, "B", bl, C_LIGHT, C_LIGHT, C_DARK);
+@@ -1071,6 +1089,7 @@ static void activate(void) {
+     case SC_SET:
+         if (rows[sel_set] == ROW_MIC) { scr = SC_MIC; play(SND_SELECT); dirty_bot = 1; }
+         else if (is_toggle(rows[sel_set])) { toggle(rows[sel_set]); play(SND_SELECT); dirty_bot = 1; }
++        else if (is_choice(rows[sel_set])) { choose(rows[sel_set], 1); play(SND_SELECT); dirty_bot = 1; }
+         else play(SND_SELECT);
+         break;
+     case SC_MIC:
+@@ -1099,6 +1118,7 @@ static void adjust(int d) {                     /* left/right on a Quick setting
+     int id = rows[sel_set];
+     if (is_slider(id)) { int old = slider_get(id); slider_set(id, old + d * 5); if (slider_get(id) != old) { play(SND_MOVE); dirty_bot = 1; } }
+     else if (is_toggle(id)) { toggle(id); play(SND_MOVE); dirty_bot = 1; }
++    else if (is_choice(id)) { choose(id, d); play(SND_MOVE); dirty_bot = 1; }
+ }
+ static void nav(int dx, int dy) {
+     int moved = 0;
+@@ -1144,7 +1164,7 @@ static void tap(int px, int py) {               /* a touch-down on the bottom pa
+                 int v = (px - R_BAR[r].x0 - S(8)) * 100 / S(146); v = (v + 2) / 5 * 5;
+                 slider_set(id, v);
+                 play(SND_MOVE); dirty_bot = 1;
+-            } else if (id == ROW_MIC || is_toggle(id)) activate();
++            } else if (id == ROW_MIC || is_toggle(id) || is_choice(id)) activate();
+             else play(SND_MOVE);
+             return;
+         }
+@@ -1304,7 +1324,7 @@ int menu_is_open(void) { return open_; }
+ void menu_frame(void) {
+     static int test = -1; static int frames;
+     if (test < 0) { const char *t = getenv("DSFLIP_MENU_TEST"); test = t ? atoi(t) + 1 : 0; }
+-    if (!frames++) session_t0 = now_ms();
++    if (!frames++) { session_t0 = now_ms(); prefs_load(); }   /* (the performance overlay starts as it was left) */
+     if (mic_until && now_ms() >= mic_until) { mic_until = 0; audio_mic_hold(0); }
+ 
+     if (test && frames == 180) {
+-- 
+2.43.0
+
+
+From fce7ed0d5cdbccdca58269b85a758093f1add1c8 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 8 Oct 2026 18:30:28 +0000
+Subject: [PATCH 20/27] Shaders from the in-game menu: switched while the game
+ runs where the session can, kept per game (issues 3, 5)
+
+Quick settings has a Shader row: Off, ROCKNIX's built-ins (when libdrastouch.so is there) and every .frag in the
+shader folders. The pick applies as the menu closes:
+- In a session that started with a shader, the shader worker compiles the new one between two frames and uses it
+  only if it links and draws into buffers of the size this session made (shader_switch); touch follows its viewport.
+  "Off" is then a plain copy (the GPU still draws; zero-copy, and its lower GPU clock, come with the next start).
+- Otherwise (a zero-copy session, a "dsflip-output:" size that differs, e.g. ds-fsr's 3x on the RG DS Plus) it
+  shows from the next start, and a pop-up says so. A shader that doesn't compile is reported and not kept.
+
+Either way it is kept for the game in <DSFLIP_DATA>/menu.cfg ("shader.<game>=<picked> <the frontend's shader>") and
+used at the next start (shader_name, through menu_shader_pick) as long as the frontend still asks for the shader it
+was picked over: a change of the game's shader in the frontend wins again. superdrastic-run reads the same line, so
+the GPU's clock follows the pick. GL still runs on one thread only (the shader worker); the menu waits up to 2 s for
+its answer while the game is paused.
+
+shader_init is split into compile_named (source, its dsflip-viewport/dsflip-output lines, compile and link, nothing
+global touched) and use_program, which shader_switch shares.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PBVcHtDJUrUv4eL8Vsmzy9
+---
+ runner/superdrastic-run |   6 ++
+ src/dsflip.c            |  35 +++++++
+ src/menu.c              |  70 ++++++++++++--
+ src/shader.c            | 196 +++++++++++++++++++++++++++++-----------
+ 4 files changed, 247 insertions(+), 60 deletions(-)
+
+diff --git a/runner/superdrastic-run b/runner/superdrastic-run
+index 047c10c..201f8fe 100755
+--- a/runner/superdrastic-run
++++ b/runner/superdrastic-run
+@@ -41,6 +41,12 @@ for v in DSFLIP_SHADER DSFLIP_SHADER_DIR DSFLIP_TOP DSFLIP_CARD DSFLIP_TOUCH DSF
+     eval "[ -n \"\${$v}\" ] && export $v"
+ done
+ SHADER=${DSFLIP_SHADER:-${DSHOOK_SHADER:-none}}
++# the shader picked for this game in the in-game menu (data/menu.cfg: "shader.<game>=<picked> <the shader it was picked
++# over>"), while that is still the shader asked for here: SuperDrastic uses it, and the GPU's clock below follows it
++for ROM; do :; done
++G=$(basename "$ROM"); G=${G%.*}; B=$SHADER; [ "$B" = bilinear ] && B=none
++PICK=$(awk -v k="shader.$G=" 'index($0, k) == 1 { v = substr($0, length(k) + 1) } END { print v }' "$DSFLIP_DATA/menu.cfg" 2>/dev/null)
++[ -n "$PICK" ] && [ "${PICK#* }" = "$B" ] && SHADER=${PICK%% *}
+ 
+ say() { echo "$(date '+%F %T') $*" >> "$RUNLOG"; }
+ plain() { cd "$WORKDIR" && exec "$DRASTIC" "$@"; }
+diff --git a/src/dsflip.c b/src/dsflip.c
+index 3b9ff5e..cef2c2c 100644
+--- a/src/dsflip.c
++++ b/src/dsflip.c
+@@ -665,6 +665,39 @@ static void shade_pending(void) {
+  * "still pending" and the display fell into 30 fps bursts. The presenter now only handles DRM events, the latch
+  * timer and commits; this worker shades each frame DraStic presents (woken via wfd) and then wakes the presenter. */
+ static int wfd = -1;
++/* the in-game menu's shader switch (menu.c): a request for the worker, which answers between two frames */
++int shader_switch(const char *name);
++static char sw_name[64]; static volatile int sw_req, sw_done, sw_result;
++static pthread_mutex_t sw_mu = PTHREAD_MUTEX_INITIALIZER; static pthread_cond_t sw_cv = PTHREAD_COND_INITIALIZER;
++static void shader_switch_now(void) {          /* on the worker */
++    if (sw_req == sw_done) return;
++    pthread_mutex_lock(&sw_mu);
++    char nm[64]; snprintf(nm, sizeof nm, "%s", sw_name); int req = sw_req;
++    pthread_mutex_unlock(&sw_mu);
++    int r = shader_switch(*nm ? nm : 0);
++    if (!r) {                                   /* touch follows a shader that draws the DS screen into part of the panel */
++        int v[4] = { 0, 0, 0, 0 }, pw = P[1].mode.hdisplay, ph = P[1].mode.vdisplay;
++        if (!shader_viewport(v, pw, ph)) v[0] = v[1] = v[2] = v[3] = 0;
++        lock(&tmu); vp_x = v[0]; vp_y = v[1]; vp_w = v[2]; vp_h = v[3]; unlock(&tmu);
++        LOG("[dsflip] shader switched to %s\n", *nm ? nm : "a plain copy (off)");
++    }
++    pthread_mutex_lock(&sw_mu); sw_result = r; sw_done = req; pthread_cond_broadcast(&sw_cv); pthread_mutex_unlock(&sw_mu);
++}
++/* menu.c: switch to shader name (0: off) while the game runs. 0 done, -1 it doesn't compile (the old one stays), -2 it
++ * needs another buffer size (next start), -3 this session has no shader (zero-copy: next start), -4 no answer */
++int dsflip_shader_switch(const char *name) {
++    if (!ok || !shader_on) return -3;
++    pthread_mutex_lock(&sw_mu);
++    snprintf(sw_name, sizeof sw_name, "%s", name ? name : "");
++    int req = ++sw_req;
++    uint64_t one = 1; if (write(wfd, &one, 8) < 0) {}
++    struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts); ts.tv_sec += 2;
++    while (sw_done != req) if (pthread_cond_timedwait(&sw_cv, &sw_mu, &ts)) break;
++    int r = sw_done == req ? sw_result : -4;
++    pthread_mutex_unlock(&sw_mu);
++    return r;
++}
++int dsflip_shader_on(void) { return ok && shader_on; }
+ static void *shader_worker(void *a) {
+     (void)a;
+     int on = shader_init(fd, shader_nm);           /* GL lives on this thread; init() waits for the verdict */
+@@ -693,8 +726,10 @@ static void *shader_worker(void *a) {
+     if (!shader_on) return 0;
+     struct pollfd pw = { .fd = wfd, .events = POLLIN };
+     for (;;) {
++        shader_switch_now();
+         if (poll(&pw, 1, 100) <= 0) continue;
+         uint64_t v; if (read(wfd, &v, 8) < 0) {}
++        shader_switch_now();
+         shade_pending();
+         uint64_t one = 1; if (write(efd, &one, 8) < 0) {}
+     }
+diff --git a/src/menu.c b/src/menu.c
+index f6a48a6..eecb9fa 100644
+--- a/src/menu.c
++++ b/src/menu.c
+@@ -52,6 +52,11 @@ void dsflip_log(const char *fmt, ...);
+ void cpugov_boost(int ms);
+ void SDL_PauseAudio(int on);
+ void dsflip_perf_mode(int m);
++int dsflip_shader_switch(const char *name);
++int dsflip_shader_on(void);
++/* shader.c */
++const char *shader_name(void);
++int shader_list(char (*names)[48], int max);
+ /* audio.c */
+ void audio_mute(int on);
+ int audio_ui_load(int id, const int16_t *pcm, int frames, int rate, int ch);
+@@ -180,6 +185,8 @@ static const char *const IC_NOTE[12] = { "............", "......#####.", "......
+     "......#...#.", "...###..###.", "..####.####.", "..####.####.", "...##...##..", "............" };
+ static const char *const IC_CHART[12] = { "............", "..........#.", "..........#.", "......#...#.", "......#...#.", "......#...#.",
+     "..#...#...#.", "..#...#...#.", "..#...#...#.", "..#...#...#.", "############", "............" };
++static const char *const IC_GRID[12] = { "............", ".##.##.##.#.", ".##.##.##.#.", "............", ".##.##.##.#.", ".##.##.##.#.",
++    "............", ".##.##.##.#.", ".##.##.##.#.", "............", ".##.##.##.#.", "............" };
+ static const char *const IC_TIP[12] = { "....####....", "...#....#...", "..#......#..", "..#......#..", "...#....#...", "....#..#....",
+     "....#..#....", ".....##.....", "....####....", "....####....", ".....##.....", "............" };
+ /* the slot numbers' 5x7 face (the same shapes as ROCKNIXDS's Pixelify Sans after its issue #34 fix) */
+@@ -462,6 +469,24 @@ static void prefs_load(void) {
+     if (mcfg_get("perf", v, sizeof v)) perf = atoi(v) < 0 || atoi(v) > 3 ? 0 : atoi(v);
+     dsflip_perf_mode(perf);
+ }
++/* the shader, per game: shader.<game>=<picked> <the frontend's shader when it was picked> ("none" for none). The pick
++ * holds while the frontend's setting is unchanged; changed there since, the frontend's wins again. shader.c asks
++ * at the start (shader_name); a launcher that sets the GPU's clock by the shader reads the same line. */
++static char shader_base[48];                    /* this start's shader as the frontend named it ("none": none) */
++const char *menu_shader_pick(const char *frontend) {
++    static char pick[48];
++    snprintf(shader_base, sizeof shader_base, "%s", frontend && *frontend && strcmp(frontend, "bilinear") ? frontend : "none");
++    if (!gbase[0]) game_info();
++    char key[300], v[120], chosen[48], was[48];
++    snprintf(key, sizeof key, "shader.%s", gbase);
++    if (mcfg_get(key, v, sizeof v) && sscanf(v, "%47s %47s", chosen, was) == 2 && !strcmp(was, shader_base)) {
++        if (strcmp(chosen, shader_base)) dsflip_log("[menu] shader for this game: %s (picked in the menu over %s)\n", chosen, shader_base);
++        snprintf(pick, sizeof pick, "%s", chosen);
++        return pick;
++    }
++    return frontend;
++}
++
+ /* a tip (resume.c's "Resumed where you left off", the menu's undo tip): 1 = show it, the first `times` times only,
+  * never with the tips off */
+ int menu_hint(const char *name, int times) {
+@@ -577,7 +602,9 @@ static canvas CV[2];
+ static int pw[2], ph[2];
+ 
+ /* rows of Quick settings that exist on this setup; ROWS_SHOWN fit the page, the rest scroll */
+-enum { ROW_VOL, ROW_BRI, ROW_BRI_TOP, ROW_BRI_BOT, ROW_MIC, ROW_PERF, ROW_SOUNDS, ROW_HINTS };
++enum { ROW_VOL, ROW_BRI, ROW_BRI_TOP, ROW_BRI_BOT, ROW_MIC, ROW_SHADER, ROW_PERF, ROW_SOUNDS, ROW_HINTS };
++#define NSH 40
++static char shn[NSH][48]; static int nsh = -1, sh_active, sh_sel;   /* shn[0]: "Off"; the one in use; the one picked */
+ static const char *const PERF_NAME[4] = { "Off", "FPS", "Detailed", "Advanced" };
+ #define MAXROWS 10
+ #define ROWS_SHOWN 5
+@@ -586,12 +613,24 @@ static void make_rows(void) {
+     bl_map();
+     nrows = 0; rows[nrows++] = ROW_VOL;
+     if (bl_scr[0]) { rows[nrows++] = ROW_BRI_TOP; rows[nrows++] = ROW_BRI_BOT; } else rows[nrows++] = ROW_BRI;
+-    rows[nrows++] = ROW_MIC; rows[nrows++] = ROW_PERF; rows[nrows++] = ROW_SOUNDS; rows[nrows++] = ROW_HINTS;
++    rows[nrows++] = ROW_MIC; rows[nrows++] = ROW_SHADER; rows[nrows++] = ROW_PERF; rows[nrows++] = ROW_SOUNDS; rows[nrows++] = ROW_HINTS;
+ }
+ static int is_slider(int id) { return id == ROW_VOL || id == ROW_BRI || id == ROW_BRI_TOP || id == ROW_BRI_BOT; }
+ static int is_toggle(int id) { return id == ROW_SOUNDS || id == ROW_HINTS; }
+-static int is_choice(int id) { return id == ROW_PERF; }            /* left / right (or A) steps through values */
++static int is_choice(int id) { return id == ROW_PERF || id == ROW_SHADER; }   /* left / right (or A) steps through values */
++static void shaders_load(void) {
++    if (nsh >= 0) return;
++    snprintf(shn[0], sizeof shn[0], "Off");
++    nsh = 1 + shader_list(shn + 1, NSH - 1);
++    const char *cur = shader_name(); sh_active = 0;
++    if (cur) {
++        for (int i = 1; i < nsh; i++) if (!strcmp(shn[i], cur)) sh_active = i;
++        if (!sh_active && nsh < NSH) { snprintf(shn[nsh], sizeof shn[0], "%s", cur); sh_active = nsh++; }
++    }
++    sh_sel = sh_active;
++}
+ static void choose(int id, int d) {
++    if (id == ROW_SHADER) { sh_sel = (sh_sel + d + nsh) % nsh; return; }
+     if (id == ROW_PERF) {
+         perf = (perf + d + 4) % 4; dsflip_perf_mode(perf);
+         char v[8]; snprintf(v, sizeof v, "%d", perf); mcfg_set("perf", v);
+@@ -924,11 +963,11 @@ static void draw_bottom(void) {
+             R_ROW[r] = (rect){ gx0, y, gx1, y + rh };
+             box(c, gx0, y, gx1, y + rh, S(10), bw, sel ? C_LIGHT : C_LINE, sel ? C_BLUE : C_PANEL);
+             const char *const *ic = id == ROW_VOL ? IC_VOL : id == ROW_MIC ? IC_MIC : id == ROW_SOUNDS ? IC_NOTE : id == ROW_HINTS ? IC_TIP :
+-                                    id == ROW_PERF ? IC_CHART : IC_SUN;
++                                    id == ROW_PERF ? IC_CHART : id == ROW_SHADER ? IC_GRID : IC_SUN;
+             int k = S(2) < 2 ? 2 : S(2);
+             bitmap(c, ic, 12, gx0 + S(16), y + (rh - 12 * k) / 2, k, sel ? 0xffffff : C_LIGHT);
+             const char *lab = id == ROW_VOL ? "Volume" : id == ROW_BRI ? "Brightness" : id == ROW_BRI_TOP ? "Top screen" :
+-                              id == ROW_BRI_BOT ? "Bottom screen" : id == ROW_MIC ? "Microphone" : id == ROW_PERF ? "Performance" :
++                              id == ROW_BRI_BOT ? "Bottom screen" : id == ROW_MIC ? "Microphone" : id == ROW_PERF ? "Performance" : id == ROW_SHADER ? "Shader" :
+                               id == ROW_SOUNDS ? "Menu sounds" : "Tips";
+             text(c, &F_MED, lab, gx0 + S(56), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? 0xffffff : C_LIGHT, 0, 0);
+             char v[32] = "";
+@@ -939,6 +978,7 @@ static void draw_bottom(void) {
+                 snprintf(v, sizeof v, "%d%%", val);
+             } else if (is_toggle(id)) snprintf(v, sizeof v, "%s", (id == ROW_SOUNDS ? sounds_on : hints_on) ? "On" : "Off");
+             else if (id == ROW_PERF) snprintf(v, sizeof v, "< %s >", PERF_NAME[perf]);
++            else if (id == ROW_SHADER) snprintf(v, sizeof v, "< %.24s >", shn[sh_sel]);
+             else snprintf(v, sizeof v, "Test / blow");
+             text(c, &F_MED, v, gx1 - S(18), y + (rh - S(20)) / 2.0f - S(1), S(20), sel ? 0xffffff : C_CYAN, 0, 2);
+             y += rh + gap;
+@@ -956,6 +996,8 @@ static void draw_bottom(void) {
+         case ROW_MIC: help = "A live meter of the mic, and a blow for games that ask for one"; break;
+         case ROW_PERF: help = perf == 3 ? "+ CPU and GPU clocks, internal resolution" : perf == 2 ? "Frames a second, frame time (avg / longest), drops"
+                               : perf == 1 ? "Frames a second, top left of the top screen" : "Left / right: FPS, Detailed, Advanced"; break;
++        case ROW_SHADER: help = dsflip_shader_on() ? "Changes when you resume; kept for this game"
++                                                   : "From the next start of this game (kept for it)"; break;
+         case ROW_SOUNDS: help = "The menu's clicks and beeps"; break;
+         case ROW_HINTS: help = "Tips like \"Resumed where you left off\" and the undo tip"; break;
+         }
+@@ -1230,6 +1272,21 @@ static void handle_sdl(const uint8_t *e) {
+     }
+ }
+ 
++/* the shader picked in Quick settings, as the menu closes: now where this session can (it started with one, and the
++ * new one draws into buffers of the same size), else from the next start; kept for this game either way */
++static void apply_shader(void) {
++    const char *nm = sh_sel ? shn[sh_sel] : 0;
++    int r = dsflip_shader_switch(nm);
++    dsflip_log("[menu] shader %s: %s\n", nm ? nm : "off", r == 0 ? "switched" : r == -1 ? "doesn't compile, kept the old one" :
++               r == -2 ? "another buffer size: from the next start" : r == -3 ? "zero-copy session: from the next start" : "no answer");
++    if (r == -1) { dsflip_toast("Couldn't use this shader", shn[sh_sel], 0xff7a4a, 3000); sh_sel = sh_active; return; }
++    char key[300], v[120]; snprintf(key, sizeof key, "shader.%s", gbase);
++    snprintf(v, sizeof v, "%s %s", nm ? nm : "none", shader_base[0] ? shader_base : "none");
++    mcfg_set(key, v);
++    sh_active = sh_sel;                        /* (from the next start, if not now: the menu shows the pick) */
++    if (r) dsflip_toast(nm ? "The new shader shows from the next start" : "No shader from the next start", "Quit and start the game again to see it", 0x3aa0ff, 3500);
++}
++
+ static void menu_run(int start) {
+     if (!setup()) { enabled = 0; return; }
+     static int (*poll_real)(void *);
+@@ -1241,7 +1298,7 @@ static void menu_run(int start) {
+     audio_mic_quiet(1);             /* the real mic presses nothing while the game is paused */
+     cpugov_boost(800);
+     open_ = 1; scr = SC_MAIN; sel_main = 0; held_dir = 0; axis_dir[0] = axis_dir[1] = 0; tqn = 0;
+-    bri_dirty = 0; make_rows();
++    bri_dirty = 0; make_rows(); shaders_load(); sh_sel = sh_active;
+     scan_slots(0);
+     load_recent();
+     grab_background();
+@@ -1268,6 +1325,7 @@ static void menu_run(int start) {
+         if (open_) redraw();
+         usleep(8000);
+     }
++    if (sh_sel != sh_active) apply_shader();
+     if (bri_dirty & 4) want(-1, 0, bri[0]);           /* ROCKNIX's settings, as its own scripts keep them */
+     for (int k = 0; k < 2; k++) if (bri_dirty & (1 << k)) want(-1, bl_scr[k], bri[k]);
+     if (mic_until) audio_mic_hold(1);
+diff --git a/src/shader.c b/src/shader.c
+index ad152ef..ee8f787 100644
+--- a/src/shader.c
++++ b/src/shader.c
+@@ -12,6 +12,11 @@
+ // copied into this repo), recognised by their content. Other names load <name>.frag from DSFLIP_SHADER_DIR,
+ // /storage/.config/drastic/shaders (the files the stock path uses), or shaders/ beside libdsflip.so.
+ //
++// The in-game menu can switch to another shader while the game runs (shader_switch, on the shader worker's thread
++// between frames): the new program is compiled first and replaces the old one only if it links, and only when it draws
++// into buffers of the size this session made (a "dsflip-output:" that differs needs a restart). "Off" in a session that
++// started with a shader is a plain copy (the GPU still draws; zero-copy needs a restart).
++//
+ // GL runs only on the presenter thread, in a surfaceless context (it renders only into imported dumb buffers).
+ // The RG DS's GPU runs ARM's libmali (mali_kbase, /dev/mali0; there is no DRM render node), so libmali's EGL in
+ // /usr/lib/mali is preferred over the system (Mesa) one. Everything is dlopen()ed: a missing or failing GL
+@@ -24,6 +29,7 @@
+ #include <dlfcn.h>
+ #include <unistd.h>
+ #include <fcntl.h>
++#include <dirent.h>
+ #include <xf86drm.h>
+ #include <drm_fourcc.h>
+ 
+@@ -55,6 +61,7 @@ static EGLint (*eglDupNativeFenceFDANDROID)(EGLDisplay, void *);
+ GLFN(GLuint, glCreateShader, GLenum) GLFN(void, glShaderSource, GLuint, GLsizei, const GLchar *const *, const GLint *)
+ GLFN(void, glCompileShader, GLuint) GLFN(void, glGetShaderiv, GLuint, GLenum, GLint *)
+ GLFN(void, glGetShaderInfoLog, GLuint, GLsizei, GLsizei *, GLchar *) GLFN(GLuint, glCreateProgram, void)
++GLFN(void, glDeleteProgram, GLuint) GLFN(void, glDeleteShader, GLuint)
+ GLFN(void, glAttachShader, GLuint, GLuint) GLFN(void, glBindAttribLocation, GLuint, GLuint, const GLchar *)
+ GLFN(void, glLinkProgram, GLuint) GLFN(void, glGetProgramiv, GLuint, GLenum, GLint *)
+ GLFN(void, glGetProgramInfoLog, GLuint, GLsizei, GLsizei *, GLchar *) GLFN(void, glUseProgram, GLuint)
+@@ -134,15 +141,21 @@ static int parse_output(const char *s, int *n, int *w, int *h) {
+ }
+ /* the size of the buffers the shader draws into, for a pw x ph panel; 1 if smaller than the panel (scaled by the
+  * display controller). After shader_init; the viewport mapping below uses it too */
++static int last_pw, last_ph;                    /* the panel size it was last asked for */
++static void output_for(int n, int ow, int oh, int pw, int ph, int *w, int *h);
+ int shader_output_size(int *w, int *h, int pw, int ph) {
+-    int n = out_num, ow = out_req_w, oh = out_req_h;
++    last_pw = pw; last_ph = ph;
++    output_for(out_num, out_req_w, out_req_h, pw, ph, &out_w, &out_h);
++    *w = out_w; *h = out_h;
++    return out_w != pw || out_h != ph;
++}
++/* the buffer size for a shader's "dsflip-output:" (n, or ow x oh; 0: none) on a pw x ph panel */
++static void output_for(int n, int ow, int oh, int pw, int ph, int *w, int *h) {
+     const char *e = getenv("DSFLIP_SHADER_OUTPUT");
+     if (e && *e && !parse_output(e, &n, &ow, &oh)) SLOG("[shader] DSFLIP_SHADER_OUTPUT \"%s\" not understood (Nx, WxH or panel): ignored\n", e);
+     if (n > 0) { ow = 256 * n; oh = 192 * n; }
+     if (ow <= 0 || oh <= 0 || ow > pw || oh > ph) { ow = pw; oh = ph; }   /* no fit: the panel itself */
+-    out_w = ow; out_h = oh;
+     *w = ow; *h = oh;
+-    return ow != pw || oh != ph;
+ }
+ int shader_viewport(int *v, int pw, int ph) {
+     int ow = out_w > 0 ? out_w : pw, oh = out_h > 0 ? out_h : ph;   /* the shader's rectangle is in its buffer's pixels */
+@@ -261,12 +274,135 @@ static gimg *image_for(uint32_t handle, int w, int h, int pitch, uint64_t gen, i
+ }
+ 
+ /* ---- public ---- */
++/* menu.c: the shader picked for this game in the in-game menu, if the frontend's setting is still the one it was
++ * picked over (weak: tools/shtest.c has no menu) */
++__attribute__((weak)) const char *menu_shader_pick(const char *frontend);
+ const char *shader_name(void) {
+     const char *s = getenv("DSFLIP_SHADER"); if (!s) s = getenv("DSHOOK_SHADER");
++    if (menu_shader_pick) s = menu_shader_pick(s);
+     if (!s || !*s || !strcmp(s, "none") || !strcmp(s, "bilinear")) return 0;
+     return s;
+ }
+ 
++/* the shader folders: DSFLIP_SHADER_DIR, ROCKNIX's DraStic shader folder, then shaders/ beside libdsflip.so (the
++ * standalone package's layout) */
++static int shader_dirs(char dirs[3][512]) {
++    int nd = 0;
++    const char *sdir = getenv("DSFLIP_SHADER_DIR");
++    if (sdir && *sdir) snprintf(dirs[nd++], 512, "%s", sdir);
++    snprintf(dirs[nd++], 512, "/storage/.config/drastic/shaders");
++    Dl_info di;
++    if (dladdr((void *)shader_dirs, &di) && di.dli_fname && strrchr(di.dli_fname, '/'))
++        snprintf(dirs[nd++], 512, "%.*s/shaders", (int)(strrchr(di.dli_fname, '/') - di.dli_fname), di.dli_fname);
++    return nd;
++}
++/* a plain copy, for "Off" in a session that started with a shader */
++static const char *plain_fs = "precision mediump float;\nuniform sampler2D u_texture;\nvarying vec2 v_texcoord;\n"
++    "void main() { gl_FragColor = SWIZ(texture2D(u_texture, v_texcoord)); }\n";
++/* compile and link shader `name` (0: the plain copy) into *out, with its viewport and output lines in *lines
++ * (vp[4], vp_integer, out_num, out_req_w, out_req_h); 0 if it can't be used. Nothing global changes here. */
++typedef struct { int vp[4], vp_integer, out_num, out_req_w, out_req_h; } shlines;
++static int compile_named(const char *name, GLuint *out, shlines *L) {
++    char path[600] = "", dirs[3][512]; size_t n;
++    int nd = shader_dirs(dirs);
++    memset(L, 0, sizeof *L);
++    char *fs = name ? drastouch_source(name, 0) : strdup(plain_fs), *vs = name ? drastouch_source(name, 1) : 0;
++    const char *from = name ? "libdrastouch" : "built in";
++    for (int i = 0; i < nd && !fs; i++) {
++        snprintf(path, sizeof path, "%s/%s.frag", dirs[i], name);
++        fs = slurp(path, &n); from = path;
++    }
++    if (!fs) { SLOG("[shader] unknown shader \"%s\" (not built into libdrastouch, no %s.frag in the shader folders)\n", name, name); return 0; }
++    { const char *m = strstr(fs, "dsflip-viewport:"); char word[16];
++      if (m && sscanf(m + 16, "%d %d %d %d", &L->vp[0], &L->vp[1], &L->vp[2], &L->vp[3]) == 4)
++          SLOG("[shader] draws the DS screen at %d,%d %dx%d of the panel (touch follows)\n", L->vp[0], L->vp[1], L->vp[2], L->vp[3]);
++      else if (m && sscanf(m + 16, "%15s", word) == 1 && !strcmp(word, "integer")) {
++          L->vp_integer = 1; SLOG("[shader] draws the DS screen at a whole-number scale, centred (touch follows)\n");
++      } else L->vp[2] = L->vp[3] = 0; }
++    { const char *m = strstr(fs, "dsflip-output:"); char word[32];
++      if (m && sscanf(m + 14, "%31s", word) == 1) {
++          if (!parse_output(word, &L->out_num, &L->out_req_w, &L->out_req_h)) SLOG("[shader] dsflip-output \"%s\" not understood (Nx or WxH): the panel size\n", word);
++          else if (L->out_num > 0) SLOG("[shader] draws %dx the DS screen (%dx%d) where the panel is larger; the display controller scales the rest\n", L->out_num, 256 * L->out_num, 192 * L->out_num);
++          else if (L->out_req_w > 0) SLOG("[shader] draws %dx%d where the panel is larger; the display controller scales the rest\n", L->out_req_w, L->out_req_h);
++      } }
++    char *ffs = flip_fragcoord(fs);
++    const char *pre = up_fmt == 0x1908 && shader_copy_mode ? "#define SWIZ(c) (c).bgra\nuniform highp float dsf_fch;\n"
++                      "#define dsf_FragCoord() vec4(gl_FragCoord.x, dsf_fch - gl_FragCoord.y, gl_FragCoord.zw)\n"
++                    : "#define SWIZ(c) (c)\nuniform highp float dsf_fch;\n"
++                      "#define dsf_FragCoord() vec4(gl_FragCoord.x, dsf_fch - gl_FragCoord.y, gl_FragCoord.zw)\n";
++    GLuint v = compile(GL_VERTEX_SHADER, "", vs ? vs : default_vs), f = compile(GL_FRAGMENT_SHADER, pre, ffs);
++    free(fs); free(ffs); free(vs);
++    if (!v || !f) { if (v) glDeleteShader(v); if (f) glDeleteShader(f); return 0; }
++    GLuint pg = glCreateProgram();
++    glAttachShader(pg, v); glAttachShader(pg, f);
++    glBindAttribLocation(pg, 0, "a_position"); glBindAttribLocation(pg, 1, "a_texcoord");
++    glLinkProgram(pg);
++    glDeleteShader(v); glDeleteShader(f);              /* (freed with the program) */
++    GLint okl = 0; glGetProgramiv(pg, GL_LINK_STATUS, &okl);
++    if (!okl) { char log[1024] = ""; glGetProgramInfoLog(pg, sizeof log, 0, log); SLOG("[shader] link failed: %s\n", log); glDeleteProgram(pg); return 0; }
++    SLOG("[shader] \"%s\" from %s\n", name ? name : "plain copy", from);
++    *out = pg;
++    return 1;
++}
++/* make pg the program in use, with its lines */
++static void use_program(GLuint pg, const shlines *L) {
++    prog = pg;
++    memcpy(vp, L->vp, sizeof vp); vp_integer = L->vp_integer;
++    out_num = L->out_num; out_req_w = L->out_req_w; out_req_h = L->out_req_h;
++    glUseProgram(prog);
++    u_tex = glGetUniformLocation(prog, "u_texture"); u_tsize = glGetUniformLocation(prog, "u_texture_size");
++    u_osize = glGetUniformLocation(prog, "u_output_size"); u_fch = glGetUniformLocation(prog, "dsf_fch");
++    glUniform1i(u_tex, 0);
++    glDisable(GL_BLEND); glDisable(GL_DITHER);
++}
++static int build(const char *name, GLuint *out) {
++    shlines L; GLuint pg;
++    if (!compile_named(name, &pg, &L)) return 0;
++    use_program(pg, &L); *out = pg;
++    return 1;
++}
++/* the in-game menu's switch (on the shader worker's thread, between frames): name, or 0 for a plain copy. 0 done,
++ * -1 it doesn't compile (the old one stays), -2 it wants buffers of another size than this session's (a restart) */
++int shader_switch(const char *name) {
++    shlines L; GLuint pg;
++    if (!compile_named(name, &pg, &L)) return -1;
++    int w, h;
++    output_for(L.out_num, L.out_req_w, L.out_req_h, last_pw, last_ph, &w, &h);
++    if (last_pw && (w != out_w || h != out_h)) {
++        SLOG("[shader] \"%s\" draws %dx%d, this session's buffers are %dx%d: from the next start\n", name ? name : "plain copy", w, h, out_w, out_h);
++        glDeleteProgram(pg); glUseProgram(prog);
++        return -2;
++    }
++    GLuint old = prog;
++    use_program(pg, &L);
++    glDeleteProgram(old);
++    return 0;
++}
++/* the shaders there are to pick from: ROCKNIX's built-ins (when libdrastouch.so is there) and every .frag in the
++ * shader folders, sorted, without repeats; up to max names */
++int shader_list(char (*names)[48], int max) {
++    static const char *const builtin[] = { "lcd1x-nds-color", "lcd3x", "quilez", "scanlines", "sharp-bilinear", "sharp-shimmerless" };
++    int n = 0;
++    if (!access("/usr/lib/libdrastouch.so", R_OK))
++        for (size_t i = 0; i < sizeof builtin / sizeof *builtin && n < max; i++) snprintf(names[n++], 48, "%s", builtin[i]);
++    char dirs[3][512]; int nd = shader_dirs(dirs);
++    for (int d = 0; d < nd; d++) {
++        DIR *dp = opendir(dirs[d]); struct dirent *e;
++        while (dp && (e = readdir(dp)) && n < max) {
++            size_t l = strlen(e->d_name);
++            if (l < 6 || l - 5 >= 48 || strcmp(e->d_name + l - 5, ".frag")) continue;
++            char nm[48]; snprintf(nm, sizeof nm, "%.*s", (int)(l - 5), e->d_name);
++            int dup = 0; for (int k = 0; k < n; k++) dup |= !strcmp(names[k], nm);
++            if (!dup) snprintf(names[n++], 48, "%s", nm);
++        }
++        if (dp) closedir(dp);
++    }
++    for (int i = 1; i < n; i++) for (int j = i; j > 0 && strcmp(names[j - 1], names[j]) > 0; j--) {
++        char t[48]; memcpy(t, names[j], 48); memcpy(names[j], names[j - 1], 48); memcpy(names[j - 1], t, 48);
++    }
++    return n;
++}
++
+ /* on the presenter thread; returns 0 if the shader can't be used (the caller stays zero-copy) */
+ int shader_init(int fd, const char *name) {
+     drm_fd = fd;
+@@ -289,7 +425,7 @@ int shader_init(int fd, const char *name) {
+     *(void **)&eglDupNativeFenceFDANDROID = eglGetProcAddress("eglDupNativeFenceFDANDROID");
+ #define G(n) if (!(*(void **)&n = dlsym(gl, #n))) { SLOG("[shader] missing " #n "\n"); return 0; }
+     G(glCreateShader) G(glShaderSource) G(glCompileShader) G(glGetShaderiv) G(glGetShaderInfoLog) G(glCreateProgram)
+-    G(glAttachShader) G(glBindAttribLocation) G(glLinkProgram) G(glGetProgramiv) G(glGetProgramInfoLog) G(glUseProgram)
++    G(glDeleteProgram) G(glDeleteShader) G(glAttachShader) G(glBindAttribLocation) G(glLinkProgram) G(glGetProgramiv) G(glGetProgramInfoLog) G(glUseProgram)
+     G(glGetUniformLocation) G(glUniform1i) G(glUniform1f) G(glUniform2f) G(glGenTextures) G(glDeleteTextures)
+     G(glBindTexture) G(glTexParameteri) G(glActiveTexture) G(glGenFramebuffers) G(glDeleteFramebuffers)
+     G(glBindFramebuffer) G(glFramebufferTexture2D) G(glCheckFramebufferStatus) G(glViewport) G(glVertexAttribPointer)
+@@ -319,56 +455,8 @@ int shader_init(int fd, const char *name) {
+     /* upload path: DraStic's XRGB8888 is B,G,R,X in memory; BGRA uploads need no swizzle in the shader */
+     const char *gx = (const char *)glGetString(0x1F03 /* GL_EXTENSIONS */);
+     up_fmt = gx && strstr(gx, "GL_EXT_texture_format_BGRA8888") ? 0x80E1 /* GL_BGRA_EXT */ : 0x1908 /* GL_RGBA */;
+-    /* .frag files: DSFLIP_SHADER_DIR, ROCKNIX's DraStic shader folder, then shaders/ beside libdsflip.so (the
+-     * standalone package's layout) */
+-    char path[600] = "", dirs[3][512]; size_t n; int nd = 0;
+-    const char *sdir = getenv("DSFLIP_SHADER_DIR");
+-    if (sdir && *sdir) snprintf(dirs[nd++], sizeof dirs[0], "%s", sdir);
+-    snprintf(dirs[nd++], sizeof dirs[0], "/storage/.config/drastic/shaders");
+-    Dl_info di;
+-    if (dladdr((void *)shader_init, &di) && di.dli_fname && strrchr(di.dli_fname, '/'))
+-        snprintf(dirs[nd++], sizeof dirs[0], "%.*s/shaders", (int)(strrchr(di.dli_fname, '/') - di.dli_fname), di.dli_fname);
+-    char *fs = drastouch_source(name, 0), *vs = drastouch_source(name, 1);
+-    const char *from = "libdrastouch";
+-    for (int i = 0; i < nd && !fs; i++) {
+-        snprintf(path, sizeof path, "%s/%s.frag", dirs[i], name);
+-        fs = slurp(path, &n); from = path;
+-    }
+-    if (!fs) { SLOG("[shader] unknown shader \"%s\" (not built into libdrastouch, no %s.frag in the shader folders)\n", name, name); return 0; }
+-    { const char *m = strstr(fs, "dsflip-viewport:"); char word[16];
+-      vp_integer = 0;
+-      if (m && sscanf(m + 16, "%d %d %d %d", &vp[0], &vp[1], &vp[2], &vp[3]) == 4)
+-          SLOG("[shader] draws the DS screen at %d,%d %dx%d of the panel (touch follows)\n", vp[0], vp[1], vp[2], vp[3]);
+-      else if (m && sscanf(m + 16, "%15s", word) == 1 && !strcmp(word, "integer")) {
+-          vp_integer = 1; SLOG("[shader] draws the DS screen at a whole-number scale, centred (touch follows)\n");
+-      } else vp[2] = vp[3] = 0; }
+-    { const char *m = strstr(fs, "dsflip-output:"); char word[32];
+-      out_num = out_req_w = out_req_h = 0;
+-      if (m && sscanf(m + 14, "%31s", word) == 1) {
+-          if (!parse_output(word, &out_num, &out_req_w, &out_req_h)) SLOG("[shader] dsflip-output \"%s\" not understood (Nx or WxH): the panel size\n", word);
+-          else if (out_num > 0) SLOG("[shader] draws %dx the DS screen (%dx%d) where the panel is larger; the display controller scales the rest\n", out_num, 256 * out_num, 192 * out_num);
+-          else if (out_req_w > 0) SLOG("[shader] draws %dx%d where the panel is larger; the display controller scales the rest\n", out_req_w, out_req_h);
+-      } }
+-    char *ffs = flip_fragcoord(fs);
+-    const char *pre = up_fmt == 0x1908 && shader_copy_mode ? "#define SWIZ(c) (c).bgra\nuniform highp float dsf_fch;\n"
+-                      "#define dsf_FragCoord() vec4(gl_FragCoord.x, dsf_fch - gl_FragCoord.y, gl_FragCoord.zw)\n"
+-                    : "#define SWIZ(c) (c)\nuniform highp float dsf_fch;\n"
+-                      "#define dsf_FragCoord() vec4(gl_FragCoord.x, dsf_fch - gl_FragCoord.y, gl_FragCoord.zw)\n";
+-    GLuint v = compile(GL_VERTEX_SHADER, "", vs ? vs : default_vs), f = compile(GL_FRAGMENT_SHADER, pre, ffs);
+-    free(fs); free(ffs); free(vs);
+-    if (!v || !f) return 0;
+-    prog = glCreateProgram();
+-    glAttachShader(prog, v); glAttachShader(prog, f);
+-    glBindAttribLocation(prog, 0, "a_position"); glBindAttribLocation(prog, 1, "a_texcoord");
+-    glLinkProgram(prog);
+-    GLint okl = 0; glGetProgramiv(prog, GL_LINK_STATUS, &okl);
+-    if (!okl) { char log[1024] = ""; glGetProgramInfoLog(prog, sizeof log, 0, log); SLOG("[shader] link failed: %s\n", log); return 0; }
+-    glUseProgram(prog);
+-    u_tex = glGetUniformLocation(prog, "u_texture"); u_tsize = glGetUniformLocation(prog, "u_texture_size");
+-    u_osize = glGetUniformLocation(prog, "u_output_size"); u_fch = glGetUniformLocation(prog, "dsf_fch");
+-    glUniform1i(u_tex, 0);
+-    glDisable(GL_BLEND); glDisable(GL_DITHER);
+-    SLOG("[shader] \"%s\" from %s, EGL %d.%d (%s%s, %s display)\n", name, from, maj, min, *dir ? dir : "system ", "libEGL", how);
++    if (!build(name, &prog)) return 0;
++    SLOG("[shader] EGL %d.%d (%s%s, %s display)\n", maj, min, *dir ? dir : "system ", "libEGL", how);
+     return 1;
+ }
+ 
+-- 
+2.43.0
+
+
+From 4aedbb57626063418734b9b14bc226a3281d54ed Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 8 Oct 2026 18:34:07 +0000
+Subject: [PATCH 21/27] Volume keys: the brightness card whenever Menu is held
+ at the press, read from the gamepad's key state
+
+input_sense runs "brightness" instead of "volume" for the volume keys while the function key (Menu, BTN_MODE on the RG
+DS) is held. volume.c now reads that key's state at each press (EVIOCGKEY on the gamepad's evdev node: no events are
+taken from anyone) and shows the brightness card at once, also at the end of the scale where the setting doesn't
+change; the setting-change check stays as the fallback for a gamepad without BTN_MODE. Nothing here touches the audio:
+a press costs a read of system.cfg every 50 ms for 1.2 s.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PBVcHtDJUrUv4eL8Vsmzy9
+---
+ src/volume.c | 31 +++++++++++++++++++++++++++----
+ 1 file changed, 27 insertions(+), 4 deletions(-)
+
+diff --git a/src/volume.c b/src/volume.c
+index b64b28d..3c38bf8 100644
+--- a/src/volume.c
++++ b/src/volume.c
+@@ -6,9 +6,11 @@
+ // overlay (ui.c) as the setting changes. The value shown is ROCKNIX's own, so it matches the menus' indicator.
+ //
+ // The same keys with ROCKNIX's function key held change the brightness instead (input_sense: "brightness up/down"):
+-// display.brightness is followed too, and the indicator shows whichever setting the press changed (it showed the
+-// volume, unchanged, while the brightness went up: ROCKNIXDS issue 49). Nothing shows until one of them has changed,
+-// or for 400 ms (a press at the end of the scale changes nothing: the volume, as before).
++// display.brightness is followed too, and the indicator shows the brightness when the gamepad's Menu (BTN_MODE, read
++// with EVIOCGKEY at the press) is held or the brightness setting is what changed, else the volume (it showed the
++// volume, unchanged, while the brightness went up: ROCKNIXDS issue 49). Nothing shows until a setting has changed,
++// or for 400 ms (a press at the end of the scale changes nothing: the volume, as before). Reading system.cfg is all
++// this does per press; nothing here touches the audio.
+ //
+ // While the keys are in use the CPU runs at its top clock (cpugov_boost): input_sense runs ROCKNIX's volume script
+ // (a shell, pactl, sed on system.cfg) for every press and every 100 ms of a held key, in processes the governor
+@@ -58,6 +60,26 @@ static int open_dev(char *name, size_t nlen) {
+     return -1;
+ }
+ 
++/* ROCKNIX's function key (input_sense's key.function.a, the RG DS's Menu / mode button, BTN_MODE) held right now on
++ * the gamepad: EVIOCGKEY reads the key state without taking events from anyone. -1: no gamepad found */
++static int pad_fd = -2;
++static int modifier_held(void) {
++    if (pad_fd == -2) {
++        pad_fd = -1;
++        for (int i = 0; i < 32 && pad_fd < 0; i++) {
++            char path[32]; snprintf(path, sizeof path, "/dev/input/event%d", i);
++            int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC); if (fd < 0) continue;
++            unsigned long bits[(KEY_MAX + 8 * sizeof(long)) / (8 * sizeof(long))]; memset(bits, 0, sizeof bits);
++            if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof bits), bits) >= 0 && has_bit(bits, BTN_SOUTH) && has_bit(bits, BTN_MODE)) pad_fd = fd;
++            else close(fd);
++        }
++    }
++    if (pad_fd < 0) return -1;
++    unsigned long st[(KEY_MAX + 8 * sizeof(long)) / (8 * sizeof(long))]; memset(st, 0, sizeof st);
++    if (ioctl(pad_fd, EVIOCGKEY(sizeof st), st) < 0) { close(pad_fd); pad_fd = -2; return -1; }
++    return has_bit(st, BTN_MODE);
++}
++
+ static void read_settings(int *vol, int *bri) {
+     *vol = *bri = -1;
+     FILE *f = fopen(CFG, "r"); if (!f) return;
+@@ -92,13 +114,14 @@ static void *vol_thread(void *a) {
+                 if (ev[k].type == EV_KEY && (ev[k].code == KEY_VOLUMEUP || ev[k].code == KEY_VOLUMEDOWN)) {
+                     long long t = now_ms();
+                     if (!until) { shown = -1; kind = 0; next = t; pressed = t; read_settings(&base_v, &base_b); }   /* a new press: follow */
++                    if (ev[k].value == 1 && modifier_held() == 1) kind = 2;   /* Menu held: input_sense changes the brightness */
+                     until = t + FOLLOW_MS;
+                     cpugov_boost(FOLLOW_MS + 300);
+                 }
+         }
+         if (until && now_ms() >= next) {
+             int v, b; read_settings(&v, &b);
+-            if (b >= 0 && b != base_b) kind = 2;                         /* the function key: brightness */
++            if (kind == 2 || (b >= 0 && b != base_b)) kind = 2;          /* the function key: brightness */
+             else if (v >= 0 && v != base_v) kind = 1;
+             else if (!kind && now_ms() - pressed >= GUESS_MS) kind = 1;
+             int val = kind == 2 ? b : v;
+-- 
+2.43.0
+
+
+From 401193342f4e2f7ae7da93db25e9e971302a24c2 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 8 Oct 2026 18:34:57 +0000
+Subject: [PATCH 22/27] Microphone: the capture's DC offset out, a leak the
+ echo gate can't talk itself into, the sample pressed again (issue 26)
+
+A real blow did nothing while the menu's Blow worked (ROCKNIXDS issue 26; 1.6.1's known issue: the echo gate held its
+bar above any blow). Three defects in the gate's arithmetic:
+- No DC removal: a constant offset in the capture counted in every block's RMS, so a blow rose less above the floor
+  (sqrt(dc^2 + blow^2) - dc) and the offset went into the leak the gate learns (level / output). A one-pole high-pass
+  at ~14 Hz now takes it out before anything is measured (a blow's wind is far above that); the 10 s log line has the
+  offset ("dc").
+- The leak was learned from the whole level, the room's noise included: with the game quiet, noise over a small
+  output read as a leak of x1 and more. It is now learned from the level above the noise floor.
+- Every block not pressed was learned from, a blow that stayed under the bar included: each such block raised the
+  leak, so the bar climbed during the very blow it should have let through. Blocks above 1.5x the expected leak (plus
+  the threshold) no longer teach it, once it has its first 50.
+
+And two in how the fake microphone is pressed. DraStic r2.5.2.2 plays its sample (microphone/<game>.wav, else
+microphone.wav, read once at the game's start) from the beginning at each press and gives silence after its end
+however long the key stays down (spu_fake_microphone_start keeps the press time; spu_get_microphone_sample returns 0
+past the end; with no sample it gives noise for as long as the key is held):
+- A blow wavers around the bar, and each release and press restarted the sample: the game heard its first few ms over
+  and over. Once pressed, the key now stays down while the level is above 60% of the way from the floor to the bar,
+  and at least DSFLIP_MIC_HOLD_MS (now 120 ms by default; was 0).
+- A blow held longer than the sample is pressed again at its end (dsflip_mic_restart: release, a barrier that ends
+  DraStic's event loop, press), for the real mic and the menu's Blow alike; the sample's length is read from the same
+  file DraStic loads.
+
+The menu's Microphone page picks the Blow's length with left / right: 1, 3 (the default) or 10 s, the long one for a
+sustained blow (Phantom Hourglass's candles). A louder "shout" can't be switched while the game runs: DraStic reads its
+sample once, at the game's start; a louder microphone/<game>.wav in DraStic's folder is the way.
+
+Not measured on a handheld (none here): the defaults are reasoned from the code and the 1.6.1 notes, and
+DSFLIP_MIC_DEBUG=1 logs everything needed to check them.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PBVcHtDJUrUv4eL8Vsmzy9
+---
+ src/audio.c  | 96 ++++++++++++++++++++++++++++++++++++++++++++--------
+ src/dsflip.c | 10 ++++++
+ src/menu.c   | 32 +++++++++++++-----
+ 3 files changed, 116 insertions(+), 22 deletions(-)
+
+diff --git a/src/audio.c b/src/audio.c
+index e768d3d..384edd1 100644
+--- a/src/audio.c
++++ b/src/audio.c
+@@ -34,6 +34,7 @@
+ #include <pthread.h>
+ #include <dlfcn.h>
+ #include <math.h>
++#include <unistd.h>
+ 
+ void dsflip_log(const char *fmt, ...);
+ 
+@@ -332,8 +333,55 @@ void audio_pump_log(void) {
+  * 16-bit samples (scaled to +-1.0); the first 60 blocks average a noise floor, which then keeps tracking slowly
+  * (floor = 0.999 floor + 0.001 level); level > floor + threshold holds the key, dropping below releases it.
+  * The threshold is ES's "microphone sensitivity" (DSHOOK_MIC_THRESH: high 0.03, medium 0.15, low 0.3; off 0).
+- * Capture goes straight through ALSA (PipeWire's mic source). */
++ * Capture goes straight through ALSA (PipeWire's mic source).
++ *
++ * Changes from libdrastouch's logic, for a real blow that did nothing (ROCKNIXDS issue 26):
++ * - The capture's DC offset is taken out (a one-pole high-pass at ~14 Hz) before the level is measured: a constant
++ *   offset counted in every block's RMS, squeezed a blow's rise above the floor (sqrt(dc^2 + blow^2) - dc) and,
++ *   worse, went into the speaker leak the echo gate learns (level / output), raising its bar for nothing. The offset
++ *   is in the 10 s log line.
++ * - The echo gate learns the leak from the level above the noise floor, not the whole level (with the game quiet,
++ *   the room's own noise over a small output read as a leak of x1 or more), and not from blocks well above the leak
++ *   it expects: a blow that stayed under the bar taught the gate a bigger leak, every block of it, so the bar climbed
++ *   during the very blow it should have let through.
++ * - Once pressed, the key stays down while the level is above 60% of the way from the floor to the bar, and at least
++ *   DSFLIP_MIC_HOLD_MS (now 120 ms by default): a blow wavers around the bar, and every release and press restarted
++ *   DraStic's sample from its beginning (below), so the game heard its first few ms over and over.
++ * - DraStic plays its fake microphone's sample once per press, then silence while the key stays down: a blow longer
++ *   than the sample is re-pressed at its end (dsflip_mic_restart), and so is the menu's Blow. */
+ void dsflip_mic_key(int down);
++void dsflip_mic_restart(int button);
++const char *menu_game_base(void);
++/* the length of the sample DraStic's fake microphone plays (ms): <DraStic's folder>/microphone/<game>.wav, else
++ * microphone.wav there, as DraStic r2.5.2.2 looks for them at the game's start; 0 without one (DraStic then plays
++ * noise for as long as the key is held) */
++int audio_mic_sample_ms(void) {
++    static int ms = -1;
++    if (ms >= 0) return ms;
++    ms = 0;
++    char cwd[400], p[700];
++    if (!getcwd(cwd, sizeof cwd)) return 0;
++    for (int k = 0; k < 2 && !ms; k++) {
++        if (k == 0) snprintf(p, sizeof p, "%s/microphone/%s.wav", cwd, menu_game_base()); else snprintf(p, sizeof p, "%s/microphone/microphone.wav", cwd);
++        FILE *f = fopen(p, "rb"); if (!f) continue;
++        uint8_t h[12], ck[8]; int ch = 0, rate = 0, bits = 0;
++        if (fread(h, 1, 12, f) == 12 && !memcmp(h, "RIFF", 4) && !memcmp(h + 8, "WAVE", 4))
++            while (fread(ck, 1, 8, f) == 8) {
++                uint32_t len = ck[4] | ck[5] << 8 | ck[6] << 16 | (uint32_t)ck[7] << 24;
++                if (!memcmp(ck, "fmt ", 4)) {
++                    uint8_t fm[16]; if (len < 16 || fread(fm, 1, 16, f) != 16) break;
++                    if (len > 16) fseek(f, (long)(len - 16), SEEK_CUR);
++                    ch = fm[2] | fm[3] << 8; rate = fm[4] | fm[5] << 8 | fm[6] << 16 | fm[7] << 24; bits = fm[14] | fm[15] << 8;
++                } else if (!memcmp(ck, "data", 4)) {
++                    if (ch > 0 && rate > 0 && bits >= 8) ms = (int)((long long)len * 1000 / ((long long)rate * ch * (bits / 8)));
++                    break;
++                } else fseek(f, (long)(len + (len & 1)), SEEK_CUR);
++            }
++        fclose(f);
++        if (ms) dsflip_log("[mic] DraStic's fake microphone sample: %s, %d ms (a longer blow presses it again)\n", p, ms);
++    }
++    return ms;
++}
+ /* the in-game menu's mic meter (menu.c): the last block's level and the noise floor, published by the mic thread.
+  * Without ES's mic sensitivity there is no mic thread; the meter then starts one that only measures (thresh 0) and
+  * stops it once the meter hasn't been looked at for 2 s. While the menu is open the mic presses no key. */
+@@ -351,7 +399,7 @@ int resume_control_code(const char *set, const char *name);   /* resume.c: a dra
+  *                             setting; 0 turns the gate off: libdrastouch's plain floor + threshold)
+  *   DSFLIP_MIC_COUPLING_MAX=<r>  the most speaker-to-mic leak the gate may learn (4; the learned leak includes the
+  *                             room's noise, so a lower cap keeps the bar reachable while music plays)
+- *   DSFLIP_MIC_HOLD_MS=<ms>   once pressed, the key stays down at least this long (0: it follows every 23 ms block)
++ *   DSFLIP_MIC_HOLD_MS=<ms>   once pressed, the key stays down at least this long (120; 0: only the hysteresis)
+  *   DSFLIP_MIC_LF=<r>         a press also needs the block's low-frequency share (the RMS below ~250 Hz over the RMS)
+  *                             above r: a blow into the mic is mostly wind below that, game sound mostly above; for a
+  *                             speaker whose leak is as loud as a blow, where no level bar can separate them (the
+@@ -376,17 +424,22 @@ static int mic_button(int *code_a, int *code_b) {
+ }
+ /* the in-game menu's Blow (menu.c): DraStic's fake microphone held, the way the mic thread presses it (it pressed only
+  * the key, which a drastic.cfg with the joystick binding alone never sees: ROCKNIXDS issue 26) */
++static int menu_btn = -2;
+ void audio_mic_hold(int down) {
+-    static int btn = -2;
+-    if (btn == -2) btn = mic_button(0, 0);
+-    if (btn >= 0) dsflip_mic_button(btn, down); else dsflip_mic_key(down);
++    if (menu_btn == -2) menu_btn = mic_button(0, 0);
++    if (menu_btn >= 0) dsflip_mic_button(menu_btn, down); else dsflip_mic_key(down);
++}
++/* the menu's Blow, held past the sample's end: press it again */
++void audio_mic_again(void) {
++    if (menu_btn == -2) menu_btn = mic_button(0, 0);
++    dsflip_mic_restart(menu_btn);
+ }
+ static void *mic_thread(void *a) {
+     float thresh = *(float *)a;
+     void *cap = 0;
+     int debug = getenv("DSFLIP_MIC_DEBUG") && strcmp(getenv("DSFLIP_MIC_DEBUG"), "0");
+     float gate_k = envf("DSFLIP_MIC_GATE", 3.0f), coup_max = envf("DSFLIP_MIC_COUPLING_MAX", 4.0f);
+-    int hold_ms = (int)envf("DSFLIP_MIC_HOLD_MS", 0);
++    int hold_ms = (int)envf("DSFLIP_MIC_HOLD_MS", 120);
+     float lf_k = envf("DSFLIP_MIC_LF", 0);
+     if (gate_k < 0) gate_k = 0;
+     if (coup_max < 0.1f) coup_max = 0.1f;
+@@ -411,7 +464,9 @@ static void *mic_thread(void *a) {
+     float coup = 0; int coup_n = 0;     /* how much speaker output leaks into the mic (mic rms / output rms) */
+     int16_t buf[1024];
+     float floor_ = 0, peak = 0, allpeak = 0; int n = 0, down = 0, blocks = 0, presses = 0, total = 0, silent_said = 0;
+-    long long down_since = 0;
++    long long down_since = 0, trig_at = 0;
++    int smp_ms = thresh > 0 ? audio_mic_sample_ms() : 0;
++    float hp_x = 0, hp_y = 0; double dc_sum = 0; long dc_n = 0;   /* the DC blocker's state; the offset, for the log */
+     float lp = 0, lf_lo = 9, lf_hi = 0;  /* a first-order low-pass at ~250 Hz (1 - exp(-2 pi 250 / 44100)); the share's range */
+     const float lpa = 0.035f;
+     int errs = 0;
+@@ -425,7 +480,12 @@ static void *mic_thread(void *a) {
+         if (r <= 0) continue;
+         errs = 0;
+         double acc = 0, acclo = 0;
+-        for (long i = 0; i < r; i++) { float v = buf[i] * (1.0f / 32768); acc += v * v; lp += lpa * (v - lp); acclo += lp * lp; }
++        for (long i = 0; i < r; i++) {
++            float x = buf[i] * (1.0f / 32768), v = x - hp_x + 0.998f * hp_y;   /* DC out: y = x - x[-1] + 0.998 y[-1] */
++            hp_x = x; hp_y = v; dc_sum += x;
++            acc += v * v; lp += lpa * (v - lp); acclo += lp * lp;
++        }
++        dc_n += r;
+         float level = (float)sqrt(acc / r);
+         float lf = level > 1e-6f ? (float)sqrt(acclo / r) / level : 0;   /* the low-frequency share of this block */
+         mic_lvl = level;
+@@ -451,16 +511,23 @@ static void *mic_thread(void *a) {
+         float bleed = coup * out, bar = floor_ + thresh;
+         if (dcb && gate_k > 0 && gate_k * bleed + thresh > bar) bar = gate_k * bleed + thresh;
+         int loud = level > bar && (lf_k <= 0 || lf > lf_k) && !mic_quiet;
++        if (down && !loud && !mic_quiet && level > floor_ + 0.6f * (bar - floor_)) loud = 1;   /* hysteresis: held on */
+         if (level > floor_ + thresh) { if (lf < lf_lo) lf_lo = lf; if (lf > lf_hi) lf_hi = lf; }
+-        if (!loud && out > 0.01f) {      /* learn the coupling only from blocks that aren't a real blow */
+-            float rr = level / out; if (rr > coup_max) rr = coup_max;
++        /* learn the coupling only from blocks that aren't a real blow: not pressed, and (once it knows the leak) not
++         * well above the leak it expects; from the level above the room's noise */
++        if (!loud && out > 0.01f && !(coup_n >= 50 && level > floor_ + 1.5f * bleed + thresh)) {
++            float rr = (level > floor_ ? level - floor_ : 0) / out; if (rr > coup_max) rr = coup_max;
+             coup = coup_n < 50 ? (coup * coup_n + rr) / (coup_n + 1) : coup * 0.99f + rr * 0.01f; coup_n++;
+         }
+         long long tnow = mono_ns();
+         if (down && !loud && hold_ms > 0 && tnow - down_since < (long long)hold_ms * 1000000) loud = 1;   /* held on */
++        if (down && loud && smp_ms > 0 && tnow - trig_at >= (long long)(smp_ms - 30) * 1000000) {   /* past the sample's end */
++            dsflip_mic_restart(use_button); trig_at = tnow;
++            if (debug) dsflip_log("[mic] still blowing: the sample again\n");
++        }
+         if (loud != down) {
+             down = loud; presses += down;
+-            if (down) down_since = tnow;
++            if (down) down_since = trig_at = tnow;
+             if (use_button >= 0) dsflip_mic_button(use_button, down); else dsflip_mic_key(down);
+             if (debug) dsflip_log("[mic] %s: level %.4f floor %.4f out %.4f coup %.2f bar %.4f lf %.2f\n", down ? "PRESS" : "release", level, floor_, out, coup, bar, lf);
+         }
+@@ -468,9 +535,10 @@ static void *mic_thread(void *a) {
+             dsflip_log("[mic] level %.4f floor %.4f out %.4f coup %.2f bleed %.4f bar %.4f lf %.2f down %d\n", level, floor_, out, coup, bleed, bar, lf, down);
+         if (level > peak) peak = level;
+         if (++blocks >= 431) {           /* ~10 s: levels for bug reports and tuning */
+-            if (lf_hi > 0) dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses, lf %.2f-%.2f above floor\n", floor_, peak, coup, presses, lf_lo, lf_hi);
+-            else dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses\n", floor_, peak, coup, presses);
+-            blocks = presses = 0; peak = 0; lf_lo = 9; lf_hi = 0;
++            double dc = dc_n ? dc_sum / dc_n : 0;
++            if (lf_hi > 0) dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses, lf %.2f-%.2f above floor, dc %+.4f\n", floor_, peak, coup, presses, lf_lo, lf_hi, dc);
++            else dsflip_log("[mic] 10 s: noise floor %.4f, peak %.4f, speaker leak x%.3f, %d presses, dc %+.4f\n", floor_, peak, coup, presses, dc);
++            blocks = presses = 0; peak = 0; lf_lo = 9; lf_hi = 0; dc_sum = 0; dc_n = 0;
+         }
+     }
+     if (a_close) a_close(cap);            /* the meter's own thread, no longer looked at */
+diff --git a/src/dsflip.c b/src/dsflip.c
+index cef2c2c..87128c5 100644
+--- a/src/dsflip.c
++++ b/src/dsflip.c
+@@ -1148,6 +1148,16 @@ void dsflip_mic_button(int button, int down) {
+     e.pad[12] = (uint8_t)button; e.pad[13] = down ? 1 : 0;
+     push_ev(&e);
+ }
++/* DraStic's fake microphone plays its sample (microphone/<game>.wav or microphone.wav, read once at the game's
++ * start) from the beginning at each press and then gives silence until the next one, whatever the hold (r2.5.2.2's
++ * spu_fake_microphone_start keeps the press time, spu_get_microphone_sample plays from there and returns 0 past the
++ * sample's end). A blow held longer than the sample is re-pressed: released in one of DraStic's event loops and
++ * pressed in the next (a barrier between them), so DraStic sees both and starts the sample over. button < 0: the key */
++void dsflip_mic_restart(int button) {
++    if (button >= 0) dsflip_mic_button(button, 0); else dsflip_mic_key(0);
++    sdl_ev e; memset(&e, 0, sizeof e); e.type = EV_BARRIER; push_ev(&e);
++    if (button >= 0) dsflip_mic_button(button, 1); else dsflip_mic_key(1);
++}
+ /* DraStic ignores the absolute x/y of mouse events: it moves its stylus by the RELATIVE deltas (xrel/yrel),
+  * 1:1 in DS pixels, clamped to the bottom screen, starting from the centre (measured by logging where it
+  * draws its 32x32 cursor). So we track its stylus position and send exact deltas. On every touch-down we
+diff --git a/src/menu.c b/src/menu.c
+index eecb9fa..611b12d 100644
+--- a/src/menu.c
++++ b/src/menu.c
+@@ -47,6 +47,8 @@ int dsflip_battery(int *charging);
+ int dsflip_drastic_menu(void);
+ extern volatile int dsflip_hold;
+ void audio_mic_hold(int down);                  /* audio.c: DraStic's fake microphone, key or button */
++void audio_mic_again(void);                     /* ...pressed again (its sample starts over) */
++int audio_mic_sample_ms(void);
+ void dsflip_toast(const char *l1, const char *l2, uint32_t accent, int ms);
+ void dsflip_log(const char *fmt, ...);
+ void cpugov_boost(int ms);
+@@ -352,6 +354,10 @@ static void game_info(void) {
+     snprintf(undo_path, sizeof undo_path, "/tmp/dsflip-undo.dss");
+     dsflip_log("[menu] game '%s' (%s), savestates in %s\n", gtitle, gbase, sdir);
+ }
++static pthread_once_t gi_once = PTHREAD_ONCE_INIT;
++static void game_info_once(void) { pthread_once(&gi_once, game_info); }
++/* the game's name as DraStic names its files (audio.c: the fake microphone's sample) */
++const char *menu_game_base(void) { game_info_once(); return gbase; }
+ static void slot_path(int n, char *out, size_t sz) { snprintf(out, sz, "%s/%s_%d.dss", sdir, gbase, n); }
+ 
+ /* zlib, as ra.c loads it */
+@@ -476,7 +482,7 @@ static char shader_base[48];                    /* this start's shader as the fr
+ const char *menu_shader_pick(const char *frontend) {
+     static char pick[48];
+     snprintf(shader_base, sizeof shader_base, "%s", frontend && *frontend && strcmp(frontend, "bilinear") ? frontend : "none");
+-    if (!gbase[0]) game_info();
++    game_info_once();
+     char key[300], v[120], chosen[48], was[48];
+     snprintf(key, sizeof key, "shader.%s", gbase);
+     if (mcfg_get(key, v, sizeof v) && sscanf(v, "%47s %47s", chosen, was) == 2 && !strcmp(was, shader_base)) {
+@@ -595,7 +601,9 @@ static int enabled = -1, inited, open_, scr, sel_main, sel_slot, sel_set, dirty_
+ static char busy_msg[96];
+ static int btn_menu[2] = { -1, -1 }, b_a = -1, b_b = -1, b_y = -1, b_l = -1, b_r = -1, b_start = -1;
+ static int b_up = -1, b_down = -1, b_left = -1, b_right = -1;
+-static long long mic_until;
++static long long mic_until, mic_trig;          /* the menu's Blow: held until; last (re)pressed */
++static const int MIC_SECS[3] = { 1, 3, 10 };
++static int mic_len = 1;                         /* the Blow's length: MIC_SECS[mic_len] */
+ static long long drastic_menu_t;                /* when "DraStic menu" was picked (dsflip.c then skips its status card) */
+ static uint32_t *bgtop;                         /* the game's top frame, dimmed (panel size) */
+ static canvas CV[2];
+@@ -1045,14 +1053,15 @@ static void draw_bottom(void) {
+         int n = wrap2(&F_REG, msg, S(16), x1 - x0 - S(44), l1, l2, sizeof l1);
+         text(c, &F_REG, l1, x0 + S(22), my1 + S(26), S(16), 0xc2ccd8, x1 - x0 - S(44), 0);
+         if (n > 1) text(c, &F_REG, l2, x0 + S(22), my1 + S(50), S(16), 0xc2ccd8, x1 - x0 - S(44), 0);
+-        text(c, &F_REG, "A: blow for 3 s, for when the real mic isn't picked up", gx0 + S(4), y1 + S(16), S(16), C_GREY, gx1 - gx0, 0);
++        char bl[120]; snprintf(bl, sizeof bl, "A: blow for %d s (left / right: 1, 3 or 10 s), when the real mic isn't heard", MIC_SECS[mic_len]);
++        text(c, &F_REG, bl, gx0 + S(4), y1 + S(16), S(16), C_GREY, gx1 - gx0, 0);
+     }
+     /* footer */
+     int fy = c->h - S(56);
+     const char *bl = s == SC_MAIN ? "Resume" : "Back", *al = "Select", *mid = "";
+     if (s == SC_SAVE) al = "Save"; else if (s == SC_LOAD) al = "Load";
+     else if (s == SC_SET) al = rows[sel_set] == ROW_MIC ? "Open" : is_toggle(rows[sel_set]) || is_choice(rows[sel_set]) ? "Switch" : "OK";
+-    else if (s == SC_MIC) al = "Blow for 3 s";
++    else if (s == SC_MIC) al = mic_len == 0 ? "Blow for 1 s" : mic_len == 1 ? "Blow for 3 s" : "Blow for 10 s";
+     if (s == SC_MAIN) mid = "D-pad or tap";
+     R_FOOT_L = pill(c, S(20), fy, 0, "B", bl, C_LIGHT, C_LIGHT, C_DARK);
+     R_FOOT_R = pill(c, c->w - S(20), fy, 1, "A", al, C_CYAN, C_CYAN, C_DARK);
+@@ -1136,8 +1145,9 @@ static void activate(void) {
+         break;
+     case SC_MIC:
+         /* the game has to run to hear it: back to the game, with a pop-up for as long as it blows */
+-        play(SND_SELECT); mic_until = now_ms() + 3000; close_menu();
+-        dsflip_toast("Blowing into the mic...", "The game hears it for 3 seconds", 0x7ec8ee, 3000);
++        play(SND_SELECT); mic_until = now_ms() + MIC_SECS[mic_len] * 1000; close_menu();
++        { char t[64]; snprintf(t, sizeof t, "The game hears it for %d second%s", MIC_SECS[mic_len], MIC_SECS[mic_len] > 1 ? "s" : "");
++          dsflip_toast("Blowing into the mic...", t, 0x7ec8ee, MIC_SECS[mic_len] * 1000); }
+         break;
+     case SC_QUIT:
+         play(SND_SELECT);
+@@ -1178,6 +1188,8 @@ static void nav(int dx, int dy) {
+     } else if (scr == SC_SET) {
+         if (dy) { int n = sel_set + dy; if (n >= 0 && n < nrows) { sel_set = n; moved = 1; } }
+         if (dx) { adjust(dx); return; }
++    } else if (scr == SC_MIC && dx) {
++        int n = mic_len + dx; if (n >= 0 && n < 3) { mic_len = n; moved = 1; }
+     }
+     if (moved) { play(SND_MOVE); dirty_bot = 1; }
+ }
+@@ -1291,7 +1303,7 @@ static void menu_run(int start) {
+     if (!setup()) { enabled = 0; return; }
+     static int (*poll_real)(void *);
+     if (!poll_real) poll_real = (int (*)(void *))dlsym(RTLD_NEXT, "SDL_PollEvent");
+-    if (!gbase[0]) game_info();
++    game_info_once();
+     prefs_load();
+     dsflip_log("[menu] open\n");
+     SDL_PauseAudio(1);
+@@ -1328,7 +1340,7 @@ static void menu_run(int start) {
+     if (sh_sel != sh_active) apply_shader();
+     if (bri_dirty & 4) want(-1, 0, bri[0]);           /* ROCKNIX's settings, as its own scripts keep them */
+     for (int k = 0; k < 2; k++) if (bri_dirty & (1 << k)) want(-1, bl_scr[k], bri[k]);
+-    if (mic_until) audio_mic_hold(1);
++    if (mic_until) { audio_mic_hold(1); mic_trig = now_ms(); }
+     SDL_PauseAudio(0);
+     audio_mic_quiet(0);
+     dsflip_log("[menu] closed\n");
+@@ -1384,6 +1396,10 @@ void menu_frame(void) {
+     if (test < 0) { const char *t = getenv("DSFLIP_MENU_TEST"); test = t ? atoi(t) + 1 : 0; }
+     if (!frames++) { session_t0 = now_ms(); prefs_load(); }   /* (the performance overlay starts as it was left) */
+     if (mic_until && now_ms() >= mic_until) { mic_until = 0; audio_mic_hold(0); }
++    else if (mic_until && !open_) {             /* DraStic's sample is shorter than the blow: from its start again */
++        int smp = audio_mic_sample_ms();
++        if (smp > 0 && now_ms() - mic_trig >= smp - 30) { audio_mic_again(); mic_trig = now_ms(); }
++    }
+ 
+     if (test && frames == 180) {
+         if (enabled < 0) menu_event(0);
+-- 
+2.43.0
+
+
+From ca65b55d8e17d35bd31388d07976d349232bf3e9 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 8 Oct 2026 18:35:08 +0000
+Subject: [PATCH 23/27] Exit combos: held 0.3 s instead of 0.5, and the quit's
+ save at the top clock from the first moment (issue 3)
+
+Start + Select took about 8 s back to the menu (SuperDrastic issue 3). What is SuperDrastic's in that: the hold, now
+300 ms (was 500), and the resume save. DraStic writes the state on its main thread and compresses it on another; the
+CPU boost came only once DraStic opened its temp file, so the press itself and the first frame ran at whatever low
+clock the governor had settled on. The quit now boosts as it presses Save. The rest of that wait is outside the
+library: ~0.8 s for the save (measured in 1.5), then the frontend's return (on ROCKNIXDS 1.6 the menu is back ~1.2 s
+after the hotkey; the 3 s fade the issue saw was the frontend's).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PBVcHtDJUrUv4eL8Vsmzy9
+---
+ src/resume.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/resume.c b/src/resume.c
+index 758b104..1e3ae29 100644
+--- a/src/resume.c
++++ b/src/resume.c
+@@ -192,7 +192,8 @@ int resume_poll(void *ev) {
+ /* Exit combos: Start + Select, or Menu + Start, held for EXIT_HOLD_MS quit the game the way the exit hotkey does
+  * (with a resume save when that is on). ROCKNIX's DraStic had them through gptokeyb, which this session doesn't
+  * run. DSFLIP_EXIT_COMBO=0: off. */
+-#define EXIT_HOLD_MS 500
++#define EXIT_HOLD_MS 300            /* (500 until 0.5.0-beta.1: issue 3 found the way back slow; two buttons held
++                                       together for 0.3 s are still nothing a game asks for) */
+ static int btn_start = -1, btn_select = -1, btn_menu = -1, exit_combo = 1;
+ static uint64_t held_btns;                             /* joystick buttons down, by number */
+ static long long combo_since;                          /* when the combo was complete (0: it isn't) */
+@@ -265,6 +266,7 @@ void resume_frame(void) {
+     if (want_save && !saving) {
+         saving = 1; want_save = 0;
+         dsflip_log("[resume] quit requested: saving a resume state\n");
++        cpugov_boost(3000);                           /* the top clock from the press on: DraStic compresses ~6.5 MB */
+         unlink(resume_path);
+         resume_press(btn_save);
+         pthread_t t; if (pthread_create(&t, 0, save_thread, 0)) kill(getpid(), SIGKILL);
+-- 
+2.43.0
+
+
+From 9af7a2f5d68127980863ea81e6d7800df48cd1f6 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 8 Oct 2026 18:35:51 +0000
+Subject: [PATCH 24/27] Docs: the in-game menu's pages and settings file,
+ DSFLIP_MENU_SOUNDS / DSFLIP_MENU_HINTS and their precedence
+
+INTEGRATION.md: the menu's Save / Load (both screens, LAST, the undo on the Load page), Quick settings (per-screen
+brightness and how the top panel's backlight is found, the shader and what switches live, the performance overlay,
+sounds, tips), <DSFLIP_DATA>/menu.cfg's keys and the precedence between the menu's switches and the environment, the
+per-game shader lookup a launcher that sets the GPU's clock should copy, the volume keys' indicator, the 0.3 s exit
+combos, and the status card that no longer follows the in-game menu. New settings in the table: DSFLIP_MENU_SOUNDS,
+DSFLIP_MENU_HINTS, DSFLIP_BACKLIGHT_TOP, DSFLIP_MIC_HOLD_MS. README lists the menu. superdrastic-run passes
+DSFLIP_MENU, DSFLIP_MENU_SOUNDS, DSFLIP_MENU_HINTS and DSFLIP_BACKLIGHT_TOP on from superdrastic.conf, whose example
+has the first three.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PBVcHtDJUrUv4eL8Vsmzy9
+---
+ README.md                        |  3 ++
+ docs/INTEGRATION.md              | 71 +++++++++++++++++++++++++++-----
+ runner/superdrastic-run          |  3 +-
+ runner/superdrastic.conf.example |  5 +++
+ 4 files changed, 70 insertions(+), 12 deletions(-)
+
+diff --git a/README.md b/README.md
+index 2cd9b87..116882e 100644
+--- a/README.md
++++ b/README.md
+@@ -34,6 +34,9 @@ own, for any firmware.
+   DTCM memory, for `.nds` ROMs and ROMs in a `.zip`.
+ - **Its own CPU governor**: the lowest clock at which the game drops no more frames than at full clock (HeartGold at
+   2x: ~1450-1660 MHz instead of 1992), and the GPU's clock chosen per shader.
++- **An in-game menu** in place of DraStic's (which stays a tap away): save and load with both screens' pictures and an
++  undo, volume and per-screen brightness, the microphone's meter and a fake blow, the shader (per game), a performance
++  overlay (FPS, frame time, drops, clocks).
+ - **DraStic's menu** on the bottom panel while the game stays on top, with the time and the battery on the top screen.
+ - **Quitting** with Start + Select or Menu + Start held (with a save to resume from, where the frontend wants one).
+ 
+diff --git a/docs/INTEGRATION.md b/docs/INTEGRATION.md
+index bdd5932..2f0fbb5 100644
+--- a/docs/INTEGRATION.md
++++ b/docs/INTEGRATION.md
+@@ -95,7 +95,7 @@ With DraStic's `backup_in_savestates` on (its default), loading a state also put
+ with: don't load a resume state older than the game's `.dsv` (ROCKNIXDS drops it then). On ROCKNIX the hotkey runs
+ `killall $(cat /tmp/.process-kill-data)`, so writing `-USR1 drastic` there after `start_drastic.sh` has set it is enough.
+ 
+-**Exit combos.** Holding **Start + Select** or **Menu + Start** for half a second quits the same way (with a resume
++**Exit combos.** Holding **Start + Select** or **Menu + Start** for 0.3 seconds quits the same way (with a resume
+ save when `DSFLIP_RESUME_FILE` is set, else at once), like ROCKNIX's gptokeyb did for DraStic. The buttons are the
+ ones `drastic.cfg` maps to `START`, `SELECT` and `MENU` (either control set). `DSFLIP_EXIT_COMBO=0` turns them off.
+ 
+@@ -104,19 +104,65 @@ ones `drastic.cfg` maps to `START`, `SELECT` and `MENU` (either control set). `D
+ DraStic's menu button (the controls `drastic.cfg` maps to `MENU`, L3 and the mode key on the RG DS) opens
+ SuperDrastic's own menu instead of DraStic's (`src/menu.c`), drawn in ROCKNIXDS Pixel's look with the theme's font and
+ sounds when the theme is installed. The game, its sound and its clock stop while it is open. Bottom screen: Resume,
+-Save and Load (8 slots with the picture each savestate holds), Quick settings (volume, brightness, and a Microphone
+-page: a live meter of the real mic against ES's sensitivity, and a 3 s fake blow),
+-DraStic's own menu (cheats, controls, firmware) and Quit (with a resume save when that is on). Top screen: the game,
+-this session's play time, the last save and the latest RetroAchievements unlocks with their badges. D-pad, left stick
+-and touch all work. Saves and loads press DraStic's own save/load state controls, so those must be joystick buttons;
+-a load first saves the game to `/tmp/dsflip-undo.dss`, which "Undo last load" (Y on the Load page) puts back.
+-`DSFLIP_MENU=0` brings back DraStic's menu. The exit hotkey also works while the menu is open. The pop-ups on the top screen
+-(achievements, volume, saves) use the same look.
++Save and Load, Quick settings, DraStic's own menu (cheats, controls, firmware) and Quit (with a resume save when that
++is on). Top screen: the game, this session's play time, the last save and the latest RetroAchievements unlocks with
++their badges. D-pad, left stick and touch all work. `DSFLIP_MENU=0` brings back DraStic's menu. The exit hotkey also
++works while the menu is open. The pop-ups on the top screen (achievements, volume, saves) use the same look.
++
++- **Save and Load**: 8 slots with the picture each savestate holds (DraStic keeps both screens in it: **L / R** switch
++  every picture between the top and the bottom screen). "LAST" marks the slot saved to this session, else the newest
++  file. Saves and loads press DraStic's own save/load state controls, so those must be joystick buttons. A load first
++  saves the game to `/tmp/dsflip-undo.dss`, which **Y on the Load page** ("Undo last load") puts back. The menu
++  doesn't open while the resume state is going in at a game's start (2-4.5 s in).
++- **Quick settings** (the page scrolls): volume; brightness, one slider per screen where the device has a backlight
++  per panel (ROCKNIX's `brightness set <n> <pct>`; the top panel is the screen numbered like `DSFLIP_TOP`'s connector,
++  DSI-2 = screen 2, or `DSFLIP_BACKLIGHT_TOP`), else one for both; Microphone (a live meter of the real mic against
++  ES's sensitivity, and a fake blow of 1, 3 or 10 s); Shader; Performance (an overlay: Off, FPS, Detailed with frame
++  time and drops, Advanced with the CPU and GPU clocks and the internal resolution); Menu sounds; Tips.
++- **Shader**: Off, ROCKNIX's built-in shaders (when `/usr/lib/libdrastouch.so` is there) and every `.frag` in the
++  shader folders. In a session that started with a shader the new one is used as the menu closes, if it draws into
++  buffers of the same size (`dsflip-output:`); otherwise (a session without a shader, or ds-fsr's 3x on the RG DS
++  Plus) from the next start of the game, and a pop-up says so. "Off" in a session with a shader is a plain copy
++  until the next start. The GPU's clock is the launcher's (below), so it follows the shader the session started with.
++- **Tips** are the tutorial pop-ups: "Resumed where you left off" and the undo tip after a load, each shown the first
++  three times only.
++
++**The menu's settings** live in `<DSFLIP_DATA>/menu.cfg`, one `key=value` a line:
++
++| Key | |
++|---|---|
++| `sounds`, `hints` | `<0 or 1> <the environment's DSFLIP_MENU_SOUNDS / DSFLIP_MENU_HINTS when it was set>` |
++| `shader.<game>` | `<picked> <the shader the session had when it was picked>` (`none` for none); `<game>` is the ROM's file name without its extension |
++| `perf` | the overlay: 0 off, 1 FPS, 2 detailed, 3 advanced |
++| `preview` | 1: the slot pictures show the bottom screen |
++| `seen.resumed`, `seen.undo` | how often a tip was shown |
++
++Precedence: `DSFLIP_MENU_SOUNDS` and `DSFLIP_MENU_HINTS` (default 1) are the starting values. Switching one in the menu
++holds until the environment's value changes (the frontend's own setting was changed after it); then the environment
++wins again. The per-game shader works the same way: the pick holds while the frontend still asks for the shader it was
++picked over (`DSFLIP_SHADER`, else `DSHOOK_SHADER`; `bilinear` counts as `none`).
++
++**A launcher that sets the GPU's clock by the shader** should resolve the per-game pick the same way before it does,
++or a game picked to ds-fsr in the menu would run it at the clock for no shader. `superdrastic-run` does:
++
++```sh
++G=$(basename "$ROM"); G=${G%.*}; B=$SHADER; [ "$B" = bilinear ] && B=none
++PICK=$(awk -v k="shader.$G=" 'index($0, k) == 1 { v = substr($0, length(k) + 1) } END { print v }' "$DSFLIP_DATA/menu.cfg" 2>/dev/null)
++[ -n "$PICK" ] && [ "${PICK#* }" = "$B" ] && SHADER=${PICK%% *}
++```
+ 
+ ## DraStic's menu
+ 
+-Opening DraStic's menu (from the in-game menu, or with `DSFLIP_MENU=0`) shows a card on the top screen with the time and the battery (red at 15% or less, unless
+-charging) for 3 seconds. `DSFLIP_STATUS_CARD=0` turns it off.
++Opening DraStic's menu with `DSFLIP_MENU=0` shows a card on the top screen with the time and the battery (red at 15% or
++less, unless charging) for 3 seconds. `DSFLIP_STATUS_CARD=0` turns it off. Opened from the in-game menu, whose top
++screen had both already, it doesn't.
++
++## The volume keys
++
++While a game runs, the volume keys' indicator (the frontend's notifications are down with its compositor) shows the
++volume, or the brightness when ROCKNIX's function key (the gamepad's `BTN_MODE`, Menu on the RG DS) is held or the
++brightness is what changed, from `system.cfg`. The CPU runs at its top clock while the keys are in use: ROCKNIX runs
++its volume script in new processes for every step, which the governor doesn't see.
+ 
+ ## What SuperDrastic tells you
+ 
+@@ -150,6 +196,9 @@ Environment variables, or `superdrastic.conf` beside the launcher (a value there
+ | `DSHOOK_MIC_THRESH` | 0 (off) | Microphone sensitivity: 0.03 high, 0.15 medium, 0.3 low. The mic is opened after DraStic's audio output, never at the same time |
+ | `DSFLIP_EXIT_COMBO`, `DSFLIP_STATUS_CARD` | 1, 1 | 0 = no Start+Select / Menu+Start exit; no time and battery card in DraStic's menu |
+ | `DSFLIP_MENU` | 1 | 0 = the menu button opens DraStic's own menu instead of the in-game menu |
++| `DSFLIP_MENU_SOUNDS`, `DSFLIP_MENU_HINTS` | 1, 1 | The in-game menu's navigation sounds and its tips, until switched in the menu (see *The in-game menu*). ROCKNIXDS sets the sounds from ES's navigation sounds |
++| `DSFLIP_BACKLIGHT_TOP` | from `DSFLIP_TOP` | ROCKNIX's screen number (1 or 2) of the top panel's backlight, for the menu's per-screen brightness |
++| `DSFLIP_MIC_HOLD_MS` | 120 | Once a blow presses the fake microphone, it stays down at least this long (see `src/audio.c` for the other mic tunables) |
+ | `DSFLIP_CPUGOV`, `DSFLIP_CPU_MIN`, `DSFLIP_CPU_MAX` | on, 1104 MHz, the CPU's top | The CPU governor and its bounds (kHz). A `DSFLIP_CPU_MAX` below the top holds from the first moment |
+ | `DSFLIP_CPU_MAX_SOFT` | 0 | 1 = `DSFLIP_CPU_MAX` is passed while the game is below full speed with real work going on (for a "balanced" profile: a heavy game gets the clock it needs instead of running slow at the bound) |
+ | `DSFLIP_CPUGOV_MEMORY` | 1 | 0 = the governor doesn't remember clocks that dropped frames |
+diff --git a/runner/superdrastic-run b/runner/superdrastic-run
+index 201f8fe..77c5ac0 100755
+--- a/runner/superdrastic-run
++++ b/runner/superdrastic-run
+@@ -37,7 +37,8 @@ export DSFLIP_LOG=${DSFLIP_LOG:-$LOGDIR/superdrastic.log}
+ mkdir -p "$DSFLIP_DATA" "$LOGDIR" 2>/dev/null
+ RUNLOG=$LOGDIR/run.log
+ for v in DSFLIP_SHADER DSFLIP_SHADER_DIR DSFLIP_TOP DSFLIP_CARD DSFLIP_TOUCH DSFLIP_TOUCH_INVERT DSFLIP_FONT \
+-         DSFLIP_RA_USER DSFLIP_RA_PASSWORD DSFLIP_RA_SOUND DSFLIP_CPUGOV DSFLIP_CPUGOV_MEMORY DSFLIP_RESUME_FILE DSFLIP_RESUME_LOAD DSFLIP_CPU_MIN DSFLIP_CPU_MAX DSHOOK_MIC_THRESH; do
++         DSFLIP_RA_USER DSFLIP_RA_PASSWORD DSFLIP_RA_SOUND DSFLIP_CPUGOV DSFLIP_CPUGOV_MEMORY DSFLIP_RESUME_FILE DSFLIP_RESUME_LOAD DSFLIP_CPU_MIN DSFLIP_CPU_MAX DSHOOK_MIC_THRESH \
++         DSFLIP_MENU DSFLIP_MENU_SOUNDS DSFLIP_MENU_HINTS DSFLIP_BACKLIGHT_TOP; do
+     eval "[ -n \"\${$v}\" ] && export $v"
+ done
+ SHADER=${DSFLIP_SHADER:-${DSHOOK_SHADER:-none}}
+diff --git a/runner/superdrastic.conf.example b/runner/superdrastic.conf.example
+index 7502c48..cb61627 100644
+--- a/runner/superdrastic.conf.example
++++ b/runner/superdrastic.conf.example
+@@ -20,6 +20,11 @@
+ # 0.03 = high sensitivity, 0.15 = medium, 0.3 = low; 0: mic off
+ #DSHOOK_MIC_THRESH=0
+ 
++# The in-game menu (0: DraStic's own menu), its navigation sounds and its tips (both can also be switched in the menu)
++#DSFLIP_MENU=1
++#DSFLIP_MENU_SOUNDS=1
++#DSFLIP_MENU_HINTS=1
++
+ # SuperDrastic's CPU governor (on with the "performance" governor and one CPU cluster): 0 = leave the clock alone
+ #DSFLIP_CPUGOV=1
+ # It remembers clocks that dropped frames, per game, shader and resolution (data/cpugov/): 0 = start knowing nothing
+-- 
+2.43.0
+
+
+From 5f5b92ce5443cc73dfeab099b9683ccaa899449c Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 8 Oct 2026 18:45:31 +0000
+Subject: [PATCH 25/27] 3x: DraStic's edge marking gap passes leave the rows
+ the bins wrote (ROCKNIXDS issue 47)
+
+With edge marking on, update_frame_3d_4x re-marks rows 32k-1 and 32k of the output frame after all bins (the gap
+passes, spec/resolve.c), from gap buffers that only DraStic's own bin resolve fills. hr.c never wrote them, so at 3x
+every bin boundary got two rows of zeros or a 2x frame's leftovers: the black (or purple) lines every 32 rows in the
+Zelda games and Dragon Quest IX, gone with "Disable edge marking", which skips those passes. Each 3x bin now fills
+its half of the gap buffers with its own output rows and all-zero attributes, which make both the edge and the fog
+passes an identity (no bit 30, so no edge colour; no fog flag, so no fog).
+
+RAST_HRCHECK=1 (needs the compositor table, RAST_COMP=2, the default) compares each bin's rows 0 and 31 with the
+frame after update_frame_3d_4x returns. The fog and edge-marking scene S4 at 3x: 22 rows changed in every frame
+before (299 of 300 frames), 0 after, also with threaded_3d=1 and with disable_edge_marking=1. regress.sh's 3x runs
+check it; the 2x checks pass with their known counts.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PBVcHtDJUrUv4eL8Vsmzy9
+---
+ src/rast/comp.c           |  2 ++
+ src/rast/comp.h           |  1 +
+ src/rast/ds3d.h           |  4 ++++
+ src/rast/fused.h          |  3 ++-
+ src/rast/hr.c             | 48 ++++++++++++++++++++++++++++++++++++++-
+ src/rast/rast.c           |  2 ++
+ tools/rast/dev/regress.sh | 10 +++++---
+ 7 files changed, 65 insertions(+), 5 deletions(-)
+
+diff --git a/src/rast/comp.c b/src/rast/comp.c
+index b1c1d55..3e3d86b 100644
+--- a/src/rast/comp.c
++++ b/src/rast/comp.c
+@@ -183,6 +183,7 @@ void comp_bin(uint8_t *sys, unsigned bin, int count) {
+     if (count) __atomic_fetch_add(&bins_done, 1, __ATOMIC_RELAXED);
+ }
+ 
++void (*comp_uf4_done)(uint8_t *sys);
+ static void hook_uf4(uint8_t *sys, uint32_t skip) {
+     uintptr_t b = (uintptr_t)sys + SYS_FRAMEBUF;
+     if (__atomic_load_n(&fb0, __ATOMIC_RELAXED) != b) { invalidate_all(); __atomic_store_n(&fb0, b, __ATOMIC_RELAXED); }
+@@ -195,6 +196,7 @@ static void hook_uf4(uint8_t *sys, uint32_t skip) {
+     unsigned long n0 = __atomic_load_n(&bins_done, __ATOMIC_ACQUIRE);
+     orig_uf4(sys, skip);
+     unsigned long n = __atomic_load_n(&bins_done, __ATOMIC_ACQUIRE) - n0;
++    if (comp_uf4_done && n == NBINS) comp_uf4_done(sys);
+     uint8_t *o = PTR(sys, SYS_OUTPUT), *last = PTR(sys, SYS_LAST);
+     int so = slot_of(o), sl = slot_of(last);
+     if (so < 0) { invalidate_all(); return; }
+diff --git a/src/rast/comp.h b/src/rast/comp.h
+index a42714e..0760b12 100644
+--- a/src/rast/comp.h
++++ b/src/rast/comp.h
+@@ -7,4 +7,5 @@
+ void comp_init(void);                                   /* rast_init, renderer hooked: installs per RAST_COMP */
+ void comp_bins_begin(uint8_t *sys);                     /* a render thread starts on the output frame */
+ void comp_bin(uint8_t *sys, unsigned bin, int count);   /* the bin's output block is final: its 64 table entries */
++extern void (*comp_uf4_done)(uint8_t *sys);             /* after an update_frame_3d_4x that rendered all bins (RAST_HRCHECK) */
+ #endif
+diff --git a/src/rast/ds3d.h b/src/rast/ds3d.h
+index 7bb5dfc..10ad647 100644
+--- a/src/rast/ds3d.h
++++ b/src/rast/ds3d.h
+@@ -44,6 +44,10 @@
+ #define SYS_BINS_OPAQUE 0x2856c0    /* [12] { u16 poly[0x800]; u32 count; } */
+ #define SYS_BINS_TRANSL 0x2916f0
+ #define BIN_LIST_SIZE   0x1004
++/* the edge marking gap buffers, slot g = the boundary between bins g and g + 1 (spec/resolve.c): attributes 11 x 0x2000
++ * (lines 30, 31 of bin g, lines 0, 1 of bin g + 1), colours 11 x 0x1000 (line 31 of bin g, line 0 of bin g + 1) */
++#define SYS_ATTR_GAPS   0x32db40
++#define SYS_COLOR_GAPS  0x343b40
+ 
+ /* geometry state; buf = the render-side buffer of the double-buffered polygon/vertex RAM */
+ #define GEOM_SWAP_BUF   0x9ac0      /* u8: geometry-side buffer; render side is ^1 */
+diff --git a/src/rast/fused.h b/src/rast/fused.h
+index f03d1a4..50820e8 100644
+--- a/src/rast/fused.h
++++ b/src/rast/fused.h
+@@ -50,7 +50,8 @@ void defer_flush(const layout_t *L, uint8_t *ctx);
+ /* hr.c: the 3x pipeline */
+ void hr_render_bins(uint8_t *ctx);
+ void hr_vertices(uint8_t *geom, const uint32_t *recips, const uint32_t *shifts);
+-extern int hr_vcheck;
++extern int hr_vcheck, hr_check;
++void hr_check_frame(uint8_t *sys);
+ extern uint32_t *hr_frame;
+ enum { CLAMP, WRAP, FLIP };
+ #endif
+diff --git a/src/rast/hr.c b/src/rast/hr.c
+index fc52305..50a0b05 100644
+--- a/src/rast/hr.c
++++ b/src/rast/hr.c
+@@ -12,7 +12,9 @@
+  *   - the bin resolve (edge marking, fog) as spec/resolve.c's, over 768-pixel lines, into a 48 x 768 buffer;
+  *   - a 3:2 box downsample of that buffer into the bin's 32 x 512 output block (DraStic's compositing then sees a
+  *     normal 2x frame): each output pixel averages a 1.5 x 1.5 block, colour weighted by alpha so transparent
+- *     (clear) pixels do not darken polygon edges; the averaged alpha gives anti-aliased edges over the 2D layers.
++ *     (clear) pixels do not darken polygon edges; the averaged alpha gives anti-aliased edges over the 2D layers;
++ *   - the edge marking gap buffers filled so that DraStic's gap passes, which re-mark the rows at the bin boundaries
++ *     after all bins, leave the rows as the bins wrote them (hr_gaps).
+  * Not rendered at 3x yet: shadow polygons (mode 3). DraStic's sprite path (axis-aligned textured quads, polygon
+  * flag bit 14) goes through the general walker here. */
+ #include <stddef.h>
+@@ -532,6 +534,48 @@ static __attribute__((noinline)) void hr_downsample(const uint32_t *in, uint8_t
+     }
+ }
+ 
++/* ---- DraStic's edge marking gap passes ----
++ * With edge marking on (DISP3DCNT bit 5, and not turned off in DraStic's settings) update_frame_3d_4x re-marks rows
++ * 32k-1 and 32k of the output frame after all bins are done (k = 1..11, the gap passes of spec/resolve.c), from gap
++ * buffers that DraStic's bin resolve fills and ours never did: every bin boundary got two rows of whatever the buffers
++ * held (zeros or a 2x frame's leftovers: the black or coloured lines every 32 rows at 3x, ROCKNIXDS issue 47). Our
++ * edges are marked at 3x already, so each bin leaves its own output rows there (in the line order of the colour
++ * buffers: pixel x at word x), with attributes that make the passes an identity: all 0, so no pixel has bit 30 (its
++ * edge byte is 8 or 0xff: no edge colour) and no output colour has the fog flag (fog factor 0); both passes keep the
++ * colour bytes and alpha & 0x1f, which is what the downsample wrote. */
++static void hr_gap_line(uint32_t *g, const uint8_t *row) {
++    const uint32_t *ev = (const uint32_t *)row, *od = (const uint32_t *)(row + 0x400);
++    for (int i = 0; i < 256; i++) g[2 * i] = ev[i], g[2 * i + 1] = od[i];
++}
++static void hr_gaps(uint8_t *sys, unsigned bin, const uint8_t *blk) {
++    if (bin) {                                                  /* lines 0, 1 of this bin: slot bin - 1 */
++        memset(sys + SYS_ATTR_GAPS + (bin - 1) * 0x2000 + 0x1000, 0, 0x1000);
++        hr_gap_line((uint32_t *)(sys + SYS_COLOR_GAPS + (bin - 1) * 0x1000 + 0x800), blk);
++    }
++    if (bin < NBINS - 1) {                                      /* lines 30, 31: slot bin */
++        memset(sys + SYS_ATTR_GAPS + bin * 0x2000, 0, 0x1000);
++        hr_gap_line((uint32_t *)(sys + SYS_COLOR_GAPS + bin * 0x1000), blk + 31 * 0x800);
++    }
++}
++
++/* ---- RAST_HRCHECK: the rows each bin wrote against the frame DraStic's update_frame_3d_4x leaves (its edge marking
++ * gap passes re-mark rows 32k-1 and 32k after the bins: those must come out as the bins wrote them) ---- */
++int hr_check;
++static uint8_t hr_rows[NBINS][2][0x800];        /* each bin's rows 0 and 31 as written */
++static unsigned long hc_frames, hc_bad, hc_rows;
++static void hr_check_save(const uint8_t *blk, unsigned bin) {
++    memcpy(hr_rows[bin][0], blk, 0x800); memcpy(hr_rows[bin][1], blk + 31 * 0x800, 0x800);
++}
++void hr_check_frame(uint8_t *sys) {             /* comp.c's hook_uf4, after a call that rendered all 12 bins */
++    const uint8_t *o = PTR(sys, SYS_OUTPUT);
++    unsigned rows = 0;
++    for (unsigned b = 0; b < NBINS; b++)
++        for (unsigned h = 0; h < 2; h++) rows += memcmp(o + b * BIN_BYTES + h * 31 * 0x800, hr_rows[b][h], 0x800) != 0;
++    hc_frames++; hc_bad += rows != 0; hc_rows += rows;
++    if (hc_frames % 120 == 0)
++        fprintf(stderr, "[hr] check: %lu frames, %lu with rows changed after the bins (%lu rows)\n", hc_frames, hc_bad, hc_rows);
++}
++
+ /* ---- the bin loop (in place of rast.c's render_bins when the scale is 3) ---- */
+ void hr_render_bins(uint8_t *ctx) {
+     uint8_t *sys = PTR(ctx, CTX_SYS), *geom = PTR(ctx, CTX_GEOM);
+@@ -561,6 +605,8 @@ void hr_render_bins(uint8_t *ctx) {
+         hr_resolve_bin(H, sys, geom, bin);
+         if (hr_frame) memcpy(hr_frame + hy0 * HR_W, H->out, HR_BL * HR_W * 4);
+         hr_downsample(H->out, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, U32(sys, SYS_CLEAR_COLOR));
++        hr_gaps(sys, bin, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES);
++        if (hr_check) hr_check_save(PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, bin);
+         comp_bin(sys, bin, 1);          /* the compositor's visibility table (comp.c) */
+     }
+ }
+diff --git a/src/rast/rast.c b/src/rast/rast.c
+index 676afc5..643f250 100644
+--- a/src/rast/rast.c
++++ b/src/rast/rast.c
+@@ -360,6 +360,8 @@ __attribute__((constructor)) static void rast_init(void) {
+         orig_persp = (void (*)(uint8_t *, const uint32_t *, const uint32_t *))rast_hook(DS_PERSP_APPLY_HIRES, expect_persp, (void *)hook_persp);
+         if (!orig_persp) { fprintf(stderr, "[rast] cannot hook the vertex transform, 3x off\n"); rast_scale = 2; }
+         else if (dump_dir) hr_frame = calloc(768 * 576, 4);
++        /* RAST_HRCHECK=1: the rows the bins wrote against the frame after DraStic's gap passes (needs RAST_COMP=2) */
++        if (rast_scale == 3 && getenv("RAST_HRCHECK")) { hr_check = 1; comp_uf4_done = hr_check_frame; }
+     }
+     comp_init();                         /* the compositor's 3D visibility step (comp.c) */
+     { Dl_info di; if (dladdr((void *)rast_init, &di)) fprintf(stderr, "[rast] librast base %p\n", di.dli_fbase); }
+diff --git a/tools/rast/dev/regress.sh b/tools/rast/dev/regress.sh
+index 5bbf285..87465e3 100755
+--- a/tools/rast/dev/regress.sh
++++ b/tools/rast/dev/regress.sh
+@@ -4,7 +4,9 @@
+ #   14400-bin checkpoints (47 and 662 known bins, with and without deferred shading), per-polygon diff on each single scene
+ #   S3-S9 (dsscenes-cycle.nds sometimes dies in the simulator at frame 720, the scene 2 -> 3 transition, a SIGILL in
+ #   DraStic's JIT cache that also happens with RAST=off, mostly under load: then the cycle runs cover scenes 0-2 only);
+-#   3x stability: S7, S4, S2 and L4 keep rendering.
++#   3x stability: S7, S4, S2 and L4 keep rendering; and DraStic's edge marking gap passes, which re-mark rows 32k-1 and 32k
++#   after the bins, leave the rows the 3x bins wrote (RAST_HRCHECK: S4 has edge marking, 22 rows a frame without hr.c's gap
++#   buffers).
+ # One simulator job at a time (each 0.5-3 minutes, about 20 minutes in all). Prints one line per check with PASS/FAIL.
+ SIM=${SIM:-/tmp/claude-0/-home-user/2214c741-dca5-5de9-abc6-6b47f5d47ba5/scratchpad}
+ HERE=$(cd "$(dirname "$0")" && pwd)
+@@ -35,9 +37,11 @@ for n in 3 4 5 6 7 8 9; do
+     check "pdiff S$n (${f:-0} frames)" "$(grep -ac '\[pdiff\]' $L/pd-s$n.log)$([ "${f:-0}" -ge 100 ] || echo ' (starved: under 100 frames)')" 0
+ done
+ for r in dsscenes-S7 dsscenes-S4 dsscenes-S2 dsstress-L4; do
+-    sh $HERE/run.sh $ROMS/$r.nds 40 ours -E RAST_SCALE=3 -E RAST_FRAMES=1 > $L/3x-$r.log 2>&1
++    sh $HERE/run.sh $ROMS/$r.nds 40 ours -E RAST_SCALE=3 -E RAST_FRAMES=1 -E RAST_HRCHECK=1 > $L/3x-$r.log 2>&1
+     n=$(grep -a '\[rast\] frames' $L/3x-$r.log | tail -1 | grep -o '[0-9]*$'); s=$(grep -ac '\[sim\] signal' $L/3x-$r.log)
+-    if [ "${n:-0}" -ge 100 ] && [ "$s" = 0 ]; then echo "PASS 3x $r ($n frames)"; else echo "FAIL 3x $r (${n:-0} frames, $s faults)"; fail=1; fi
++    g=$(grep -a '\[hr\] check' $L/3x-$r.log | tail -1 | grep -o '[0-9]* with rows changed')
++    if [ "${n:-0}" -ge 100 ] && [ "$s" = 0 ] && [ "$g" = "0 with rows changed" ]; then echo "PASS 3x $r ($n frames, gap rows kept)"
++    else echo "FAIL 3x $r (${n:-0} frames, $s faults, gap rows: ${g:-no check line})"; fail=1; fi
+ done
+ echo "logs in $L"
+ exit $fail
+-- 
+2.43.0
+
+
+From c2cc3a73ec97ae9f537242a14235c10cac7fbebd Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 8 Oct 2026 18:45:47 +0000
+Subject: [PATCH 26/27] 3x: a bin also renders its neighbours' polygons;
+ "Disable edge marking" turns the 3x edge marking off
+
+DraStic bins polygons by their 2x lines (bins ytop >> 5 to (ybot - 1) >> 5), but the 3x coordinates are rounded on
+their own: a polygon whose 2x lines end at 32k can still cover 3x line 48k, the first line of bin k, and the edge
+marking reads the lines just above and below the bin (48k - 1, 48k + 48), where polygons of bin k - 1 or k + 1 alone
+may lie. With the bin's own list such a line had holes in the clear colour (and false edges) wherever a row of
+vertices sits on a bin boundary: a line across the screen that comes and goes as the scene moves (ROCKNIXDS issue 47:
+the flickering line while walking in HeartGold at 3x with edge marking disabled). hr_lists now gives a bin its
+neighbours' polygons as well, in DraStic's order: every list is the frame's one polygon sequence filtered by bin,
+sorted by the 2x bottom line (video_3d_bin_polygons_y_sort_4x), so the sequence is (k-1 without k) (k without k+1)
+(k+1); translucent polygons with manual sorting are in index order and merged. hr_polygon drops a neighbour's
+polygon that cannot reach the bin's lines before the walk.
+
+A/B on the field scene S7 at 3x (RAST_DUMP every 30 frames): 10 of 69 frames differ, only in 3x rows 192, 240 and 384
+(48k), up to 699 of 768 pixels a row, where the bin's own list left the clear colour. RAST_HRCHECK counts the
+neighbours' polygons that drew lines: S7 2910 on a bin's own lines in 3300 frames, L4 3960 in 900.
+
+The 3x resolve ignored DraStic's disable_edge_marking (render context byte CTX_NO_EDGE, which rast.c's 2x resolve
+honours): it now skips the edge marking as the 2x path does.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PBVcHtDJUrUv4eL8Vsmzy9
+---
+ src/rast/ds3d.h      |  1 +
+ src/rast/hr.c        | 96 +++++++++++++++++++++++++++++++++++++-------
+ tools/rast/README.md |  9 +++++
+ 3 files changed, 92 insertions(+), 14 deletions(-)
+
+diff --git a/src/rast/ds3d.h b/src/rast/ds3d.h
+index 10ad647..51e983f 100644
+--- a/src/rast/ds3d.h
++++ b/src/rast/ds3d.h
+@@ -51,6 +51,7 @@
+ 
+ /* geometry state; buf = the render-side buffer of the double-buffered polygon/vertex RAM */
+ #define GEOM_SWAP_BUF   0x9ac0      /* u8: geometry-side buffer; render side is ^1 */
++#define GEOM_SORT_MODE  0x9acc      /* u8: bit 0 = translucent polygons in their own order (SWAP_BUFFERS bit 0), not y-sorted */
+ /* the geometry side's clip-space vertex arrays and viewport (geometry_perspective_apply_hires_asm's inputs) */
+ #define GEOM_VTX_COUNT  0x64c       /* u32 */
+ #define GEOM_CLIP_X     0x17f0      /* s32[1568] clip x (screen x after the transform) */
+diff --git a/src/rast/hr.c b/src/rast/hr.c
+index 50a0b05..8ec42b7 100644
+--- a/src/rast/hr.c
++++ b/src/rast/hr.c
+@@ -6,7 +6,8 @@
+  *   - the vertices' 3x screen coordinates, computed by hr_vertices() from the same clip-space values and viewport as
+  *     DraStic's geometry_perspective_apply_hires_asm (hooked in rast.c; its math in the comment there);
+  *   - our own polygon walker, hr_polygon(): render_polygon_4x's edge walks and span setup from spec/edges.c, with
+- *     the line width 768 and span arrays of 64 entries;
++ *     the line width 768 and span arrays of 64 entries, over the polygons of DraStic's list for the bin and those of
++ *     its two neighbours' lists, in DraStic's order (hr_lists: the 3x lines at a bin's edges can belong to them);
+  *   - the pixel kernels of fused_asm.c in their hi-res instantiation (rast_kern_h*, strides from the kernel
+  *     arguments) through f_run() with layout_3x, including deferred shading and bilinear filtering;
+  *   - the bin resolve (edge marking, fog) as spec/resolve.c's, over 768-pixel lines, into a 48 x 768 buffer;
+@@ -62,10 +63,14 @@ static hrv_t hr_vtx2[2][HR_NVTX];       /* the 2x ones: the index mapping check
+ int hr_vcheck;
+ uint32_t *hr_frame;                     /* RAST_DUMP: the resolved 3x frame (576 x 768) */
+ 
++#define HR_NPOLY    2048                /* polygons per list (GEOM_POLYS_BUF / 32) */
++#define HR_EXTRA    0x8000              /* a list entry from a neighbour bin's list (hr_lists) */
+ typedef struct {
+     uint8_t *ctx;                       /* colour | attr | ids | header (sys, geom, line mask, fog used) */
+     uint8_t *spans;
+     uint32_t *out;                      /* the resolved bin, 48 x 768 */
++    uint16_t *list;                     /* the bin's polygons with its neighbours' (hr_lists), 3 x HR_NPOLY */
++    uint32_t *in, gen;                  /* hr_lists' membership stamps: in[0][p] (this bin), in[1][p] (the one below) */
+ } hr_t;
+ static __thread hr_t hr;
+ 
+@@ -74,6 +79,8 @@ static hr_t *hr_get(void) {
+         hr.ctx = aligned_alloc(64, HR_CTX_SIZE + 64); memset(hr.ctx, 0, HR_CTX_SIZE + 64);
+         hr.spans = aligned_alloc(64, HR_SPANS); memset(hr.spans, 0, HR_SPANS);
+         hr.out = aligned_alloc(64, HR_BL * HR_W * 4);
++        hr.list = malloc(3 * HR_NPOLY * 2);
++        hr.in = calloc(2 * HR_NPOLY, 4);
+     }
+     return &hr;
+ }
+@@ -113,8 +120,9 @@ void hr_vertices(uint8_t *p, const uint32_t *recips, const uint32_t *shifts) {
+ }
+ 
+ /* ---- the polygon walker: render_polygon_4x (spec/edges.c section 1) at 3x ---- */
++static unsigned long hc_extra, hc_own;  /* RAST_HRCHECK: neighbours' polygons that drew lines of a bin, of its own lines */
+ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv, const hrv_t *hv2, unsigned bin_top,
+-                       unsigned bin_bot, int lb, uint32_t d3, int defer) {
++                       unsigned bin_bot, int lb, uint32_t d3, int defer, int extra) {
+     uint32_t a8 = U32(poly, 8);
+     unsigned count = a8 & 15, flags = (a8 >> 8) & 0xff, oi = (a8 >> 16) & 0x7f, base = U16(poly, 0x1a);
+     if (count < 1 || count > 10) return;             /* DraStic walks 1 and 2 vertices too (points, lines) */
+@@ -132,6 +140,16 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv,
+         if (ys[k] < ymin) ymin = ys[k];
+     }
+     if (ys[t] != ymin) for (unsigned k = 0; k < count; k++) if (ys[k] == ymin) { top = k; break; }
++    if (extra) {
++        /* a neighbour bin's polygon (most end or start well outside this bin's lines): out if no vertex, with either
++         * of the y the loop below may take, is past the bin's top line or above its bottom line */
++        unsigned lo = 0xffff, hi = 0;
++        for (unsigned k = 0; k < count; k++) {
++            unsigned a = ys[k], b = (3u * U16(verts + 16 * idx[k], 6) + 1) / 2;
++            if (a < lo) lo = a; if (b < lo) lo = b; if (a > hi) hi = a; if (b > hi) hi = b;
++        }
++        if (hi <= bin_top || lo >= bin_bot) return;
++    }
+     uint8_t vbuf[10][16]; vtx_t *vptr[12];
+     unsigned ybot = 0, bad = 0;
+     for (unsigned k = 0; k < count; k++) {
+@@ -168,6 +186,10 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv,
+     unsigned y_end = ybot < bin_bot ? ybot : bin_bot;
+     int lines = (int)y_end - (int)(y_top > bin_top ? y_top : bin_top);
+     if (lines <= 0) return;
++    if (extra && hr_check) {
++        __atomic_fetch_add(&hc_extra, 1, __ATOMIC_RELAXED);
++        if ((int)y_end > lb + 1 && (int)(y_top > bin_top ? y_top : bin_top) < lb + 1 + HR_BL) __atomic_fetch_add(&hc_own, 1, __ATOMIC_RELAXED);
++    }
+     uint8_t *span = H->spans, *scratch = span + 10 * HR_SPS, *sp = span;
+     if ((d3 >> 5) & 1) {
+         unsigned ys0 = bin_top - top_clip, ye = y_end + bot_clip, nl = lines + top_clip + bot_clip;
+@@ -207,14 +229,58 @@ static void hr_polygon(hr_t *H, uint8_t *poly, uint8_t *verts, const hrv_t *hv,
+     else f_run(&layout_3x, H->ctx, sp, poly, 0, line0, (unsigned)lines, flags, vptr[0], 0, 0);
+ }
+ 
+-static void hr_render_list(hr_t *H, const uint8_t *list, uint8_t *polys, uint8_t *verts, const hrv_t *hv, const hrv_t *hv2,
++/* ---- the polygons of a bin at 3x ----
++ * DraStic bins polygons by their 2x lines (video_3d_bin_polygons_*_4x: bins ytop >> 5 to (ybot - 1) >> 5, ybot
++ * exclusive). The 3x coordinates are rounded on their own, so a polygon whose 2x lines end at 32k can still cover 3x
++ * line 48k, the first of bin k, and the edge marking reads the lines just above and below the bin (48k - 1, 48k + 48),
++ * where polygons of bin k - 1 or k + 1 alone may lie. With the bin's own list only, such a line had holes (the clear
++ * colour) and false edges wherever rows of vertices fall on a bin boundary: a line flickering as the scene moves. So
++ * a bin renders its neighbours' polygons as well (marked HR_EXTRA; the walker skips those that miss its lines), in
++ * DraStic's order: every list is the frame's one polygon sequence filtered by bin, sorted
++ *   - by the 2x bottom line, ascending (video_3d_bin_polygons_y_sort_4x: opaque polygons, and translucent ones
++ *     without manual sorting): then the polygons of bin k - 1 that are not in bin k end at or above line 32k, before
++ *     all of bin k's, and bin k's that are not in bin k + 1 end at or above 32k + 32, before all of bin k + 1's, so the
++ *     sequence is (k - 1 without k) (k without k + 1) (k + 1);
++ *   - by index (translucent polygons with manual sorting, geometry state byte 0x9acc bit 0): a merge. */
++static unsigned hr_lists(hr_t *H, const uint8_t *lists, unsigned bin, int by_index) {
++    const uint16_t *L[3]; uint32_t n[3];
++    for (int j = 0; j < 3; j++) {
++        unsigned b = bin + j - 1;
++        L[j] = (const uint16_t *)(lists + b * BIN_LIST_SIZE);
++        n[j] = b < NBINS ? U32(L[j], 0x1000) : 0;
++        if (n[j] > HR_NPOLY) n[j] = HR_NPOLY;
++    }
++    uint16_t *m = H->list;
++    unsigned c = 0;
++    if (by_index) {
++        uint32_t i[3] = { 0, 0, 0 };
++        for (;;) {
++            unsigned p = 0xffff;
++            for (int j = 0; j < 3; j++) if (i[j] < n[j] && L[j][i[j]] < p) p = L[j][i[j]];
++            if (p == 0xffff) break;
++            int own = i[1] < n[1] && L[1][i[1]] == p;
++            for (int j = 0; j < 3; j++) if (i[j] < n[j] && L[j][i[j]] == p) i[j]++;
++            m[c++] = (uint16_t)(p | (own ? 0 : HR_EXTRA));
++        }
++        return c;
++    }
++    uint32_t g = ++H->gen, *in0 = H->in, *in1 = H->in + HR_NPOLY;
++    for (uint32_t i = 0; i < n[1]; i++) if (L[1][i] < HR_NPOLY) in0[L[1][i]] = g;
++    for (uint32_t i = 0; i < n[2]; i++) if (L[2][i] < HR_NPOLY) in1[L[2][i]] = g;
++    for (uint32_t i = 0; i < n[0]; i++) if (L[0][i] < HR_NPOLY && in0[L[0][i]] != g) m[c++] = L[0][i] | HR_EXTRA;
++    for (uint32_t i = 0; i < n[1]; i++) if (L[1][i] >= HR_NPOLY || in1[L[1][i]] != g) m[c++] = L[1][i];
++    for (uint32_t i = 0; i < n[2]; i++) if (L[2][i] < HR_NPOLY) m[c++] = (uint16_t)(L[2][i] | (in0[L[2][i]] == g ? 0 : HR_EXTRA));
++    return c;
++}
++
++static void hr_render_list(hr_t *H, unsigned n, uint8_t *polys, uint8_t *verts, const hrv_t *hv, const hrv_t *hv2,
+                            unsigned bin_top, unsigned bin_bot, int lb, uint32_t d3, int defer) {
+-    uint32_t n = U32(list, 0x1000);
+-    for (uint32_t i = 0; i < n; i++) {
+-        uint8_t *poly = polys + 32 * (size_t)((const uint16_t *)list)[i];
++    for (unsigned i = 0; i < n; i++) {
++        unsigned e = H->list[i];
++        uint8_t *poly = polys + 32 * (size_t)(e & ~HR_EXTRA);
+         int d = defer && !((U32(poly, 4) >> 4) & 3);
+         if (defer && !d) defer_flush(&layout_3x, H->ctx);
+-        hr_polygon(H, poly, verts, hv, hv2, bin_top, bin_bot, lb, d3, d);
++        hr_polygon(H, poly, verts, hv, hv2, bin_top, bin_bot, lb, d3, d, (e & HR_EXTRA) != 0);
+     }
+     if (defer) defer_flush(&layout_3x, H->ctx);
+ }
+@@ -411,13 +477,13 @@ static __attribute__((noinline)) void edge_lines(uint32_t *out0, uint32_t *out1,
+         edge_block(out0 + x, out1 + x, col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 0, k, &lp0, &lp1, er, eg, eb);
+     edge_block(out0 + x, out1 + x, col0 + x, col1 + x, a + x, c0 + x, c1 + x, b + x, 1, k, &lp0, &lp1, er, eg, eb);
+ }
+-static __attribute__((noinline)) void hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, unsigned bin) {
++/* no_edge: DraStic's disable_edge_marking (render context byte CTX_NO_EDGE), as rast.c's resolve_bin */
++static __attribute__((noinline)) void hr_resolve_bin(hr_t *H, uint8_t *sys, uint8_t *geom, int no_edge) {
+     uint32_t d3 = U32(sys, SYS_DISP3DCNT);
+-    int edges = (d3 >> 5) & 1, fog = (d3 >> 7) & 1 ? ((d3 >> 6) & 1 ? 2 : 1) : 0;   /* 1 full, 2 alpha only */
++    int edges = (d3 >> 5) & 1 && !no_edge, fog = (d3 >> 7) & 1 ? ((d3 >> 6) & 1 ? 2 : 1) : 0;   /* 1 full, 2 alpha only */
+     if (fog && !(U32(H->ctx, HR_HDR + 0x14) && U32(sys, 0x34eb50))) fog = 0;
+     uint32_t params = 0, fogc = U32(geom, 0x9a9c), clear = U32(sys, SYS_CLEAR_ATTR);
+     if (fog) { uint32_t sh = (d3 >> 8) & 0xf; params = sh | ((U16(geom, 0x9aaa) & 0x7fff) + (0x400u >> sh)) << 16; }
+-    (void)bin;
+ #define COL(l) ((uint32_t *)(H->ctx + (l) * HR_LSTRIDE))
+ #define ATT(l) ((uint32_t *)(H->ctx + HR_ATTR + (l) * HR_LSTRIDE))
+     _Static_assert(HR_BL % 2 == 0, "the resolve takes the bin's lines in pairs");
+@@ -573,7 +639,9 @@ void hr_check_frame(uint8_t *sys) {             /* comp.c's hook_uf4, after a ca
+         for (unsigned h = 0; h < 2; h++) rows += memcmp(o + b * BIN_BYTES + h * 31 * 0x800, hr_rows[b][h], 0x800) != 0;
+     hc_frames++; hc_bad += rows != 0; hc_rows += rows;
+     if (hc_frames % 120 == 0)
+-        fprintf(stderr, "[hr] check: %lu frames, %lu with rows changed after the bins (%lu rows)\n", hc_frames, hc_bad, hc_rows);
++        fprintf(stderr, "[hr] check: %lu frames, %lu with rows changed after the bins (%lu rows); %lu polygons of neighbour bins drew lines "
++                "(%lu on the bin's own lines)\n", hc_frames, hc_bad, hc_rows, __atomic_load_n(&hc_extra, __ATOMIC_RELAXED),
++                __atomic_load_n(&hc_own, __ATOMIC_RELAXED));
+ }
+ 
+ /* ---- the bin loop (in place of rast.c's render_bins when the scale is 3) ---- */
+@@ -597,12 +665,12 @@ void hr_render_bins(uint8_t *ctx) {
+         hr_clear_bin(H, sys, geom, hy0);
+         U32(H->ctx, HR_HDR + 0x10) = 0xffffffffu; U32(H->ctx, HR_HDR + 0x14) = 0;
+         U64(H->ctx, HR_HDR + 0x18) = ~0ull;             /* the shadow line mask (fused.c line_px): all lines clean */
+-        hr_render_list(H, sys + SYS_BINS_OPAQUE + bin * BIN_LIST_SIZE, opa, verts, hv, hv2, bin_top, bin_bot, lb, d3, rast_defer);
++        hr_render_list(H, hr_lists(H, sys + SYS_BINS_OPAQUE, bin, 0), opa, verts, hv, hv2, bin_top, bin_bot, lb, d3, rast_defer);
+         if (ntrl) {
+             memset(H->ctx + HR_ID, 0xff, HR_CL * HR_W);
+-            hr_render_list(H, sys + SYS_BINS_TRANSL + bin * BIN_LIST_SIZE, trl, verts, hv, hv2, bin_top, bin_bot, lb, d3, 0);
++            hr_render_list(H, hr_lists(H, sys + SYS_BINS_TRANSL, bin, U8(geom, GEOM_SORT_MODE) & 1), trl, verts, hv, hv2, bin_top, bin_bot, lb, d3, 0);
+         }
+-        hr_resolve_bin(H, sys, geom, bin);
++        hr_resolve_bin(H, sys, geom, U8(ctx, CTX_NO_EDGE));
+         if (hr_frame) memcpy(hr_frame + hy0 * HR_W, H->out, HR_BL * HR_W * 4);
+         hr_downsample(H->out, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES, U32(sys, SYS_CLEAR_COLOR));
+         hr_gaps(sys, bin, PTR(sys, SYS_OUTPUT) + (size_t)bin * BIN_BYTES);
+diff --git a/tools/rast/README.md b/tools/rast/README.md
+index e871656..1c7d5bd 100644
+--- a/tools/rast/README.md
++++ b/tools/rast/README.md
+@@ -64,6 +64,15 @@ off unless `DSFLIP_RAST=1` (ROCKNIXDS: the "3D renderer" option).
+   instructions a frame at 3x against 1.7 M at 2x: the kernels 2.8 M (the pixels), the downsample 0.66 M (four
+   triples a step; groups whose 36 alphas are all 31 or all 0 take fast paths, the same bits as the general case),
+   the rest the clear and the resolve over 2.25x the pixels (`RAST_DUMP` also writes the 3x frames as `hNNNNN.ppm`).
++  Two things at the bin boundaries (ROCKNIXDS issue 47: black or coloured lines every 32 rows at 3x, and a line
++  flickering while the scene moves): with edge marking on, DraStic's `update_frame_3d_4x` re-marks rows 32k-1 and 32k
++  after the bins from gap buffers that only its own bin resolve filled, so each 3x bin now fills them with its own
++  rows and attributes that make that pass an identity (`RAST_HRCHECK=1` compares those rows after the update: 22
++  rows a frame changed on the fog and edge-marking scene S4 before, 0 after); and DraStic's bin lists are made from
++  the 2x lines, while a polygon of bin k - 1 alone can cover 3x line 48k (the field scene S7: one polygon in about
++  every frame, a missing row of the clear colour in 10 of 69 sampled frames) and the edge marking's neighbour lines,
++  so a 3x bin also renders its neighbours' polygons, in DraStic's order (`hr_lists`). DraStic's "disable edge
++  marking" setting now turns the 3x edge marking off too.
+ - **Palette lookups with tbl.** 4- and 16-colour textures (the common DS formats I2 and I4) keep their palette
+   in four NEON registers and look texels up with `tbl` instead of a dependent load per texel; exact. The
+   instruction count hardly changes; the gain is the removed load latency on the handheld's in-order cores.
+-- 
+2.43.0
+
+
+From 195452bdce5de8166e418b51c03a819bca2ee138 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 8 Oct 2026 18:46:54 +0000
+Subject: [PATCH 27/27] 0.5.0-beta.1-rocknixds.8: the ROCKNIXDS test build with
+ the in-game menu's fixes and 3x's lines
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PBVcHtDJUrUv4eL8Vsmzy9
+---
+ VERSION | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/VERSION b/VERSION
+index f8a456d..c84735a 100644
+--- a/VERSION
++++ b/VERSION
+@@ -1 +1 @@
+-0.5.0-beta.1-rocknixds.7
++0.5.0-beta.1-rocknixds.8
 -- 
 2.43.0
 

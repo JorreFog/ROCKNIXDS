@@ -2,7 +2,7 @@ es-rgds-panelguis: VIEW GAME MEDIA, the save state manager and manual scrape on 
 
 The dual-screen themes run ES on a canvas three panels wide (1920x480 on the RG DS, 3072x768 on the Plus), and
 es-rgds-uiwidth.patch sizes the menus against one panel (ES_UI_WIDTH), centred on the bottom one. Three screens were
-still sized against the whole canvas:
+still sized against the whole canvas (and one laid out too tightly for a panel):
 
 - VIEW GAME MEDIA (GuiImageViewer), its zoom view and VIEW FULLSCREEN VIDEO (GuiVideoViewer) took all three panels. A
   picture was fitted to the canvas' height only, so a wide one ran over the top screen and off the bottom one, and the
@@ -21,6 +21,13 @@ still sized against the whole canvas:
 - A message box with an icon (GuiMsgBox) measured its text at the box's whole width, though the icon's column takes
   part of it: a message of several lines (the notice after a game that stopped responding) wrapped once more than the
   box was made for, and its first and last lines ran over the box's edges. The text is measured at the width it gets.
+  A message too tall for the screen made the box as wide as the canvas, with the text still wrapped for the narrow
+  box: it is one panel wide now, with the text wrapped to it.
+- RETROACHIEVEMENTS (GuiRetroAchievements): each game's progress bar and its "N% (won of total)" label touched, and on
+  the RG DS Plus the bar ran over the label in every theme (ROCKNIXDS issue 51): the label sat a bar's height under the
+  bar in a box one letter high, and its line, taller than that, was centred on it. Bar, gap and label are one block now,
+  centred in the row, and the label's box is a line high. The column is as wide as the longest label needs (at most 40%
+  of the window), so "100% (52 of 52)" is no longer cut to "100% (52 ...".
 
 diff --git a/es-app/src/components/ScraperSearchComponent.cpp b/es-app/src/components/ScraperSearchComponent.cpp
 index 280412b6..eae19125 100644
@@ -162,6 +169,62 @@ index 7ceeffdf..1e3ec1a0 100644
  
  	mVideo->setOnVideoEnded([&]()
  	{		
+diff --git a/es-app/src/guis/GuiRetroAchievements.cpp b/es-app/src/guis/GuiRetroAchievements.cpp
+index f05a72e6..11fb8143 100644
+--- a/es-app/src/guis/GuiRetroAchievements.cpp
++++ b/es-app/src/guis/GuiRetroAchievements.cpp
+@@ -50,16 +50,23 @@ RetroAchievementProgress::RetroAchievementProgress(Window* window, int valueSoft
+ 	mText->setHorizontalAlignment(Alignment::ALIGN_CENTER);
+ }
+ 
++// ROCKNIXDS: the bar and its label are one block, centred in the row, with a gap between them, and the label's box
++// is a whole line of its font high. The label was put PROGRESSHEIGHT under the bar in a box one letter high, so the
++// line, centred on that box, reached up into the bar: on the RG DS Plus the bar ran over the "N% (won of total)" text
++// in every theme (ROCKNIXDS issue 51). The padding is smaller too: the label lost its end ("100% (52 of ...").
++#define PROGRESSPADDING (mSize.x() * 0.04f)
++#define PROGRESSBARY ((mSize.y() - 2.0f * PROGRESSHEIGHT - mText->getFont()->getHeight()) / 2.0f)
++
+ void RetroAchievementProgress::onSizeChanged()
+ {
+ 	GuiComponent::onSizeChanged();
+ 
+-	float padding = mSize.x() * 0.1f;
++	float padding = PROGRESSPADDING;
+ 		
+-	float y = (mSize.y() + PROGRESSHEIGHT) / 2.0f;
++	float y = PROGRESSBARY + 2.0f * PROGRESSHEIGHT;
+ 		
+ 	mText->setPosition(padding, y);
+-	mText->setSize(mSize.x() - 2.0f * padding, mText->getFont()->getLetterHeight());
++	mText->setSize(mSize.x() - 2.0f * padding, mText->getFont()->getHeight());
+ }
+ 
+ void RetroAchievementProgress::setColor(unsigned int color)
+@@ -78,11 +85,11 @@ void RetroAchievementProgress::render(const Transform4x4f& parentTrans)
+ 	if (!Renderer::isVisibleOnScreen(rect))
+ 		return;
+ 		
+-	int padding = mSize.x() * 0.1f;
++	int padding = PROGRESSPADDING;
+ 	int w = mSize.x() - 2.0 * padding;
+ 
+ 	float height = PROGRESSHEIGHT;
+-	float y = mSize.y() / 2.0f - 1.5f * height;
++	float y = PROGRESSBARY;
+ 
+ 	Renderer::setMatrix(trans);
+ 
+@@ -218,7 +225,9 @@ public:
+ 
+ 		setColWidthPerc(0, (height - IMAGESPACER) / WINDOW_WIDTH);
+ 		setColWidthPerc(1, IMAGESPACER / WINDOW_WIDTH);
+-		setColWidthPerc(3, 0.25f);
++		// ROCKNIXDS: wide enough for the longest label ("100% (100 of 100)") where the font needs it (issue 51)
++		float labelWidth = theme->TextSmall.font->sizeText(Utils::String::format(_("%d%% (%d of %d)").c_str(), 100, 888, 888)).x();
++		setColWidthPerc(3, Math::min(0.4f, Math::max(0.25f, labelWidth / 0.92f / WINDOW_WIDTH)));
+ 	
+ 		mImage->setMaxSize(height - IMAGESPACER, height - IMAGESPACER);
+ 		mImage->setImage(ra.badge.empty() ? ":/cartridge.svg" : ra.badge);
 diff --git a/es-app/src/guis/GuiSaveState.cpp b/es-app/src/guis/GuiSaveState.cpp
 index 9a21a260..d2934d26 100644
 --- a/es-app/src/guis/GuiSaveState.cpp
@@ -187,10 +250,10 @@ index 9a21a260..d2934d26 100644
  		Vector2f((Renderer::getScreenWidth() - getSize().x()) / 2, Renderer::getScreenHeight()),
  		Vector2f((Renderer::getScreenWidth() - getSize().x()) / 2, Renderer::getScreenHeight() - WINDOW_HEIGHT),
 diff --git a/es-core/src/guis/GuiMsgBox.cpp b/es-core/src/guis/GuiMsgBox.cpp
-index 956f5e7a..54adc207 100644
+index 956f5e7a..c571ce8e 100644
 --- a/es-core/src/guis/GuiMsgBox.cpp
 +++ b/es-core/src/guis/GuiMsgBox.cpp
-@@ -137,7 +137,9 @@ GuiMsgBox::GuiMsgBox(Window* window, const std::string& text,
+@@ -137,15 +137,18 @@ GuiMsgBox::GuiMsgBox(Window* window, const std::string& text,
  	}
  	
  	// now that we know width, we can find height
@@ -201,3 +264,15 @@ index 956f5e7a..54adc207 100644
  	
  	float msgHeight = Math::max(Font::get(FONT_SIZE_LARGE)->getHeight(), mMsg->getSize().y()*1.225f);
  	
+ 	if (msgHeight + mButtonGrid->getSize().y() > Renderer::getScreenHeight())
+ 	{
+-		setSize(Renderer::getScreenWidth(), Renderer::getScreenHeight());
+-		if (mImage != nullptr)
+-			mMsg->setSize(Renderer::getScreenWidth() - mImage->getSize().x() - 4* HORIZONTAL_PADDING_PX, 0);
++		// ROCKNIXDS: one panel (ES_UI_WIDTH) wide, with the text wrapped again to it. The canvas' width put the box over
++		// all the panels, and the text, still wrapped for the narrow box, ran over its edges.
++		setSize(Renderer::getUIWidth(), Renderer::getScreenHeight());
++		mMsg->setSize(Renderer::getUIWidth() - (mImage != nullptr ? mImage->getSize().x() + 4 * HORIZONTAL_PADDING_PX : 2 * HORIZONTAL_PADDING_PX), 0);
+ 	}
+ 	else
+ 		setSize(width + HORIZONTAL_PADDING_PX*2, msgHeight + mButtonGrid->getSize().y());

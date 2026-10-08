@@ -1,0 +1,72 @@
+#!/bin/sh
+# ROCKNIXDS: no sound at all after some cold boots, until a restart (#53). Runs from ROCKNIX's autostart, after its
+# 050-audio and before ES starts. ROCKNIXDS itself changes no audio setting at boot (PipeWire's 44.1 kHz is set for a
+# DS game by session.sh and put back by restore.sh, in memory only), so this checks the two things ROCKNIX's boot sets
+# once, without waiting for the sound card, and puts them right:
+#   - the codec's output path. On the RG DS, 050-audio sets the rk817's "Playback Mux" to HP (amixer, errors
+#     discarded) and headphone_sense sets it again, both early; a card that registers after them keeps the codec's
+#     power-on path, and nothing plays. Set here once the card is there (up to 10 s), if it isn't what ROCKNIX's
+#     audio.device (speakers/headphone) asks for. Not on the RG DS Plus (UCM sets its paths).
+#   - PipeWire's default output. A card that shows up late can leave the default on the dummy output (auto_null) or
+#     none: WirePlumber is restarted once (only when PipeWire's Pulse server answers: else a restart can't help) and
+#     the volume put back (ROCKNIX's `volume restore`). A muted default output is unmuted (ROCKNIX has no mute).
+# A normal boot costs a few amixer/pactl calls (~0.1 s); the waits only run when something is missing. Each boot adds
+# one line to /storage/.config/rocknixds/audio-boot.log (the last 60), so a silent boot leaves its evidence.
+# Host tests set AUDIOCHK_CARDS, AUDIOCHK_CFG, AUDIOCHK_LOG and AUDIOCHK_STEP.
+CARDS=${AUDIOCHK_CARDS:-/proc/asound/cards}
+CFG=${AUDIOCHK_CFG:-/storage/.config/system/configs/system.cfg}
+LOG=${AUDIOCHK_LOG:-/storage/.config/rocknixds/audio-boot.log}
+STEP=${AUDIOCHK_STEP:-0.25}
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/var/run/0-runtime-dir}
+[ -n "$DEVICE_PLAYBACK_PATH$AUDIO_MANAGEMENT" ] || . /storage/.config/profile.d/002-audio_path 2>/dev/null
+CARD=${ALSA_PRIMARY_CARD:-0} CTL=${DEVICE_PLAYBACK_PATH:-Playback Path}
+setting() { grep "^$1=" "$CFG" 2>/dev/null | tail -n1 | cut -d= -f2-; }
+mux() {         # the output path's current item, by name
+    amixer -c "$CARD" cget name="$CTL" 2>/dev/null | awk -F"'" '
+        /; Item #/ { n = $1; sub(/.*#/, "", n); item[n + 0] = $2 }
+        /: values=/ { v = $0; sub(/.*values=/, "", v); cur = v + 0; got = 1 }
+        END { if (got) print item[cur] }'
+}
+sink() { pactl get-default-sink 2>/dev/null; }
+real_sink() { case "$(sink)" in ""|auto_null*) return 1 ;; esac; return 0; }   # a card's (or Bluetooth's), not the dummy
+wait_for() {    # wait_for <seconds> <command...>
+    n=$(awk -v s="$1" -v t="$STEP" 'BEGIN { print int(s / t) }'); shift
+    i=0; while ! "$@"; do [ $i -ge $n ] && return 1; sleep "$STEP"; i=$((i + 1)); done
+}
+NOTE=
+# the output path (the RG DS's single rk817 card; ROCKNIX's UCM handles the Plus)
+want=$DEVICE_PLAYBACK_PATH_SPK
+[ "$(setting audio.device)" = headphone ] && want=${DEVICE_PLAYBACK_PATH_HP:-$want}
+if [ "$AUDIO_MANAGEMENT" != UCM ] && [ -n "$want" ]; then
+    if wait_for 10 sh -c '[ -n "$(amixer -c "$0" cget name="$1" 2>/dev/null)" ]' "$CARD" "$CTL"; then
+        have=$(mux)
+        if [ "$have" != "$want" ]; then
+            amixer -q -c "$CARD" cset name="$CTL" "$want" 2>/dev/null
+            NOTE="$NOTE path '$have' -> '$(mux)'"
+        fi
+    else
+        NOTE="$NOTE no '$CTL' on card $CARD after 10 s"
+    fi
+fi
+# the default output
+if ! wait_for 5 real_sink; then
+    if ! pactl info >/dev/null 2>&1; then
+        NOTE="$NOTE PipeWire's Pulse server doesn't answer"
+    else
+        NOTE="$NOTE default output '$(sink)': wireplumber restarted"
+        systemctl --no-block restart wireplumber.service 2>/dev/null
+        if wait_for 8 real_sink; then
+            command -v volume >/dev/null && volume restore >/dev/null 2>&1
+        else
+            NOTE="$NOTE, still '$(sink)'"
+        fi
+    fi
+fi
+case "$(pactl get-sink-mute @DEFAULT_SINK@ 2>/dev/null)" in
+    *yes*) pactl set-sink-mute @DEFAULT_SINK@ 0 2>/dev/null; NOTE="$NOTE default output was muted: unmuted" ;;
+esac
+mkdir -p "${LOG%/*}" 2>/dev/null
+{ [ -f "$LOG" ] && tail -n 59 "$LOG"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') up $(cut -d' ' -f1 /proc/uptime 2>/dev/null)s cards: $(grep -c '^ *[0-9]' "$CARDS" 2>/dev/null)," \
+       "path: $(mux), default: $(sink)${NOTE:+ |$NOTE}"; } > "$LOG.new" 2>/dev/null && mv -f "$LOG.new" "$LOG"
+exit 0

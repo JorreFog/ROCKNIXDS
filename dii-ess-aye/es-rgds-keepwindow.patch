@@ -1,16 +1,17 @@
 diff --git a/es-app/src/FileData.cpp b/es-app/src/FileData.cpp
-index cf680fc2..d3bef303 100644
+index cf680fc2..36f29282 100644
 --- a/es-app/src/FileData.cpp
 +++ b/es-app/src/FileData.cpp
-@@ -35,6 +35,7 @@
+@@ -35,6 +35,8 @@
  #include "resources/TextureData.h"
  #include "views/gamelist/GameNameFormatter.h"
  #include "watchers/WatchersManager.h"
 +#include <stdlib.h>
++#include <sys/stat.h>
  
  using namespace Utils::Platform;
  
-@@ -696,6 +697,23 @@ std::string FileData::getMessageFromExitCode(int exitCode)
+@@ -696,6 +698,40 @@ std::string FileData::getMessageFromExitCode(int exitCode)
  	return _("UKNOWN ERROR") + " : " + std::to_string(exitCode);
  }
  
@@ -31,10 +32,27 @@ index cf680fc2..d3bef303 100644
 +		!Utils::FileSystem::exists("/storage/.config/drastic/nodsflip", false);
 +}
 +
++// ROCKNIXDS (es-rgds-keepwindow.patch): whether a fast-switching DS game ran. ES records the play count, time played
++// and last played only when the launch command ends with 0, and for DraStic it never does any more: ROCKNIX's
++// start_drastic.sh ends with "kill -9 $(pidof gptokeyb)" after the game, ROCKNIXDS's launcher has already stopped
++// gptokeyb (it would turn the buttons into keys under the game), so that kill fails (2) whatever the game did, and
++// since ROCKNIX 20260917 runemu.sh passes a launch's status on (as 1) instead of always 0. DS games stopped counting
++// as played and the Nintendo DS's "last played" stayed on an older game (ROCKNIXDS issue 50; GBA's RetroArch ends with
++// 0). The launcher's own verdict decides instead: libdsflip writes "ready" to /tmp/dsflip-state once the game has the
++// screens, the condition session.sh records a play on when ES is stopped for the game (fast switching off). Test
++// launches (/tmp/rocknixds-testing) don't count, as there.
++static bool rgdsGameRan(time_t since)
++{
++	struct stat st;
++	if (Utils::FileSystem::exists("/tmp/rocknixds-testing", false) || stat("/tmp/dsflip-state", &st) != 0 || st.st_mtime < since)
++		return false;
++	return Utils::String::startsWith(Utils::FileSystem::readAllText("/tmp/dsflip-state"), "ready");
++}
++
  bool FileData::launchGame(Window* window, LaunchGameOptions options)
  {
  	LOG(LogInfo) << "Attempting to launch game...";
-@@ -716,6 +734,9 @@ bool FileData::launchGame(Window* window, LaunchGameOptions options)
+@@ -716,6 +752,9 @@ bool FileData::launchGame(Window* window, LaunchGameOptions options)
  	VolumeControl::getInstance()->deinit();
  
  	bool hideWindow = Settings::getInstance()->getBool("HideWindow");
@@ -44,7 +62,7 @@ index cf680fc2..d3bef303 100644
  	window->deinit(hideWindow);
  	
  	const std::string rom = Utils::FileSystem::getEscapedPath(getPath());
-@@ -735,9 +756,11 @@ bool FileData::launchGame(Window* window, LaunchGameOptions options)
+@@ -735,9 +774,11 @@ bool FileData::launchGame(Window* window, LaunchGameOptions options)
  	WatchersManager::pause();
  
  	ProcessStartInfo process(command);
@@ -57,7 +75,7 @@ index cf680fc2..d3bef303 100644
  	
  	// Resume watchers when returning to ES
  	WatchersManager::resume();
-@@ -762,7 +785,7 @@ bool FileData::launchGame(Window* window, LaunchGameOptions options)
+@@ -762,7 +803,7 @@ bool FileData::launchGame(Window* window, LaunchGameOptions options)
  
  	Scripting::fireEvent("game-end");
  
@@ -66,3 +84,20 @@ index cf680fc2..d3bef303 100644
  	{
  		ResourceManager::getInstance()->reloadAll();
  		window->deinit();
+@@ -777,8 +818,15 @@ bool FileData::launchGame(Window* window, LaunchGameOptions options)
+ 
+ 	window->normalizeNextUpdate();
+ 
++	bool played = exitCode == 0;
++	if (!played && keepForVt && exitCode < 200 && rgdsGameRan(tstart))	// ROCKNIXDS: the launcher's verdict (above)
++	{
++		LOG(LogInfo) << "...the DS game ran (dsflip-state: ready): recorded as played";
++		played = true;
++	}
++
+ 	//update number of times the game has been launched
+-	if (exitCode == 0)
++	if (played)
+ 	{
+ 		int timesPlayed = gameToUpdate->getMetadata().getInt(MetaDataId::PlayCount) + 1;
+ 		gameToUpdate->setMetadata(MetaDataId::PlayCount, std::to_string(static_cast<long long>(timesPlayed)));

@@ -1,0 +1,5 @@
+# The ROCKNIX nightly this ROCKNIXDS release was verified on (OS_VERSION in /etc/os-release). install.sh installs it as
+# /storage/.config/rocknixds/rocknix-verified: rocknixds-update os-* offers it as the "verified" ROCKNIX, and
+# tools/image/build-image.sh builds the SD card images on it unless told otherwise (--rocknix). Bump it with a release
+# that was tested on a newer nightly.
+20261001
