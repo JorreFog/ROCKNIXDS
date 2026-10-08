@@ -7,7 +7,11 @@
 # drastic = DraStic's; unset, the menu's Auto, is Gengis Engine since 1.5.13), its "3D resolution" (nds.resolution3d: 2x,
 # 3x since 1.6; DSFLIP_RAST_SCALE, Gengis Engine only; unset is the menu's Auto, and Gengis Engine keeps its own scale)
 # and its "3D texture filter" (nds.texture_filter: nearest, bilinear, sharp; DSFLIP_RAST_TEXFILTER, only used with
-# Gengis Engine) are their own options, siblings of share performance logs.
+# Gengis Engine) are their own options, siblings of share performance logs. So are "apply recommended settings"
+# (nds.recommended: 1 replaces the game's picture and speed settings with ROCKNIXDS's recommended ones, nds-settings.sh;
+# #45), "save files" (nds.saves_dir: roms = next to the games, ROCKNIX's; saves = roms/saves/nds) and "save states"
+# (nds.states_dir: savestates = roms/savestates/nds, ROCKNIX's; saves = roms/saves/nds/states), which save-dirs.sh
+# applies before DraStic starts (#42, #56). Save files and save states are the DS system's: a game's value is ignored.
 # 1.5.13's "wfc dns" option (nds.wfc_dns: Wi-Fi online play through a Nintendo WFC replacement server) is no
 # longer offered: online play is parked for 1.6, and SuperDrastic only turns its Wi-Fi hook on with the DSFLIP_WFC
 # environment switch now. strip_ours still takes the option out of a copy that has it.
@@ -42,7 +46,7 @@ SYSCFG=${SYSCFG:-/storage/.config/system/configs/system.cfg}
 # </features> is the wrapper, not a feature. Reads stdin.
 strip_ours() {
     grep -vE 'value="ds-(crisp|grid|grid-2x|crisp-color|grid-color|fsr|integer)"' | awk '
-        depth == 0 && ($0 ~ /<feature name="resume on quit"/ || $0 ~ /<feature name="power profile"/ || $0 ~ /<feature name="share performance logs"/ || $0 ~ /<feature name="3D renderer"/ || $0 ~ /<feature name="3D texture filter"/ || $0 ~ /<feature name="3D resolution"/ || $0 ~ /<feature name="wfc dns"/) { if ($0 !~ /<\/feature>[ \t\r]*$/) depth = 1; next }
+        depth == 0 && ($0 ~ /<feature name="resume on quit"/ || $0 ~ /<feature name="power profile"/ || $0 ~ /<feature name="share performance logs"/ || $0 ~ /<feature name="3D renderer"/ || $0 ~ /<feature name="3D texture filter"/ || $0 ~ /<feature name="3D resolution"/ || $0 ~ /<feature name="wfc dns"/ || $0 ~ /<feature name="apply recommended settings"/ || $0 ~ /<feature name="save files"/ || $0 ~ /<feature name="save states"/) { if ($0 !~ /<\/feature>[ \t\r]*$/) depth = 1; next }
         depth > 0 {
             if ($0 ~ /<feature[ \t]/ && $0 !~ /\/>[ \t\r]*$/) depth++
             if ($0 ~ /<\/feature>[ \t\r]*$/) depth--
@@ -98,6 +102,18 @@ add_ours() {
             print ind "<choice name=\"nearest (DS)\" value=\"nearest\" />"
             print ind "<choice name=\"bilinear\" value=\"bilinear\" />"
             print ind "<choice name=\"sharp bilinear\" value=\"sharp\" />"
+            print fi "</feature>"
+            print fi "<feature name=\"apply recommended settings\" value=\"recommended\">"
+            print ind "<choice name=\"on (ROCKNIXDS picture and speed settings)\" value=\"1\" />"
+            print ind "<choice name=\"off\" value=\"0\" />"
+            print fi "</feature>"
+            print fi "<feature name=\"save files\" value=\"saves_dir\">"
+            print ind "<choice name=\"next to the games (roms/nds)\" value=\"roms\" />"
+            print ind "<choice name=\"saves folder (roms/saves/nds)\" value=\"saves\" />"
+            print fi "</feature>"
+            print fi "<feature name=\"save states\" value=\"states_dir\">"
+            print ind "<choice name=\"ROCKNIX folder (roms/savestates/nds)\" value=\"savestates\" />"
+            print ind "<choice name=\"saves folder (roms/saves/nds/states)\" value=\"saves\" />"
             print fi "</feature>"
             next
         }

@@ -30,6 +30,7 @@ LOG = "/storage/.config/drastic/dsflip/dsflip.log"
 GPU = "/sys/class/devfreq/fde60000.gpu"
 CPU = "/sys/devices/system/cpu/cpufreq/policy0"
 BAT = "/sys/class/power_supply/battery"
+MODEL = os.environ.get("ROCKNIXDS_MODEL_PATH", "/proc/device-tree/model")
 # padkey.py: A confirms in ES, B does not. The message box only has OK, so B is read from the pad itself.
 BTN_A, BTN_B = 304, 305
 SHARE_KEY = "nds.share_performance_logs"
@@ -290,7 +291,7 @@ def running_game(pid):
             return None
         shader = (env.get(b"DSFLIP_SHADER") or env.get(b"DSHOOK_SHADER") or b"").decode(errors="replace")
         rom = os.path.basename(args[-1].decode(errors="replace")) if len(args) > 1 else ""
-        return {"system": "nds", "rom": rom, "shader": shader}
+        return dict({"system": "nds", "rom": rom, "shader": shader}, **renderer(env))
     try:
         r = urllib.request.urlopen("http://localhost:1234/runningGame", timeout=0.4)
         if r.status == 200:
@@ -299,6 +300,18 @@ def running_game(pid):
     except Exception:
         pass
     return None
+
+
+def renderer(env):
+    """The 3D renderer and Gengis Engine's 3D resolution from DraStic's environment (session.sh exports them after
+    the sampler starts, so only DraStic's own environment has them). DraStic's renderer: its resolution isn't known."""
+    if (env.get(b"DSFLIP_RAST") or b"0") in (b"0", b""):
+        return {"renderer": "drastic"}
+    return {"renderer": "gengis", "res3d": "3x" if env.get(b"DSFLIP_RAST_SCALE") == b"3" else "2x"}
+
+
+def model():
+    return rd(MODEL).replace("\0", "").strip() or None
 
 
 def one_sample(tail, pc, gt, pid, pid_t, pcpu, hz):
@@ -343,6 +356,7 @@ def cmd_sample(directory):
         "queue": os.environ.get("DSFLIP_QUEUE", ""),
         "queue_wait": os.environ.get("DSFLIP_QUEUE_WAIT", ""),
         "cpu_max": os.environ.get("DSFLIP_CPU_MAX", ""),
+        "cpu_max_soft": os.environ.get("DSFLIP_CPU_MAX_SOFT", ""),
         "rom": os.environ.get("ROCKNIXDS_ROM", ""),
         "t0": time.time(),
     }
@@ -429,6 +443,8 @@ def build_session(directory):
         "queue": num(meta.get("queue")),
         "queue_wait_ms": num(meta.get("queue_wait")),
         "cpu_max_khz": num(meta.get("cpu_max")),
+        "cpu_max_soft": num(meta.get("cpu_max_soft")),
+        "model": model(),
     }
     summary = sess.summary(samples[-1]["t"], extra)
     name = time.strftime("%Y%m%d-%H%M%S", time.localtime(samples[0]["t"])) + "_" + safe_name(rom) + ".jsonl"
@@ -864,7 +880,7 @@ def selftest():
     samples = []
     for i, fps, dropped in ((0, 60, 0), (1, 58, 2), (2, 60, 0)):
         samples.append({
-            "t": 1700000000 + i, "game": {"system": "nds", "rom": "Heart Gold.nds", "shader": "ds-crisp"},
+            "t": 1700000000 + i, "game": {"system": "nds", "rom": "Heart Gold.nds", "shader": "ds-crisp", "renderer": "gengis", "res3d": "3x"},
             "cpu_mhz": 816 + i, "cpu_max_mhz": 1416, "cpu_load": [10],
             "gpu_mhz": 200, "gpu_avg_mhz": 400 if i else None, "game_cpu": 30,
             "temp": {"soc": 50 + i}, "bat": {"pct": 80 - i, "status": "Discharging", "ma": -200, "v": 3.8},
@@ -891,6 +907,9 @@ def selftest():
     assert redact("[ra] logged in as playername") == "[ra] logged in as [redacted]"
     assert "playername" not in redact("[ra] logged in with token as playername")
     assert safe_name("Heart Gold.nds") == "Heart_Gold.nds"
+    assert renderer({b"DSFLIP_RAST": b"1", b"DSFLIP_RAST_SCALE": b"3"}) == {"renderer": "gengis", "res3d": "3x"}
+    assert renderer({b"DSFLIP_RAST": b"1"}) == {"renderer": "gengis", "res3d": "2x"}
+    assert renderer({}) == {"renderer": "drastic"}
 
     import http.server, shutil, tempfile, threading
     box = {"blobs": [], "patched": None}
@@ -949,12 +968,14 @@ def selftest():
 
     httpd = http.server.HTTPServer(("127.0.0.1", 0), H)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    global API, CFG, STATE, QUEUE
+    global API, CFG, STATE, QUEUE, MODEL
     API = "http://127.0.0.1:%d" % httpd.server_address[1]
     os.environ["ROCKNIXDS_PERF_SKIP_GITHUB_CHECK"] = "1"
     tmp = tempfile.mkdtemp()
     try:
         CFG = os.path.join(tmp, "system.cfg")
+        MODEL = os.path.join(tmp, "model")
+        open(MODEL, "wb").write(b"Anbernic RG DS\0")
         STATE = os.path.join(tmp, "state")
         os.makedirs(STATE)
         write_share("1")
@@ -971,7 +992,8 @@ def selftest():
         with open(os.path.join(d, "samples.jsonl"), "w") as f:
             for sample in samples:
                 f.write(json.dumps(sample) + "\n")
-        json.dump({"profile": "balanced", "queue": "2", "queue_wait": "20", "cpu_max": "1416000", "rom": "Heart Gold.nds"},
+        json.dump({"profile": "balanced", "queue": "2", "queue_wait": "20", "cpu_max": "1416000", "cpu_max_soft": "1",
+                   "rom": "Heart Gold.nds"},
                   open(os.path.join(d, "meta.json"), "w"))
         # finish uploads because sharing is on and the fake GitHub answers
         os.environ.pop("ROCKNIXDS_TESTING", None)
@@ -985,6 +1007,8 @@ def selftest():
         assert "hunter2" not in text and "shouldnotappear" not in text and "github_pat_" not in text
         summ = json.loads(text.strip().splitlines()[-1])
         assert summ["profile"] == "balanced" and summ["queue"] == 2 and summ["device"] == "abc123def456"
+        assert summ["model"] == "Anbernic RG DS" and summ["cpu_max_soft"] == 1, summ
+        assert summ["game"]["renderer"] == "gengis" and summ["game"]["res3d"] == "3x", summ
         assert not os.path.isdir(d)
         os.remove(os.path.join(STATE, "upload.token"))
         QUEUE = API

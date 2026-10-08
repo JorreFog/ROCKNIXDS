@@ -12,6 +12,7 @@
 #   --no-dsflip     skip libdsflip (keep the stock DraStic display path)
 #   --no-hires      don't switch on hires 3D for Nintendo DS
 #   --no-game       skip Döda Kvarter (the zombie roguelike made for both screens: its own tile in the menu, or Ports)
+#   --no-store      skip the ROCKNIXDS Store (games and apps for ROCKNIXDS, installed and updated from the menu)
 #   --uninstall     undo what this installer changed, leaving settings made since the install alone
 #   --restore-files with --uninstall: put back whole config files from the install-time backups instead
 #   --version       print the ROCKNIXDS version this installer belongs to
@@ -46,7 +47,7 @@ WORK=/storage/.rgds-install
 ESF=/storage/.config/emulationstation/es_features.cfg
 VERSION_FILE=/storage/.config/rocknixds-version
 
-WITH_60HZ=0 THEME_ON=1 CANVAS_ON=1 DSFLIP_ON=1 HIRES_ON=1 GAME_ON=1 UNINSTALL=0 RESTORE_FILES=0
+WITH_60HZ=0 THEME_ON=1 CANVAS_ON=1 DSFLIP_ON=1 HIRES_ON=1 GAME_ON=1 STORE_ON=1 UNINSTALL=0 RESTORE_FILES=0
 for a in "$@"; do
     case $a in
     --with-60hz) WITH_60HZ=1 ;;
@@ -55,6 +56,7 @@ for a in "$@"; do
     --no-dsflip) DSFLIP_ON=0 ;;
     --no-hires) HIRES_ON=0 ;;
     --no-game) GAME_ON=0 ;;
+    --no-store) STORE_ON=0 ;;
     --uninstall) UNINSTALL=1 ;;
     --restore-files) RESTORE_FILES=1 ;;
     --version) echo "ROCKNIXDS installer ${RGDS_VERSION:-$(cat $VERSION_FILE 2>/dev/null || echo unknown)} ($REPO $BRANCH)"; exit 0 ;;
@@ -169,7 +171,9 @@ es_set() {        # es_set <key> <value> in the live es_settings.cfg
         sed -i "s|<string name=\"$1\" value=\"[^\"]*\" />|<string name=\"$1\" value=\"$2\" />|" $ES_SETTINGS
     else sed -i "s|</config>|\t<string name=\"$1\" value=\"$2\" />\n</config>|" $ES_SETTINGS; fi
 }
-themes_allow() { printf 'rocknixds-pixel-light\nrocknixds-pixel-dark\ndii-ess-aye\ncanvas-ds\n'; }   # pickable in the patched ES
+# pickable in the patched ES: the four dual-screen themes, and ROCKNIX's own default theme (Art Book Next, #48), which
+# gets ROCKNIX's one-screen layout (start_es_rgds.sh: the top panel, the bottom one off)
+themes_allow() { printf 'rocknixds-pixel-light\nrocknixds-pixel-dark\ndii-ess-aye\ncanvas-ds\nes-theme-art-book-next\n'; }
 es_setb() {       # es_setb <key> true|false: a <bool name=...> setting in the live es_settings.cfg
     if grep -q "<bool name=\"$1\"" $ES_SETTINGS 2>/dev/null; then
         sed -i "s|<bool name=\"$1\" value=\"[^\"]*\" />|<bool name=\"$1\" value=\"$2\" />|" $ES_SETTINGS
@@ -227,7 +231,7 @@ if [ $UNINSTALL = 1 ]; then
         fi
     fi
     rm -f /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
-    rm -f /storage/.config/emulationstation/es_systems_rocknixds.cfg
+    rm -f /storage/.config/emulationstation/es_systems_rocknixds.cfg /storage/.config/emulationstation/es_systems_rocknixds-store.cfg
     rm -f /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh /storage/.config/autostart/rocknixds-menu-power \
           /storage/.config/emulationstation/scripts/start/rocknixds-menu-power.sh \
           /storage/.config/emulationstation/scripts/start/rocknixds-share-logs.sh
@@ -265,12 +269,15 @@ if [ $UNINSTALL = 1 ]; then
         else printf '#!/bin/sh\nexec /storage/.config/drastic/drastic.real "$@"\n' > $DRASTIC/drastic; chmod +x $DRASTIC/drastic; fi
     fi
     sed -i '/<bool name="HideWindow" /d' $ES_SETTINGS 2>/dev/null      # fast-switch on (up to 1.5.12) set it; ROCKNIX's default again
+    # the DS saves and savestates back where ROCKNIX's launcher looks for them (the save files / save states options)
+    [ -f $DRASTIC/dsflip/save-dirs.sh ] && sh $DRASTIC/dsflip/save-dirs.sh --stock
     # ROCKNIX's DS emulators again (lockdown), while es-features.sh is still there
     [ -f $DRASTIC/dsflip/es-features.sh ] && sh $DRASTIC/dsflip/es-features.sh --unlock-nds
     rm -rf $DRASTIC/dsflip
     [ -f $BACKUP/.shaders-added ] && while read -r b; do rm -f "$DRASTIC/shaders/$b"; done < $BACKUP/.shaders-added
     [ -e $BACKUP/.esf-created ] && rm -f $ESF $ESF.rocknixds-old
-    rm -f /storage/.config/autostart/rocknixds-es-features
+    rm -f /storage/.config/autostart/rocknixds-es-features /storage/.config/autostart/rocknixds-os \
+          /storage/.config/autostart/rocknixds-audio
     # lockdown and updates: ROCKNIX's DS emulators and settings menus again
     systemctl stop rocknixds-update-check.timer 2>/dev/null
     rm -f /storage/.config/system.d/rocknixds-update-check.service /storage/.config/system.d/rocknixds-update-check.timer \
@@ -283,6 +290,12 @@ if [ $UNINSTALL = 1 ]; then
         python3 /storage/.config/rocknixds/dodakvarter/gamelist.py remove /storage/roms/ports 2>/dev/null || true
     fi
     rm -f "/storage/roms/ports/Doda Kvarter.sh" /storage/roms/ports/images/dodakvarter-*.png
+    # the Store: its Ports entry before 1.6 (what it installed goes with /storage/.config/rocknixds; the lines it
+    # added to ROCKNIXDS Pixel's systems.cfg go with the theme)
+    systemctl stop rocknixds-store.service rocknixds-store-check.timer 2>/dev/null || true
+    rm -f "/storage/roms/ports/ROCKNIXDS Store.sh" /storage/.config/system.d/rocknixds-store-check.service \
+          /storage/.config/system.d/rocknixds-store-check.timer /storage/.config/system.d/timers.target.wants/rocknixds-store-check.timer
+    rmdir /storage/.config/system.d/timers.target.wants 2>/dev/null; systemctl daemon-reload
     rm -rf /storage/.config/rocknixds
     [ -f $SYSCFG ] && sed -i '/^rocknixds\./d' $SYSCFG      # the update channel and the media and update switches
     [ -e $ES_THEMES/canvas-ds/.rocknixds-commit ] && rm -rf $ES_THEMES/canvas-ds      # the one this installer downloaded
@@ -505,6 +518,7 @@ if [ $DSFLIP_ON = 1 ]; then
        "$SRC/dsflip/device/es-share-logs.sh" "$SRC/dsflip/device/menu-power.sh" \
        "$SRC/dsflip/device/battery-led-status" "$SRC/dsflip/device/powerstate" \
        "$SRC/dsflip/device/media-auto.sh" "$SRC/dsflip/device/preload-guard.so" "$SRC/dsflip/device/drastic-launch" \
+       "$SRC/dsflip/device/save-dirs.sh" "$SRC/dsflip/device/nds-settings.sh" "$SRC/dsflip/device/recommended.cfg" \
        $WORK/dsflip/
     sh $WORK/dsflip/install.sh
     # fast switching (dsflip/fast-switch): ES and sway stay up during a DS game, which runs on another VT, so the menu
@@ -590,6 +604,13 @@ if [ $WITH_60HZ = 1 ]; then
     sh "$SRC/dii-ess-aye/device/apply-60hz-dtb.sh" || say "60 Hz step skipped (see message above)"
     NEED_REBOOT=1
 fi
+# A ROCKNIX update puts its own device tree back: the first boot on a new ROCKNIX (autostart-rocknixds-os) re-applies
+# the 60 Hz one from this copy, where it was chosen (--with-60hz now, or a tree that has it from an earlier install).
+mkdir -p /storage/.config/rocknixds
+cp "$SRC/dii-ess-aye/device/apply-60hz-dtb.sh" /storage/.config/rocknixds/apply-60hz-dtb.sh
+if [ $WITH_60HZ = 1 ] || [ "$(sh "$SRC/dii-ess-aye/device/apply-60hz-dtb.sh" --check 2>/dev/null)" = 60hz ]; then
+    touch /storage/.config/rocknixds/.with-60hz
+fi
 
 # ---- Döda Kvarter: a game made for both screens -----------------------------------------------------------
 # A zombie roguelike in a Swedish suburb at night (dodakvarter/): the top screen is the game, the bottom one the
@@ -633,6 +654,48 @@ if [ $GAME_ON = 1 ] && [ -f "$SRC/dodakvarter/bin/dodakvarter-aarch64" ]; then
     python3 $DK/gamelist.py add "$DKE" || say "Döda Kvarter: the menu's list wasn't updated (see above)"
 fi
 
+# ---- the ROCKNIXDS Store: games and apps, installed and updated from the menu -----------------------------
+# store/: the app (a tile of its own, or Ports before 1.6) and its package manager (rocknixds-store), which installs
+# and updates Döda Kvarter, the bank and every app that comes later from store/catalog.json, each with a tile of its
+# own, without a ROCKNIXDS release. Its cache and settings stay in /storage/.config/rocknixds/store/data. As with the
+# game, a Store newer than this ROCKNIXDS's (it updates itself) stays.
+STORE=/storage/.config/rocknixds/store
+if [ $STORE_ON = 1 ] && [ -f "$SRC/store/bin/store-aarch64" ]; then
+    systemctl stop rocknixds-store.service 2>/dev/null || true
+    mkdir -p $STORE/data
+    ST_HAVE=$(cat $STORE/VERSION 2>/dev/null || echo 0) ST_SHIP=$(cat "$SRC/store/VERSION")
+    if [ -x $STORE/store ] && [ "$ST_HAVE" != "$ST_SHIP" ] &&
+       [ "$(printf '%s\n%s\n' "$ST_HAVE" "$ST_SHIP" | sort -V | tail -n1)" = "$ST_HAVE" ]; then
+        say "ROCKNIXDS Store $ST_HAVE is newer than this ROCKNIXDS's $ST_SHIP: kept"
+    else
+        cp "$SRC/store/bin/store-aarch64" $STORE/store
+        for f in rocknixds-store launch.sh session.sh restore.sh "ROCKNIXDS Store.sh"; do cp "$SRC/store/device/$f" "$STORE/"; done
+        cp "$SRC/store/VERSION" "$SRC/store/catalog.json" $STORE/
+        chmod +x $STORE/store $STORE/rocknixds-store $STORE/*.sh
+    fi
+    if [ -f /storage/.config/emulationstation/es_systems_rocknixds.cfg ]; then
+        STE=/storage/.config/rocknixds/apps/store STOLD=/storage/roms/ports
+        say "Installing the ROCKNIXDS Store (its own tile in the menu)"
+    else
+        STE=/storage/roms/ports STOLD=/storage/.config/rocknixds/apps/store
+        say "Installing the ROCKNIXDS Store (Ports)"
+    fi
+    rm -f "$STOLD/ROCKNIXDS Store.sh"
+    mkdir -p "$STE"
+    cp "$STORE/ROCKNIXDS Store.sh" "$STE/ROCKNIXDS Store.sh"
+    chmod +x "$STE/ROCKNIXDS Store.sh"
+    # app updates: checked in the background, the menu told once per new one (the same switch as ROCKNIXDS's check)
+    mkdir -p /storage/.config/system.d/timers.target.wants
+    cp "$SRC/store/device/rocknixds-store-check.service" "$SRC/store/device/rocknixds-store-check.timer" /storage/.config/system.d/
+    ln -sf ../rocknixds-store-check.timer /storage/.config/system.d/timers.target.wants/rocknixds-store-check.timer
+    systemctl daemon-reload; systemctl start rocknixds-store-check.timer 2>/dev/null || true
+fi
+# Apps installed from the Store that this ROCKNIXDS doesn't list get their tile from the Store: the theme was just put
+# back as it ships, so their lines in its systems.cfg (and their ES systems) are written again
+if [ -x $STORE/rocknixds-store ]; then
+    RNDS_STORE_NO_ES=1 python3 $STORE/rocknixds-store relink >/dev/null 2>&1 || say "The Store's apps: their tiles weren't put back (rocknixds-store relink)"
+fi
+
 # ---- lockdown and updates ------------------------------------------------------------------------------
 # The patched ES leaves out the settings that break the dual-screen setup or ROCKNIXDS's DraStic, offers only the
 # themes in themes.allow, and its UPDATES & DOWNLOADS menu updates ROCKNIXDS (rocknixds-update) instead of ROCKNIX.
@@ -642,6 +705,18 @@ RD=/storage/.config/rocknixds
 mkdir -p $RD
 cp "$SRC/dsflip/device/rocknixds-update" $RD/ && chmod +x $RD/rocknixds-update
 themes_allow > $RD/themes.allow
+# The base ROCKNIX (UPDATES & DOWNLOADS > ROCKNIX (BASE SYSTEM), rocknixds-update os-*): the nightly this release was
+# verified on, and the boot hook that puts back what a ROCKNIX update undoes. The ROCKNIX running now is the one
+# ROCKNIXDS was just installed on: the hook acts only once that changes.
+grep -v '^#' "$SRC/ROCKNIX" 2>/dev/null | grep -o '^[0-9]\{8\}' | head -n1 > $RD/rocknix-verified
+mkdir -p /storage/.config/autostart
+cp "$SRC/dsflip/device/autostart-rocknixds-os" /storage/.config/autostart/rocknixds-os
+chmod +x /storage/.config/autostart/rocknixds-os
+(. /etc/os-release; echo "$OS_VERSION") > $RD/os-version
+rm -f $RD/os-pending
+# #53: the boot check of the sound card's output path and PipeWire's default output (autostart-rocknixds-audio)
+cp "$SRC/dsflip/device/autostart-rocknixds-audio" /storage/.config/autostart/rocknixds-audio
+chmod +x /storage/.config/autostart/rocknixds-audio
 [ -f $SYSCFG ] && backup_once $SYSCFG
 [ -f $SYSCFG ] && sed -i '/^nds\(\[.*\]\)\{0,1\}\.\(emulator\|core\)=/d' $SYSCFG       # a per-game RetroArch/melonDS choice
 # The update channel follows what was installed, unless the player already chose one in the menu (which stores

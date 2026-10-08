@@ -1,0 +1,47 @@
+#!/bin/sh
+# ROCKNIXDS: the first boot on a new ROCKNIX (rocknixds-update os-install, or an update made some other way) puts back
+# what a ROCKNIX update undoes. Runs at every boot from ROCKNIX's autostart, before ES starts; on any boot but the
+# first on a new OS_VERSION it only reads two files.
+# What the update undoes, and who puts it back:
+#   - /flash: the update copies its device trees over the 60 Hz one (--with-60hz): re-applied here, from the copy of
+#     apply-60hz-dtb.sh the installer keeps (it checks the new tree still has the panel timing it knows, else leaves
+#     it); it takes effect at the next reboot, and the menu says so.
+#   - es_features.cfg and es_systems.cfg: ROCKNIX's post-update links them to its own copies; es-features.sh (its
+#     hook, rocknixds-es-features, runs before this one) puts ROCKNIXDS's options and the DS lock back.
+#   - /usr/bin/start_es.sh (the launcher's bind mount) and sway's config: put back at every boot (dii-ess-aye hook).
+#   - the patched ES is built for one ROCKNIX: the launcher checks it links and runs stock ES (and says so) if not.
+# Everything else ROCKNIXDS installs is in /storage, which an update leaves alone. No network: nothing is downloaded.
+# The new version is recorded first, so a failure here can never make it run again on every boot.
+# Host tests set ROCKNIXDS_STATE, ROCKNIXDS_OS_RELEASE and ROCKNIXDS_NOTIFY (0: no notification).
+RD=${ROCKNIXDS_STATE:-/storage/.config/rocknixds}
+OS=$(sed -n 's/^OS_VERSION="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "${ROCKNIXDS_OS_RELEASE:-/etc/os-release}" 2>/dev/null | tail -n1)
+[ -n "$OS" ] || exit 0
+OLD=$(cat "$RD/os-version" 2>/dev/null)
+[ "$OS" = "$OLD" ] && exit 0
+mkdir -p "$RD" && echo "$OS" > "$RD/os-version" && sync
+# no record: an install from before this hook, or the first boot after one; nothing to compare with, nothing undone
+# that the installer didn't just do
+[ -n "$OLD" ] || exit 0
+LOG=$RD/os-reapply.log
+MSG="ROCKNIX $OS is installed (it was $OLD)."
+{
+    echo "$(date): ROCKNIX $OLD -> $OS"
+    set -- $(cat "$RD/os-pending" 2>/dev/null)
+    if [ -n "$1" ] && [ "$1" != "$OS" ]; then echo "the update staged was $1, not $OS"; fi
+    rm -f "$RD/os-pending"
+    if [ -e "$RD/.with-60hz" ] && [ -f "$RD/apply-60hz-dtb.sh" ]; then
+        out=$(sh "$RD/apply-60hz-dtb.sh" 2>&1); echo "60 Hz: $out"
+        case "$out" in
+            *"applied; reboot"*) MSG="$MSG Restart once more for the 60 Hz panel timing: the update had put ROCKNIX's back." ;;
+            *"already applied"*) ;;
+            *) MSG="$MSG The 60 Hz panel timing couldn't be put back on this ROCKNIX: the panels run at ROCKNIX's 60.1 Hz." ;;
+        esac
+    fi
+} >> "$LOG" 2>&1
+tail -n 40 "$LOG" > "$LOG.new" 2>/dev/null && mv -f "$LOG.new" "$LOG"
+# the menu's notification once it answers (in its own unit: autostart ends before ES starts)
+[ "${ROCKNIXDS_NOTIFY:-1}" = 0 ] && exit 0
+systemd-run --no-block --quiet --collect --unit=rocknixds-os-notice sh -c '
+    for i in $(seq 1 120); do curl -fs -m 2 localhost:1234/isIdle >/dev/null 2>&1 && break; sleep 2; done
+    curl -fs --max-time 5 -X POST --data-binary "$0" http://localhost:1234/notify >/dev/null 2>&1' "$MSG" >/dev/null 2>&1
+exit 0

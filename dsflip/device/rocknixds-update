@@ -1,9 +1,20 @@
 #!/bin/sh
-# rocknixds-update check|install|notify -- ROCKNIXDS updates, from EmulationStation (UPDATES & DOWNLOADS > ROCKNIXDS)
-# and the rocknixds-update-check timer.
+# rocknixds-update check|install|notify|os-* -- ROCKNIXDS updates, from EmulationStation (UPDATES & DOWNLOADS >
+# ROCKNIXDS) and the rocknixds-update-check timer, and the ROCKNIX underneath it.
 #   check    one line: "UPDATE <what>" when the channel has something newer than what's installed, else a message
 #   install  runs the channel's installer in its own unit (it stops the menu and brings it back when it's done)
 #   notify   check, and pop up a notification in the menu once per new update (the timer; off with the menu switch)
+# The base ROCKNIX (UPDATES & DOWNLOADS > ROCKNIX (BASE SYSTEM)). Each prints one last line for the menu:
+#   os-current   the running ROCKNIX (OS_VERSION), e.g. 20261001
+#   os-verified  the nightly this ROCKNIXDS was verified on (the repo's ROCKNIX file, installed as rocknix-verified)
+#   os-list      the nightlies ROCKNIX's update server offers this handheld, newest first, on one line
+#   os-check     "UPDATE <version> <label>" when the chosen ROCKNIX isn't the running one, else a message
+#   os-install [verified|latest|YYYYMMDD]  stages that ROCKNIX with ROCKNIX's own updater (`rocknix-update
+#                <version>`: download and sha256 check into /storage/.update, applied on the next reboot) and prints
+#                "READY <version>". The first boot on it re-applies what a ROCKNIX update undoes (the autostart hook
+#                rocknixds-os, autostart-rocknixds-os).
+# The choice: rocknixds.os in system.cfg, verified (unset), latest or a YYYYMMDD. ROCKNIX's own update check stays off
+# (start_es_rgds.sh keeps updates.enabled=0): this is the only way to a new ROCKNIX from the locked menu.
 # Channel: rocknixds.channel in system.cfg, "stable" (the latest release for this handheld) or "beta". Releases
 # come in pairs from 1.5 on: vX.Y for the RG DS and vX.Y-plus for the RG DS Plus (pre-releases are betas), so
 # stable is the newest release whose tag is this handheld's. The menu only stores those
@@ -13,13 +24,16 @@
 # What's installed: /storage/.config/rocknixds/installed-id, written by install.sh (a release tag or a commit).
 # install hands install.sh the exact tag or commit the check found (RGDS_REF), and that ref's own install.sh runs,
 # so installed-id is what was installed: never a branch head that moved in between, never another handheld's.
-# Host tests point ROCKNIXDS_CFG, ROCKNIXDS_STATE, ROCKNIXDS_MODEL_FILE and ROCKNIXDS_MODES_GLOB
-# at a temp tree. Unset, these are the paths on the device.
+# Host tests point ROCKNIXDS_CFG, ROCKNIXDS_STATE, ROCKNIXDS_MODEL_FILE, ROCKNIXDS_MODES_GLOB, ROCKNIXDS_OS_RELEASE,
+# ROCKNIXDS_UPDATE_DIR and ROCKNIXDS_AUTOSTART at a temp tree. Unset, these are the paths on the device.
 REPO=JorreFog/ROCKNIXDS
 CFG=${ROCKNIXDS_CFG:-/storage/.config/system/configs/system.cfg}
 STATE=${ROCKNIXDS_STATE:-/storage/.config/rocknixds}
 MODEL_FILE=${ROCKNIXDS_MODEL_FILE:-/proc/device-tree/model}
 MODES_GLOB=${ROCKNIXDS_MODES_GLOB:-/sys/class/drm/card*-DSI-*/modes}
+OS_RELEASE=${ROCKNIXDS_OS_RELEASE:-/etc/os-release}
+UPDATE_DIR=${ROCKNIXDS_UPDATE_DIR:-/storage/.update}
+AUTOSTART=${ROCKNIXDS_AUTOSTART:-/storage/.config/autostart}
 setting() { grep "^$1=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2-; }
 
 rgds_plus() {   # the RG DS Plus: the model string, or a panel wider than the RG DS's 640
@@ -85,7 +99,80 @@ latest() {  # "<id> <label>": the latest release's tag (stable) or the channel's
     fi
 }
 
+# ---- the base ROCKNIX ------------------------------------------------------------------------------------
+os_current() { sed -n 's/^OS_VERSION="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$OS_RELEASE" 2>/dev/null | tail -n1; }
+os_verified() { grep -v '^#' "$STATE/rocknix-verified" 2>/dev/null | grep -o '^[0-9]\{8\}' | head -n1; }
+os_list() {   # ROCKNIX's own list (rocknix-update releases asks its update server for this SoC): the dates in it
+    rocknix-update releases 2>/dev/null | tr -c '0-9' '\n' | grep -E '^20[0-9]{6}$' | sort -ur | tr '\n' ' ' | sed 's/ $//'
+}
+os_target() {   # os_target [verified|latest|YYYYMMDD]: the version that choice means here (empty: not known now)
+    case "${1:-$(setting rocknixds.os)}" in
+    latest) os_list | cut -d' ' -f1 ;;
+    [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) echo "${1:-$(setting rocknixds.os)}" ;;
+    *) os_verified ;;   # verified, unset, or anything the menu doesn't write
+    esac
+}
+os_label() {    # os_label <version>: what the menu says about it
+    if [ "$1" = "$(os_verified)" ]; then echo "ROCKNIX $1 (verified for ROCKNIXDS)"
+    elif [ "$1" = "$LATEST" ]; then echo "ROCKNIX $1, the latest nightly (not verified for ROCKNIXDS)"
+    else echo "ROCKNIX $1 (not verified for ROCKNIXDS)"; fi
+}
+os_no_target() {
+    case "${1:-$(setting rocknixds.os)}" in
+    latest) echo "COULDN'T REACH ROCKNIX'S UPDATE SERVER: CHECK THE NETWORK" ;;
+    *) echo "NO VERIFIED ROCKNIX VERSION RECORDED: UPDATE ROCKNIXDS FIRST" ;;
+    esac
+    exit 1
+}
+
 case "$1" in
+os-current)
+    v=$(os_current); [ -n "$v" ] || { echo "UNKNOWN"; exit 1; }
+    echo "$v" ;;
+os-verified)
+    v=$(os_verified); [ -n "$v" ] || { echo "UNKNOWN"; exit 1; }
+    echo "$v" ;;
+os-list)
+    l=$(os_list); [ -n "$l" ] || { echo "COULDN'T GET THE LIST OF ROCKNIX NIGHTLIES: CHECK THE NETWORK"; exit 1; }
+    echo "$l" ;;
+os-check)
+    cur=$(os_current) LATEST=
+    [ "$(setting rocknixds.os)" = latest ] && LATEST=$(os_list | cut -d' ' -f1)
+    t=$(os_target); [ -n "$t" ] || os_no_target
+    if [ "$t" = "$cur" ]; then
+        if [ "$t" = "$(os_verified)" ]; then echo "ROCKNIX IS ON $cur (VERIFIED)"
+        elif [ "$t" = "$LATEST" ]; then echo "ROCKNIX IS ON $cur (THE LATEST NIGHTLY)"
+        else echo "ROCKNIX IS ON $cur"; fi
+        exit 0
+    fi
+    label=$(os_label "$t")
+    [ -n "$cur" ] && [ "$t" -lt "$cur" ] 2>/dev/null && label="$label, older than the installed $cur"
+    echo "UPDATE $t $label"
+    ;;
+os-install)
+    cur=$(os_current)
+    case "$2" in ""|verified|latest|[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;; *) echo "UNKNOWN ROCKNIX VERSION: $2"; exit 1 ;; esac
+    t=$(os_target "$2"); [ -n "$t" ] || os_no_target "$2"
+    [ "$t" = "$cur" ] && { echo "ROCKNIX IS ALREADY ON $cur"; exit 1; }
+    # the first boot on the new ROCKNIX puts back what its update undoes: without the hook, don't start
+    [ -x "$AUTOSTART/rocknixds-os" ] || { echo "ROCKNIXDS CAN'T RE-APPLY ITSELF AFTER THIS: UPDATE ROCKNIXDS FIRST"; exit 1; }
+    mkdir /tmp/rocknixds-os-install.lock 2>/dev/null || { echo "A ROCKNIX UPDATE IS ALREADY DOWNLOADING"; exit 1; }
+    trap 'rmdir /tmp/rocknixds-os-install.lock 2>/dev/null' EXIT
+    # ROCKNIX's boot applies the first .tar it finds in /storage/.update: an earlier choice's download goes
+    rm -f "$UPDATE_DIR"/*.tar "$UPDATE_DIR"/*.tar.sha256 "$UPDATE_DIR"/*.img.gz "$UPDATE_DIR"/*.img.gz.sha256
+    LOG=$STATE/os-update.log
+    echo "$(date): ROCKNIX $cur -> $t" > "$LOG"
+    rocknix-update "$t" >> "$LOG" 2>&1; rc=$?
+    if [ $rc != 0 ] || ! ls "$UPDATE_DIR"/*"$t"* >/dev/null 2>&1; then
+        why=$(grep -v '^ *$' "$LOG" | grep -v '#' | tail -n1 | tr 'a-z' 'A-Z')
+        rm -f "$STATE/os-pending"
+        echo "THE ROCKNIX UPDATE DIDN'T DOWNLOAD${why:+: $why}"; exit 1
+    fi
+    # for the hook on the next boot: what it was, what it should be
+    echo "$t $cur" > "$STATE/os-pending"
+    sync
+    echo "READY $t"
+    ;;
 check|notify)
     l=$(latest)
     [ -n "$l" ] || {
@@ -130,5 +217,5 @@ install)
     echo "STARTED"
     ;;
 *)
-    echo "usage: rocknixds-update check|install|notify" >&2; exit 2 ;;
+    echo "usage: rocknixds-update check|install|notify|os-current|os-verified|os-list|os-check|os-install [verified|latest|YYYYMMDD]" >&2; exit 2 ;;
 esac

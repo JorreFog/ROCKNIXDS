@@ -72,3 +72,47 @@ index dba37647..bdf79b19 100644
  
  		mGrid->setEntry(item.first, Vector2i(col, 0), false, false);
  		mGrid->setEntry(item.second, Vector2i(col + 2, 0), false, false);
+diff --git a/es-core/src/guis/GuiTextEditPopupKeyboard.cpp b/es-core/src/guis/GuiTextEditPopupKeyboard.cpp
+index 6de2cfe1..75968f7f 100644
+--- a/es-core/src/guis/GuiTextEditPopupKeyboard.cpp
++++ b/es-core/src/guis/GuiTextEditPopupKeyboard.cpp
+@@ -461,6 +461,27 @@ std::vector<HelpPrompt> GuiTextEditPopupKeyboard::getHelpPrompts()
+ 	return prompts;
+ }
+ 
++// ROCKNIXDS: on a canvas of several panels (ES_UI_WIDTH each) the theme's help bar sits on another panel than the
++// keyboard (ROCKNIXDS Pixel: inside the top screen's frame), where the keyboard's eight prompts didn't fit and ran off
++// the screen (ROCKNIXDS issue 30). Put them under the keyboard, on its panel and as wide as it is (HelpComponent keeps
++// a left-aligned bar inside its panel with the same margin on both sides), when there is room below it.
++HelpStyle GuiTextEditPopupKeyboard::getHelpStyle()
++{
++	HelpStyle style = GuiComponent::getHelpStyle();
++	if (Renderer::getUIWidth() >= Renderer::getScreenWidth() || Renderer::ScreenSettings::fullScreenMenus() || style.font == nullptr)
++		return style;
++
++	// where the keyboard ends up (it slides into place)
++	float x = (Renderer::getScreenWidth() - mSize.x()) / 2;
++	float y = (Renderer::getScreenHeight() + mSize.y()) / 2 + 2 * OSK_PADDINGY;
++	if (y + style.font->getHeight() > Renderer::getScreenHeight())
++		return style;
++
++	style.position = Vector2f(x, y);
++	style.origin = Vector2f::Zero();
++	return style;
++}
++
+ std::shared_ptr<ButtonComponent> GuiTextEditPopupKeyboard::makeButton(const std::string& key, const std::string& shiftedKey, const std::string& altedKey, const std::string& altedShiftedKey)
+ {
+ 	std::shared_ptr<ButtonComponent> button = std::make_shared<ButtonComponent>(mWindow, key, key, [this, key, shiftedKey, altedKey, altedShiftedKey]
+diff --git a/es-core/src/guis/GuiTextEditPopupKeyboard.h b/es-core/src/guis/GuiTextEditPopupKeyboard.h
+index d90b75e8..6f06de7d 100644
+--- a/es-core/src/guis/GuiTextEditPopupKeyboard.h
++++ b/es-core/src/guis/GuiTextEditPopupKeyboard.h
+@@ -17,6 +17,7 @@ public:
+ 	//void update(int deltatime) override;
+ 	void onSizeChanged();
+ 	std::vector<HelpPrompt> getHelpPrompts() override;
++	HelpStyle getHelpStyle() override;
+ 
+ private:
+ 	class KeyboardButton
