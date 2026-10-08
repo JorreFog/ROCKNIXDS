@@ -422,6 +422,19 @@ runs):
   virtual destructor.
 - **Not covered:** a handheld's decode speed and GPU, a real touchscreen (a mouse stood in), and DraStic itself.
 
+## Results on an RG DS, 2026-10-08 (the 1.6.1 release)
+
+ROCKNIX 20261001, upgraded from 1.5.2 with `RGDS_SRC` from branch `rgds-1.6.1` (the RG DS line plus the Plus line's
+commits after 171b5f6), test launches of `stressrom/out/dsstress-L2.nds` and `-L4.nds`:
+- `stall-checks.sh dsstress`: 7 of 7 passed. `start-stall.sh dsstress 30 12`: 0 of 30 stalled, 0 didn't start; the
+  log shows the rocknixds.7 lock gate at work ("helper +0x58e50 waited 276 us for its locks").
+- 2x: 59.5-60 present/s, 0 dropped. 3x (`nds.resolution3d=3x`): "scale 3", performance profile; L2 59.5-60.7,
+  L4 ~47 (2x: 59.5).
+- In-game menu: L3 opens it at 640x480 on both planes (kmsgrab), B closes it. Exit hotkey (USR1): the game gone in
+  0.8 s, ES idle at 1.2 s, same ES pid.
+- Döda Kvarter 0.2.0 from its tile: 640x480 on both panels; its Quit returns to the same ES.
+- Not checked on an RG DS: Bank & Trade, RetroAchievements offline, the #32/#34/#35 screens, a flashed SD image.
+
 ## Results on an RG DS Plus, 2026-10-06
 
 The Plus branch installed from a checkout (`RGDS_SRC`), then the 1.6-plus release tree the same way at the end of
