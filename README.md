@@ -399,7 +399,7 @@ its art, the theme draws a card with the game's name or box art.
 | Option | |
 |---|---|
 | `--with-60hz` | also retune both panels to 60.000 Hz (edits the device tree in `/flash`, backed up; needs a reboot) |
-| `--no-theme` / `--no-dsflip` / `--no-hires` / `--no-game` | skip that part (`--no-game`: Döda Kvarter) |
+| `--no-theme` / `--no-dsflip` / `--no-hires` / `--no-game` / `--no-store` | skip that part (`--no-game`: Döda Kvarter; `--no-store`: the ROCKNIXDS Store) |
 | `--uninstall` | undo what the installer changed; settings you made since the install are kept. Add `--restore-files` to put back the whole config files from the install-time backups instead |
 | `--version` | print the installed ROCKNIXDS version (also in `/storage/.config/rocknixds-version`) |
 
@@ -809,7 +809,7 @@ the top panel, the bottom panel, and an unused third.
 | `es-rgds-*.patch`, `emulationstation-rgds` | ES patches and the built binary (aarch64); [`tools/build-es.sh`](tools/build-es.sh) builds it without ROCKNIX's build system |
 | `themes/rocknixds-pixel-dark`, `themes/rocknixds-pixel-light`, `rnds/` | ROCKNIXDS Pixel and the tools that make its fonts, icons and status-bar pictures; `rnds/test/` the engine's host harness |
 | `device/autostart-dii-ess-aye`, `device/sway-config.theme` | Boot hook: redoes the bind mount and restores the theme's sway config, which ROCKNIX's `111-sway-init` overwrites on every boot |
-| `device/es_systems_rocknixds.cfg` | ROCKNIXDS's own apps (Döda Kvarter, ROCKNIXDS Bank) as systems of one entry: a tile each on the menu's shelf once the app is installed |
+| `device/es_systems_rocknixds.cfg` | ROCKNIXDS's own apps (Döda Kvarter, ROCKNIXDS Bank, the Store) as systems of one entry: a tile each on the menu's shelf once the app is installed. Apps from the Store that aren't listed here get theirs from the Store |
 | `scrape/` | Media tools: cart scans, 3D boxes, label art, RetroAchievements strip, HTTP-API push |
 
 ---
@@ -822,6 +822,18 @@ dark-background and a light-background version, a stacked version for small squa
 `gen_skin.py` embeds in the theme's bottom bar and the boot splash. `docs/ds_frame.py` makes the clamshell screenshots from 1280×480 captures.
 
 ---
+
+## `store/`: ROCKNIXDS Store
+
+<p align="center"><img src="store/docs/img/store-games.png" width="300" alt="The ROCKNIXDS Store: Döda Kvarter with an update out on the top screen, the Games tab on the bottom screen"></p>
+
+Games and apps for ROCKNIXDS, installed and updated from the menu: the green shopping bag on the home page. Döda
+Kvarter, ROCKNIXDS Bank & Trade and every app that comes later install with one press, each with a tile of its own,
+and update without a ROCKNIXDS release. `install.sh` installs the Store with ROCKNIXDS (`--no-store` leaves it out).
+
+A new app needs no ROCKNIXDS release: package it (`store/tools/package-app.sh`), publish it as a GitHub release, and
+add an entry to [`store/catalog.json`](store/catalog.json); the Store gives it its own ES system and its icon and
+colour in ROCKNIXDS Pixel. How it works, the catalog's format and a template app: [store/README.md](store/README.md).
 
 ## `bank/`: ROCKNIXDS Bank & Trade
 

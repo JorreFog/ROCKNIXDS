@@ -12,6 +12,7 @@
 #   --no-dsflip     skip libdsflip (keep the stock DraStic display path)
 #   --no-hires      don't switch on hires 3D for Nintendo DS
 #   --no-game       skip Döda Kvarter (the zombie roguelike made for both screens: its own tile in the menu, or Ports)
+#   --no-store      skip the ROCKNIXDS Store (games and apps for ROCKNIXDS, installed and updated from the menu)
 #   --uninstall     undo what this installer changed, leaving settings made since the install alone
 #   --restore-files with --uninstall: put back whole config files from the install-time backups instead
 #   --version       print the ROCKNIXDS version this installer belongs to
@@ -46,7 +47,7 @@ WORK=/storage/.rgds-install
 ESF=/storage/.config/emulationstation/es_features.cfg
 VERSION_FILE=/storage/.config/rocknixds-version
 
-WITH_60HZ=0 THEME_ON=1 CANVAS_ON=1 DSFLIP_ON=1 HIRES_ON=1 GAME_ON=1 UNINSTALL=0 RESTORE_FILES=0
+WITH_60HZ=0 THEME_ON=1 CANVAS_ON=1 DSFLIP_ON=1 HIRES_ON=1 GAME_ON=1 STORE_ON=1 UNINSTALL=0 RESTORE_FILES=0
 for a in "$@"; do
     case $a in
     --with-60hz) WITH_60HZ=1 ;;
@@ -55,6 +56,7 @@ for a in "$@"; do
     --no-dsflip) DSFLIP_ON=0 ;;
     --no-hires) HIRES_ON=0 ;;
     --no-game) GAME_ON=0 ;;
+    --no-store) STORE_ON=0 ;;
     --uninstall) UNINSTALL=1 ;;
     --restore-files) RESTORE_FILES=1 ;;
     --version) echo "ROCKNIXDS installer ${RGDS_VERSION:-$(cat $VERSION_FILE 2>/dev/null || echo unknown)} ($REPO $BRANCH)"; exit 0 ;;
@@ -227,7 +229,7 @@ if [ $UNINSTALL = 1 ]; then
         fi
     fi
     rm -f /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
-    rm -f /storage/.config/emulationstation/es_systems_rocknixds.cfg
+    rm -f /storage/.config/emulationstation/es_systems_rocknixds.cfg /storage/.config/emulationstation/es_systems_rocknixds-store.cfg
     rm -f /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh /storage/.config/autostart/rocknixds-menu-power \
           /storage/.config/emulationstation/scripts/start/rocknixds-menu-power.sh \
           /storage/.config/emulationstation/scripts/start/rocknixds-share-logs.sh
@@ -283,6 +285,10 @@ if [ $UNINSTALL = 1 ]; then
         python3 /storage/.config/rocknixds/dodakvarter/gamelist.py remove /storage/roms/ports 2>/dev/null || true
     fi
     rm -f "/storage/roms/ports/Doda Kvarter.sh" /storage/roms/ports/images/dodakvarter-*.png
+    # the Store: its Ports entry before 1.6 (what it installed goes with /storage/.config/rocknixds; the lines it
+    # added to ROCKNIXDS Pixel's systems.cfg go with the theme)
+    systemctl stop rocknixds-store.service 2>/dev/null || true
+    rm -f "/storage/roms/ports/ROCKNIXDS Store.sh"
     rm -rf /storage/.config/rocknixds
     [ -f $SYSCFG ] && sed -i '/^rocknixds\./d' $SYSCFG      # the update channel and the media and update switches
     [ -e $ES_THEMES/canvas-ds/.rocknixds-commit ] && rm -rf $ES_THEMES/canvas-ds      # the one this installer downloaded
@@ -631,6 +637,43 @@ if [ $GAME_ON = 1 ] && [ -f "$SRC/dodakvarter/bin/dodakvarter-aarch64" ]; then
     chmod +x "$DKE/Doda Kvarter.sh"
     cp "$SRC"/dodakvarter/device/media/dodakvarter-*.png "$DKE/images/"
     python3 $DK/gamelist.py add "$DKE" || say "Döda Kvarter: the menu's list wasn't updated (see above)"
+fi
+
+# ---- the ROCKNIXDS Store: games and apps, installed and updated from the menu -----------------------------
+# store/: the app (a tile of its own, or Ports before 1.6) and its package manager (rocknixds-store), which installs
+# and updates Döda Kvarter, the bank and every app that comes later from store/catalog.json, each with a tile of its
+# own, without a ROCKNIXDS release. Its cache and settings stay in /storage/.config/rocknixds/store/data. As with the
+# game, a Store newer than this ROCKNIXDS's (it updates itself) stays.
+STORE=/storage/.config/rocknixds/store
+if [ $STORE_ON = 1 ] && [ -f "$SRC/store/bin/store-aarch64" ]; then
+    systemctl stop rocknixds-store.service 2>/dev/null || true
+    mkdir -p $STORE/data
+    ST_HAVE=$(cat $STORE/VERSION 2>/dev/null || echo 0) ST_SHIP=$(cat "$SRC/store/VERSION")
+    if [ -x $STORE/store ] && [ "$ST_HAVE" != "$ST_SHIP" ] &&
+       [ "$(printf '%s\n%s\n' "$ST_HAVE" "$ST_SHIP" | sort -V | tail -n1)" = "$ST_HAVE" ]; then
+        say "ROCKNIXDS Store $ST_HAVE is newer than this ROCKNIXDS's $ST_SHIP: kept"
+    else
+        cp "$SRC/store/bin/store-aarch64" $STORE/store
+        for f in rocknixds-store launch.sh session.sh restore.sh "ROCKNIXDS Store.sh"; do cp "$SRC/store/device/$f" "$STORE/"; done
+        cp "$SRC/store/VERSION" "$SRC/store/catalog.json" $STORE/
+        chmod +x $STORE/store $STORE/rocknixds-store $STORE/*.sh
+    fi
+    if [ -f /storage/.config/emulationstation/es_systems_rocknixds.cfg ]; then
+        STE=/storage/.config/rocknixds/apps/store STOLD=/storage/roms/ports
+        say "Installing the ROCKNIXDS Store (its own tile in the menu)"
+    else
+        STE=/storage/roms/ports STOLD=/storage/.config/rocknixds/apps/store
+        say "Installing the ROCKNIXDS Store (Ports)"
+    fi
+    rm -f "$STOLD/ROCKNIXDS Store.sh"
+    mkdir -p "$STE"
+    cp "$STORE/ROCKNIXDS Store.sh" "$STE/ROCKNIXDS Store.sh"
+    chmod +x "$STE/ROCKNIXDS Store.sh"
+fi
+# Apps installed from the Store that this ROCKNIXDS doesn't list get their tile from the Store: the theme was just put
+# back as it ships, so their lines in its systems.cfg (and their ES systems) are written again
+if [ -x $STORE/rocknixds-store ]; then
+    RNDS_STORE_NO_ES=1 python3 $STORE/rocknixds-store relink >/dev/null 2>&1 || say "The Store's apps: their tiles weren't put back (rocknixds-store relink)"
 fi
 
 # ---- lockdown and updates ------------------------------------------------------------------------------

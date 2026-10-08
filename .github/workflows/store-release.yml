@@ -1,0 +1,54 @@
+# The ROCKNIXDS Store's own releases (store/): a store-v<version> tag publishes the Store as a GitHub pre-release, which
+# the Store installs on itself (its catalog entry, id "store"), without a ROCKNIXDS release. Like the game's and the
+# bank's, these are pre-releases and never "latest": ROCKNIXDS's installer and updater skip pre-releases and take only
+# v* tags. The package holds store/bin/store-aarch64 as committed, after the tests pass.
+#
+# Other apps in the catalog are released the same way from their own workflows (dodakvarter-release.yml, bank.yml),
+# or from anywhere else: the catalog names their GitHub repository and tag prefix, or a pinned URL and sha256.
+name: store-release
+on:
+  push:
+    tags: ['store-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends clang lld llvm gcc libc6-dev libdrm-dev libsdl2-dev python3 ca-certificates curl binutils pkg-config
+      - name: The tag matches store/VERSION, and the committed app is that version
+        run: |
+          V=$(cat store/VERSION)
+          if [ "$GITHUB_REF_TYPE" = tag ]; then test "${GITHUB_REF_NAME#store-v}" = "$V"; fi
+          llvm-readelf -h store/bin/store-aarch64 | grep -q AArch64
+          strings store/bin/store-aarch64 | grep -qx "$V" || { echo "bin/store-aarch64 isn't $V: rebuild it"; exit 1; }
+          newest=$(llvm-readelf -V store/bin/store-aarch64 | grep -o 'GLIBC_2\.[0-9]*' | sort -uV | tail -n1)
+          [ "$(printf '%s\nGLIBC_2.38\n' "$newest" | sort -V | tail -n1)" = GLIBC_2.38 ] || { echo "needs glibc newer than 2.38"; exit 1; }
+      - name: Tests
+        run: |
+          CC=gcc sh store/tests/run.sh
+          cd tests && python3 -m unittest test_store -v
+      - name: Package
+        run: sh store/tools/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: store-package
+          path: store/dist/
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/store-v')
+        with:
+          name: ROCKNIXDS Store ${{ github.ref_name }}
+          body_path: store/RELEASE.md
+          prerelease: true
+          make_latest: false
+          files: |
+            store/dist/rocknixds-store-*-aarch64.tar.gz
+            store/dist/rocknixds-store-*-aarch64.tar.gz.sha256

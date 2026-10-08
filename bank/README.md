@@ -36,7 +36,10 @@ the same conversions between generations and the same legality analysis.
 
 ## Install
 
-On the handheld, as root over ssh (password `rocknix`), with Wi-Fi on:
+The easiest way: the **ROCKNIXDS Store** on the menu's home page (in ROCKNIXDS releases after 1.6.1): *Apps > ROCKNIXDS Bank &
+Trade*, A. It updates it from there too ([../store](../store)).
+
+Or on the handheld, as root over ssh (password `rocknix`), with Wi-Fi on:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/bank/device/install-bank.sh | sh

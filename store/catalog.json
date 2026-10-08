@@ -1,0 +1,115 @@
+{
+ "schema": 1,
+ "name": "ROCKNIXDS Store",
+ "apps": [
+  {
+   "id": "dodakvarter",
+   "name": "Döda Kvarter",
+   "tile": "Döda Kvarter",
+   "kind": "game",
+   "developer": "JorreFog",
+   "genre": "Shooter / Roguelike",
+   "players": "1",
+   "releasedate": "20261006T000000",
+   "accent": "#b8323a",
+   "summary": "A zombie roguelike for both screens, set in a Swedish suburb at night.",
+   "description": "Survive round after round as in Call of Duty Zombies: earn kronor, buy your way through barricades into new districts, find the power, drink Julmust and Snabbkaffe, try Lådan (beware the Dalahäst) and upgrade at Smedjan. Every town is new and the loot gets better every round. Eight bosses from Swedish folklore. The top screen is the game, the bottom screen your inventory, health, ammo and the map. Runs natively at 60 frames a second on both panels.",
+   "icon": "../dii-ess-aye/themes/rocknixds-pixel-dark/rnds/icons/dodakvarter.png",
+   "screenshots": ["../dodakvarter/device/media/dodakvarter-image.png"],
+   "devices": ["rgds", "rgds-plus"],
+   "release": {
+    "github": "JorreFog/ROCKNIXDS",
+    "tag_prefix": "dodakvarter-v",
+    "asset": "dodakvarter-{version}-aarch64.tar.gz"
+   },
+   "package": {
+    "root": "dodakvarter",
+    "dest": "/storage/.config/rocknixds/dodakvarter",
+    "check": "dodakvarter",
+    "keep": ["data"],
+    "executable": ["dodakvarter"],
+    "version_default": "0.1.0",
+    "unit": "dodakvarter-game"
+   },
+   "menu": {
+    "system": "dodakvarter",
+    "folder": "/storage/.config/rocknixds/apps/dodakvarter",
+    "entry": "Doda Kvarter.sh",
+    "media": {
+     "image": "media/dodakvarter-image.png",
+     "thumbnail": "media/dodakvarter-thumb.png",
+     "marquee": "media/dodakvarter-marquee.png"
+    }
+   }
+  },
+  {
+   "id": "bank",
+   "name": "ROCKNIXDS Bank & Trade",
+   "tile": "Bank & Trade",
+   "kind": "app",
+   "developer": "JorreFog",
+   "genre": "Tool",
+   "players": "1-2",
+   "releasedate": "20261006T000000",
+   "accent": "#3d6fb8",
+   "summary": "A Pokémon bank, legality checker and trading app, built on PKHeX.Core.",
+   "description": "Reads your game saves (generation 1 to 5), stores Pokémon in boxes of its own, moves them between games through the bank (they change format only when they move up a generation, as Pal Park and Poké Transfer did), checks every one with PKHeX's legality analysis, and trades with another handheld over Wi-Fi, in a lobby or a private room. Close the game before you use it: emulators write their own copy of the save when they quit. Your bank stays in /storage/roms/rocknixds-bank, also when the app is removed.",
+   "icon": "../dii-ess-aye/themes/rocknixds-pixel-dark/rnds/icons/bank.png",
+   "screenshots": ["../bank/device/media/bank-image.png"],
+   "devices": ["rgds", "rgds-plus"],
+   "release": {
+    "github": "JorreFog/ROCKNIXDS",
+    "tag_prefix": "bank-v",
+    "asset": "rocknixds-bank-{version}-aarch64.tar.gz"
+   },
+   "package": {
+    "root": "rocknixds-bank",
+    "dest": "/storage/.config/rocknixds/bank",
+    "check": "rocknixds-bank",
+    "executable": ["rocknixds-bank"]
+   },
+   "menu": {
+    "system": "rocknixdsbank",
+    "folder": "/storage/.config/rocknixds/apps/bank",
+    "entry": "ROCKNIXDS Bank.sh",
+    "media": {
+     "image": "media/bank-image.png",
+     "thumbnail": "media/bank-thumb.png",
+     "marquee": "media/bank-marquee.png"
+    }
+   }
+  },
+  {
+   "id": "store",
+   "name": "ROCKNIXDS Store",
+   "tile": "Store",
+   "kind": "app",
+   "developer": "JorreFog",
+   "genre": "Tool",
+   "players": "1",
+   "releasedate": "20261008T000000",
+   "accent": "#2eae62",
+   "summary": "This Store: games and apps for ROCKNIXDS, installed and updated in one press.",
+   "description": "Lists the games and apps made for ROCKNIXDS, installs them with a tile of their own on the menu's shelf, and keeps them up to date without waiting for a ROCKNIXDS release. Updates to the Store itself come through here too.",
+   "icon": "../dii-ess-aye/themes/rocknixds-pixel-dark/rnds/icons/store.png",
+   "devices": ["rgds", "rgds-plus"],
+   "release": {
+    "github": "JorreFog/ROCKNIXDS",
+    "tag_prefix": "store-v",
+    "asset": "rocknixds-store-{version}-aarch64.tar.gz"
+   },
+   "package": {
+    "root": "store",
+    "dest": "/storage/.config/rocknixds/store",
+    "check": "rocknixds-store",
+    "keep": ["data"],
+    "executable": ["store", "rocknixds-store"]
+   },
+   "menu": {
+    "system": "rocknixdsstore",
+    "folder": "/storage/.config/rocknixds/apps/store",
+    "entry": "ROCKNIXDS Store.sh"
+   }
+  }
+ ]
+}
