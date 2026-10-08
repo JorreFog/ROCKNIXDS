@@ -514,7 +514,7 @@ void game_new(uint64_t seed, int season) {
     game_free();
     memset(G, 0, sizeof *G);
     G->view_w = vw; G->view_h = vh;
-    G->seed = seed; G->season = season; G->diff = S.diff;
+    G->seed = seed; G->season = season; G->diff = S.diff; G->radio.cur = -1;
     G->storm_t = 20;                                        /* (the first lightning comes a while in) */
     rng_seed(&G->rng, seed, 1); rng_seed(&G->fx, seed, 2);
     map_generate(seed, season);
@@ -569,6 +569,7 @@ void game_update(const Input *in, const Input *prev, float dt) {
     inter_update(in, prev, dt);
     flow_update(0);
     round_update(dt);
+    radio_update(dt);
     zombies_update(dt);
     hazards_update(dt);
     shots_update(dt);

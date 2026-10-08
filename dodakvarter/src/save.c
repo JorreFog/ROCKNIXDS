@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <pthread.h>
 
-Settings S = { .volume = 80, .music = 1, .shake = 1, .assist = 2, .scheme = 0, .season = 0, .lang = LANG_EN, .swap_ab = 0, .show_fps = 0, .touch_aim = 1, .diff = DIFF_MEDIUM,
+Settings S = { .volume = 80, .music = 1, .shake = 1, .assist = 2, .scheme = 0, .season = 0, .lang = LANG_EN, .swap_ab = 0, .show_fps = 0, .touch_aim = 1, .diff = DIFF_MEDIUM, .radio = 1,
                .bind = { { B_A, B_B, B_Y, B_X, B_R1, B_L1, B_L2, -1, B_SELECT, B_R2 }, { -1, B_R1, B_SELECT, B_R2, -1, B_L1, B_L2, -1, -1, -1 } } };
 
 /* ---------------------------------------------------------------- the buttons */
@@ -74,6 +74,9 @@ void settings_load(void) {
         else if (!strcmp(k, "touch_aim")) S.touch_aim = !!v;
         else if (!strcmp(k, "effects")) S.effects = CLAMP(v, 0, 2);
         else if (!strcmp(k, "difficulty")) S.diff = CLAMP(v, 0, DIFF_COUNT - 1);
+        else if (!strcmp(k, "radio")) S.radio = !!v;
+        else if (!strcmp(k, "radio_heard")) S.radio_heard = !!v;
+        else if (!strcmp(k, "radio_tip")) S.radio_tip = MAX(0, v);
     }
     fclose(f);
     for (int l = 0; l < LAYOUT_COUNT; l++) if (!binds_valid(l)) binds_default(l);   /* a file edited by hand, or an older one */
@@ -85,8 +88,8 @@ void settings_save(void) {
     char p[600], t[610]; path(p, sizeof p, "settings.txt"); snprintf(t, sizeof t, "%s.tmp", p);
     FILE *f = fopen(t, "w");
     if (!f) return;
-    fprintf(f, "volume %d\nmusic %d\nshake %d\nassist %d\nscheme %d\nseason %d\nlang %d\nswap_ab %d\nshow_fps %d\ntouch_aim %d\neffects %d\ndifficulty %d\n",
-            S.volume, S.music, S.shake, S.assist, S.scheme, S.season, S.lang, S.swap_ab, S.show_fps, S.touch_aim, S.effects, S.diff);
+    fprintf(f, "volume %d\nmusic %d\nshake %d\nassist %d\nscheme %d\nseason %d\nlang %d\nswap_ab %d\nshow_fps %d\ntouch_aim %d\neffects %d\ndifficulty %d\nradio %d\nradio_heard %d\nradio_tip %d\n",
+            S.volume, S.music, S.shake, S.assist, S.scheme, S.season, S.lang, S.swap_ab, S.show_fps, S.touch_aim, S.effects, S.diff, S.radio, S.radio_heard, S.radio_tip);
     for (int l = 0; l < LAYOUT_COUNT; l++)
         for (int a = 0; a < ACT_COUNT; a++)
             if (BIND_KEY[l][a]) fprintf(f, "%s %d\n", BIND_KEY[l][a], S.bind[l][a]);

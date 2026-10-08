@@ -74,6 +74,21 @@ top screen to fire where you touch (*Touch aiming* in the settings).
 On a computer: arrows or WASD, J or Z to fire, K or X to use, U reload, I switch, E knife, Q sprint, 1 grenade,
 3 lock on, Tab next item (held: use it), Enter pause; the mouse aims (left button fires) and clicks the bottom screen.
 
+<img src="docs/img/radio.png" width="200" align="right" alt="Kert Barlsson's radio box over the top of the game: his face, his name, and the line he's saying">
+
+**Kert Barlsson on the radio** (0.3). You wake up in a world the forces of evil have taken: the dead walk, and Mörkret
+has woken the old ones from the stories, eight Väktare that hold the land. A voice comes over the radio: Kert Barlsson,
+an old businessman broadcasting from a warehouse, who talks you through taking it back, district by district,
+Väktare by Väktare. His box comes up on the top screen now and then: the story as you go (the run starting, the first
+door, the power, round milestones, a boss coming and each one falling, eight in all), a word when you're bleeding or
+out of ammo, and between rounds a tip, a new one each time across your runs. His introduction plays once; after that
+he just says hello. *Settings > Radio (Kert)* turns him off. The lines are in `src/radio.c` (English and Swedish);
+his portrait is `art/kert.txt`.
+
+**Music** (0.3): songs for the title, under the play, for the bosses and for game over (`music/`, built into the
+game; *Settings > Music* turns them off). The Mystery Box's tune, the perk jingles and the gnomes' song are still
+synthesized, like every sound.
+
 **Settings > Difficulty**: *Easy*, *Medium* (the default) or *Hard*, taken by a run when it starts. Hard is the game
 as 0.1 had it (Black Ops' own numbers); Medium takes 30% off what the dead (and the bosses) do to you, 20% off their
 health and 15% off how many come in a round, and they turn into runners and sprinters more slowly; Easy takes 55%,
@@ -232,13 +247,14 @@ on every run).
 ## Inside
 
 C, about 11,000 lines (and 1,000 of tests), no libraries but libc, libm and libdrm (SDL2 and libasound are loaded only
-if there).
+if there), and minimp3 (`src/third_party/minimp3.h`, public domain, CC0) for the songs.
 
 | | |
 |---|---|
 | `src/plat_kms.c` | both panels through atomic KMS commits: a pair of dumb buffers per panel, each frame scaled up by whole pixels into the free one and flipped on the next vblank, both panels in one commit; a screen that didn't change isn't sent. Takes the display the way SuperDrastic does (DRM master, a modeset, the display controller's underrun check) |
 | `src/input_evdev.c` | the gamepad (d-pad as buttons or a hat, sticks if any), both touchscreens (the bottom one is on `fe5e0000.i2c`), a USB keyboard; nothing grabbed, so ROCKNIX's hotkeys still work |
-| `src/audio_alsa.c`, `src/audio.c` | a mixer on its own thread into ALSA's default device (PipeWire); every sound synthesised at start (no sound files), the title music *Vem kan segla förutan vind?* (traditional) as a music box, a music box figure for the Mystery Box and a chorale for the game over (both original), and the night under the play, made as it plays: autumn rain, winter wind, crickets and birds at midsummer |
+| `src/radio.c` | Kert Barlsson on the radio: the story and the tips (English and Swedish), when he says what, his box on the top screen |
+| `src/audio_alsa.c`, `src/audio.c`, `src/music.c` | a mixer on its own thread into ALSA's default device (PipeWire); every sound synthesised at start, the songs (`src/music.c`, `music/`: MP3s built in, decoded as they play, cross-faded), and as before the synthesized title music *Vem kan segla förutan vind?* (traditional) as a music box, a music box figure for the Mystery Box and a chorale for the game over (both original), and the night under the play, made as it plays: autumn rain, winter wind, crickets and birds at midsummer |
 | `src/plat_sdl.c`, `src/plat_headless.c` | a window for a computer; no display at all for the tests |
 | `src/render.c` | the top screen: the painted town, everything standing sorted by its feet, and the night: per-season ambient light, street lamps and windows once the power is on (spreading from the switch), the torch on your gun (stopped by walls), muzzle flashes; zombie eyes, Lucia's candles, the trap's arcs and fireflies glow after the light |
 | `src/mapgen.c`, `src/world.c`, `src/props.c` | the town: districts, buildings with their facades, everything standing in it, painted once into one big bitmap |

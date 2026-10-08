@@ -11,7 +11,7 @@
 set -e
 cd "$(dirname "$0")/.."
 CC=${CC:-cc}
-SRCS="src/game.c src/mapgen.c src/world.c src/props.c src/render.c src/hud.c src/menu.c src/update.c src/weapons.c src/zombies.c
+SRCS="src/game.c src/mapgen.c src/world.c src/props.c src/render.c src/hud.c src/menu.c src/update.c src/radio.c src/music.c src/weapons.c src/zombies.c
       src/loot.c src/inter.c src/audio.c src/save.c src/lang.c src/data.c src/bot.c src/art.c src/art_data.c src/gfx.c
       src/font.c src/png.c src/plat.c src/plat_headless.c src/plat_kms.c src/plat_sdl.c src/selftest.c src/input_evdev.c src/audio_alsa.c src/boss.c src/splash.c"
 INC="-I/usr/include/libdrm -I/usr/include/SDL2"
@@ -102,6 +102,9 @@ done
 echo "== sounds"
 ./build/sounds $T/sounds > $T/sounds.txt || { cat $T/sounds.txt; exit 1; }
 grep "long" $T/sounds.txt || true; tail -n1 $T/sounds.txt
+echo "== songs"
+$CC -O2 -w $INC -o build/test_music tests/test_music.c $SRCS -ldrm -lm -lpthread -ldl
+./build/test_music
 echo "== the game's own updates"
 sh tests/test_update.sh
 rm -rf "$T"

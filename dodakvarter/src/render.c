@@ -474,6 +474,7 @@ static void overlays(Surf *s) {
     }
     if (G->flash_t > 0) rect_blend(s, 0, 0, s->w, s->h, 0xfff8e0, (int)(G->flash_t * 600));
     boss_overlay(s);                                        /* its health bar along the top */
+    radio_draw(s);                                          /* Kert Barlsson, when he has something to say */
     /* the round in the corner */
     uint32_t rc = G->rstate == RS_BREAK ? ((int)(G->time * 3) & 1 ? 0xf0f0f0 : 0xc81818) : 0xb81414;
     tally(s, 6, s->h - 20, G->round, rc);
