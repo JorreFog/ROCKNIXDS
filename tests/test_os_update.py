@@ -35,13 +35,22 @@ class OsUpdateTest(unittest.TestCase):
         self.bin = self.root / "bin"
         self.bin.mkdir()
         self._stub("rocknix-update", """#!/bin/sh
-printf '%s\\n' "rocknix-update $*" >> "$ROCKNIXDS_STUB_LOG"
+# as ROCKNIX's: the branch from updates.branch; the server answers auto with nothing, and has the monthly releases
+# on stable and the nightlies on nightly only
+B=$(grep '^updates\\.branch=' "$ROCKNIXDS_CFG" 2>/dev/null | tail -n1 | cut -d= -f2)
+printf '%s\\n' "rocknix-update [$B] $*" >> "$ROCKNIXDS_STUB_LOG"
 case "$1" in
   releases)
     [ "$STUB_OFFLINE" = 1 ] && { echo "Network connection unavailable."; exit 1; }
     echo "Checking available releases..."
-    printf '["ROCKNIX-RK3566.aarch64-20260915.tar", "20261101", "20261001", "size 123456789"]\\n' ;;
+    case "$B" in
+      stable) printf '20261001\\n20260901\\n' ;;
+      nightly) printf '["ROCKNIX-RK3566.aarch64-20260915.tar", "20261101", "size 123456789"]\\n' ;;
+      *) echo "No releases found." ;;
+    esac ;;
   2026*)
+    case "$B:$1" in stable:20261001|stable:20260901|nightly:20261101|nightly:20260915) ;;
+      *) echo "Specified version '$1' not found."; echo "No update available or invalid update URL."; exit 1 ;; esac
     [ "$STUB_FAIL" = 1 ] && { echo "Downloading update file..."; echo "#####  50%"; echo "Failed to download update file."; exit 1; }
     : > "$ROCKNIXDS_UPDATE_DIR/ROCKNIX-RK3566.aarch64-$1.tar"; echo "Checksum verified successfully. Reboot to apply the update." ;;
   *) exit 1 ;;
@@ -84,7 +93,7 @@ esac
         r = self.run_update("os-verified")
         self.assertEqual((r.returncode, self.last(r)), (0, "20261001"))
         r = self.run_update("os-list")
-        self.assertEqual((r.returncode, self.last(r)), (0, "20261101 20261001 20260915"))
+        self.assertEqual((r.returncode, self.last(r)), (0, "20261101 20261001 20260915 20260901"))
         r = self.run_update("os-list", STUB_OFFLINE="1")
         self.assertEqual(r.returncode, 1)
         self.assertIn("CHECK THE NETWORK", self.last(r))
@@ -114,7 +123,7 @@ esac
         (self.upd / "ROCKNIX-RK3566.aarch64-20260101.tar").write_text("an earlier choice")
         r = self.run_update("os-install", "latest")
         self.assertEqual((r.returncode, self.last(r)), (0, "READY 20261101"))
-        self.assertIn("rocknix-update 20261101", self.log.read_text())
+        self.assertIn("rocknix-update [nightly] 20261101", self.log.read_text())
         self.assertEqual(sorted(p.name for p in self.upd.iterdir()), ["ROCKNIX-RK3566.aarch64-20261101.tar"])
         self.assertEqual((self.state / "os-pending").read_text().split(), ["20261101", "20261001"])
 
@@ -130,6 +139,20 @@ esac
         r = self.run_update("os-install", "bogus")
         self.assertEqual(r.returncode, 1)
         self.assertIn("UNKNOWN ROCKNIX VERSION", self.last(r))
+
+    def test_branch_per_call_and_put_back(self):
+        # ROCKNIX's default (auto) lists nothing on the update server: each call names its branch, and the player's
+        # updates.branch is what it was afterwards (or absent, if it was)
+        self.cfg.write_text("updates.branch=auto\nrocknixds.os=20260901\n")
+        r = self.run_update("os-install")
+        self.assertEqual((r.returncode, self.last(r)), (0, "READY 20260901"))
+        self.assertIn("rocknix-update [stable] 20260901", self.log.read_text())
+        self.assertEqual(self.cfg.read_text(), "updates.branch=auto\nrocknixds.os=20260901\n")
+        self.cfg.write_text("rocknixds.os=20260915\n")
+        r = self.run_update("os-install")
+        self.assertEqual((r.returncode, self.last(r)), (0, "READY 20260915"))
+        self.assertIn("rocknix-update [nightly] 20260915", self.log.read_text())
+        self.assertEqual(self.cfg.read_text(), "rocknixds.os=20260915\n")
 
     def test_install_needs_the_reapply_hook(self):
         (self.autostart / "rocknixds-os").unlink()

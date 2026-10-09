@@ -102,8 +102,26 @@ latest() {  # "<id> <label>": the latest release's tag (stable) or the channel's
 # ---- the base ROCKNIX ------------------------------------------------------------------------------------
 os_current() { sed -n 's/^OS_VERSION="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$OS_RELEASE" 2>/dev/null | tail -n1; }
 os_verified() { grep -v '^#' "$STATE/rocknix-verified" 2>/dev/null | grep -o '^[0-9]\{8\}' | head -n1; }
-os_list() {   # ROCKNIX's own list (rocknix-update releases asks its update server for this SoC): the dates in it
-    rocknix-update releases 2>/dev/null | tr -c '0-9' '\n' | grep -E '^20[0-9]{6}$' | sort -ur | tr '\n' ' ' | sed 's/ $//'
+# rocknix-update asks its update server with the branch in updates.branch, and the server answers ROCKNIX's default,
+# auto, with "No releases found" (seen 2026-10-09 on 20261001). The monthly releases are on stable, the daily
+# nightlies only on nightly, for the list and for a download alike. So ROCKNIXDS asks for one branch at a time,
+# setting updates.branch for that one call and putting the player's value back after.
+with_branch() {   # with_branch <branch> <command...>
+    _wb=$1; shift
+    _old=$(grep '^updates\.branch=' "$CFG" 2>/dev/null | tail -n1)
+    if [ -n "$_old" ]; then sed -i "s/^updates\.branch=.*/updates.branch=$_wb/" "$CFG"; else echo "updates.branch=$_wb" >> "$CFG"; fi
+    "$@"; _rc=$?
+    if [ -n "$_old" ]; then sed -i "s/^updates\.branch=.*/$_old/" "$CFG"; else sed -i '/^updates\.branch=/d' "$CFG"; fi
+    return $_rc
+}
+os_dates() {   # os_dates <branch>: the dates rocknix-update releases lists on that branch, one a line
+    with_branch "$1" rocknix-update releases 2>/dev/null | tr -c '0-9' '\n' | grep -E '^20[0-9]{6}$'
+}
+os_list() {   # ROCKNIX's own list for this SoC, the releases and the nightlies together, newest first, on one line
+    { os_dates stable; os_dates nightly; } | sort -ur | tr '\n' ' ' | sed 's/ $//'
+}
+os_branch() {  # os_branch <date>: the branch rocknix-update finds that date on (a monthly release, else a nightly)
+    os_dates stable | grep -qx "$1" && echo stable || echo nightly
 }
 os_target() {   # os_target [verified|latest|YYYYMMDD]: the version that choice means here (empty: not known now)
     case "${1:-$(setting rocknixds.os)}" in
@@ -162,7 +180,7 @@ os-install)
     rm -f "$UPDATE_DIR"/*.tar "$UPDATE_DIR"/*.tar.sha256 "$UPDATE_DIR"/*.img.gz "$UPDATE_DIR"/*.img.gz.sha256
     LOG=$STATE/os-update.log
     echo "$(date): ROCKNIX $cur -> $t" > "$LOG"
-    rocknix-update "$t" >> "$LOG" 2>&1; rc=$?
+    with_branch "$(os_branch "$t")" rocknix-update "$t" >> "$LOG" 2>&1; rc=$?
     if [ $rc != 0 ] || ! ls "$UPDATE_DIR"/*"$t"* >/dev/null 2>&1; then
         why=$(grep -v '^ *$' "$LOG" | grep -v '#' | tail -n1 | tr 'a-z' 'A-Z')
         rm -f "$STATE/os-pending"
