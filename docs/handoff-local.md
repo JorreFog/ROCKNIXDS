@@ -454,6 +454,53 @@ re-apply hook, `save-dirs.sh`, `nds-settings.sh`, the audio check against stubbe
    more): one line each, `path: HP, default: alsa_output...` and no `|` note on a good boot. A boot with a note is
    the evidence #53 was missing: send the line with `/var/log/boot.log`.
 
+## Results on an RG DS, 2026-10-09 (Banana)
+
+`banana` at b91d166 installed with `RGDS_BRANCH=banana` over 1.6.1 on ROCKNIX 20261001 (SuperDrastic `.8`, md5
+3429ae8f). Test launches of `stressrom/out/dsstress-L2.nds` and `-L4.nds`; no real games on this card.
+
+**Passed:**
+- **Base ROCKNIX (J1):** `os-current`/`os-verified` 20261001, `os-check` "ROCKNIX IS ON 20261001 (VERIFIED)". Round trip
+  20261001 -> 20260901 -> 20261001 with `os-install` (6 min download each): after each reboot `os-reapply.log` has the
+  line, `es_features.cfg`/`es_systems.cfg` are files with only DraStic for the DS, the launcher is ours, and on
+  20260901 `start-stall.sh` gave 5/5 at 59.8-60.0 present/s.
+- **Saves (J2, #42/#56):** with both options on *saves folder*, a `.dsv` and a `.dss` (random content, md5 checked)
+  moved to `roms/saves/nds` and `roms/saves/nds/states`, the links point there, `save-dirs.log` lists the moves; set
+  back to default, they moved back, same md5. Not done: uninstall/reinstall on a spare card.
+- **Recommended settings (J3, #45):** a game with 3x, ds-crisp and performance: `shader: ds-crisp`, performance,
+  scale 3; with `recommended=1`: "recommended settings: on", `shader: none`, balanced, scale 2.
+- **Art Book Next (J4, #48):** in `themes.allow`; picked, ES is 640x480 on DSI-2 and DSI-1 is powered off; a reboot
+  keeps it, `start_es` still ours; back to Pixel: ES 1920x480, both panels on.
+- **In-game menu switches (J5):** EnableSounds false + `rocknixds.hints=0`: "sounds 0, hints 0"; back: "1, 1".
+- **Sound at boot (J6, #53):** three boots, one line each, `path: HP`, no `|` note.
+- **Store (#55), over ssh:** `remove bank` / `install bank` (0.1.0 from `bank-v0.1.0`, 14 s; the reinstalled folder is
+  identical to the one before). `remove dodakvarter` while `dodakvarter-game` runs: "FAIL It's running: quit it
+  first"; ES came back after the game was stopped.
+- **Perf logs (#57):** a 2x and a 3x session (sampler run by hand during test launches, so nothing was uploaded):
+  `model` "Anbernic RG DS", `game.renderer` "gengis", `game.res3d` "2x"/"3x"; `tools/perf-logs.py` shows the `res`
+  column and the per-version table.
+- **Every time (A):** `stall-checks.sh dsstress-L2` 7 of 7 (5: ended after 28.5 s, a little over the ~15-25 s
+  expected); `start-stall.sh dsstress-L2 30 12` 0 of 30 stalled.
+- **Speed:** L2 2x 59.9-60.0, 0 drops; L4 3x, SuperDrastic `.7` vs `.8` alternated 4 times each, 30 s runs: 44.8
+  (43.9-45.9) vs 44.4 (43.9-45.0) present/s: no difference beyond the noise.
+
+**Found:**
+1. **The base ROCKNIX list is empty on a stock handheld.** `rocknix-update releases` sends `updates.branch`, which is
+   `auto`, and update.rocknix.org answers auto with "No releases found". Monthly releases are on `stable`/`next`,
+   daily nightlies only on `nightly` (also for a forced download: 20261007 is "not found" on auto). The PC tests'
+   stub didn't model the branch. Fixed on local branch `banana-fixes` (7321259): one branch per call, the player's
+   value put back; checked on the RG DS (`os-list` lists 20261008 ... 20241029, `latest` -> 20261008).
+2. **The Store says OFFLINE on Banana.** Its catalog URL is `main`'s `store/catalog.json`, which is a 404 until the
+   Store is on `main`. With `RNDS_STORE_CATALOG` at `banana`'s, refresh is OK. A 404 should not read as "offline".
+3. **The bank can be updated or removed while it runs:** its catalog entry names no `unit`, and the bank's launcher
+   doesn't run in one (from the code; not tried on the device).
+4. **"No network" when there is no release:** `install dodakvarter` says "FAIL No network" because no
+   `dodakvarter-v*` release exists. Same for the Store's own self-update (expected, no `store-v*`).
+
+**Not checked (needs a person or a real game):** #51 RetroAchievements bars, #30 on-screen keyboard hints, #50
+last played/play count, #47 3x lines in a real 3D game, #49 brightness sliders, #26 blowing into the mic, the Store's
+touch UI and its Updates tab on the panels.
+
 ## Results on an RG DS, 2026-10-08 (the 1.6.1 release)
 
 ROCKNIX 20261001, upgraded from 1.5.2 with `RGDS_SRC` from branch `rgds-1.6.1` (the RG DS line plus the Plus line's
