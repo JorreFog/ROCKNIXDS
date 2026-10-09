@@ -1,4 +1,4 @@
-# ROCKNIXDS private test build 1 (2026-10-09)
+# ROCKNIXDS private test build 2 (2026-10-09)
 
 **For testers only.** This is not a release: it isn't on the Releases page and the menu's updater won't offer it.
 Please don't post the install command publicly.
@@ -12,13 +12,23 @@ curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/<commit>/testers
 ```
 
 `testers.sh` picks the build for your handheld (RG DS or RG DS Plus) and runs that build's own installer. Your
-games, saves and settings stay. Afterwards the version reads `... (private-test-1)`.
+games, saves and settings stay. Afterwards the version reads `... (private-test-2)`.
 
 **Back to the public release:** UPDATES & DOWNLOADS > ROCKNIXDS in the menu offers it as an update, or over ssh:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh | sh
 ```
+
+## New in build 2
+
+- **Döda Kvarter 0.3.0** (Kert Barlsson on the radio, the story, new music) for testers: on the RG DS the Store's Updates
+  tab and the game's *Settings > Game updates* both offer it (the RG DS installs with 0.2.0, so the update can be
+  tried). The RG DS Plus build already has 0.3.0.
+- **The Store reaches the network again:** it looked for its app list on the public main branch, where the Store
+  isn't yet, and said it was offline.
+- Döda Kvarter's *Game updates* says "up to date" instead of "offline" when there's nothing newer, and the Store says
+  "No release yet" instead of "No network" for an app without a release.
 
 ## What's in it
 
@@ -53,4 +63,4 @@ curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh 
 Send back what you saw, and these logs: `/storage/.config/drastic/dsflip/dsflip.log`, `last-session.log` in the
 same folder, `/var/log/es_log.txt`.
 
-Known: the Store can't update itself or Döda Kvarter yet (no releases for them), and says "No network" for that.
+Known: the Store can't update itself yet (there's no release of it); it says "No release yet" for that.
