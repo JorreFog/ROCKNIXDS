@@ -42,4 +42,19 @@ cmp -s "$T/menu/Doda Kvarter.sh" "device/Doda Kvarter.sh" && [ -f $T/menu/images
 r=$(sh device/update.sh check); [ "$r" = "UPTODATE $V" ] || fail "after: '$r'"
 r=$(sh device/update.sh install | tail -n1); [ "$r" = "DONE $V" ] || fail "again: '$r'"
 DK_UPDATE_API=file://$T/none.json sh device/update.sh check | grep -qx OFFLINE || fail "no network: not OFFLINE"
+# GitHub answering with an error (a rate limit) isn't "up to date": not known
+echo '{"message": "API rate limit exceeded"}' > $T/err.json
+DK_UPDATE_API=file://$T/err.json sh device/update.sh check | grep -qx OFFLINE || fail "an error reply: not OFFLINE"
+# a list without a release of the game: up to date (not OFFLINE), and install changes nothing
+echo '[{"tag_name": "v1.6.1", "draft": false, "prerelease": false}]' > $T/nogame.json
+r=$(DK_UPDATE_API=file://$T/nogame.json sh device/update.sh check); [ "$r" = "UPTODATE $V" ] || fail "no game release: '$r'"
+r=$(DK_UPDATE_API=file://$T/nogame.json sh device/update.sh install | tail -n1); [ "$r" = "DONE $V" ] || fail "no game release, install: '$r'"
+# a private test build's commit with testers/ (releases.json, the package beside it): used instead of GitHub's
+ID=0123456789abcdef0123456789abcdef01234567
+mkdir -p $T/raw/$ID/testers; cp $T/releases.json $T/raw/$ID/testers/releases.json; cp -r $T/rel/dodakvarter-v$V $T/raw/$ID/testers/
+echo $ID > $T/installed-id; echo 0.1.0 > $D/VERSION
+r=$(env -u DK_UPDATE_API -u DK_UPDATE_BASE DK_ROCKNIXDS_ID=$T/installed-id DK_TESTERS_BASE=file://$T/raw sh device/update.sh check)
+[ "$r" = "UPDATE $V" ] || fail "test build: '$r'"
+r=$(env -u DK_UPDATE_API -u DK_UPDATE_BASE DK_ROCKNIXDS_ID=$T/installed-id DK_TESTERS_BASE=file://$T/raw sh device/update.sh install | tail -n1)
+[ "$r" = "DONE $V" ] && [ "$(cat $D/VERSION)" = "$V" ] || fail "test build, install: '$r'"
 echo "test_update: ok ($V)"
