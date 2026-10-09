@@ -1,4 +1,4 @@
-# ROCKNIXDS private test build 2 (2026-10-09)
+# ROCKNIXDS private test build 3 (2026-10-09)
 
 **For testers only.** This is not a release: it isn't on the Releases page and the menu's updater won't offer it.
 Please don't post the install command publicly.
@@ -12,13 +12,18 @@ curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/<commit>/testers
 ```
 
 `testers.sh` picks the build for your handheld (RG DS or RG DS Plus) and runs that build's own installer. Your
-games, saves and settings stay. Afterwards the version reads `... (private-test-2)`.
+games, saves and settings stay. Afterwards the version reads `... (private-test-3)`.
 
 **Back to the public release:** UPDATES & DOWNLOADS > ROCKNIXDS in the menu offers it as an update, or over ssh:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh | sh
 ```
+
+## New in build 3
+
+- **The ROCKNIXDS Store on the RG DS Plus too** (the green bag on the menu's shelf): games and apps installed, updated
+  and removed from the menu, as on the RG DS. The RG DS build is the same as in build 2.
 
 ## New in build 2
 
@@ -38,7 +43,8 @@ curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh 
 | SuperDrastic | 0.5.0-beta.1-rocknixds.9-test.1 | 0.5.0-beta.1-rocknixds.9-test.1 |
 | Faster 3x (below) | yes | yes |
 | 3x stutter fix (below) | yes | yes |
-| Banana: base ROCKNIX from the menu, saves folders, recommended settings, Art Book Next, sound check at boot, ROCKNIXDS Store, perf logs with model and 3D resolution | yes | no (the RG DS line only for now) |
+| ROCKNIXDS Store (games and apps from the menu) | yes | yes (from build 3) |
+| Banana: base ROCKNIX from the menu, saves folders, recommended settings, Art Book Next, sound check at boot, perf logs with model and 3D resolution | yes | no (the RG DS line only for now) |
 | Base ROCKNIX list fix (below) | yes | not needed |
 
 - **Faster 3x.** The 3D work at 3x costs about 30% less CPU: on the RG DS the 3D stress test at level 4 went from
@@ -58,7 +64,8 @@ curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/install.sh 
 3. **Starting and quitting games:** a game that never shows a picture, or doesn't quit.
 4. RG DS: the Banana checks in `BANANA.md`, mostly the ones that need a person: RetroAchievements progress bars
    (#51), the on-screen keyboard's hints (#30), last played / play count (#50), brightness sliders (#49), blowing
-   into the microphone (#26), the Store on the screens.
+   into the microphone (#26).
+5. The Store on both handhelds: its screens, touch and buttons, and updating Döda Kvarter on the RG DS.
 
 Send back what you saw, and these logs: `/storage/.config/drastic/dsflip/dsflip.log`, `last-session.log` in the
 same folder, `/var/log/es_log.txt`.
