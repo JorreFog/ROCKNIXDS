@@ -175,8 +175,13 @@ stuck_report() {
   [ -n "$RES" ] || RES=$(grep "^nds.resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   RND=$(grep -F "nds[\"$GAME\"].renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$RND" ] || RND=$(grep "^nds.renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  # That profile keeps the 20 ms wait at 3x, though: DraStic's presents come unevenly there (two in one refresh, none in
+  # the next), and without the wait the second one was dropped. Measured on the RG DS Plus, 2026-10-09, HeartGold at
+  # 3x walking, 60 s each, two rounds: no wait 1.18 and 0.80 repeated frames a second (148 and 100 dropped), the wait
+  # 0.33 and 0.30 (4 and 4 dropped), at the same 59.8-60.0 fps.
+  P3X=
   if [ "$RES" = 3x ] && [ "$RND" != drastic ] && [ "${DSFLIP_RAST:-1}" != 0 ] && ! grep -qF "nds[\"$GAME\"].power_profile=" $CFG 2>/dev/null; then
-    PROF=performance
+    PROF=performance P3X=1
   fi
   case "$PROF" in
     performance) Q=1 QW=0 CMAX= ;;
@@ -186,6 +191,7 @@ stuck_report() {
     battery) Q=3 QW=20; if [ -n "$BIG" ]; then CMAX=1416000; else CMAX=1104000; fi ;;
     *) PROF=balanced Q=1 QW=20 CMAX=1416000 ;;
   esac
+  [ -n "$P3X" ] && QW=20
   export DSFLIP_QUEUE=${DSFLIP_QUEUE:-$Q} DSFLIP_QUEUE_WAIT=${DSFLIP_QUEUE_WAIT:-$QW}
   # The latch (the commit of both panels' frames) must come early enough before the EARLIER panel's vblank; on the
   # Plus the bottom panel's vblank is 6.8 ms before the top's and a commit 1.2-1.5 ms ahead of it still missed it
