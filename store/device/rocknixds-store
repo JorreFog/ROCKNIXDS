@@ -48,8 +48,10 @@ import xml.etree.ElementTree as ET
 import zlib
 
 ROOT = os.environ.get("RNDS_STORE_ROOT", "")
-CATALOG_URL = os.environ.get(
-    "RNDS_STORE_CATALOG", "https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/store/catalog.json")
+CATALOG_ENV = os.environ.get("RNDS_STORE_CATALOG")
+CATALOG_URL = CATALOG_ENV or os.environ.get(       # (RNDS_STORE_MAIN_CATALOG: tests)
+    "RNDS_STORE_MAIN_CATALOG", "https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/store/catalog.json")
+RAW = os.environ.get("RNDS_STORE_RAW", "https://raw.githubusercontent.com/JorreFog/ROCKNIXDS")   # a ref's files
 NOTIFY = os.environ.get("RNDS_STORE_NOTIFY", "http://localhost:1234/notify")   # the menu's API
 API = os.environ.get("RNDS_STORE_API", "https://api.github.com/repos/{repo}/releases?per_page=100")
 DOWNLOAD = os.environ.get("RNDS_STORE_DOWNLOAD", "https://github.com/{repo}/releases/download/{tag}/{asset}")
@@ -148,10 +150,33 @@ def url_of(ref, base):
     return urllib.parse.urljoin(base, ref)
 
 
+def as_url(u):
+    return u if re.match(r"^[a-z]+://", u) else "file://" + os.path.abspath(u)
+
+
+CATALOG_FROM = None                         # where the catalog in use came from: its relative paths resolve against it
+
+
 def catalog_base():
-    if re.match(r"^[a-z]+://", CATALOG_URL):
-        return CATALOG_URL
-    return "file://" + os.path.abspath(CATALOG_URL)
+    return CATALOG_FROM or as_url(CATALOG_URL)
+
+
+def catalog_urls():
+    """where the catalog is looked for: RNDS_STORE_CATALOG alone; else main's, then the installed ROCKNIXDS's own (the
+    tag or commit in installed-id): a private test build's testers/catalog.json (the apps its testers get from it),
+    then its store/catalog.json. A ROCKNIXDS whose Store isn't on main yet (a beta, a test build) has its catalog
+    there: with main's alone, its Store said OFFLINE with the network up (main has no store/ yet)."""
+    if CATALOG_ENV:
+        return [as_url(CATALOG_URL)]
+    urls = [CATALOG_URL]
+    try:
+        with open(P("/storage/.config/rocknixds/installed-id")) as f:
+            ref = f.read().strip()
+    except OSError:
+        ref = ""
+    if re.match(r"^[0-9A-Za-z][0-9A-Za-z._-]{0,79}$", ref) and ref != "main":
+        urls += ["%s/%s/testers/catalog.json" % (RAW, ref), "%s/%s/store/catalog.json" % (RAW, ref)]
+    return urls
 
 
 # ---- the data folder: the catalog and what the network said, cached --------------------------------------------
@@ -176,7 +201,10 @@ def save_json(path, obj):
 
 
 def catalog():
+    global CATALOG_FROM
     c = load_json(data("catalog.json"), None)
+    if c is not None and c.get("_from"):
+        CATALOG_FROM = c["_from"]
     if c is None:
         # never refreshed: fetched now, else the copy that came with the Store (beside it; the repository's in a checkout)
         c = fetch_catalog()
@@ -190,12 +218,18 @@ def catalog():
 
 
 def fetch_catalog():
-    body = fetch(catalog_base(), timeout=20)
-    try:
-        c = json.loads(body) if body else None
-    except ValueError:
-        return None
-    return c if isinstance(c, dict) and isinstance(c.get("apps"), list) else None
+    """the first catalog of catalog_urls() that comes, with where it came from in "_from"; None when none does"""
+    global CATALOG_FROM
+    for u in catalog_urls():
+        body = fetch(u, timeout=20)
+        try:
+            c = json.loads(body) if body else None
+        except ValueError:
+            c = None
+        if isinstance(c, dict) and isinstance(c.get("apps"), list):
+            CATALOG_FROM = c["_from"] = u
+            return c
+    return None
 
 
 def apps():
@@ -751,7 +785,9 @@ def install(app_id, version=None):
     else:
         rel = resolve(app, cache)
     if not rel:
-        raise Fail("No network" if app.get("release", {}).get("github") else "No release yet")
+        gh = (app.get("release") or {}).get("github")
+        # the releases' list came (a list), without one of this app: not a network problem
+        raise Fail("No network" if gh and not isinstance(cache.get(gh), list) else "No release yet")
     v = rel["version"]
     have = installed_version(app)
     if have and not version and not newer(v, have):

@@ -67,6 +67,41 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(last, "OFFLINE")
         self.assertEqual(self.states()["bank"][6], "0.1.0")
 
+    def test_catalog_from_the_installed_rocknixds_when_main_has_none(self):
+        # a ROCKNIXDS whose Store isn't on main yet (a beta, a private test build): main's catalog is missing (404),
+        # the installed commit's is used, and its relative paths resolve against where it came from
+        env = self.sb.env()
+        del env["RNDS_STORE_CATALOG"]
+        ref = "0123456789abcdef0123456789abcdef01234567"
+        raw = Path(self.tmp.name) / "raw"
+        (raw / ref / "store").mkdir(parents=True)
+        (raw / ref / "store" / "catalog.json").write_text(self.sb.catalog_path.read_text())
+        idf = self.sb.storage / ".config" / "rocknixds" / "installed-id"
+        idf.parent.mkdir(parents=True, exist_ok=True)
+        idf.write_text(ref + "\n")
+        env["RNDS_STORE_MAIN_CATALOG"] = "file://" + str(Path(self.tmp.name) / "no-such-main" / "catalog.json")
+        env["RNDS_STORE_RAW"] = "file://" + str(raw)
+        r = subprocess.run([sys.executable, str(CLI), "refresh"], env=env, capture_output=True, text=True)
+        self.assertEqual(r.stdout.strip().splitlines()[-1], "OK", r.stdout + r.stderr)
+        saved = json.loads((self.cfg / "rocknixds" / "store" / "data" / "catalog.json").read_text())
+        self.assertEqual(saved["_from"], "file://%s/%s/store/catalog.json" % (raw, ref))
+        # a test build's testers/catalog.json comes before its store/ one
+        (raw / ref / "testers").mkdir()
+        (raw / ref / "testers" / "catalog.json").write_text(self.sb.catalog_path.read_text())
+        r = subprocess.run([sys.executable, str(CLI), "refresh"], env=env, capture_output=True, text=True)
+        self.assertEqual(r.stdout.strip().splitlines()[-1], "OK", r.stdout + r.stderr)
+        saved = json.loads((self.cfg / "rocknixds" / "store" / "data" / "catalog.json").read_text())
+        self.assertEqual(saved["_from"], "file://%s/%s/testers/catalog.json" % (raw, ref))
+        # without an installed-id (or with main's gone and no network): OFFLINE as before
+        idf.unlink()
+        r = subprocess.run([sys.executable, str(CLI), "refresh"], env=env, capture_output=True, text=True)
+        self.assertEqual(r.stdout.strip().splitlines()[-1], "OFFLINE")
+
+    def test_no_release_yet_is_not_a_network_problem(self):
+        self.run_cli("refresh")
+        _, last = self.run_cli("install", "store", ok=False)
+        self.assertEqual(last, "FAIL No release yet")        # the releases' list came, without a store-v release
+
     def test_refresh_converts_pictures_for_the_app(self):
         self.run_cli("refresh")
         for app, name, size in (("bank", "icon.raw", (32, 32)), ("bank", "shot.raw", (160, 120)),
