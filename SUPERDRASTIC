@@ -17,4 +17,11 @@
 # Built with build.sh (clang 23 + lld, an Ubuntu noble arm64 sysroot: libc6 2.39, libdrm 2.4.125) and
 # package.sh; it needs glibc 2.38 like the release. Once the patch is in a SuperDrastic release, pin that release here
 # instead and drop the patch.
-0.5.0-beta.1-rocknixds.8 3f66f6eb43c14ad84e3186bdf2ee422ce9d33cb9343676876bed6d31f2efb733
+# 0.5.0-beta.1-rocknixds.9-test.1 (a PRIVATE test build, 2026-10-09; not a release): .8 plus the 3x work, built
+# from SuperDrastic's local branch opt/3x-a55-noil: the cache work of 2026-10-05 (prefetch in the pixel kernels, direct
+# rendering into the scanout buffers, no copy of an unchanged 3D frame, audio without SDL's subsystem, test aids),
+# SuperDrastic PR #8 (the rasterizer scheduled for the Cortex-A55; it also fixes 3x textures drawn askew) and #6 (3x
+# keeps its own clock memory). Verified on the handhelds: frames identical with and without PR #8 at 2x (six games),
+# at 3x except where it now matches DraStic's own picture; the cache work identical to .8 at 3x. Source: SuperDrastic's
+# refs/testers/sd-9-test.1.
+0.5.0-beta.1-rocknixds.9-test.1 1d6b0535d84b72cc00a8069a4e6a70a679f68d08944d079635669bc1327f6a37
