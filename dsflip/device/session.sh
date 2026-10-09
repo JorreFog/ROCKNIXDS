@@ -193,14 +193,20 @@ stuck_report() {
   # walking held 59.8-60.2 fps at 1992 MHz in the 3x test build; the balanced profile's 1416 MHz cap would not.
   RES=$(nds_get "$GAME" resolution3d)
   RND=$(nds_get "$GAME" renderer)
+  # That profile keeps the 20 ms wait at 3x, though: DraStic's presents come unevenly there (two in one refresh, none in
+  # the next), and without the wait the second one was dropped. Measured on the RG DS Plus, 2026-10-09, HeartGold at
+  # 3x walking, 60 s each, two rounds: no wait 1.18 and 0.80 repeated frames a second (148 and 100 dropped), the wait
+  # 0.33 and 0.30 (4 and 4 dropped), at the same 59.8-60.0 fps.
+  P3X=
   if [ "$RES" = 3x ] && [ "$RND" != drastic ] && [ "${DSFLIP_RAST:-1}" != 0 ] && ! nds_chosen "$GAME" power_profile; then
-    PROF=performance
+    PROF=performance P3X=1
   fi
   case "$PROF" in
     performance) Q=1 QW=0 CMAX= ;;
     battery) Q=3 QW=20 CMAX=1104000 ;;
     *) PROF=balanced Q=1 QW=20 CMAX=1416000 ;;
   esac
+  [ -n "$P3X" ] && QW=20
   export DSFLIP_QUEUE=${DSFLIP_QUEUE:-$Q} DSFLIP_QUEUE_WAIT=${DSFLIP_QUEUE_WAIT:-$QW}
   [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX} DSFLIP_CPU_MAX_SOFT=${DSFLIP_CPU_MAX_SOFT:-1}
   echo "power profile: $PROF (queue $DSFLIP_QUEUE, wait ${DSFLIP_QUEUE_WAIT} ms, CPU max ${DSFLIP_CPU_MAX:-hardware})"
