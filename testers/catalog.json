@@ -1,0 +1,117 @@
+{
+ "schema": 1,
+ "name": "ROCKNIXDS Store",
+ "apps": [
+  {
+   "id": "dodakvarter",
+   "name": "Döda Kvarter",
+   "tile": "Döda Kvarter",
+   "kind": "game",
+   "developer": "JorreFog",
+   "genre": "Shooter / Roguelike",
+   "players": "1",
+   "releasedate": "20261006T000000",
+   "accent": "#b8323a",
+   "summary": "A zombie roguelike for both screens, set in a Swedish suburb at night.",
+   "description": "Survive round after round as in Call of Duty Zombies: earn kronor, buy your way through barricades into new districts, find the power, drink Julmust and Snabbkaffe, try Lådan (beware the Dalahäst) and upgrade at Smedjan. Every town is new and the loot gets better every round. Eight bosses from Swedish folklore. The top screen is the game, the bottom screen your inventory, health, ammo and the map. Runs natively at 60 frames a second on both panels.",
+   "icon": "../dii-ess-aye/themes/rocknixds-pixel-dark/rnds/icons/dodakvarter.png",
+   "screenshots": ["../dodakvarter/device/media/dodakvarter-image.png"],
+   "devices": ["rgds", "rgds-plus"],
+   "release": {
+    "version": "0.3.0",
+    "url": "dodakvarter-v0.3.0/dodakvarter-0.3.0-aarch64.tar.gz",
+    "sha256": "6ca3c71c2e58402209d9f378470eeb468204109a07416d1e608b840dba6e2d8e",
+    "size": 8781930,
+    "notes": "Döda Kvarter, the zombie roguelike for both screens of the RG DS and RG DS Plus (ROCKNIXDS).\n\n## What's new in 0.3\n\n- **Kert Barlsson on the radio.** You wake up in a world the forces of evil have taken: the dead walk, and Mörkret has\n  woken the old ones from the stories, eight Väktare that hold the land. Kert, an old businessman broadcasting from a\n  warehouse, talks you through taking it back, district by district, Väktare by Väktare. His box comes up on the top\n  screen now and then with the story, a word when you need it, and between rounds a tip. *Settings > Radio (Kert)*\n  turns him off. How to play opens with the story.\n- **Music**: new songs for the title, under the play, for the boss fights and for game over.\n\n## Install\n\n**On the handheld:** the game updates itself: start it with Wi-Fi on, and the title says a new version is out; then\n**Settings > Game updates**. Or over ssh, as root: `/storage/.config/rocknixds/dodakvarter/update.sh install`. High\nscores and settings stay.\n\nUpdating the game this way needs ROCKNIXDS 1.6.1 or later; on 1.6, update ROCKNIXDS first (**Updates & downloads >\nROCKNIXDS**). This is a pre-release on purpose: ROCKNIXDS's own updater only takes ROCKNIXDS's releases.\n"
+   },
+   "package": {
+    "root": "dodakvarter",
+    "dest": "/storage/.config/rocknixds/dodakvarter",
+    "check": "dodakvarter",
+    "keep": ["data"],
+    "executable": ["dodakvarter"],
+    "version_default": "0.1.0",
+    "unit": "dodakvarter-game"
+   },
+   "menu": {
+    "system": "dodakvarter",
+    "folder": "/storage/.config/rocknixds/apps/dodakvarter",
+    "entry": "Doda Kvarter.sh",
+    "media": {
+     "image": "media/dodakvarter-image.png",
+     "thumbnail": "media/dodakvarter-thumb.png",
+     "marquee": "media/dodakvarter-marquee.png"
+    }
+   }
+  },
+  {
+   "id": "bank",
+   "name": "ROCKNIXDS Bank & Trade",
+   "tile": "Bank & Trade",
+   "kind": "app",
+   "developer": "JorreFog",
+   "genre": "Tool",
+   "players": "1-2",
+   "releasedate": "20261006T000000",
+   "accent": "#3d6fb8",
+   "summary": "A Pokémon bank, legality checker and trading app, built on PKHeX.Core.",
+   "description": "Reads your game saves (generation 1 to 5), stores Pokémon in boxes of its own, moves them between games through the bank (they change format only when they move up a generation, as Pal Park and Poké Transfer did), checks every one with PKHeX's legality analysis, and trades with another handheld over Wi-Fi, in a lobby or a private room. Close the game before you use it: emulators write their own copy of the save when they quit. Your bank stays in /storage/roms/rocknixds-bank, also when the app is removed.",
+   "icon": "../dii-ess-aye/themes/rocknixds-pixel-dark/rnds/icons/bank.png",
+   "screenshots": ["../bank/device/media/bank-image.png"],
+   "devices": ["rgds", "rgds-plus"],
+   "release": {
+    "github": "JorreFog/ROCKNIXDS",
+    "tag_prefix": "bank-v",
+    "asset": "rocknixds-bank-{version}-aarch64.tar.gz"
+   },
+   "package": {
+    "root": "rocknixds-bank",
+    "dest": "/storage/.config/rocknixds/bank",
+    "check": "rocknixds-bank",
+    "executable": ["rocknixds-bank"]
+   },
+   "menu": {
+    "system": "rocknixdsbank",
+    "folder": "/storage/.config/rocknixds/apps/bank",
+    "entry": "ROCKNIXDS Bank.sh",
+    "media": {
+     "image": "media/bank-image.png",
+     "thumbnail": "media/bank-thumb.png",
+     "marquee": "media/bank-marquee.png"
+    }
+   }
+  },
+  {
+   "id": "store",
+   "name": "ROCKNIXDS Store",
+   "tile": "Store",
+   "kind": "app",
+   "developer": "JorreFog",
+   "genre": "Tool",
+   "players": "1",
+   "releasedate": "20261008T000000",
+   "accent": "#2eae62",
+   "summary": "This Store: games and apps for ROCKNIXDS, installed and updated in one press.",
+   "description": "Lists the games and apps made for ROCKNIXDS, installs them with a tile of their own on the menu's shelf, and keeps them up to date without waiting for a ROCKNIXDS release. Updates to the Store itself come through here too.",
+   "icon": "../dii-ess-aye/themes/rocknixds-pixel-dark/rnds/icons/store.png",
+   "devices": ["rgds", "rgds-plus"],
+   "release": {
+    "github": "JorreFog/ROCKNIXDS",
+    "tag_prefix": "store-v",
+    "asset": "rocknixds-store-{version}-aarch64.tar.gz"
+   },
+   "package": {
+    "root": "store",
+    "dest": "/storage/.config/rocknixds/store",
+    "check": "rocknixds-store",
+    "keep": ["data"],
+    "executable": ["store", "rocknixds-store"]
+   },
+   "menu": {
+    "system": "rocknixdsstore",
+    "folder": "/storage/.config/rocknixds/apps/store",
+    "entry": "ROCKNIXDS Store.sh"
+   }
+  }
+ ]
+}

@@ -1,0 +1,15 @@
+[
+ {
+  "tag_name": "dodakvarter-v0.3.0",
+  "name": "Döda Kvarter 0.3.0 (private test build)",
+  "draft": false,
+  "prerelease": true,
+  "body": "Döda Kvarter, the zombie roguelike for both screens of the RG DS and RG DS Plus (ROCKNIXDS).\n\n## What's new in 0.3\n\n- **Kert Barlsson on the radio.** You wake up in a world the forces of evil have taken: the dead walk, and Mörkret has\n  woken the old ones from the stories, eight Väktare that hold the land. Kert, an old businessman broadcasting from a\n  warehouse, talks you through taking it back, district by district, Väktare by Väktare. His box comes up on the top\n  screen now and then with the story, a word when you need it, and between rounds a tip. *Settings > Radio (Kert)*\n  turns him off. How to play opens with the story.\n- **Music**: new songs for the title, under the play, for the boss fights and for game over.\n\n## Install\n\n**On the handheld:** the game updates itself: start it with Wi-Fi on, and the title says a new version is out; then\n**Settings > Game updates**. Or over ssh, as root: `/storage/.config/rocknixds/dodakvarter/update.sh install`. High\nscores and settings stay.\n\nUpdating the game this way needs ROCKNIXDS 1.6.1 or later; on 1.6, update ROCKNIXDS first (**Updates & downloads >\nROCKNIXDS**). This is a pre-release on purpose: ROCKNIXDS's own updater only takes ROCKNIXDS's releases.\n",
+  "assets": [
+   {
+    "name": "dodakvarter-0.3.0-aarch64.tar.gz",
+    "size": 8781930
+   }
+  ]
+ }
+]
