@@ -186,6 +186,7 @@ if [ $UNINSTALL = 1 ]; then
     es_stop
     grep -q " /usr/bin/start_es.sh " /proc/mounts && umount /usr/bin/start_es.sh || true
     rm -f /storage/.config/autostart/dii-ess-aye
+    rm -f /storage/.config/profile.d/085-rocknixds-pad
     B=$BACKUP/storage
     if [ $RESTORE_FILES = 1 ]; then
         # whole files from the install-time copies (what 1.2 always did): also undoes settings made since
@@ -413,6 +414,14 @@ if [ $THEME_ON = 1 ]; then
     cp "$SRC/dii-ess-aye/device/sway-config.theme" /storage/dii-ess-aye-backup/sway-config.theme
     mkdir -p /storage/.config/rocknixds && cp "$SRC/dii-ess-aye/device/ra-launch-log.sh" /storage/.config/rocknixds/ra-launch-log.sh &&
         chmod +x /storage/.config/rocknixds/ra-launch-log.sh
+    # Apps started from the menu (File Manager, PortMaster, ports) take the pad while their window isn't focused. sway
+    # focuses a new window on seat1 only, and seat0 (it has the touchscreen, for ES) stays where the last tap left it:
+    # after a tap on the bottom screen, File Manager and PortMaster ignored every button (RG DS Plus, test build 6).
+    # SDL drops pad events for an unfocused window unless this is set. /etc/profile reads profile.d, and the apps'
+    # launch scripts source it; start_es_rgds.sh unsets it for ES itself.
+    mkdir -p /storage/.config/profile.d
+    printf '%s\n' '# ROCKNIXDS (install.sh): the pad for apps whose window sway focused on the other seat' \
+        'export SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1' > /storage/.config/profile.d/085-rocknixds-pad
     cp "$SRC/dii-ess-aye/device/autostart-dii-ess-aye" /storage/.config/autostart/dii-ess-aye
     chmod +x /storage/.config/autostart/dii-ess-aye
     # restart ES when the theme choice switches between this theme and another (their canvases differ)
