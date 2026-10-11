@@ -33,13 +33,13 @@ jobs:
       - name: Scenes, random scenes, benchmark
         run: bananads/build/host/banana2d-test --scenes --fuzz 300 --bench 30
       - name: A real ROM through melonDS
-        run: bananads/build/host/banana2d-test --rom bananads/rom/out/banana2d.nds --rom-frames 680
+        run: bananads/build/host/banana2d-test --rom bananads/rom/out/banana2d.nds --rom-frames 720
       - name: aarch64 build (RG DS, static)
         run: sh bananads/build.sh aarch64
       - name: aarch64 under qemu
         run: |
           qemu-aarch64-static bananads/build/aarch64/banana2d-test --scenes --fuzz 60
-          qemu-aarch64-static bananads/build/aarch64/banana2d-test --rom bananads/rom/out/banana2d.nds --rom-frames 680
+          qemu-aarch64-static bananads/build/aarch64/banana2d-test --rom bananads/rom/out/banana2d.nds --rom-frames 720
       - uses: actions/upload-artifact@v4
         with:
           name: banana2d-test-aarch64-${{ github.sha }}

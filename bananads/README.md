@@ -47,8 +47,8 @@ has no SIMD to gain from it). Best of three runs of 60 frames.
 | **total** | | **32.17** | **11.02** | **2.9x** |
 
 A real ROM, `rom/banana2d.nds`, through melonDS itself (the interpreter, both renderers in turn; only the
-time in the 2D renderer's scanline and sprite calls is counted): 680 frames, all 680 identical,
-**3.30 ms -> 1.23 ms per frame, 2.7x**. The same ROM through the static aarch64 build under qemu: 680
+time in the 2D renderer's scanline and sprite calls is counted): 720 frames, all 720 identical,
+**3.32 ms -> 1.20 ms per frame, 2.8x**. The same ROM through the static aarch64 build under qemu: 720
 identical frames.
 
 Where the time went in melonDS's engine, and what changed: every BG pixel was a function call with a
@@ -72,7 +72,8 @@ framebuffers (after master brightness and colour expansion) and on captured VRAM
 - random scenes: random registers, VRAM, palettes, OAM and VRAM mapping, and for half of them random
   register, palette, OAM and VRAM writes during the frame (as a game's HBlank handler does), checked
   after each frame; 200 seeds in `build.sh test`, 300 in CI, both 2D units, no mismatch found;
-- the test ROM through the whole emulator, 680 frames;
+- the test ROM through the whole emulator, 720 frames (548 with a picture: the rest is the boot and
+  the white screens after the last phase);
 - all of it again as the aarch64 build (NEON code paths) under qemu-user.
 
 The register semantics are melonDS's: the two-scanline layer enable delay, the window edge state that
@@ -147,7 +148,7 @@ frame time; the 2D time per frame is what the engine saves.
   affine rotation, bitmaps with fades, mosaic, raster effects from a VCOUNT poll, and a 3D layer with
   translucent quads under 2D layers), all graphics from a PRNG so there is nothing to ship but the code.
   The boot (filling VRAM) takes about 140 frames on the interpreter, and the raster phase two frames per
-  iteration, so the 3D phase starts around frame 620.
+  iteration, so the 3D phase runs from about frame 630 to 690 (`--rom-frames 720` covers all of it).
 - The harness builds melonDS headless (no Qt, no OpenGL, no GDB stub, no JIT, no LTO) with the same
   optimisation flags for both renderers.
 - License: `gpu2d/`, `tests/` and `melonds-core.patch` are GPL-3.0-or-later like melonDS, which they

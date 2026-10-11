@@ -129,11 +129,12 @@ static void wait_vblank(void) {
 static void w32(volatile u8 *base, u32 off, u32 v) { *(volatile u32 *)(base + off) = v; }
 static void w16(volatile u8 *base, u32 off, u16 v) { *(volatile u16 *)(base + off) = v; }
 
+// tile 0 is blank, as in most games, so an 'empty' map entry shows what is underneath
 static void gen_tiles16(volatile u8 *base, u32 off, int n, int zeropct) {
     for (int t = 0; t < n; t++)
         for (int r = 0; r < 8; r++) {
             u32 v = 0;
-            for (int k = 0; k < 8; k++) v |= (chance(zeropct) ? 0 : 1 + rndn(15)) << (k * 4);
+            if (t) for (int k = 0; k < 8; k++) v |= (chance(zeropct) ? 0 : 1 + rndn(15)) << (k * 4);
             w32(base, off + t * 32 + r * 4, v);
         }
 }
@@ -142,7 +143,7 @@ static void gen_tiles256(volatile u8 *base, u32 off, int n, int zeropct) {
     for (int t = 0; t < n; t++)
         for (int r = 0; r < 16; r++) {
             u32 v = 0;
-            for (int k = 0; k < 4; k++) v |= (chance(zeropct) ? 0 : 1 + rndn(255)) << (k * 8);
+            if (t) for (int k = 0; k < 4; k++) v |= (chance(zeropct) ? 0 : 1 + rndn(255)) << (k * 8);
             w32(base, off + t * 64 + r * 4, v);
         }
 }
@@ -403,7 +404,7 @@ static void phase_setup(int phase) {
     case 7:
         DISPCNT(0) = 0x00011718;                                  // mode 0: BG0 = 3D, BG1, BG2, OBJ
         BGCNT(0, 0) = 0x0001;
-        BGCNT(0, 1) = 0x0000 | (0x10 << 8);
+        BGCNT(0, 1) = 0x0000 | (0x15 << 8);                       // the half-empty map: a HUD over the 3D
         BGCNT(0, 2) = 0x0002 | (0x11 << 8) | (4 << 2) | (1 << 7);
         BLDCNT(0) = 0x0441 | 0x2000;                              // 3D 1st, BG2 + backdrop 2nd, alpha
         BLDALPHA(0) = 8 | (8 << 8);

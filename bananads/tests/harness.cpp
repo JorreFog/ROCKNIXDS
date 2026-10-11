@@ -1148,7 +1148,7 @@ static bool RunRom(const std::vector<u8>& rom, int nframes, RomRun& out, const c
         nds->GPU.GetFramebuffers(&top, &bottom);
         out.frames[f].top.assign((u32*)top, (u32*)top + 256*192);
         out.frames[f].bottom.assign((u32*)bottom, (u32*)bottom + 256*192);
-        if (dumpPrefix && (f % 60) == 30)
+        if (dumpPrefix && (f % 30) == 15)
         {
             char path[512];
             snprintf(path, sizeof(path), "%s-f%03d-top.ppm", dumpPrefix, f);
@@ -1218,7 +1218,7 @@ int main(int argc, char** argv)
     u64 seed = 1;
     std::string only;
     std::string romPath;
-    int romFrames = 680;
+    int romFrames = 720;
     for (int i = 1; i < argc; i++)
     {
         std::string a = argv[i];
