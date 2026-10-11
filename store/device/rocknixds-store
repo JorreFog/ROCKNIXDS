@@ -18,11 +18,13 @@ fails leaves the app as it was. refresh ends with OK or OFFLINE.
 
 The catalog (store/catalog.json in the ROCKNIXDS repository; RNDS_STORE_CATALOG names another, a URL or a file) lists
 every app: what it is, where its releases are (GitHub releases, a tag prefix and the package's file name, or a pinned
-URL and sha256), and how its package is laid out. A package is a .tar.gz with one folder; an app.json in that folder
-can say the same things about its layout as the catalog does, and wins. store/README.md has the whole format.
+URL and sha256), and how its package is laid out. A package is a .tar.gz or a .zip with one folder; an app.json in that
+folder can say the same things about its layout as the catalog does, and wins. A GitHub release's download is checked
+against the sha256 GitHub lists for it, else the .sha256 file beside it. store/README.md has the whole format.
 
 An app is installed when its folder (/storage/.config/rocknixds/<id> unless it says otherwise) holds the package's
-check file; its version is the folder's VERSION. So apps put there by their own installers (ROCKNIXDS's install.sh
+check file; its version is the folder's VERSION (or what the app's own version file says, for an app that updates
+itself). So apps put there by their own installers (ROCKNIXDS's install.sh
 for Döda Kvarter, install-bank.sh for the bank) count as installed, and the Store updates them in place.
 
 Its entry in the menu is a tile of its own where ROCKNIXDS lists apps as systems (es_systems_rocknixds.cfg, ROCKNIXDS
@@ -41,10 +43,12 @@ import re
 import shutil
 import subprocess
 import sys
+import stat
 import tarfile
 import time
 import urllib.parse
 import xml.etree.ElementTree as ET
+import zipfile
 import zlib
 
 ROOT = os.environ.get("RNDS_STORE_ROOT", "")
@@ -268,6 +272,9 @@ def layout(app, pkg=None):
         "icon": "",                                         # a 32x32 picture in the package, for the tile
         "ports": True,                                      # without tiles: a line in Ports
         "unit": "",                                         # the systemd unit it runs in: no install while it's up
+        "version_file": "",                                 # a file in it that holds its version (an app that updates
+        "version_match": "",                                # itself): the regex's first group, else the file's text
+        "launch": "",                                       # a script in it the Store writes the tile's entry for
     }
     for src in (app.get("package"), app.get("menu"), pkg):
         if isinstance(src, dict):
@@ -296,12 +303,30 @@ def stored_layout(app):
     return layout(app, pkg) if pkg else lay
 
 
+def own_version(d, lay):
+    """the version the app's own version file says (an app that updates itself keeps it), or "" """
+    if not lay["version_file"]:
+        return ""
+    try:
+        with open(os.path.join(d, safe_rel(lay["version_file"])), encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError:
+        return ""
+    if lay["version_match"]:
+        m = re.search(lay["version_match"], text)
+        return m.group(1).strip() if m and m.groups() else ""
+    return text.strip()
+
+
 def installed_version(app):
     lay = stored_layout(app)
     d = P(lay["dest"])
     check = os.path.join(d, safe_rel(lay["check"])) if lay["check"] else os.path.join(d, "VERSION")
     if not os.path.exists(check):
         return ""
+    v = own_version(d, lay)
+    if v:
+        return v
     try:
         with open(os.path.join(d, "VERSION")) as f:
             v = f.read().strip()
@@ -343,14 +368,22 @@ def resolve(app, cache):
         v = t[len(prefix):]
         if not VER_RE.match(v) or (best and not newer(v, best["version"])):
             continue
-        name = asset.format(version=v)
-        size = 0
-        for a in r.get("assets") or []:
-            if a.get("name") == name:
-                size = a.get("size") or 0
-        url = DOWNLOAD.format(repo=repo, tag=t, asset=name)
-        best = {"version": v, "url": url, "sha256_url": url + ".sha256", "size": size, "notes": r.get("body") or ""}
+        best = release_of(repo, r, t, asset.format(version=v), v)
     return best
+
+
+def release_of(repo, r, tag, name, v):
+    """a release's download: its URL, size and checksum (the sha256 GitHub lists for the asset, else the .sha256
+    file beside it)"""
+    url = DOWNLOAD.format(repo=repo, tag=tag, asset=name)
+    res = {"version": v, "url": url, "sha256_url": url + ".sha256", "size": 0, "notes": (r or {}).get("body") or ""}
+    for a in (r or {}).get("assets") or []:
+        if a.get("name") == name:
+            res["size"] = a.get("size") or 0
+            digest = str(a.get("digest") or "")
+            if re.match(r"^sha256:[0-9a-fA-F]{64}$", digest):
+                res["sha256"] = digest[7:].lower()
+    return res
 
 
 def plain_notes(md, limit=1200):
@@ -587,6 +620,48 @@ def unlist(folder, lay):
             pass
 
 
+def shq(s):
+    return "'" + str(s).replace("'", "'\\''") + "'"
+
+
+# The tile's entry for an app whose own start script lives in its folder ("launch"): it runs that script and gives the
+# menu its bottom panel back as it was. An app made for ROCKNIX turns the bottom panel off as it leaves (ROCKNIX's
+# menu has it off); ROCKNIXDS's dual-screen menu has it on.
+LAUNCHER = """#!/bin/sh
+# %(name)s, from the ROCKNIXDS Store (written by rocknixds-store: an install or an update writes it again). Starts the
+# app's own script, then gives the menu its bottom panel back as it had it.
+APP=%(script)s
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/var/run/0-runtime-dir}"
+if [ -z "$SWAYSOCK" ]; then
+    SWAYSOCK=$(ls "$XDG_RUNTIME_DIR"/sway-ipc.*.sock 2>/dev/null | head -n1)
+    export SWAYSOCK
+fi
+BOTTOM_ON=
+if [ -n "$SWAYSOCK" ] && command -v swaymsg >/dev/null; then
+    swaymsg -r -t get_outputs 2>/dev/null | python3 -c 'import json, sys
+sys.exit(0 if any(o.get("name") == "DSI-1" and o.get("power", o.get("dpms", o.get("active"))) for o in json.load(sys.stdin)) else 1)' \\
+        2>/dev/null && BOTTOM_ON=1
+fi
+back() {
+    [ -n "$BOTTOM_ON" ] && swaymsg output DSI-1 power on >/dev/null 2>&1
+}
+pid=
+stop() {
+    [ -n "$pid" ] && kill "$pid" 2>/dev/null && wait "$pid"
+    back
+    exit 143
+}
+trap stop TERM INT HUP
+"$APP" "$@" &
+pid=$!
+wait "$pid"
+rc=$?
+pid=
+back
+exit $rc
+"""
+
+
 def list_in_menu(app, lay):
     """the app's entry where this ROCKNIXDS puts apps: its own tile, else Ports"""
     entry = lay["entry"]
@@ -601,7 +676,12 @@ def list_in_menu(app, lay):
     folder = P(folder)
     os.makedirs(os.path.join(folder, "images"), exist_ok=True)
     tmp = os.path.join(folder, entry + ".new")
-    shutil.copyfile(os.path.join(dest, safe_rel(entry)), tmp)
+    if lay["launch"]:
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(LAUNCHER % {"name": re.sub(r"[\r\n]", " ", app.get("name", app["id"])),
+                                "script": shq(os.path.join(lay["dest"], safe_rel(lay["launch"])))})
+    else:
+        shutil.copyfile(os.path.join(dest, safe_rel(entry)), tmp)
     os.chmod(tmp, 0o755)
     os.replace(tmp, os.path.join(folder, entry))
     fields = [("name", app.get("name", app["id"])), ("desc", app.get("description") or app.get("summary", ""))]
@@ -761,8 +841,11 @@ def check_idle(lay):
         raise Fail("It's running: quit it first")
 
 
-def extract(tgz, into):
-    with tarfile.open(tgz, "r:gz") as t:
+def extract(pkg, into):
+    """a .tar.gz or a .zip (by what's in it), refused when a path in it would land outside"""
+    if zipfile.is_zipfile(pkg):
+        return extract_zip(pkg, into)
+    with tarfile.open(pkg, "r:gz") as t:
         for m in t.getmembers():
             n = m.name
             if n.startswith("/") or ".." in n.split("/") or not (m.isfile() or m.isdir() or m.issym()):
@@ -773,6 +856,28 @@ def extract(tgz, into):
             t.extractall(into, filter="tar")
         except TypeError:                               # Python before 3.12
             t.extractall(into)
+
+
+def extract_zip(pkg, into):
+    """a zip, with the permissions it was made with (a zip from Linux or macOS keeps them; links are refused)"""
+    with zipfile.ZipFile(pkg) as z:
+        members = z.infolist()
+        for m in members:
+            n = m.filename
+            mode = m.external_attr >> 16
+            if not n or n.startswith("/") or "\\" in n or ".." in n.split("/") or stat.S_ISLNK(mode):
+                raise Fail("Package damaged")
+        for m in members:
+            dest = os.path.join(into, m.filename)
+            if m.is_dir():
+                os.makedirs(dest, exist_ok=True)
+                continue
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            with z.open(m) as src, open(dest, "wb") as f:
+                shutil.copyfileobj(src, f, 1 << 20)
+            mode = (m.external_attr >> 16) & 0o777
+            if mode:
+                os.chmod(dest, mode | 0o600)
 
 
 def install(app_id, version=None):
@@ -798,7 +903,7 @@ def install(app_id, version=None):
     os.makedirs(work)
     try:
         step("Downloading %s" % v)
-        pkg = os.path.join(work, "pkg.tar.gz")
+        pkg = os.path.join(work, "pkg")
         if not fetch(rel["url"], pkg, timeout=900):
             raise Fail("Download failed")
         step("Checking it")
@@ -810,12 +915,14 @@ def install(app_id, version=None):
         with open(pkg, "rb") as f:
             for chunk in iter(lambda: f.read(1 << 20), b""):
                 h.update(chunk)
-        if not want or h.hexdigest() != want:
+        if not want:
+            raise Fail("No checksum published for it")
+        if h.hexdigest() != want:
             raise Fail("Download damaged")
         x = os.path.join(work, "x")
         try:
             extract(pkg, x)
-        except (tarfile.TarError, OSError, EOFError):
+        except (tarfile.TarError, zipfile.BadZipFile, OSError, EOFError):
             raise Fail("Package damaged")
         lay = layout(app)
         src = os.path.join(x, safe_rel(lay["root"]))
@@ -830,7 +937,10 @@ def install(app_id, version=None):
         if check and not os.path.exists(check):
             raise Fail("Package incomplete")
         vf = os.path.join(src, "VERSION")
-        if os.path.exists(vf):
+        if lay["version_file"]:
+            if own_version(src, lay) != v:
+                raise Fail("Wrong version inside")
+        elif os.path.exists(vf):
             with open(vf) as f:
                 if f.read().strip() != v:
                     raise Fail("Wrong version inside")
@@ -897,8 +1007,9 @@ def resolve_version(app, version, cache):
     repo, prefix, asset = rel.get("github"), rel.get("tag_prefix"), rel.get("asset")
     if not (repo and prefix and asset) or not VER_RE.match(version):
         return None
-    url = DOWNLOAD.format(repo=repo, tag=prefix + version, asset=asset.format(version=version))
-    return {"version": version, "url": url, "sha256_url": url + ".sha256", "size": 0}
+    lst = releases(repo, cache)
+    r = next((r for r in lst if r.get("tag_name") == prefix + version), None) if isinstance(lst, list) else None
+    return release_of(repo, r, prefix + version, asset.format(version=version), version)
 
 
 def remove(app_id):

@@ -1,7 +1,7 @@
 # ROCKNIXDS Store
 
-**Games and apps for ROCKNIXDS, installed and updated from the menu.** Döda Kvarter, ROCKNIXDS Bank & Trade and every
-app that comes later are one press away: no ssh, no commands, and no waiting for a ROCKNIXDS release to get a new app or
+**Games and apps for ROCKNIXDS, installed and updated from the menu.** Döda Kvarter, ROCKNIXDS Bank & Trade,
+casualducko's [eReaderDS](https://github.com/casualducko/eReaderDS) and every app that comes later are one press away: no ssh, no commands, and no waiting for a ROCKNIXDS release to get a new app or
 an update to one. Every app gets a tile of its own on the menu's shelf.
 
 <p align="center">
@@ -42,6 +42,23 @@ Store (the menu reads its list of systems when it starts).
   0.3.0*. It follows the menu's *Updates & downloads > ROCKNIXDS > Check for updates automatically* switch, as
   ROCKNIXDS's own update check does.
 - **The Store updates itself** the same way: it restarts into the new version.
+- **Apps that update themselves** (eReaderDS has its own *Check for Updates*): the Store reads the version from the
+  app's own version file, so an update made in the app is never offered again, and one made in the Store is what the
+  app sees.
+
+### Apps from other developers
+
+An app made outside ROCKNIXDS is listed with its developer's permission and installed from the developer's own GitHub
+releases, exactly as they publish them: nothing is rebuilt or re-hosted here, and a new release reaches every handheld
+at its next check without a change to this repository.
+
+| App | Developer | Releases | Handhelds |
+|---|---|---|---|
+| eReaderDS: a two-page ebook reader | [casualducko](https://github.com/casualducko/eReaderDS) | `v<version>` tags, `eReaderDS-v<version>.zip` (pre-releases such as `v1.3.0-beta` are skipped, as its own updater skips them) | RG DS Plus (its developer's target), ROCKNIXDS 1.6 on |
+
+eReaderDS goes to `/storage/.config/rocknixds/ereaderds` (the zip's `Ports` folder) with a tile of its own; books, fonts
+and its settings stay in `/storage/roms/ebook` (the `games-roms` share's `ebook` folder), also when it's removed or
+updated. A copy put in `roms/ports` by hand stays as it is: remove that one yourself if you use the Store's.
 
 Over ssh, the same as root:
 
@@ -69,7 +86,9 @@ store/catalog.json  ──fetched from main──▶  rocknixds-store  ──Git
                                                   └─▶ ROCKNIXDS Pixel's rnds/systems.cfg + icon   its icon, colour and [app], if the theme doesn't name it
 ```
 
-- **`device/rocknixds-store`**: the package manager (Python 3, as ROCKNIX ships it; downloads with curl). Everything
+- **`device/rocknixds-store`**: the package manager (Python 3, as ROCKNIX ships it; downloads with curl). A package is
+  a `.tar.gz` or a `.zip` (its permissions kept, links refused), checked against the sha256 GitHub lists for the
+  release's asset, else the `.sha256` file beside it; with neither it isn't installed. Everything
   the app does is one of its commands; long jobs print `STEP <what>` lines and end with `DONE <version>` or
   `FAIL <why>`. An install unpacks next to the old copy, moves what the app keeps over, then swaps the folders, so a
   failure leaves the old version working. An app is *installed* when its folder holds its check file, whoever put it
@@ -136,7 +155,7 @@ The fields:
 | `icon`, `screenshots` | 32x32 PNG; 4:3 PNGs (the first is shown). Relative to the catalog, or URLs. 8-bit, not interlaced |
 | `devices` | `rgds`, `rgds-plus` (left out: both) |
 | `requires.rocknixds` | the oldest ROCKNIXDS it runs on |
-| `release` | `github` + `tag_prefix` + `asset` (the newest release by version, its `.sha256` beside it), or `url` + `version` + `sha256` |
+| `release` | `github` + `tag_prefix` + `asset` (the newest release by version; tags with a suffix, like `-beta`, are skipped; checked against GitHub's sha256 for the asset, else its `.sha256` beside it), or `url` + `version` + `sha256` |
 | `hidden` | listed for updates only, not shown |
 
 | Package (`app.json`, or `package` / `menu` in the catalog for a package without one) | Default |
@@ -144,9 +163,11 @@ The fields:
 | `root` | the package's one folder | the id |
 | `dest` | where it's installed (under `/storage`) | `/storage/.config/rocknixds/<id>` |
 | `check` | the file that says it's installed | `VERSION` |
+| `version_file`, `version_match` | the app's own file that holds its version, and a regex whose first group is it (for an app that updates itself) | the folder's `VERSION` |
 | `keep` | files and folders an update or a remove leaves (saves, settings) | none |
 | `executable` | files made executable (every `.sh` is) | none |
 | `entry` | the script that starts it, in the package: copied to its tile | none (no tile) |
+| `launch` | a script in the installed folder: the Store writes `entry` itself, which runs it and turns the bottom panel back on if the menu had it on (for an app made for ROCKNIX, whose own launcher leaves it off) | none |
 | `media` | `image`, `thumbnail`, `marquee` for the menu | none |
 | `icon` | 32x32 PNG for its tile (else the catalog's) | none |
 | `system`, `folder` | its ES system and the tile's folder | the id; `/storage/.config/rocknixds/apps/<id>` |

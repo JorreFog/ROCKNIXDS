@@ -2,6 +2,7 @@
 over what ROCKNIXDS's own installers put there, keeps what an app keeps, refuses damaged packages, and gives an app
 ROCKNIXDS doesn't know its tile (an ES system and a line in ROCKNIXDS Pixel's systems.cfg) and takes it away again."""
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -14,7 +15,7 @@ import importlib.util
 from loadmod import ROOT
 
 sys.path.insert(0, str(ROOT / "store" / "tests"))
-from sandbox import CLI, Sandbox, tar_package  # noqa: E402
+from sandbox import CLI, Sandbox, ereaderds_files, tar_package, zip_package  # noqa: E402
 
 _loader = importlib.machinery.SourceFileLoader("rocknixds_store", str(CLI))   # no .py: load it as Python anyway
 store = importlib.util.module_from_spec(importlib.util.spec_from_loader("rocknixds_store", _loader))
@@ -396,6 +397,159 @@ class StoreWithoutTilesTest(unittest.TestCase):
         self.assertNotIn(store.THEME_MARK_BEGIN, (self.sb.theme / "systems.cfg").read_text())
 
 
+class EReaderDSTest(unittest.TestCase):
+    """eReaderDS (casualducko/eReaderDS), an app from outside ROCKNIXDS, installed from its developer's own releases:
+    a zip of the SD card's Ports folder, checked against the sha256 GitHub lists for it. It updates itself too, so
+    its version is what its own app/version.lua says, and the Store follows every new release."""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.sb = Sandbox(self.tmp.name, device="rgds-plus")
+        self.sb.publish_ereaderds("1.23.1")
+        self.sb.publish_ereaderds("1.23.2")
+        self.cfg = self.sb.storage / ".config"
+        self.dest = self.cfg / "rocknixds" / "ereaderds"
+        self.tile = self.cfg / "rocknixds" / "apps" / "ereaderds"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_cli(self, *args, ok=True):
+        r = subprocess.run([sys.executable, str(CLI)] + list(args), env=self.sb.env(), capture_output=True, text=True)
+        last = r.stdout.strip().splitlines()[-1] if r.stdout.strip() else ""
+        if ok:
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return r, last
+
+    def state(self):
+        r, _ = self.run_cli("list")
+        return next(l.split("\t") for l in r.stdout.splitlines() if l.startswith("APP\tereaderds\t"))
+
+    def test_install_from_its_own_release_zip(self):
+        self.run_cli("refresh")
+        self.assertEqual(self.state()[5:8], ["", "1.23.2", "install"])
+        _, last = self.run_cli("install", "ereaderds")
+        self.assertEqual(last, "DONE 1.23.2")
+        # the Ports folder as on an SD card, its permissions kept
+        for rel in ("eReaderDS.sh", "eReaderDS/launch.sh", "eReaderDS/runtime/love.aarch64"):
+            self.assertTrue((self.dest / rel).stat().st_mode & 0o100, rel)
+        self.assertIn('return "1.23.2"', (self.dest / "eReaderDS/app/version.lua").read_text())
+        self.assertFalse((self.dest / "VERSION").exists())          # its version is its own file's
+        # its tile: the Store's entry runs the app's own script, then gives the menu its bottom panel back
+        entry = (self.tile / "eReaderDS.sh").read_text()
+        self.assertIn("APP='/storage/.config/rocknixds/ereaderds/eReaderDS.sh'", entry)
+        self.assertIn("swaymsg output DSI-1 power on", entry)
+        self.assertTrue((self.tile / "eReaderDS.sh").stat().st_mode & 0o100)
+        gl = (self.tile / "gamelist.xml").read_text()
+        self.assertIn("<name>eReaderDS</name>", gl)
+        self.assertIn("<developer>casualducko</developer>", gl)
+        self.assertIn("./images/icon.png", gl)
+        es = (self.sb.es / "es_systems_rocknixds-store.cfg").read_text()
+        self.assertIn("<name>ereaderds</name>", es)
+        self.assertIn("<path>/storage/.config/rocknixds/apps/ereaderds</path>", es)
+        theme = (self.sb.theme / "systems.cfg").read_text()
+        self.assertRegex(theme, r"\nereaderds +store-ereaderds\.png +#2b395e +casualducko \[app\]\n")
+        self.assertEqual((self.sb.theme / "icons" / "store-ereaderds.png").read_bytes(),
+                         (ROOT / "store/apps/ereaderds/icon.png").read_bytes())
+        self.assertFalse((self.sb.storage / "roms/ports/eReaderDS.sh").exists())
+        self.assertEqual(self.state()[5:8], ["1.23.2", "1.23.2", "installed"])
+
+    def test_new_release_is_an_update_that_keeps_the_books(self):
+        self.run_cli("install", "ereaderds", "--version", "1.23.1")
+        self.assertEqual(self.state()[5], "1.23.1")
+        books = self.sb.storage / "roms" / "ebook"
+        (books / ".ereaderds").mkdir(parents=True)
+        (books / ".ereaderds" / "progress.txt").write_text("frankenstein 5%\n")
+        self.sb.publish_ereaderds("1.24.0")
+        self.sb.publish_ereaderds("1.25.0-beta", prerelease=True)     # its pre-releases: never offered
+        self.run_cli("refresh")
+        self.assertEqual(self.state()[5:8], ["1.23.1", "1.24.0", "update"])
+        r, _ = self.run_cli("list")
+        self.assertIn("NOTES\tereaderds\tv1.24.0\\n\\n- Better page turns", r.stdout)
+        _, last = self.run_cli("update")
+        self.assertEqual(last, "DONE 1.24.0")
+        self.assertIn('return "1.24.0"', (self.dest / "eReaderDS/app/version.lua").read_text())
+        self.assertEqual((books / ".ereaderds" / "progress.txt").read_text(), "frankenstein 5%\n")
+
+    def test_its_own_updates_are_seen(self):
+        """eReaderDS updated itself (Settings > Check for Updates): the Store doesn't offer the same version again"""
+        self.run_cli("install", "ereaderds", "--version", "1.23.1")
+        self.sb.publish_ereaderds("1.24.0")
+        self.run_cli("refresh")
+        self.assertEqual(self.state()[7], "update")
+        (self.dest / "eReaderDS/app/version.lua").write_text('return "1.24.0"\n')
+        self.assertEqual(self.state()[5:8], ["1.24.0", "1.24.0", "installed"])
+
+    def test_checksum_from_github_and_damaged_downloads(self):
+        self.sb.publish_ereaderds("1.24.0", digest="0" * 64)
+        r, last = self.run_cli("install", "ereaderds", ok=False)
+        self.assertEqual(last, "FAIL Download damaged")
+        self.assertFalse(self.dest.exists())
+        self.sb.publish_ereaderds("1.24.1", digest=False)               # no digest, no .sha256: not installed
+        _, last = self.run_cli("install", "ereaderds", ok=False)
+        self.assertEqual(last, "FAIL No checksum published for it")
+        self.assertFalse(self.dest.exists())
+
+    def test_zip_that_would_write_outside_or_lies_about_its_version_is_refused(self):
+        bad = ereaderds_files("1.24.0")
+        bad["Ports/../../evil.sh"] = b"#!/bin/sh\n"
+        self.sb.publish_ereaderds("1.24.0", files=bad)
+        _, last = self.run_cli("install", "ereaderds", ok=False)
+        self.assertEqual(last, "FAIL Package damaged")
+        self.assertFalse((self.sb.base / "evil.sh").exists())
+        self.sb.publish_ereaderds("1.24.1", files=ereaderds_files("1.24.0"))
+        _, last = self.run_cli("install", "ereaderds", ok=False)
+        self.assertEqual(last, "FAIL Wrong version inside")
+        self.assertFalse(self.dest.exists())
+
+    def test_not_for_the_original_rg_ds(self):
+        self.sb.device = "rgds"
+        self.run_cli("refresh")
+        self.assertEqual(self.state()[7], "unsupported")
+        _, last = self.run_cli("install", "ereaderds", ok=False)
+        self.assertEqual(last, "FAIL Not made for this handheld")
+
+    def test_remove_keeps_the_books(self):
+        self.run_cli("install", "ereaderds")
+        books = self.sb.storage / "roms" / "ebook"
+        books.mkdir(parents=True)
+        (books / "frankenstein.epub").write_text("book")
+        _, last = self.run_cli("remove", "ereaderds")
+        self.assertEqual(last, "DONE")
+        self.assertFalse(self.dest.exists())
+        self.assertFalse(self.tile.exists())
+        self.assertNotIn("ereaderds", (self.sb.theme / "systems.cfg").read_text())
+        self.assertTrue((books / "frankenstein.epub").exists())
+
+    def test_entry_runs_the_app_and_passes_its_exit(self):
+        """the Store's entry (no sway here: nothing to give back) runs the app's script with its arguments"""
+        self.run_cli("install", "ereaderds")
+        app = self.sb.base / "app.sh"
+        app.write_text('#!/bin/sh\necho "$@" > "$(dirname "$0")/args"\nexit 3\n')
+        app.chmod(0o755)
+        entry = (self.tile / "eReaderDS.sh").read_text().replace(
+            "'/storage/.config/rocknixds/ereaderds/eReaderDS.sh'", "'%s'" % app)
+        env = {k: v for k, v in os.environ.items() if k not in ("SWAYSOCK",)}
+        env["XDG_RUNTIME_DIR"] = str(self.sb.base)
+        r = subprocess.run(["sh", "-c", entry, "eReaderDS.sh", "a", "b c"], env=env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 3, r.stderr)
+        self.assertEqual((self.sb.base / "args").read_text(), "a b c\n")
+
+    def test_zip_permissions_and_links(self):
+        z = self.sb.base / "t.zip"
+        zip_package(str(z), {"x/run": b"#!/bin/sh\n", "x/data.txt": b"d"}, ("x/run",))
+        into = self.sb.base / "out"
+        store.extract(str(z), str(into))
+        self.assertTrue((into / "x/run").stat().st_mode & 0o100)
+        self.assertFalse((into / "x/data.txt").stat().st_mode & 0o100)
+        import zipfile
+        with zipfile.ZipFile(z, "a") as zf:
+            zi = zipfile.ZipInfo("x/link")
+            zi.external_attr = 0o120777 << 16
+            zf.writestr(zi, "/etc/passwd")
+        with self.assertRaises(store.Fail):
+            store.extract(str(z), str(self.sb.base / "out2"))
+
+
 class CatalogTest(unittest.TestCase):
     """The catalog the Store fetches from main: every app's layout is one the package manager accepts, and every
     picture it names is in the repository."""
@@ -411,7 +565,7 @@ class CatalogTest(unittest.TestCase):
                 if ref:
                     self.assertTrue((ROOT / "store" / ref).resolve().exists(), ref)
             self.assertRegex(a.get("accent", "#000000"), r"^#[0-9a-f]{6}$")
-        self.assertTrue({"dodakvarter", "bank", "store"} <= ids)
+        self.assertTrue({"dodakvarter", "bank", "store", "ereaderds"} <= ids)
 
 
 if __name__ == "__main__":

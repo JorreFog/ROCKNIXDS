@@ -80,6 +80,44 @@
    }
   },
   {
+   "id": "ereaderds",
+   "name": "eReaderDS",
+   "tile": "eReaderDS",
+   "kind": "app",
+   "developer": "casualducko",
+   "genre": "Reader",
+   "players": "1",
+   "releasedate": "20260925T000000",
+   "accent": "#2b395e",
+   "summary": "A two-page ebook reader: hold the handheld sideways like an open book.",
+   "description": "Each screen shows one page. Reads EPUB and text books, and comics and manga (.cbz). Bookmarks, highlights, a dictionary, themes and fonts, KOReader sync, and books from Standard Ebooks, Project Gutenberg and other catalogs, or sent from your phone or computer over Wi-Fi. Put books in /storage/roms/ebook (the games-roms share's ebook folder); your books, settings and reading places stay there, also when the app is removed. Made by casualducko for the RG DS Plus; it updates itself too, and the Store follows its releases.",
+   "icon": "apps/ereaderds/icon.png",
+   "screenshots": ["apps/ereaderds/library.png"],
+   "devices": ["rgds-plus"],
+   "requires": { "rocknixds": "1.6" },
+   "release": {
+    "github": "casualducko/eReaderDS",
+    "tag_prefix": "v",
+    "asset": "eReaderDS-v{version}.zip"
+   },
+   "package": {
+    "root": "Ports",
+    "dest": "/storage/.config/rocknixds/ereaderds",
+    "check": "eReaderDS/launch.sh",
+    "executable": ["eReaderDS.sh", "eReaderDS/launch.sh", "eReaderDS/runtime/love.aarch64"],
+    "version_file": "eReaderDS/app/version.lua",
+    "version_match": "return \"([^\"]+)\""
+   },
+   "menu": {
+    "system": "ereaderds",
+    "folder": "/storage/.config/rocknixds/apps/ereaderds",
+    "entry": "eReaderDS.sh",
+    "launch": "eReaderDS.sh",
+    "ports": false,
+    "media": { "image": "eReaderDS/icon.png" }
+   }
+  },
+  {
    "id": "store",
    "name": "ROCKNIXDS Store",
    "tile": "Store",
