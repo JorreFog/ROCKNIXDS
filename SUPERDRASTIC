@@ -21,4 +21,11 @@
 # games), at 3x except where it now matches DraStic's own picture; 54 starts at 3x through this line's session.sh with
 # the build before PR #8 without a freeze, and the final library in real sessions. Source: SuperDrastic's
 # refs/testers/sd-9-test.1.
-0.5.0-beta.1-rocknixds.9-test.1 1d6b0535d84b72cc00a8069a4e6a70a679f68d08944d079635669bc1327f6a37
+# 0.5.0-beta.1-rocknixds.9-test.4 (PRIVATE test build 4, 2026-10-11; not a release): test build 3's library merged
+# into the Gengis Engine at SuperDrastic e646968 (2D scanline routines, geometry stage and A55-scheduled kernels
+# replaced) with test build 3's cache work ported onto it (kernel and downsample prefetch, no copy of an unchanged
+# 3D frame, direct rendering into the scanout buffers), 3x honouring disable_edge_marking, and issue 47's neighbour
+# polygons at 3x. Measured on the RG DS Plus against test build 3: 3x faster in all four games tried (stress ROM
+# 35.7 vs 34.9 fps at 1416 MHz, CPU a frame MKDS -4%, HeartGold -10%), 2x level; 2x exact (RAST=diff). Source:
+# SuperDrastic's refs/testers/sd-9-test.4.
+0.5.0-beta.1-rocknixds.9-test.4 80ae156281009eb404fda88950b1d6c3f94c3d2a8e9c1e2cc1d5817b5a96c88b
