@@ -1,6 +1,8 @@
 """A handheld in a folder, for the Store's tests and pictures: /storage under a temp dir (RNDS_STORE_ROOT), ROCKNIXDS's
 ES systems file and ROCKNIX Pixel's systems.cfg as install.sh puts them, a catalog of the real apps plus a new one
 ("hello", which ROCKNIXDS doesn't know), their releases as GitHub lists them and their packages, all file:// URLs.
+eReaderDS's releases are as its developer publishes them: a zip of the SD card's Ports folder, its sha256 in GitHub's
+asset list (no .sha256 file).
 
     python3 store/tests/sandbox.py <dir>     makes one and prints the environment to use it (for the Store app)
 """
@@ -11,6 +13,7 @@ import os
 import shutil
 import sys
 import tarfile
+import zipfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -41,6 +44,36 @@ def tar_package(path, root, files, mode_exec=()):
     sha = hashlib.sha256(Path(path).read_bytes()).hexdigest()
     Path(path + ".sha256").write_text("%s  %s\n" % (sha, os.path.basename(path)))
     return sha
+
+
+def zip_package(path, files, mode_exec=()):
+    """files: {path in the zip: bytes}; the sha256 of the zip"""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        for rel, body in files.items():
+            zi = zipfile.ZipInfo(rel, (2026, 10, 5, 0, 0, 0))
+            zi.external_attr = (0o100755 if rel in mode_exec else 0o100644) << 16
+            z.writestr(zi, body)
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def ereaderds_files(v):
+    """eReaderDS's release zip, as its tools/build-release.sh lays it out (the parts that matter here)"""
+    icon = (THEME / "icons" / "book.png").read_bytes()
+    return {
+        "Ports/eReaderDS.sh": b'#!/bin/sh\nPORTS_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 1\n'
+                              b'exec /bin/bash "$PORTS_DIR/eReaderDS/launch.sh" "$@"\n',
+        "Ports/Imgs/eReaderDS.png": icon,
+        "Ports/eReaderDS/launch.sh": b"#!/bin/bash\necho reading\n",
+        "Ports/eReaderDS/icon.png": icon,
+        "Ports/eReaderDS/README.txt": ("eReaderDS v%s\n" % v).encode(),
+        "Ports/eReaderDS/app/main.lua": b"-- the app\n",
+        "Ports/eReaderDS/app/version.lua": ('return "%s"\n' % v).encode(),
+        "Ports/eReaderDS/runtime/love.aarch64": b"\x7fELF love",
+    }
+
+
+EREADERDS_EXEC = ("Ports/eReaderDS.sh", "Ports/eReaderDS/launch.sh", "Ports/eReaderDS/runtime/love.aarch64")
 
 
 class Sandbox:
@@ -139,6 +172,22 @@ class Sandbox:
                  "media/hello-image.png": (REPO / "bank" / "device" / "media" / "bank-thumb.png").read_bytes()}
         files.update(extra or {})
         return self.publish("Someone/hello", "v" + v, "hello-%s-aarch64.tar.gz" % v, files, "hello", exec_=("hello",))
+
+    def publish_ereaderds(self, v, files=None, digest=True, prerelease=False):
+        """a release as casualducko/eReaderDS publishes one: tag v<version>, eReaderDS-v<version>.zip"""
+        repo, tag, asset = "casualducko/eReaderDS", "v" + v, "eReaderDS-v%s.zip" % v
+        p = self.dl / tag / asset
+        sha = zip_package(str(p), files or ereaderds_files(v), EREADERDS_EXEC)
+        a = {"name": asset, "size": p.stat().st_size}
+        if digest:
+            a["digest"] = "sha256:" + (sha if digest is True else digest)
+        self.releases.setdefault(repo, []).insert(0, {
+            "tag_name": tag, "draft": False, "prerelease": prerelease, "body": "## v%s\n\n- Better page turns\n" % v,
+            "assets": [a]})
+        f = self.rel / (repo + ".json")
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(self.releases[repo]))
+        return p
 
     def legacy_dodakvarter(self, v="0.2.0"):
         """Döda Kvarter as ROCKNIXDS's install.sh puts it: the game, its data, its tile"""

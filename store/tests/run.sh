@@ -13,9 +13,9 @@ python3 tests/sandbox.py "$T/hh" > "$T/env"
 R=$RNDS_STORE_ROOT/storage/.config
 export DK_DATA=$T/data ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1
 # 1. the first start refreshes and finds Döda Kvarter's update: it opens on the Updates tab. A updates it; the tab
-#    is empty then. Left twice: Apps; Hello Handheld is the third app: install it
+#    is empty then. Left twice: Apps; Hello Handheld is the fourth app (after the bank, eReaderDS and the Store): install it
 ./build/store --backend headless --script "job; wait 2; shot $T/home.png; a; job; wait 2; shot $T/done.png; a; wait 2;
-    shot $T/uptodate.png; left; left; down; down; a; job; a; wait 2; shot $T/games.png; quit"
+    shot $T/uptodate.png; left; left; down; down; down; a; job; a; wait 2; shot $T/games.png; quit"
 grep -qx 0.3.0 "$R/rocknixds/dodakvarter/VERSION" || { echo "FAIL: Döda Kvarter wasn't updated"; exit 1; }
 grep -q JRF "$R/rocknixds/dodakvarter/data/scores.txt" || { echo "FAIL: Döda Kvarter's high scores went"; exit 1; }
 grep -qx 1.0.0 "$R/rocknixds/hello/VERSION" || { echo "FAIL: hello wasn't installed"; exit 1; }
