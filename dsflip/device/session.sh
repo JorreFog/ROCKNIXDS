@@ -76,33 +76,12 @@ stuck_report() {
     systemctl stop essway.service sway.service
     echo "$(ms) ms: ES and sway stopped"
   fi
-  # without a shader the Mali GPU does nothing in this mode (the display controller scans out DraStic's
-  # buffers), so it goes to powersave (200 MHz): anything more is only heat. With a shader it draws every frame
-  # (lcd1x-nds-color: ~3 ms per screen at 800 MHz), under simple_ondemand with a 400 MHz floor. Measured
-  # 2026-09-27 (I6: Pokemon Black 2 at 2x, lcd1x-nds-color, ~5 min per setting in one session): pinned 800 MHz
-  # dropped 0.11 frames/s, the 400 MHz floor 0.05/s and a 300 MHz floor 0.04/s, with the GPU averaging ~500 MHz
-  # instead of 800 (the governor never went below 400, so 300 buys nothing). The SoC settled at ~67 C.
-  # Tunable without a rebuild: DSFLIP_SHADER_GOV=performance restores the old pinned clock.
   GPU=/sys/class/devfreq/fde60000.gpu
   GPU_GOV=$(cat $GPU/governor 2>/dev/null)
   GPU_MIN=$(cat $GPU/min_freq 2>/dev/null)
-  # The RG DS Plus (1024x768) has 2.56x the pixels per frame for a shader on the same GPU, so every shader
-  # starts at the full clock there. ds-fsr at that size is about 24 ms per frame: expect drops; ds-crisp is 4x.
   PANEL=; for m in /sys/class/drm/card*-DSI-*/modes; do read -r PANEL < "$m" 2>/dev/null && [ -n "$PANEL" ] && break; done
   BIG=; [ "${PANEL%%x*}" -gt 640 ] 2>/dev/null && BIG=1
-  case "${DSHOOK_SHADER:-none}" in
-    none|bilinear) GOV=powersave; MIN= ;;
-    # ds-fsr (FSR 1.0) needs ~9.5 ms of GPU per frame on the RG DS (~14 ms on the Plus, where it draws 3x the DS
-    # screen, 768x576, and the display controller scales the rest; SuperDrastic's shaders/ds-fsr.frag): under
-    # simple_ondemand it sat at 800 MHz 97% of the time and dropped frames while ramping up from the floor at the
-    # start, so it gets the full clock from the start
-    ds-fsr) GOV=${DSFLIP_SHADER_GOV:-performance}; MIN=$DSFLIP_SHADER_GPU_MIN ;;
-    *) if [ -n "$BIG" ]; then GOV=${DSFLIP_SHADER_GOV:-performance}; MIN=$DSFLIP_SHADER_GPU_MIN
-       else GOV=${DSFLIP_SHADER_GOV:-simple_ondemand}; MIN=${DSFLIP_SHADER_GPU_MIN:-400000000}; fi ;;
-  esac
-  [ -n "$BIG" ] && [ "$DSHOOK_SHADER" = ds-fsr ] &&
-    echo "note: ds-fsr costs ~2.5x more at ${PANEL} (~24 ms per frame, estimated): expect dropped frames; ds-crisp is exact 4x here"
-  [ -n "$GPU_GOV" ] && { echo "$GPU_GOV" > /tmp/dsflip-gpu-governor; echo "$GPU_MIN" > /tmp/dsflip-gpu-min; echo $GOV > $GPU/governor 2>/dev/null; [ -n "$MIN" ] && echo $MIN > $GPU/min_freq 2>/dev/null; }
+  # (the GPU's governor is set after the power profile, which it follows on the Plus)
   # libdsflip's CPU governor (cpugov.c) lowers the CPU's clock limit while the game runs; restore.sh puts it back.
   # A file left by a session that never got restored holds the real limit: keep it.
   CPU=/sys/devices/system/cpu/cpufreq/policy0
@@ -130,6 +109,12 @@ stuck_report() {
     eval $PWM 0 clock.allowed-rates "'[ 44100 48000 ]'" >/dev/null 2>&1
     eval $PWM 0 clock.force-rate ${DSFLIP_PW_RATE:-44100} >/dev/null 2>&1
   fi
+  # The audio's state, for the crackling seen on the RG DS Plus in test build 4: after ~7 h up, every session's audio
+  # drained ~3% fast (dsflip.log: "[audio] pump ~44.9k, drain ~45.5k Hz", underruns every window, trim at -20000 ppm)
+  # until a reboot; a fresh boot plays at 44.1k exactly. What puts it there isn't known yet: the uptime, the
+  # suspends since boot and PipeWire's clock settings here, and the graph as pw-top sees it 20 s into the game (below).
+  echo "audio: up $(cut -d' ' -f1 /proc/uptime) s, $(cat /sys/power/suspend_stats/success 2>/dev/null || echo ?) suspends;" \
+    "PipeWire $(eval $PWM 0 2>/dev/null | sed -n "s/.*key:'clock\.\([a-z-]*\)' value:'\([^']*\)'.*/\1=\2/p" | tr '\n' ' ')"
   rm -f $STATE $NOTICE
   # test launches (smoke.sh, switchtime.sh) don't teach libdsflip's CPU governor anything about the player's games
   [ -e /tmp/rocknixds-testing ] && export DSFLIP_CPUGOV_MEMORY=0
@@ -203,6 +188,31 @@ stuck_report() {
   # play at the clocks the governor held; a bound that slows the game down saves nothing worth it.
   [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX} DSFLIP_CPU_MAX_SOFT=${DSFLIP_CPU_MAX_SOFT:-1}
   echo "power profile: $PROF (queue $DSFLIP_QUEUE, wait ${DSFLIP_QUEUE_WAIT} ms, CPU max ${DSFLIP_CPU_MAX:-hardware})"
+  # without a shader the Mali GPU does nothing in this mode (the display controller scans out DraStic's
+  # buffers), so it goes to powersave (200 MHz): anything more is only heat. With a shader it draws every frame
+  # (lcd1x-nds-color: ~3 ms per screen at 800 MHz), under simple_ondemand with a 400 MHz floor. Measured
+  # 2026-09-27 (I6: Pokemon Black 2 at 2x, lcd1x-nds-color, ~5 min per setting in one session): pinned 800 MHz
+  # dropped 0.11 frames/s, the 400 MHz floor 0.05/s and a 300 MHz floor 0.04/s, with the GPU averaging ~500 MHz
+  # instead of 800 (the governor never went below 400, so 300 buys nothing). The SoC settled at ~67 C.
+  # Tunable without a rebuild: DSFLIP_SHADER_GOV=performance restores the old pinned clock.
+  # The RG DS Plus (1024x768) has 2.56x the pixels per frame for a shader on the same GPU, so every shader ran at the
+  # full clock there whatever the power profile (test build 4: 800 MHz all session on battery). Now only with the
+  # performance profile; balanced and battery get simple_ondemand with the 400 MHz floor like the RG DS (ds-fsr keeps
+  # the full clock). ds-fsr at that size is about 24 ms per frame: expect drops; ds-crisp is 4x.
+  case "${DSHOOK_SHADER:-none}" in
+    none|bilinear) GOV=powersave; MIN= ;;
+    # ds-fsr (FSR 1.0) needs ~9.5 ms of GPU per frame on the RG DS (~14 ms on the Plus, where it draws 3x the DS
+    # screen, 768x576, and the display controller scales the rest; SuperDrastic's shaders/ds-fsr.frag): under
+    # simple_ondemand it sat at 800 MHz 97% of the time and dropped frames while ramping up from the floor at the
+    # start, so it gets the full clock from the start
+    ds-fsr) GOV=${DSFLIP_SHADER_GOV:-performance}; MIN=$DSFLIP_SHADER_GPU_MIN ;;
+    *) if [ -n "$BIG" ] && [ "$PROF" = performance ]; then GOV=${DSFLIP_SHADER_GOV:-performance}; MIN=$DSFLIP_SHADER_GPU_MIN
+       else GOV=${DSFLIP_SHADER_GOV:-simple_ondemand}; MIN=${DSFLIP_SHADER_GPU_MIN:-400000000}; fi ;;
+  esac
+  [ -n "$BIG" ] && [ "$DSHOOK_SHADER" = ds-fsr ] &&
+    echo "note: ds-fsr costs ~2.5x more at ${PANEL} (~24 ms per frame, estimated): expect dropped frames; ds-crisp is exact 4x here"
+  [ -n "$GPU_GOV" ] && { echo "$GPU_GOV" > /tmp/dsflip-gpu-governor; echo "$GPU_MIN" > /tmp/dsflip-gpu-min; echo $GOV > $GPU/governor 2>/dev/null; [ -n "$MIN" ] && echo $MIN > $GPU/min_freq 2>/dev/null; }
+  echo "GPU: $GOV${MIN:+, floor $((MIN / 1000000)) MHz} (shader ${DSHOOK_SHADER:-none})"
   # 3D renderer (ES: the game's or DS system's "3D renderer"): superdrastic = Gengis Engine, SuperDrastic's own
   # rasterizer for DraStic's hi-res 3D (DSFLIP_RAST=1), drastic = DraStic's own. Auto (unset, the menu's default) is
   # Gengis Engine since 1.5.13: the same picture as DraStic's renderer pixel for pixel with ~12% less CPU (1.5.9), and
@@ -298,6 +308,12 @@ stuck_report() {
         [ "$(cat $GPU/governor 2>/dev/null)" = "$GOV" ] || { echo $GOV > $GPU/governor 2>/dev/null; echo "$(ms) ms: GPU governor changed by another service: back to $GOV"; }
       done ) &
     WATCH=$!
+  fi
+  # (see "audio:" above) the graph 20 s in: the sinks' and DraStic's stream's rate, quantum and errors
+  if command -v pw-top >/dev/null; then
+    ( sleep 20; kill -0 $P 2>/dev/null &&
+      XDG_RUNTIME_DIR=/var/run/0-runtime-dir timeout 5 pw-top -b -n 2 2>/dev/null | grep -E "_sink|drastic" | tail -n 3 |
+        sed "s/^/$(ms) ms: pw-top: /" ) &
   fi
   # ES is stopped, so it can't record the session (play count, last played, time played): do what ES does after a
   # game. In VT mode ES is only waiting, and records it itself.

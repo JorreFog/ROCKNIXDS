@@ -28,4 +28,8 @@
 # polygons at 3x. Measured on the RG DS Plus against test build 3: 3x faster in all four games tried (stress ROM
 # 35.7 vs 34.9 fps at 1416 MHz, CPU a frame MKDS -4%, HeartGold -10%), 2x level; 2x exact (RAST=diff). Source:
 # SuperDrastic's refs/testers/sd-9-test.4.
-0.5.0-beta.1-rocknixds.9-test.4 80ae156281009eb404fda88950b1d6c3f94c3d2a8e9c1e2cc1d5817b5a96c88b
+# 0.5.0-beta.1-rocknixds.9-test.6 (PRIVATE test build 6, 2026-10-11; not a release): test build 4's library with the
+# CPU governor holding the power profile's bound from the start, and going past it (and remembering a clock as too
+# slow) only when the game is CPU-bound. Test build 4 ran at 1992 MHz whatever the profile on the RG DS Plus. Source:
+# SuperDrastic's refs/testers/sd-9-test.6.
+0.5.0-beta.1-rocknixds.9-test.6 378e54bf517a82417c9c019d8ded4992c815c18db72795f45508888e0c269e60

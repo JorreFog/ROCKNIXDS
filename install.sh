@@ -411,6 +411,8 @@ if [ $THEME_ON = 1 ]; then
     backup_once /storage/.config/retroarch/retroarch.cfg
     mkdir -p /storage/dii-ess-aye-backup /storage/.config/autostart
     cp "$SRC/dii-ess-aye/device/sway-config.theme" /storage/dii-ess-aye-backup/sway-config.theme
+    mkdir -p /storage/.config/rocknixds && cp "$SRC/dii-ess-aye/device/ra-launch-log.sh" /storage/.config/rocknixds/ra-launch-log.sh &&
+        chmod +x /storage/.config/rocknixds/ra-launch-log.sh
     cp "$SRC/dii-ess-aye/device/autostart-dii-ess-aye" /storage/.config/autostart/dii-ess-aye
     chmod +x /storage/.config/autostart/dii-ess-aye
     # restart ES when the theme choice switches between this theme and another (their canvases differ)

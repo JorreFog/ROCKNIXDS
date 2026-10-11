@@ -36,6 +36,8 @@ for_window [title="RetroArch.*"] move window to output DSI-2, focus
 # DSI-2; taps then go to RetroArch on the top panel and the bottom-screen menu can't be reached (issue #33).
 for_window [title="RetroArch.*"] input "1046:911:Goodix_Capacitive_TouchScreen" map_to_output *
 for_window [title="RetroArch.*"] exec /usr/bin/vertical-check
+# each launch's windows, settings and top panel, for the wrong aspect ratio seen now and then (ra-launch-log.sh)
+for_window [title="RetroArch.*"] exec /storage/.config/rocknixds/ra-launch-log.sh
 for_window [app_id="lowerdeck"] floating enable, fullscreen enable, move window to output DSI-1
 no_focus [app_id="lowerdeck"]
 exec_always swaymsg '[app_id="emulationstation"]' seat seat0 attach "0:0:wlr_virtual_keyboard_v1"
