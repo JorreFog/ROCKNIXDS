@@ -859,6 +859,19 @@ app in `bank/` is GPL-3.0 (it links PKHeX.Core).
 
 ---
 
+## `bananads/`: a 2D engine for BananaDS
+
+**A faster software 2D renderer for BananaDS and any other emulator built on melonDS**, pixel for pixel
+the same picture as melonDS's own 2D engine in about a third of the time: 2.9x over the test scenes and
+2.7x on a real ROM through the whole emulator on an x86 host (the RG DS numbers are to be measured with
+the static aarch64 test program, see its README). It is a drop-in melonDS `Renderer2D`: `bananads/integrate.sh <BananaDS tree>`
+puts it in (four files, two friend declarations, two CMake lines, one frontend line). It renders each
+layer as a whole line, keeps sprites in a table rebuilt only when OAM changes, composites all layers in
+one SIMD pass and runs the colour effects only where BLDCNT can act. Its exactness is checked against
+melonDS's renderer on hand-made scenes, random scenes with mid-frame register writes, and a test ROM
+(`bananads/rom/`, built with clang and lld, no devkitARM) through the emulator, on the host and as the
+aarch64 build under qemu. See [`bananads/README.md`](bananads/README.md).
+
 ## Known issues
 
 - **No DS games yet** (fixed in 1.5.13, seen working on an RG DS Plus; not yet on an RG DS): with an empty `roms/nds`

@@ -1,0 +1,48 @@
+# The BananaDS 2D engine (bananads/): built against the pinned melonDS, checked pixel for pixel against
+# melonDS's own 2D renderer (the hand-made scenes, random scenes, and a real ROM through the whole
+# emulator), on the host and, through qemu, as the static aarch64 build for the RG DS.
+name: bananads 2d engine
+on:
+  push:
+    branches: [beta, plus-beta, main]
+    paths:
+      - 'bananads/**'
+      - '.github/workflows/bananads.yml'
+  pull_request:
+    paths:
+      - 'bananads/**'
+      - '.github/workflows/bananads.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchains
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build clang lld llvm g++ \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu qemu-user-static
+      - name: The pinned melonDS, patched
+        run: sh bananads/fetch-melonds.sh
+      - name: The test ROM
+        run: python3 bananads/rom/build.py
+      - name: Host build
+        run: sh bananads/build.sh
+      - name: Scenes, random scenes, benchmark
+        run: bananads/build/host/banana2d-test --scenes --fuzz 300 --bench 30
+      - name: A real ROM through melonDS
+        run: bananads/build/host/banana2d-test --rom bananads/rom/out/banana2d.nds --rom-frames 720
+      - name: aarch64 build (RG DS, static)
+        run: sh bananads/build.sh aarch64
+      - name: aarch64 under qemu
+        run: |
+          qemu-aarch64-static bananads/build/aarch64/banana2d-test --scenes --fuzz 60
+          qemu-aarch64-static bananads/build/aarch64/banana2d-test --rom bananads/rom/out/banana2d.nds --rom-frames 720
+      - uses: actions/upload-artifact@v4
+        with:
+          name: banana2d-test-aarch64-${{ github.sha }}
+          path: |
+            bananads/build/aarch64/banana2d-test
+            bananads/rom/out/banana2d.nds
