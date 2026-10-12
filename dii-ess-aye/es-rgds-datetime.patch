@@ -1,0 +1,190 @@
+From 3ae9a2970449cb9ff6d37463fbf929207a05a4a4 Mon Sep 17 00:00:00 2001
+From: JorreFog <JorreFog@users.noreply.github.com>
+Date: Mon, 12 Oct 2026 15:52:15 +0200
+Subject: [PATCH] ROCKNIXDS: DATE & TIME, the date and time set by hand
+
+ROCKNIX sets the clock only over Wi-Fi (NTP), so a handheld without Wi-Fi kept a wrong date and time with
+no way to change it. SYSTEM SETTINGS > DATE & TIME sets the year, month, day, hour and minute (the system
+clock, then the RTC in UTC with hwclock); Wi-Fi's time still replaces them once it connects, and a
+message says so when Wi-Fi is connected. The time zone
+and the 12-hour switch moved there. The time zone list now splits timeinfo's lines as well as its commas
+(every zone but the first started with a newline), and only a zone that exists is linked.
+---
+ es-app/src/guis/GuiMenu.cpp | 147 +++++++++++++++++++++++++-----------
+ 1 file changed, 102 insertions(+), 45 deletions(-)
+
+diff --git a/es-app/src/guis/GuiMenu.cpp b/es-app/src/guis/GuiMenu.cpp
+index ab755254..cf58694c 100644
+--- a/es-app/src/guis/GuiMenu.cpp
++++ b/es-app/src/guis/GuiMenu.cpp
+@@ -31,6 +31,7 @@
+ #include "VolumeControl.h"
+ #include <SDL_events.h>
+ #include <algorithm>
++#include <ctime>
+ #include "utils/Platform.h"
+ #include "utils/FileSystemUtil.h"
+ 
+@@ -1545,6 +1546,105 @@ static std::vector<std::pair<std::string, std::string>> getScriptOutput(const st
+ }
+ #endif
+ 
++// ROCKNIXDS: DATE & TIME. ROCKNIX sets the clock only over Wi-Fi (NTP): without Wi-Fi a handheld kept a wrong date and
++// time with no way to change it. Here the date and time are set by hand (the system clock, then the RTC, which holds
++// UTC); Wi-Fi's time still replaces them once it connects, and the screen says so. The time zone and the 12-hour switch moved here from SYSTEM
++// SETTINGS.
++static void rgdsDateTime(Window* window)
++{
++	auto s = new GuiSettings(window, _("DATE & TIME").c_str());
++	time_t now = time(nullptr);
++	struct tm t;
++	localtime_r(&now, &t);
++
++	auto numbers = [window](const std::string& title, int from, int to, int selected, bool twoDigits)
++	{
++		auto list = std::make_shared<OptionListComponent<std::string>>(window, title, false);
++		if (selected < from || selected > to) selected = from;
++		for (int i = from; i <= to; i++)
++		{
++			char b[8];
++			snprintf(b, sizeof b, twoDigits ? "%02d" : "%d", i);
++			list->add(b, std::to_string(i), i == selected);
++		}
++		return list;
++	};
++	int thisYear = t.tm_year + 1900;
++	auto year = numbers(_("YEAR"), 2025, 2045, thisYear < 2025 ? 2026 : thisYear, false);
++	auto month = numbers(_("MONTH"), 1, 12, t.tm_mon + 1, true);
++	auto day = numbers(_("DAY"), 1, 31, t.tm_mday, true);
++	auto hour = numbers(_("HOUR"), 0, 23, t.tm_hour, true);
++	auto minute = numbers(_("MINUTE"), 0, 59, t.tm_min, true);
++
++	s->addGroup(_("DATE"));
++	s->addWithLabel(_("YEAR"), year);
++	s->addWithLabel(_("MONTH"), month);
++	s->addWithLabel(_("DAY"), day);
++	s->addGroup(_("TIME"));
++	s->addWithLabel(_("HOUR"), hour);
++	s->addWithLabel(_("MINUTE"), minute);
++	s->addSaveFunc([window, year, month, day, hour, minute]
++	{
++		if (!year->changed() && !month->changed() && !day->changed() && !hour->changed() && !minute->changed())
++			return;
++		struct tm n = {};
++		n.tm_year = std::stoi(year->getSelected()) - 1900;
++		n.tm_mon = std::stoi(month->getSelected()) - 1;
++		n.tm_mday = 1;
++		n.tm_hour = std::stoi(hour->getSelected());
++		n.tm_min = std::stoi(minute->getSelected());
++		n.tm_isdst = -1;
++		// the 31st of a shorter month is its last day, not the next month's first
++		struct tm last = n;
++		last.tm_mon++; last.tm_mday = 0;
++		mktime(&last);
++		n.tm_mday = std::min(std::stoi(day->getSelected()), last.tm_mday);
++		struct timespec ts = { mktime(&n), 0 };
++		if (ts.tv_sec == (time_t)-1 || clock_settime(CLOCK_REALTIME, &ts) != 0)
++			return;
++		Utils::Platform::runSystemCommand("hwclock -w -u", "", nullptr);
++		// with Wi-Fi connected, systemd-timesyncd puts the network's time back within a second
++		if (Utils::String::trim(Utils::Platform::GetShOutput("timedatectl show -p NTPSynchronized --value 2>/dev/null")) == "yes")
++			window->pushGui(new GuiMsgBox(window, _("WI-FI SETS THE DATE AND TIME BY ITSELF WHILE IT IS CONNECTED.") + "\n\n" +
++				_("TO SET THEM BY HAND, TURN WI-FI OFF FIRST. IF THE TIME IS OFF BY WHOLE HOURS, CHANGE THE TIME ZONE INSTEAD."), _("OK"), nullptr));
++	});
++
++	s->addGroup(_("TIME ZONE"));
++	// timeinfo lists one zone a line, each ending in a comma: split on both, or every zone but the first starts with a
++	// newline and none matches the current one
++	auto tzChoices = std::make_shared<OptionListComponent<std::string>>(window, _("SELECT YOUR TIME ZONE"), false);
++	std::string currentTZ = SystemConf::getInstance()->get("system.timezone");
++	if (currentTZ.empty())
++		currentTZ = Utils::String::trim(Utils::Platform::GetShOutput(R"(/usr/bin/timeinfo current_timezone)"));
++	std::string all = Utils::Platform::GetShOutput(R"(/usr/bin/timeinfo timezones)");
++	std::replace(all.begin(), all.end(), '\n', ',');
++	bool found = false;
++	for (auto tz : Utils::String::split(all, ',', true))
++	{
++		tz = Utils::String::trim(tz);
++		if (tz.empty()) continue;
++		found |= tz == currentTZ;
++		tzChoices->add(tz, tz, tz == currentTZ);
++	}
++	if (!found && !currentTZ.empty())
++		tzChoices->add(currentTZ, currentTZ, true);
++	s->addWithLabel(_("TIMEZONE"), tzChoices);
++	s->addSaveFunc([tzChoices]
++	{
++		if (!tzChoices->changed())
++			return;
++		std::string tz = tzChoices->getSelected();
++		if (tz.empty() || tz.find_first_of("'\"$`;& \\") != std::string::npos || !Utils::FileSystem::exists("/usr/share/zoneinfo/" + tz))
++			return;
++		Utils::Platform::runSystemCommand("ln -sf /usr/share/zoneinfo/" + tz + " $(readlink /etc/localtime)", "", nullptr);
++		SystemConf::getInstance()->set("system.timezone", tz);
++	});
++
++	s->addGroup(_("CLOCK"));
++	s->addSwitch(_("SHOW CLOCK IN 12-HOUR FORMAT"), "ClockMode12", true);
++	window->pushGui(s);
++}
++
+ void GuiMenu::openSystemSettings() 
+ {
+ 	Window *window = mWindow;
+@@ -1702,51 +1802,8 @@ void GuiMenu::openSystemSettings()
+ 	});
+ #endif
+ 
+-	// Timezone
+-#if defined(ROCKNIX)
+-	auto tzChoices = std::make_shared<OptionListComponent<std::string> >(mWindow, _("SELECT YOUR TIME ZONE"), false);
+-	std::string currentTZ = SystemConf::getInstance()->get("system.timezone");
+-	if (currentTZ.empty())
+-		currentTZ = std::string(Utils::Platform::GetShOutput(R"(/usr/bin/timeinfo current_timezone)"));
+-	std::string tz;
+-	for(std::stringstream ss(Utils::Platform::GetShOutput(R"(/usr/bin/timeinfo timezones)")); getline(ss, tz, ','); ) {
+-		tzChoices->add(tz, tz, currentTZ == tz);
+-	}
+-	s->addWithLabel(_("TIMEZONE"), tzChoices);
+-	s->addSaveFunc([tzChoices] {
+-		if (tzChoices->changed()) {
+-			std::string selectedTimezone = tzChoices->getSelected();
+-			Utils::Platform::runSystemCommand("ln -sf /usr/share/zoneinfo/" + selectedTimezone + " $(readlink /etc/localtime)", "", nullptr);
+-		}
+-		SystemConf::getInstance()->set("system.timezone", tzChoices->getSelected());
+-	});
+-#else
+-	if (ApiSystem::getInstance()->isScriptingSupported(ApiSystem::ScriptId::TIMEZONES))
+-	{
+-		VectorEx<std::string> availableTimezones = ApiSystem::getInstance()->getTimezones();
+-		if (availableTimezones.size() > 0)
+-		{
+-			std::string currentTZ = ApiSystem::getInstance()->getCurrentTimezone();
+-			if (currentTZ.empty() || !availableTimezones.any([currentTZ](const std::string& tz) { return tz == currentTZ; }))
+-				currentTZ = "Europe/Paris";
+-
+-			auto tzChoices = std::make_shared<OptionListComponent<std::string> >(mWindow, _("SELECT YOUR TIME ZONE"), false);
+-
+-			for (auto tz : availableTimezones)
+-				tzChoices->add(_(Utils::String::toUpper(tz).c_str()), tz, currentTZ == tz);
+-
+-			s->addWithLabel(_("TIME ZONE"), tzChoices);
+-			s->addSaveFunc([tzChoices] 
+-			{
+-				if (SystemConf::getInstance()->set("system.timezone", tzChoices->getSelected()))
+-					ApiSystem::getInstance()->setTimezone(tzChoices->getSelected());
+-			});
+-		}
+-	}
+-#endif
+-
+-	// Clock time format (14:42 or 2:42 pm)
+-	s->addSwitch(_("SHOW CLOCK IN 12-HOUR FORMAT"), "ClockMode12", true);
++	// ROCKNIXDS: the date, the time, the time zone and the clock format on a screen of their own (rgdsDateTime)
++	s->addEntry(_("DATE & TIME"), true, [window] { rgdsDateTime(window); });
+ 
+ 	// power saver
+ 	auto power_saver = std::make_shared< OptionListComponent<std::string> >(mWindow, _("POWER SAVING MODE"), false);
+-- 
+2.56.0
+
