@@ -1,0 +1,94 @@
+es-rgds-slideshow-wake: the slideshow screensaver wakes when its clock changes, not ten times a second
+
+Between slides, the slideshow screensaver told the main loop to wake every 100 ms (SystemScreenSaver::
+getNextUpdateTimeout: DATE_TIME_UPDATE_INTERVAL with SHOW DATE TIME on, STATIC_SCREENSAVER_POLL_INTERVAL without it).
+Each wake updates and draws a whole frame, so an unchanged slide was drawn ten times a second across the whole canvas
+(3072x768 on the RG DS Plus): 14% of a core, and the GPU's work for every frame on top.
+
+The clock's text changes once a second when its time format shows seconds (%H:%M:%S, the default), and once a minute
+otherwise. The slideshow now wakes at the next of those moments, or for the next slide if that comes first. Without
+SHOW DATE TIME it wakes only for the next slide: the 100 ms wake was there to poll for lightguns, which the RG DS
+doesn't have (the black and dim screensavers already wake once a minute for the same reason, es-rgds-powersaver).
+Fades between slides still draw every frame, as before.
+
+The clock's update accumulator is reset after each update instead of having 100 ms taken off: with a wake about once
+a second, the remainder grew by ~900 ms per wake.
+
+diff --git a/es-app/src/SystemScreenSaver.cpp b/es-app/src/SystemScreenSaver.cpp
+index 6e2827ba..9ad3e11c 100644
+--- a/es-app/src/SystemScreenSaver.cpp
++++ b/es-app/src/SystemScreenSaver.cpp
+@@ -30,6 +30,7 @@
+ #define FADE_TIME					(500)
+ #define DATE_TIME_UPDATE_INTERVAL	(100)
+ int msToNextMinute();	// main.cpp
++int msToNextSecond();	// main.cpp
+ #define STATIC_SCREENSAVER_POLL_INTERVAL	(100)
+ 
+ SystemScreenSaver::SystemScreenSaver(Window* window) :
+@@ -72,6 +73,17 @@ bool SystemScreenSaver::isScreenSaverActive()
+ 	return (mState != STATE_INACTIVE);
+ }
+ 
++// ROCKNIXDS: whether the screensaver clock's time format (SHOW DATE TIME > TIME FORMAT) shows seconds
++static bool clockShowsSeconds()
++{
++	const std::string& format = Settings::getInstance()->getString("ScreenSaverTimeFormat");
++	for (const char* s : { "%S", "%T", "%r", "%X", "%s", "%c" })
++		if (format.find(s) != std::string::npos)
++			return true;
++
++	return false;
++}
++
+ int SystemScreenSaver::getNextUpdateTimeout()
+ {
+ 	// Fades and video require continuous rendering.
+@@ -88,12 +100,14 @@ int SystemScreenSaver::getNextUpdateTimeout()
+ 	if (timeout < 1)
+ 		timeout = 1;
+ 
+-	// Without the clock, periodically wake for polling-based input.
++	// ROCKNIXDS: otherwise wake only when the clock's text next changes, not every 100 ms. Each wake draws a whole frame of
++	// the canvas, so the slideshow drew ten frames a second of an unchanged slide (14% of a core on an RG DS Plus, and the
++	// GPU's work on top). The clock changes once a second when its format shows seconds, else once a minute. Without the
++	// clock, the 100 ms wake polled for lightguns, which the RG DS doesn't have: the next slide is enough.
+ 	if (!Settings::getInstance()->getBool("ScreenSaverDateTime"))
+-		return std::min(timeout, STATIC_SCREENSAVER_POLL_INTERVAL);
++		return timeout;
+ 
+-	// Use the existing date/time update cadence.
+-	return std::min(timeout, DATE_TIME_UPDATE_INTERVAL);
++	return std::min(timeout, clockShowsSeconds() ? msToNextSecond() : msToNextMinute());
+ }
+ 
+ void SystemScreenSaver::startScreenSaver()
+@@ -942,7 +956,9 @@ void GameScreenSaverBase::update(int deltaTime)
+ 		mDateTimeUpdateAccumulator += deltaTime;
+ 		if (mDateTimeUpdateAccumulator >= DATE_TIME_UPDATE_INTERVAL)
+ 		{
+-			mDateTimeUpdateAccumulator -= DATE_TIME_UPDATE_INTERVAL;
++			// ROCKNIXDS: reset, not -= the interval: the slideshow now wakes about once a second (getNextUpdateTimeout),
++			// and the remainder would grow by ~900 ms with every wake
++			mDateTimeUpdateAccumulator = 0;
+ 
+ 			time_t now = time(NULL);
+ 			if (now != mDateTimeLastUpdate)
+diff --git a/es-app/src/main.cpp b/es-app/src/main.cpp
+index 056a703f..2f65ba6e 100644
+--- a/es-app/src/main.cpp
++++ b/es-app/src/main.cpp
+@@ -487,6 +487,13 @@ int msToNextMinute()
+ 	return (int)(60000 - nowMs % 60000) + 20;
+ }
+ 
++// milliseconds to the next full second (+20): when the slideshow screensaver's clock shows seconds
++int msToNextSecond()
++{
++	long long nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
++	return (int)(1000 - nowMs % 1000) + 20;
++}
++
+ int main(int argc, char* argv[])
+ {
+ 	// Utils::MathExpr::performUnitTests();
