@@ -3,8 +3,9 @@ es-rgds-screensaver-controls: touch controls on the bottom panel during the scre
 With es-rgds-screensaver.patch the screensaver runs on the top panel and the bottom one stays black, its backlight
 off (dii-ess-aye/device/screensaver-panel.sh). A tap on the bottom panel now shows controls there for 10 s:
 
-- the status: Wi-Fi (connected, not connected, off) and the battery (level, charging), in the status bar's colours
-  when COLOURED STATUS ICONS is on (es-rgds-battery-charging.patch; plain without it);
+- the status: the theme's own Wi-Fi and battery icons (rnds/wifi@*.png, battery@*.png), drawn as its status bar
+  draws them (the battery's level fill, a bolt while it charges, the percentage), in the status bar's colours when
+  COLOURED STATUS ICONS is on (es-rgds-battery-charging.patch; plain without it), words for a theme without them;
 - the slide's game, with NEXT SLIDE and PLAY THIS GAME (ES's slideshow is random and keeps no history, so there is no
   previous slide);
 - the music: the song, NEXT SONG and STOP MUSIC (PLAY MUSIC when none plays), or "Music is off".
@@ -20,7 +21,7 @@ status and the song, and when they close; fades still draw every frame. One-pane
 no controls.
 
 diff --git a/es-app/src/SystemScreenSaver.cpp b/es-app/src/SystemScreenSaver.cpp
-index 6e2827ba..0dafed62 100644
+index 6e2827ba..2d00a9b6 100644
 --- a/es-app/src/SystemScreenSaver.cpp
 +++ b/es-app/src/SystemScreenSaver.cpp
 @@ -26,6 +26,12 @@
@@ -83,7 +84,7 @@ index 6e2827ba..0dafed62 100644
  	// Use this to update the fade value for the current fade stage
  	if (mState == STATE_FADE_OUT_WINDOW)
  	{
-@@ -551,6 +576,175 @@ void SystemScreenSaver::launchGame()
+@@ -551,6 +576,233 @@ void SystemScreenSaver::launchGame()
  	}
  }
  
@@ -212,22 +213,80 @@ index 6e2827ba..0dafed62 100644
 +		mCtrlButtons.push_back({ x, y, bw, bh, a });
 +	};
 +
-+	// the status: Wi-Fi and battery, in the status bar's colours when COLOURED STATUS ICONS is on
-+	// (es-rgds-battery-charging.patch: green connected or charging, amber on but not connected, red low)
++	// the status: the theme's own Wi-Fi and battery icons, as its status bar draws them (rnds/wifi@*.png and
++	// battery@*.png, the 1.6x pair on the RG DS Plus), in the status bar's colours when COLOURED STATUS ICONS is on
++	// (es-rgds-battery-charging.patch: green connected or charging, amber on but not connected, red low); words when
++	// the theme has no rnds folder
 +	bool colours = Settings::getInstance()->getBool("RndsStatusColors");
++	std::string dir;
++	{
++		SystemData* sys = ViewController::get()->getState().getSystem();
++		if (sys == nullptr && !SystemData::sSystemVector.empty()) sys = SystemData::sSystemVector.front();
++		auto elem = sys && sys->getTheme() ? sys->getTheme()->getElement("rnds", "assets", "image") : nullptr;
++		if (elem != nullptr && elem->has("path"))
++			dir = Utils::FileSystem::getParent(elem->get<std::string>("path"));
++	}
++	std::string sfx = u > 1.3f ? "@1.6x.png" : "@1x.png";
++	auto icon = [&](const std::string& name, float x, float y, float cssW, float cssH, unsigned int col)
++	{
++		std::string path = dir.empty() ? "" : dir + "/" + name + sfx;
++		if (path.empty() || !Utils::FileSystem::exists(path)) return false;
++		ImageComponent ic(mWindow, true);
++		ic.setImage(path);
++		ic.setPosition(std::round(x), std::round(y));
++		ic.setResize(std::round(cssW * u), std::round(cssH * u));
++		ic.setColorShift(col);
++		ic.render(Transform4x4f::Identity());
++		Renderer::setMatrix(Transform4x4f::Identity());
++		return true;
++	};
++	auto cell = [&](float ox, float oy, int c, int r, unsigned int col)	// one CSS pixel of a pixel-art glyph
++	{
++		float l = std::round(ox + c * u), t = std::round(oy + r * u);
++		Renderer::drawRect(l, t, std::round(ox + (c + 1) * u) - l, std::round(oy + (r + 1) * u) - t, col, col);
++	};
++
 +	auto net = WatchersManager::GetComponent<NetworkStateWatcher>();
 +	bool online = net == nullptr || net->isConnected(), wifiOn = SystemConf::getInstance()->getBool("wifi.enabled");
-+	std::string wifi = online ? _("Wi-Fi connected") : wifiOn ? _("Wi-Fi not connected") : _("Wi-Fi off");
-+	unsigned int wifiCol = !colours ? ink : online ? 0x5FD068FF : wifiOn ? 0xF2B33DFF : muted;
++	unsigned int wifiCol = !colours ? ink : online ? 0x5FD068FF : wifiOn ? 0xF2B33DFF : ink;
++	if (!online && !(colours && wifiOn)) wifiCol = (wifiCol & 0xFFFFFF00) | 0x59;	// switched off: dimmed, as in the status bar
 +	float y = p.y + 34 * u;
-+	text(small, wifi, x0, y, w / 2, wifiCol, ALIGN_LEFT);
++	if (!icon("wifi", x0, y, 18, 16, wifiCol))
++		text(small, online ? _("Wi-Fi connected") : wifiOn ? _("Wi-Fi not connected") : _("Wi-Fi off"), x0, y, w / 2, wifiCol, ALIGN_LEFT);
++
 +	auto batt = WatchersManager::GetComponent<BatteryLevelWatcher>();
 +	if (batt != nullptr && batt->getBatteryInfo().hasBattery)
 +	{
 +		auto bi = batt->getBatteryInfo();
-+		std::string bs = std::to_string(bi.level) + "%" + (bi.isCharging ? " " + _("charging") : "");
-+		unsigned int bc = !colours ? ink : bi.isCharging ? 0x5FD068FF : bi.level <= 15 ? 0xFF3B4AFF : ink;
-+		text(small, bs, x0 + w / 2, y, w / 2, bc, ALIGN_RIGHT);
++		float lvl = std::max(0, std::min(100, bi.level)) / 100.0f;
++		unsigned int fill = !colours ? ink : bi.isCharging ? 0x5FD068FF : bi.level <= 15 ? 0xFF3B4AFF : ink;
++		float bx = x0 + w - 26 * u, by = y + 1 * u;
++		std::string pct = std::to_string(bi.level) + "%";
++		if (icon("battery", bx, by, 26, 14, ink))
++		{
++			float fw = std::round(16 * lvl);
++			if (fw > 0)
++				Renderer::drawRect(std::round(bx + 3 * u), std::round(by + 3 * u), std::round(fw * u), std::round(8 * u), fill, fill);
++			if (bi.isCharging)		// the bolt across the battery, outlined in the panel's background
++			{
++				static const char* bolt[11] = { ".....###", "....###.", "...###..", "..###...", ".#######", "#######.",
++												"...###..", "..###...", ".###....", ".##.....", "##......" };
++				float ox = bx + 7 * u, oy = by + 1 * u;
++				for (int pass = 0; pass < 2; pass++)
++					for (int r = 0; r < 11; r++)
++						for (int c = 0; c < 8; c++)
++							if (bolt[r][c] == '#')
++							{
++								if (pass == 0)
++									for (int dr = -1; dr <= 1; dr++) for (int dc = -1; dc <= 1; dc++) cell(ox, oy, c + dc, r + dr, bg);
++								else
++									cell(ox, oy, c, r, ink);
++							}
++			}
++			text(small, pct, x0 + w / 2, y, w / 2 - 26 * u - 8 * u, ink, ALIGN_RIGHT);
++		}
++		else
++			text(small, pct + (bi.isCharging ? " " + _("charging") : ""), x0 + w / 2, y, w / 2, fill, ALIGN_RIGHT);
 +	}
 +
 +	// the slide's game
