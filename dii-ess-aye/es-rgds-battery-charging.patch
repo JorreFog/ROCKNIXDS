@@ -1,4 +1,4 @@
-es-rgds-battery-charging: the status bar's battery fills in steps while it charges
+es-rgds-battery-charging: the status bar's battery fills in steps while it charges, and the status bar in colour
 
 The rnds engine draws its own battery in the status bar (the theme hides ES's batteryIndicator), and it showed the
 level only: a handheld on its charger looked the same as one on battery. Themes for other frontends (Art Book Next,
@@ -7,17 +7,39 @@ TechDweeb) swap in a static charging picture (ES's batteryIndicator <incharge>, 
 On a charger the bar now fills to full in 4 steps of 600 ms and starts over, like the look's other stepped
 animations (the bob, the meter's stripes, the cover's shine): from a quarter, or from the level when it is lower.
 A first version climbed from the current level, which moved less than a pixel near full, where a handheld spends
-most of its time on the charger; the level stays in the percentage ("icon and text"). A battery
-that is (nearly) full holds still: ES counts a full battery on the charger as charging too (any status but "Not
-charging" and "Discharging"). The charging state comes from ES's BatteryLevelWatcher through a new Source virtual
-(the default: not charging), and nextWake() wakes the power saver for each step only while it charges, so a menu on
-battery draws no more than before. The steps run with STILL TOP SCREEN on too: they are the only sign of charging.
+most of its time on the charger; the level stays in the percentage ("icon and text"). A battery that is (nearly)
+full holds still: ES counts a full battery on the charger as charging too (any status but "Not charging" and
+"Discharging"). The charging state comes from ES's BatteryLevelWatcher through a new Source virtual (the default:
+not charging), and nextWake() wakes the power saver for each step only while it charges, so a menu on battery draws
+no more than before. The steps run with STILL TOP SCREEN on too: they are the only sign of charging.
 
+The status bar is in colour too: the charging fill green (full and still included, so a battery that is plugged in
+and charged reads as such), a low battery's fill (15% or less, not charging) red, and a connected Wi-Fi green. A
+disconnected Wi-Fi stays the dimmed ink, since Wi-Fi is often off on purpose. The green is a new palette colour,
+`ok` (#5fd068 dark, #2e9a44 light); the red is the palette's own. COLOURED STATUS ICONS (RndsStatusColors, on by
+default), next to SHOW BATTERY STATUS for the ROCKNIXDS Pixel themes, turns the colours off; the steps stay.
+
+diff --git a/es-app/src/guis/GuiMenu.cpp b/es-app/src/guis/GuiMenu.cpp
+index cf58694c..87cc2293 100644
+--- a/es-app/src/guis/GuiMenu.cpp
++++ b/es-app/src/guis/GuiMenu.cpp
+@@ -5322,6 +5322,11 @@ void GuiMenu::openUISettings()
+ 	if (Utils::Platform::queryBatteryInformation().hasBattery)
+ 		s->addOptionList(_("SHOW BATTERY STATUS"), { { _("NO"), "" },{ _("ICON"), "icon" },{ _("ICON AND TEXT"), "text" } }, "ShowBattery", true);
+ 
++	// ROCKNIXDS Pixel (the rnds engine): its status bar in colour, a connected Wi-Fi and a charging battery in green, a
++	// low battery in red (es-rgds-battery-charging)
++	if (Utils::String::startsWith(Settings::getInstance()->getString("ThemeSet"), "rocknixds-pixel"))
++		s->addSwitch(_("COLOURED STATUS ICONS"), "RndsStatusColors", true);
++
+ 	// ROCKNIXDS Pixel (the rnds engine): its top screen rises a little on every move and its picture bobs; a DS game's
+ 	// cartridge on the bottom screen can show the ROM's own icon instead of the art (issue #44)
+ 	if (Utils::String::startsWith(Settings::getInstance()->getString("ThemeSet"), "rocknixds-pixel"))
 diff --git a/es-app/src/rnds/RndsEs.cpp b/es-app/src/rnds/RndsEs.cpp
-index b4487728..d57859c3 100644
+index b4487728..0cc1f6a6 100644
 --- a/es-app/src/rnds/RndsEs.cpp
 +++ b/es-app/src/rnds/RndsEs.cpp
-@@ -880,6 +880,12 @@ namespace rnds
+@@ -880,6 +880,14 @@ namespace rnds
  			return w->getBatteryInfo().level / 100.0f;
  		}
  
@@ -27,14 +49,40 @@ index b4487728..d57859c3 100644
 +			return w != nullptr && w->getBatteryInfo().hasBattery && w->getBatteryInfo().isCharging;
 +		}
 +
++		bool statusColors() override { return Settings::getInstance()->getBool("RndsStatusColors"); }
++
  		bool online() override
  		{
  			auto w = WatchersManager::GetComponent<NetworkStateWatcher>();
 diff --git a/es-app/src/rnds/RndsUI.cpp b/es-app/src/rnds/RndsUI.cpp
-index 6ad71c6b..799225be 100644
+index 6ad71c6b..3070b53b 100644
 --- a/es-app/src/rnds/RndsUI.cpp
 +++ b/es-app/src/rnds/RndsUI.cpp
-@@ -226,6 +226,8 @@ namespace rnds
+@@ -62,6 +62,7 @@ namespace rnds
+ 		Color glint, floor;							// the box art's shine and its shadow on the sheet
+ 		Color slotDark, slotLip;					// the console slot the cartridge goes into
+ 		Color cartLabel;							// the label under a DS ROM's own icon (GameInfo::rom)
++		Color ok;									// the status bar in colour: a charging battery, a connected Wi-Fi
+ 	};
+ 
+ 	static Pal darkPal()
+@@ -83,6 +84,7 @@ namespace rnds
+ 		p.trackBg = Color::hex(0x0c1016); p.trackHi = Color::hex(0x2a3544); p.trackShade = p.shade45;
+ 		p.slotOn = Color::hex(0xffffff); p.railBg = Color::hex(0x0c1016); p.faceMuted = Color::hex(0x3a4654);
+ 		p.favBorder = p.red; p.favBand = Color::hex(0x5a2430); p.favBody = Color::hex(0x2a1016); p.favInk = Color::hex(0xff8a96);
++		p.ok = Color::hex(0x5fd068);
+ 		p.glint = Color(1, 1, 1, 0.28f); p.floor = Color(0, 0, 0, 0.35f);
+ 		p.slotDark = Color::hex(0x05080b); p.slotLip = Color::hex(0x3a4654);
+ 		p.cartLabel = Color::hex(0xe7eef6);
+@@ -109,6 +111,7 @@ namespace rnds
+ 		p.trackBg = Color::hex(0xd9e0e8); p.trackHi = Color::hex(0xffffff); p.trackShade = Color(sh.r, sh.g, sh.b, 0.18f);
+ 		p.slotOn = Color::hex(0x1a6ea3); p.railBg = Color::hex(0xd9e0e8); p.faceMuted = Color::hex(0xc3ccd6);
+ 		p.favBorder = p.red; p.favBand = Color::hex(0xfff2f3); p.favBody = Color::hex(0xffdfe3); p.favInk = Color::hex(0xc8283a);
++		p.ok = Color::hex(0x2e9a44);
+ 		p.glint = Color(1, 1, 1, 0.45f); p.floor = Color(sh.r, sh.g, sh.b, 0.2f);
+ 		p.slotDark = Color::hex(0x1d2733); p.slotLip = Color::hex(0x8d9bab);
+ 		p.cartLabel = Color::hex(0xffffff);
+@@ -226,6 +229,8 @@ namespace rnds
  		bool requestedThisFrame = false;
  
  		double now = 0;
@@ -43,7 +91,20 @@ index 6ad71c6b..799225be 100644
  		double topAt = -1e9, shellAt = -1e9, popAt = -1e9;
  		std::string shellKey;
  		std::vector<SlotState> slots;
-@@ -1231,10 +1233,21 @@ namespace rnds
+@@ -1226,18 +1231,38 @@ namespace rnds
+ 		void drawStatus(float ry)
+ 		{
+ 			// wifi, battery, brand
++			// the status bar in colour (COLOURED STATUS ICONS, on by default): a connected Wi-Fi and a charging battery
++			// in green, a low battery (15% or less, not charging) in red; otherwise, or switched off, the ink
++			bool colours = src->statusColors();
+ 			if (!wifi.empty())
+-				drawSprite(still("wifi", wifi, false), 18, 24 + ry, nullptr, Color(INK.r, INK.g, INK.b, src->online() ? 1.0f : 0.35f));
++			{
++				bool on = src->online();
++				Color wc = on && colours ? P.ok : INK;
++				drawSprite(still("wifi", wifi, false), 18, 24 + ry, nullptr, Color(wc.r, wc.g, wc.b, on ? 1.0f : 0.35f));
++			}
  			std::string bmode = src->batteryMode();
  			float lvl = src->battery();
  			bool pctText = bmode == "text" && lvl >= 0;
@@ -63,9 +124,15 @@ index 6ad71c6b..799225be 100644
 +					l = from + (1 - from) * step / 3.0f;
 +				}
  				float fw = std::round(16 * std::min(1.0f, std::max(0.0f, l)) * s) / s;
++				// green on a charger (full and still included: plugged in and charged), red when low, else the ink
++				Color fc = !colours ? INK : charging ? P.ok : (lvl >= 0 && lvl <= 0.15f) ? RED : INK;
  				if (fw > 0)
- 					be->fill(std::round(X(bx + 3)), std::round(X(28 + ry)), std::round(X(fw)), std::round(X(8)), INK);
-@@ -2065,6 +2078,9 @@ namespace rnds
+-					be->fill(std::round(X(bx + 3)), std::round(X(28 + ry)), std::round(X(fw)), std::round(X(8)), INK);
++					be->fill(std::round(X(bx + 3)), std::round(X(28 + ry)), std::round(X(fw)), std::round(X(8)), fc);
+ 			};
+ 			// on the left after the Wi-Fi: "icon only" the battery icon; "icon and text" the percentage and then the icon
+ 			// ("78% [battery]"), the percentage right-aligned in room for "100%" so nothing moves as it changes, and
+@@ -2065,6 +2090,9 @@ namespace rnds
  		double t = now - d->topAt;
  		auto nextOf = [t](double period) { return (std::floor(t / period) + 1) * period - t; };
  		double next = d->holdStill ? 1e9 : nextOf(600);	// held still: no bob to step
@@ -76,14 +143,27 @@ index 6ad71c6b..799225be 100644
  		{
  			next = std::min(next, nextOf(200));
 diff --git a/es-app/src/rnds/RndsUI.h b/es-app/src/rnds/RndsUI.h
-index 31e138fa..d0a92265 100644
+index 31e138fa..95965311 100644
 --- a/es-app/src/rnds/RndsUI.h
 +++ b/es-app/src/rnds/RndsUI.h
-@@ -63,6 +63,7 @@ namespace rnds
+@@ -63,6 +63,8 @@ namespace rnds
  		virtual int gameCount() = 0;			// the library's list (the current system)
  		virtual GameInfo game(int i) = 0;
  		virtual std::string clockText() = 0;	// "01:01 PM" / "13:01"
 +		virtual bool batteryCharging() { return false; }	// the status bar's battery is on a charger (its level climbs in steps)
++		virtual bool statusColors() { return true; }	// the status bar in colour (Wi-Fi, a charging or low battery)
  		virtual std::string dateText() = 0;		// "10/02"
  		virtual float battery() = 0;			// 0..1, < 0 unknown
  		virtual std::string batteryMode() { return "icon"; }	// ES's "show battery status": "" none, "icon", "text" (icon and %)
+diff --git a/es-core/src/Settings.cpp b/es-core/src/Settings.cpp
+index 89b3f482..04858b40 100644
+--- a/es-core/src/Settings.cpp
++++ b/es-core/src/Settings.cpp
+@@ -201,6 +201,7 @@ void Settings::setDefaults()
+ 	mBoolMap["MoveCarousel"] = true;
+ 	mBoolMap["SaveGamelistsOnExit"] = true;
+ 	mStringMap["ShowBattery"] = "text";
++	mBoolMap["RndsStatusColors"] = true;		// ROCKNIXDS Pixel (rnds): the status bar in colour
+ 	mBoolMap["CheckBiosesAtLaunch"] = false;
+ 	mBoolMap["RemoveMultiDiskContent"] = true;
+ 	mBoolMap["PackGamelists"] = false;

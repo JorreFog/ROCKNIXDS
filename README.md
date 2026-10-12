@@ -762,7 +762,8 @@ the top panel, the bottom panel, and an unused third.
   - `es-rgds-firstview.patch` (1.5): writes `$RGDS_ES_DRAWN` once ES's first view is complete (three frames drawn, no
     texture still loading), so the launcher shows ES's window then, instead of a fixed second after ES answers.
   - `es-rgds-battery-charging.patch`: the status bar's battery shows charging: on a charger its bar fills to full in 4
-    steps of 600 ms and starts over (from a quarter, or from the level when lower); a full battery holds still.
+    steps of 600 ms and starts over (from a quarter, or from the level when lower); a full battery holds still. The
+    status bar is in colour: the charging fill and a connected Wi-Fi green, a low battery red (COLOURED STATUS ICONS).
   - `es-rgds-rnds.patch` (1.5): the rnds engine for ROCKNIXDS Pixel (above), the `rnds` theme view, instant view
     transitions and a launch without splash or fade for it (its ready screen stays up until the game takes over),
     standby wake-ups when its looping animations step, and `<include rndsFallback="true">` (skipped by this ES).
