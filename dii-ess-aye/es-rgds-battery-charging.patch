@@ -1,0 +1,89 @@
+es-rgds-battery-charging: the status bar's battery fills in steps while it charges
+
+The rnds engine draws its own battery in the status bar (the theme hides ES's batteryIndicator), and it showed the
+level only: a handheld on its charger looked the same as one on battery. Themes for other frontends (Art Book Next,
+TechDweeb) swap in a static charging picture (ES's batteryIndicator <incharge>, a battery with a lightning bolt).
+
+On a charger the bar now fills to full in 4 steps of 600 ms and starts over, like the look's other stepped
+animations (the bob, the meter's stripes, the cover's shine): from a quarter, or from the level when it is lower.
+A first version climbed from the current level, which moved less than a pixel near full, where a handheld spends
+most of its time on the charger; the level stays in the percentage ("icon and text"). A battery
+that is (nearly) full holds still: ES counts a full battery on the charger as charging too (any status but "Not
+charging" and "Discharging"). The charging state comes from ES's BatteryLevelWatcher through a new Source virtual
+(the default: not charging), and nextWake() wakes the power saver for each step only while it charges, so a menu on
+battery draws no more than before. The steps run with STILL TOP SCREEN on too: they are the only sign of charging.
+
+diff --git a/es-app/src/rnds/RndsEs.cpp b/es-app/src/rnds/RndsEs.cpp
+index b4487728..d57859c3 100644
+--- a/es-app/src/rnds/RndsEs.cpp
++++ b/es-app/src/rnds/RndsEs.cpp
+@@ -880,6 +880,12 @@ namespace rnds
+ 			return w->getBatteryInfo().level / 100.0f;
+ 		}
+ 
++		bool batteryCharging() override
++		{
++			auto w = WatchersManager::GetComponent<BatteryLevelWatcher>();
++			return w != nullptr && w->getBatteryInfo().hasBattery && w->getBatteryInfo().isCharging;
++		}
++
+ 		bool online() override
+ 		{
+ 			auto w = WatchersManager::GetComponent<NetworkStateWatcher>();
+diff --git a/es-app/src/rnds/RndsUI.cpp b/es-app/src/rnds/RndsUI.cpp
+index 6ad71c6b..799225be 100644
+--- a/es-app/src/rnds/RndsUI.cpp
++++ b/es-app/src/rnds/RndsUI.cpp
+@@ -226,6 +226,8 @@ namespace rnds
+ 		bool requestedThisFrame = false;
+ 
+ 		double now = 0;
++		bool charging = false;			// the status bar's battery is on a charger (drawStatus; nextWake steps it)
++		static constexpr double CHARGE_STEP = 600;	// ms per step of the charging battery
+ 		double topAt = -1e9, shellAt = -1e9, popAt = -1e9;
+ 		std::string shellKey;
+ 		std::vector<SlotState> slots;
+@@ -1231,10 +1233,21 @@ namespace rnds
+ 			std::string bmode = src->batteryMode();
+ 			float lvl = src->battery();
+ 			bool pctText = bmode == "text" && lvl >= 0;
++			charging = lvl >= 0 && src->batteryCharging();
+ 			auto battery = [&](float bx)		// the 26x14 icon, its level 3 px in
+ 			{
+ 				drawSprite(still("batt", batt, false), bx, 25 + ry, nullptr, INK);
+ 				float l = lvl < 0 ? 0.75f : lvl;
++				// on a charger the bar fills to full in 4 steps (CHARGE_STEP each) and starts over, like the look's other
++				// stepped animations: from a quarter, or from the level when it's lower. Climbing from the level itself
++				// moved less than a pixel near full, where a handheld spends most of its time on the charger; the level
++				// stays in the percentage ("icon and text"). A battery that is (nearly) full holds still.
++				if (charging && l < 0.97f)
++				{
++					int step = (int)std::fmod(std::max(0.0, now) / CHARGE_STEP, 4.0);
++					float from = std::min(l, 0.25f);
++					l = from + (1 - from) * step / 3.0f;
++				}
+ 				float fw = std::round(16 * std::min(1.0f, std::max(0.0f, l)) * s) / s;
+ 				if (fw > 0)
+ 					be->fill(std::round(X(bx + 3)), std::round(X(28 + ry)), std::round(X(fw)), std::round(X(8)), INK);
+@@ -2065,6 +2078,9 @@ namespace rnds
+ 		double t = now - d->topAt;
+ 		auto nextOf = [t](double period) { return (std::floor(t / period) + 1) * period - t; };
+ 		double next = d->holdStill ? 1e9 : nextOf(600);	// held still: no bob to step
++		// the charging battery's next step (the status bar, on every view)
++		if (d->charging)
++			next = std::min(next, (std::floor(now / Impl::CHARGE_STEP) + 1) * Impl::CHARGE_STEP - now);
+ 		if (mView != HOME)
+ 		{
+ 			next = std::min(next, nextOf(200));
+diff --git a/es-app/src/rnds/RndsUI.h b/es-app/src/rnds/RndsUI.h
+index 31e138fa..d0a92265 100644
+--- a/es-app/src/rnds/RndsUI.h
++++ b/es-app/src/rnds/RndsUI.h
+@@ -63,6 +63,7 @@ namespace rnds
+ 		virtual int gameCount() = 0;			// the library's list (the current system)
+ 		virtual GameInfo game(int i) = 0;
+ 		virtual std::string clockText() = 0;	// "01:01 PM" / "13:01"
++		virtual bool batteryCharging() { return false; }	// the status bar's battery is on a charger (its level climbs in steps)
+ 		virtual std::string dateText() = 0;		// "10/02"
+ 		virtual float battery() = 0;			// 0..1, < 0 unknown
+ 		virtual std::string batteryMode() { return "icon"; }	// ES's "show battery status": "" none, "icon", "text" (icon and %)
