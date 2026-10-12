@@ -13,6 +13,9 @@ systemctl() {
 unset -f systemctl
 [ -n "$_rgds_imports" ] && systemctl import-environment $_rgds_imports 2>/dev/null
 unset _rgds_imports
+# install.sh's profile.d/085-rocknixds-pad lets apps started from the menu take the pad without sway's focus on seat0.
+# Not ES: it would read the presses made in a game once it runs again.
+unset SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS
 
 # ES needs sway's outputs. systemd starts sway and this script together (at boot, and after a game restore.sh does
 # the same); es_settings used to take 2 s, which hid the race. Wait for an active output (up to 10 s).
@@ -129,6 +132,14 @@ fi
         sleep $REVEAL_DELAY
     fi
     swaymsg -s "$SOCK" "$OUTPUTS" >/dev/null 2>&1
+    # The touchscreen's calibration as the menu has it (it maps touches to the bottom panel), to put back after games
+    # that change it (see the window events below).
+    TOUCH_CAL=$(swaymsg -s "$SOCK" -t get_inputs 2>/dev/null | python3 -c '
+import json, sys
+for i in json.load(sys.stdin):
+    m = i.get("libinput", {}).get("calibration_matrix")
+    if i.get("type") == "touch" and m:
+        print(i["identifier"], " ".join("%g" % v for v in m)); break' 2>/dev/null)
     if [ -n "$ES_ARGS" ]; then
         swaymsg -s "$SOCK" "[app_id=\"emulationstation\"] scratchpad show, floating enable, fullscreen disable, move absolute position 0 0, focus" >/dev/null 2>&1
     else
@@ -166,6 +177,14 @@ def walk(n):
     if n.get("app_id") == "emulationstation" and not n.get("visible"): sys.exit(0)
     for c in n.get("nodes", []) + n.get("floating_nodes", []): walk(c)
 walk(json.load(sys.stdin)); sys.exit(1)'; then
+                    # A game can leave the panels moved: ROCKNIX's vertical-check stacks them for vertical arcade
+                    # games in RetroArch (the bottom panel at 0,768, the touchscreen calibrated for the stack) and
+                    # nothing put them back, so the menu's canvas missed the bottom panel until a reboot (RG DS
+                    # Plus, test build 6). Side by side again (the top panel, then the 640 px bottom one, as the
+                    # boot splash has them), and the menu's touch calibration.
+                    swaymsg -s "$SOCK" "output DSI-2 pos 0 0, output DSI-1 pos 640 0, $OUTPUTS" >/dev/null 2>&1
+                    [ -n "$TOUCH_CAL" ] &&
+                        swaymsg -s "$SOCK" "input \"${TOUCH_CAL%% *}\" calibration_matrix ${TOUCH_CAL#* }" >/dev/null 2>&1
                     swaymsg -s "$SOCK" '[app_id="emulationstation"] scratchpad show' >/dev/null 2>&1
                     swaymsg -s "$SOCK" "$LAYOUT, focus" >/dev/null 2>&1
                 fi ;;

@@ -84,13 +84,6 @@ stuck_report() {
     systemctl stop essway.service sway.service
     echo "$(ms) ms: ES and sway stopped"
   fi
-  # without a shader the Mali GPU does nothing in this mode (the display controller scans out DraStic's
-  # buffers), so it goes to powersave (200 MHz): anything more is only heat. With a shader it draws every frame
-  # (lcd1x-nds-color: ~3 ms per screen at 800 MHz), under simple_ondemand with a 400 MHz floor. Measured
-  # 2026-09-27 (I6: Pokemon Black 2 at 2x, lcd1x-nds-color, ~5 min per setting in one session): pinned 800 MHz
-  # dropped 0.11 frames/s, the 400 MHz floor 0.05/s and a 300 MHz floor 0.04/s, with the GPU averaging ~500 MHz
-  # instead of 800 (the governor never went below 400, so 300 buys nothing). The SoC settled at ~67 C.
-  # Tunable without a rebuild: DSFLIP_SHADER_GOV=performance restores the old pinned clock.
   GPU=/sys/class/devfreq/fde60000.gpu
   GPU_GOV=$(cat $GPU/governor 2>/dev/null)
   GPU_MIN=$(cat $GPU/min_freq 2>/dev/null)
@@ -104,6 +97,7 @@ stuck_report() {
     *) GOV=${DSFLIP_SHADER_GOV:-simple_ondemand}; MIN=${DSFLIP_SHADER_GPU_MIN:-400000000} ;;
   esac
   [ -n "$GPU_GOV" ] && { echo "$GPU_GOV" > /tmp/dsflip-gpu-governor; echo "$GPU_MIN" > /tmp/dsflip-gpu-min; echo $GOV > $GPU/governor 2>/dev/null; [ -n "$MIN" ] && echo $MIN > $GPU/min_freq 2>/dev/null; }
+  echo "GPU: $GOV${MIN:+, floor $((MIN / 1000000)) MHz} (shader ${DSHOOK_SHADER:-none})"
   # libdsflip's CPU governor (cpugov.c) lowers the CPU's clock limit while the game runs; restore.sh puts it back.
   # A file left by a session that never got restored holds the real limit: keep it.
   CPU=/sys/devices/system/cpu/cpufreq/policy0
@@ -131,6 +125,12 @@ stuck_report() {
     eval $PWM 0 clock.allowed-rates "'[ 44100 48000 ]'" >/dev/null 2>&1
     eval $PWM 0 clock.force-rate ${DSFLIP_PW_RATE:-44100} >/dev/null 2>&1
   fi
+  # The audio's state, for the crackling seen on the RG DS Plus in test build 4: after ~7 h up, every session's audio
+  # drained ~3% fast (dsflip.log: "[audio] pump ~44.9k, drain ~45.5k Hz", underruns every window, trim at -20000 ppm)
+  # until a reboot; a fresh boot plays at 44.1k exactly. What puts it there isn't known yet: the uptime, the
+  # suspends since boot and PipeWire's clock settings here, and the graph as pw-top sees it 20 s into the game (below).
+  echo "audio: up $(cut -d' ' -f1 /proc/uptime) s, $(cat /sys/power/suspend_stats/success 2>/dev/null || echo ?) suspends;" \
+    "PipeWire $(eval $PWM 0 2>/dev/null | sed -n "s/.*key:'clock\.\([a-z-]*\)' value:'\([^']*\)'.*/\1=\2/p" | tr '\n' ' ')"
   rm -f $STATE $NOTICE
   # test launches (smoke.sh, switchtime.sh) don't teach libdsflip's CPU governor anything about the player's games
   [ -e /tmp/rocknixds-testing ] && export DSFLIP_CPUGOV_MEMORY=0
@@ -180,14 +180,20 @@ stuck_report() {
   [ -n "$RES" ] || RES=$(grep "^nds.resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   RND=$(grep -F "nds[\"$GAME\"].renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
   [ -n "$RND" ] || RND=$(grep "^nds.renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
+  # That profile keeps the 20 ms wait at 3x, though: DraStic's presents come unevenly there (two in one refresh, none in
+  # the next), and without the wait the second one was dropped. Measured on the RG DS Plus, 2026-10-09, HeartGold at
+  # 3x walking, 60 s each, two rounds: no wait 1.18 and 0.80 repeated frames a second (148 and 100 dropped), the wait
+  # 0.33 and 0.30 (4 and 4 dropped), at the same 59.8-60.0 fps.
+  P3X=
   if [ "$RES" = 3x ] && [ "$RND" != drastic ] && [ "${DSFLIP_RAST:-1}" != 0 ] && ! grep -qF "nds[\"$GAME\"].power_profile=" $CFG 2>/dev/null; then
-    PROF=performance
+    PROF=performance P3X=1
   fi
   case "$PROF" in
     performance) Q=1 QW=0 CMAX= ;;
     battery) Q=3 QW=20 CMAX=1104000 ;;
     *) PROF=balanced Q=1 QW=20 CMAX=1416000 ;;
   esac
+  [ -n "$P3X" ] && QW=20
   export DSFLIP_QUEUE=${DSFLIP_QUEUE:-$Q} DSFLIP_QUEUE_WAIT=${DSFLIP_QUEUE_WAIT:-$QW}
   [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX} DSFLIP_CPU_MAX_SOFT=${DSFLIP_CPU_MAX_SOFT:-1}
   echo "power profile: $PROF (queue $DSFLIP_QUEUE, wait ${DSFLIP_QUEUE_WAIT} ms, CPU max ${DSFLIP_CPU_MAX:-hardware})"
@@ -256,6 +262,12 @@ stuck_report() {
       kill -0 $P 2>/dev/null || break          # the game ended: restore.sh owns the governor now
       [ "$(cat $GPU/governor 2>/dev/null)" = "$GOV" ] || { echo $GOV > $GPU/governor 2>/dev/null; echo "$(ms) ms: GPU governor changed by another service: back to $GOV"; }
     done ) &
+  # (see "audio:" above) the graph 20 s in: the sinks' and DraStic's stream's rate, quantum and errors
+  if command -v pw-top >/dev/null; then
+    ( sleep 20; kill -0 $P 2>/dev/null &&
+      XDG_RUNTIME_DIR=/var/run/0-runtime-dir timeout 5 pw-top -b -n 2 2>/dev/null | grep -E "_sink|drastic" | tail -n 3 |
+        sed "s/^/$(ms) ms: pw-top: /" ) &
+  fi
   # ES is stopped, so it can't record the session (play count, last played, time played): do what ES does after a
   # game. In VT mode ES is only waiting, and records it itself.
   # (not while /tmp/rocknixds-testing exists: the test tools launch games through ES and mustn't count as plays)
