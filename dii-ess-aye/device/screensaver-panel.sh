@@ -3,6 +3,7 @@
 # on the top panel and leaves the bottom one black, but lit). ES runs this from scripts/screensaver-start (backlight
 # off), and from scripts/screensaver-stop and scripts/wake (back on). It only turns back on a backlight it turned off
 # itself: on a one-panel theme the launcher keeps the bottom panel off (start_es_rgds.sh), and that stays as it is.
+# scripts/screensaver-controls lights it while the bottom panel's touch controls show.
 # scripts/start and scripts/game-start restore it too, so a crash or a game launched from the screensaver never leaves
 # the panel dark.
 # Not `swaymsg output DSI-1 power off`, the launcher's way: ES's window lives on DSI-1, and with that output off sway
@@ -23,6 +24,15 @@ B=$(bottom_backlight)
 [ -w $B/bl_power ] || exit 0
 
 case "$0" in
+    */screensaver-controls/*)
+        # the bottom panel's touch controls (es-rgds-screensaver-controls.patch): a tap shows them, its backlight on;
+        # they close by themselves, its backlight off again. Only while this script has the backlight off.
+        [ -f $MARK ] || exit 0
+        case "$1" in
+            show) echo 0 > "$(cat $MARK)/bl_power" ;;
+            hide) echo 4 > "$(cat $MARK)/bl_power" ;;
+        esac
+        ;;
     */screensaver-start/*)
         # only a backlight that is on now (bl_power 0): a panel the launcher switched off stays as it is
         if [ "$(cat $B/bl_power)" = 0 ]; then

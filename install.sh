@@ -230,7 +230,7 @@ if [ $UNINSTALL = 1 ]; then
         fi
     fi
     rm -f /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
-    for ev in screensaver-start screensaver-stop wake start game-start; do
+    for ev in screensaver-start screensaver-stop screensaver-controls wake start game-start; do
         rm -f /storage/.config/emulationstation/scripts/$ev/rocknixds-screensaver-panel.sh
     done
     if [ -f /tmp/rocknixds-screensaver-backlight-off ]; then       # a backlight the hook left off
@@ -265,7 +265,7 @@ if [ $UNINSTALL = 1 ]; then
     rmdir /storage/.config/emulationstation/scripts/theme-changed /storage/.config/emulationstation/scripts/game-end \
           /storage/.config/emulationstation/scripts/game-start /storage/.config/emulationstation/scripts/start \
           /storage/.config/emulationstation/scripts/screensaver-start /storage/.config/emulationstation/scripts/screensaver-stop \
-          /storage/.config/emulationstation/scripts/wake \
+          /storage/.config/emulationstation/scripts/wake /storage/.config/emulationstation/scripts/screensaver-controls \
           /storage/.config/emulationstation/scripts 2>/dev/null
     rm -f $VERSION_FILE /storage/.config/rocknixds-es-notice /storage/.config/rocknixds-stock-es /storage/.config/rocknixds-any-rocknix
     rm -f /storage/.config/emulationstation/es-mem.log /storage/.config/emulationstation/es-mem.log.1
@@ -427,7 +427,7 @@ if [ $THEME_ON = 1 ]; then
     chmod +x /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
     # the bottom panel's backlight off while the screensaver runs on the top panel (es-rgds-screensaver.patch); back on
     # when it stops, on wake, and as a safety net when ES starts or a game starts
-    for ev in screensaver-start screensaver-stop wake start game-start; do
+    for ev in screensaver-start screensaver-stop screensaver-controls wake start game-start; do
         mkdir -p /storage/.config/emulationstation/scripts/$ev
         cp "$SRC/dii-ess-aye/device/screensaver-panel.sh" /storage/.config/emulationstation/scripts/$ev/rocknixds-screensaver-panel.sh
         chmod +x /storage/.config/emulationstation/scripts/$ev/rocknixds-screensaver-panel.sh

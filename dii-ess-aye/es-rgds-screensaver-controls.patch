@@ -1,0 +1,318 @@
+es-rgds-screensaver-controls: touch controls on the bottom panel during the screensaver
+
+With es-rgds-screensaver.patch the screensaver runs on the top panel and the bottom one stays black, its backlight
+off (dii-ess-aye/device/screensaver-panel.sh). A tap on the bottom panel now shows controls there for 10 s:
+
+- the status: Wi-Fi (connected, not connected, off) and the battery (level, charging), in the status bar's colours
+  when COLOURED STATUS ICONS is on (es-rgds-battery-charging.patch; plain without it);
+- the slide's game, with NEXT SLIDE and PLAY THIS GAME (ES's slideshow is random and keeps no history, so there is no
+  previous slide);
+- the music: the song, NEXT SONG and STOP MUSIC (PLAY MUSIC when none plays), or "Music is off".
+
+Each tap keeps them up for another 10 s; a tap on the top panel or any button closes the screensaver as before. They
+are drawn in the theme's menu colours and font, sized against the 480 px panel of the RG DS.
+
+Window::processMouseButton offers the tap to the screensaver first, through a new ScreenSaver::onMouseClick (the
+default takes nothing, so other screensavers are unchanged): the bottom panel's taps are taken, the press acts and its
+release is swallowed. The screensaver fires a new event, screensaver-controls show/hide, and screensaver-panel.sh
+lights the backlight it turned off while they show. While they show, getNextUpdateTimeout wakes each second, for the
+status and the song, and when they close; fades still draw every frame. One-panel layouts have no bottom panel and
+no controls.
+
+diff --git a/es-app/src/SystemScreenSaver.cpp b/es-app/src/SystemScreenSaver.cpp
+index 6e2827ba..0dafed62 100644
+--- a/es-app/src/SystemScreenSaver.cpp
++++ b/es-app/src/SystemScreenSaver.cpp
+@@ -26,6 +26,12 @@
+ #include "Paths.h"
+ #include "ApiSystem.h"
+ #include <algorithm>
++#include "ThemeData.h"
++#include "resources/Font.h"
++#include "watchers/WatchersManager.h"
++#include "watchers/BatteryLevelWatcher.h"
++#include "watchers/NetworkStateWatcher.h"
++#include <SDL_timer.h>
+ 
+ #define FADE_TIME					(500)
+ #define DATE_TIME_UPDATE_INTERVAL	(100)
+@@ -78,6 +84,10 @@ int SystemScreenSaver::getNextUpdateTimeout()
+ 	if (mState != STATE_SCREENSAVER_ACTIVE || mVideoScreensaver)
+ 		return 0;
+ 
++	// ROCKNIXDS: while the bottom panel's controls show, wake each second (the status, the song) and when they close
++	if (controlsShown())
++		return std::max(1, std::min(1000, (int)(mControlsUntil - SDL_GetTicks())));
++
+ 	// Black/dim periodically wake for polling-based input such as lightguns. ROCKNIXDS: the RG DS has none, so only once
+ 	// a minute (for the clock under a dim screensaver): at 100 ms ES drew 10 frames a second of a static screen.
+ 	if (!mImageScreensaver)
+@@ -234,6 +244,14 @@ void SystemScreenSaver::stopScreenSaver()
+ 	bool isExitingScreenSaver = !mLoadingNext;
+ 	bool isVideoScreenSaver = (mVideoScreensaver != nullptr);
+ 
++	// ROCKNIXDS: leaving the screensaver closes its controls (screensaver-stop turns the backlight back on); the next
++	// slide keeps them
++	if (isExitingScreenSaver)
++	{
++		mControlsUntil = 0;
++		mCtrlButtons.clear();
++	}
++
+ 	if (mLoadingNext)
+ 		mFadingImageScreensaver = mImageScreensaver;
+ 	else
+@@ -318,6 +336,9 @@ void SystemScreenSaver::renderScreenSaver()
+ 		unsigned char color = screensaver_behavior == "dim" ? 0x000000A0 : 0x000000FF;
+ 		Renderer::drawRect(0.0f, 0.0f, Renderer::getScreenWidth(), Renderer::getScreenHeight(), color, color);
+ 	}
++
++	if (mState != STATE_INACTIVE)
++		renderControls();	// ROCKNIXDS: the bottom panel's controls, when a tap showed them
+ }
+ 
+ unsigned long SystemScreenSaver::countGameListNodes(bool video)
+@@ -485,6 +506,10 @@ std::string SystemScreenSaver::pickRandomCustomImage(bool video)
+ 
+ void SystemScreenSaver::update(int deltaTime)
+ {
++	// ROCKNIXDS: the bottom panel's controls close CONTROLS_MS after the last tap
++	if (controlsShown() && SDL_GetTicks() >= mControlsUntil)
++		showControls(false);
++
+ 	// Use this to update the fade value for the current fade stage
+ 	if (mState == STATE_FADE_OUT_WINDOW)
+ 	{
+@@ -551,6 +576,175 @@ void SystemScreenSaver::launchGame()
+ 	}
+ }
+ 
++// ROCKNIXDS: the bottom panel's touch controls. The dual-screen themes put the screensaver on the top panel
++// (es-rgds-screensaver.patch) and leave the bottom one black, its backlight off (dii-ess-aye/device/screensaver-panel.sh).
++// A tap there shows the controls for CONTROLS_MS, lighting the backlight through the screensaver-controls event: the
++// status (Wi-Fi, battery), the slide's game (next slide, play it) and the music (next song, stop or play). Each tap
++// keeps them up; a tap on the top panel or any button closes the screensaver as before. One-panel layouts have no
++// bottom panel and no controls.
++#define CONTROLS_MS (10000)
++
++static Renderer::Rect controlsPanel()		// the bottom panel: the canvas' middle third
++{
++	int w = Renderer::getUIWidth();
++	if (w > 0 && w < Renderer::getScreenWidth())
++		return Renderer::Rect(Renderer::getUILeft(), 0, w, Renderer::getScreenHeight());
++
++	return Renderer::Rect(0, 0, 0, 0);
++}
++
++void SystemScreenSaver::showControls(bool show)
++{
++	if (show)
++	{
++		if (!controlsShown())
++			Scripting::fireEvent("screensaver-controls", "show");
++		mControlsUntil = SDL_GetTicks() + CONTROLS_MS;
++	}
++	else if (controlsShown())
++	{
++		mControlsUntil = 0;
++		mCtrlButtons.clear();
++		Scripting::fireEvent("screensaver-controls", "hide");
++	}
++}
++
++bool SystemScreenSaver::onMouseClick(int button, bool down, int x, int y)
++{
++	Renderer::Rect p = controlsPanel();
++	if (p.w <= 0 || x < p.x || x >= p.x + p.w || y < p.y || y >= p.y + p.h)
++		return false;	// not the bottom panel: the tap closes the screensaver
++
++	if (!down)
++		return true;	// the press acts; its release is swallowed
++
++	if (!controlsShown())
++	{
++		showControls(true);
++		return true;
++	}
++
++	mControlsUntil = SDL_GetTicks() + CONTROLS_MS;
++	for (auto& b : mCtrlButtons)
++	{
++		if (x < b.x || x >= b.x + b.w || y < b.y || y >= b.y + b.h)
++			continue;
++
++		switch (b.action)
++		{
++		case CtrlAction::NextSlide:
++			nextVideo();
++			break;
++		case CtrlAction::PlayGame:
++			if (getCurrentGame() != nullptr)
++			{
++				mControlsUntil = 0;
++				mCtrlButtons.clear();
++				mWindow->cancelScreenSaver();
++				launchGame();
++			}
++			break;
++		case CtrlAction::NextSong:
++		case CtrlAction::PlayMusic:
++			AudioManager::getInstance()->playRandomMusic(false);
++			break;
++		case CtrlAction::StopMusic:
++			AudioManager::getInstance()->stopMusic(false);
++			break;
++		}
++		break;
++	}
++	return true;
++}
++
++void SystemScreenSaver::renderControls()
++{
++	Renderer::Rect p = controlsPanel();
++	if (p.w <= 0 || !controlsShown())
++		return;
++
++	auto theme = ThemeData::getMenuTheme();
++	const std::string fontPath = theme->Text.font ? theme->Text.font->getPath() : "";
++	float u = p.h / 480.0f;		// design units: the RG DS's 480 px panel
++	float pad = 24 * u, x0 = p.x + pad, w = p.w - pad * 2;
++	auto big = Font::get((int)std::round(26 * u), fontPath), small = Font::get((int)std::round(17 * u), fontPath);
++	unsigned int ink = theme->Text.color, muted = theme->TextSmall.color, bg = theme->Background.color;
++	unsigned int btnBg = theme->Text.selectorColor, btnInk = theme->Text.selectedColor;
++
++	Renderer::setMatrix(Transform4x4f::Identity());
++	Renderer::drawRect((float)p.x, (float)p.y, (float)p.w, (float)p.h, 0x000000FF, 0x000000FF);
++	Renderer::drawRoundRect(p.x + pad / 2, p.y + pad / 2, p.w - pad, p.h - pad, 18 * u, bg);
++
++	auto fit = [](const std::shared_ptr<Font>& f, std::string s, float maxW)
++	{
++		if (f->sizeText(s, 1.0f).x() <= maxW) return s;
++		while (!s.empty() && f->sizeText(s + "...", 1.0f).x() > maxW)
++		{
++			s.pop_back();		// a whole UTF-8 character: its continuation bytes, then its lead byte
++			while (!s.empty() && (s.back() & 0xC0) == 0x80) s.pop_back();
++			if (!s.empty() && (s.back() & 0x80)) s.pop_back();
++		}
++		return s + "...";
++	};
++	auto text = [&](const std::shared_ptr<Font>& f, const std::string& s, float x, float y, float tw, unsigned int col, Alignment a)
++	{
++		TextCache* tc = f->buildTextCache(fit(f, s, tw), Vector2f(x, y), col, tw, a, 1.0f);
++		f->renderTextCache(tc);
++		delete tc;
++	};
++	mCtrlButtons.clear();
++	auto button = [&](float x, float y, float bw, const std::string& label, CtrlAction a)
++	{
++		float bh = 56 * u;
++		Renderer::drawRoundRect(x, y, bw, bh, 10 * u, btnBg);
++		text(big, label, x, y + (bh - big->getHeight(1.0f)) / 2, bw, btnInk, ALIGN_CENTER);
++		mCtrlButtons.push_back({ x, y, bw, bh, a });
++	};
++
++	// the status: Wi-Fi and battery, in the status bar's colours when COLOURED STATUS ICONS is on
++	// (es-rgds-battery-charging.patch: green connected or charging, amber on but not connected, red low)
++	bool colours = Settings::getInstance()->getBool("RndsStatusColors");
++	auto net = WatchersManager::GetComponent<NetworkStateWatcher>();
++	bool online = net == nullptr || net->isConnected(), wifiOn = SystemConf::getInstance()->getBool("wifi.enabled");
++	std::string wifi = online ? _("Wi-Fi connected") : wifiOn ? _("Wi-Fi not connected") : _("Wi-Fi off");
++	unsigned int wifiCol = !colours ? ink : online ? 0x5FD068FF : wifiOn ? 0xF2B33DFF : muted;
++	float y = p.y + 34 * u;
++	text(small, wifi, x0, y, w / 2, wifiCol, ALIGN_LEFT);
++	auto batt = WatchersManager::GetComponent<BatteryLevelWatcher>();
++	if (batt != nullptr && batt->getBatteryInfo().hasBattery)
++	{
++		auto bi = batt->getBatteryInfo();
++		std::string bs = std::to_string(bi.level) + "%" + (bi.isCharging ? " " + _("charging") : "");
++		unsigned int bc = !colours ? ink : bi.isCharging ? 0x5FD068FF : bi.level <= 15 ? 0xFF3B4AFF : ink;
++		text(small, bs, x0 + w / 2, y, w / 2, bc, ALIGN_RIGHT);
++	}
++
++	// the slide's game
++	FileData* game = getCurrentGame();
++	y = p.y + 86 * u;
++	text(small, _("NOW SHOWING"), x0, y, w, muted, ALIGN_LEFT);
++	text(big, game ? game->getName() : _("No game"), x0, y + 24 * u, w, ink, ALIGN_LEFT);
++	float bw = (w - pad) / 2;
++	button(x0, y + 66 * u, bw, _("NEXT SLIDE"), CtrlAction::NextSlide);
++	if (game)
++		button(x0 + bw + pad, y + 66 * u, bw, _("PLAY THIS GAME"), CtrlAction::PlayGame);
++
++	// the music
++	y = p.y + 252 * u;
++	text(small, _("MUSIC"), x0, y, w, muted, ALIGN_LEFT);
++	if (!Settings::BackgroundMusic())
++		text(big, _("Music is off"), x0, y + 24 * u, w, ink, ALIGN_LEFT);
++	else
++	{
++		bool playing = AudioManager::getInstance()->isSongPlaying();
++		text(big, playing ? AudioManager::getInstance()->getSongName() : _("No music playing"), x0, y + 24 * u, w, ink, ALIGN_LEFT);
++		button(x0, y + 66 * u, bw, _("NEXT SONG"), CtrlAction::NextSong);
++		button(x0 + bw + pad, y + 66 * u, bw, playing ? _("STOP MUSIC") : _("PLAY MUSIC"), playing ? CtrlAction::StopMusic : CtrlAction::PlayMusic);
++	}
++
++	text(small, _("Tap the top screen or press a button to close"), x0, p.y + p.h - pad - 30 * u, w, muted, ALIGN_CENTER);
++}
++
+ 
+ // ------------------------------------------------------------------------------------------------------------------------
+ // GAME SCREEN SAVER BASE CLASS
+diff --git a/es-app/src/SystemScreenSaver.h b/es-app/src/SystemScreenSaver.h
+index e4fe64e3..cd9a0c7c 100644
+--- a/es-app/src/SystemScreenSaver.h
++++ b/es-app/src/SystemScreenSaver.h
+@@ -95,9 +95,19 @@ public:
+ 
+ 	virtual FileData* getCurrentGame();
+ 	virtual void launchGame();
++	bool onMouseClick(int button, bool down, int x, int y) override;
+ 	inline virtual void resetCounts() { mGamesWithVideosLoaded = false; mGamesWithImagesLoaded = false; mGamesWithImages.clear(); mGamesWithVideos.clear(); };
+ 
+ private:
++	// ROCKNIXDS: the bottom panel's touch controls (es-rgds-screensaver-controls)
++	enum class CtrlAction { NextSlide, PlayGame, NextSong, StopMusic, PlayMusic };
++	struct CtrlButton { float x, y, w, h; CtrlAction action; };
++	std::vector<CtrlButton> mCtrlButtons;	// as last drawn: the taps are tested against them
++	unsigned int mControlsUntil = 0;		// SDL ticks the controls close at; 0 hidden
++	bool controlsShown() const { return mControlsUntil != 0; }
++	void showControls(bool show);
++	void renderControls();
++
+ 	unsigned long countGameListNodes(bool video = false);
+ 
+ 	std::string pickRandomGameMedia(bool video = false);
+diff --git a/es-core/src/Window.cpp b/es-core/src/Window.cpp
+index 7f0cb658..2ce73c91 100644
+--- a/es-core/src/Window.cpp
++++ b/es-core/src/Window.cpp
+@@ -1427,6 +1427,14 @@ bool Window::processMouseButton(int button, bool down, int x, int y)
+ 
+ 	mLastMousePoint.x() = point.x(); mLastMousePoint.y() = point.y();
+ 
++	// ROCKNIXDS: the screensaver takes a tap on its controls (the bottom panel) instead of closing; a tap anywhere else
++	// still closes it, as any input does
++	if (mScreenSaver && mScreenSaver->isScreenSaverActive() && mScreenSaver->onMouseClick(button, down, point.x(), point.y()))
++	{
++		mTimeSinceLastInput = 0;
++		return true;
++	}
++
+ 	if (mMouseCapture != nullptr)
+ 	{
+ 	//	auto hits = hitTest(x, y);
+diff --git a/es-core/src/Window.h b/es-core/src/Window.h
+index 8b8f65b2..25f20bf7 100644
+--- a/es-core/src/Window.h
++++ b/es-core/src/Window.h
+@@ -45,6 +45,9 @@ public:
+ 		virtual FileData* getCurrentGame() = 0;
+ 		virtual void launchGame() = 0;
+ 		virtual void resetCounts() = 0;
++		// ROCKNIXDS: a tap or click while the screensaver runs, before it closes the screensaver; true when the
++		// screensaver took it (es-rgds-screensaver-controls: the bottom panel's touch controls)
++		virtual bool onMouseClick(int button, bool down, int x, int y) { return false; }
+ 	};
+ 
+ 	Window();

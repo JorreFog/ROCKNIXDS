@@ -787,6 +787,9 @@ the top panel, the bottom panel, and an unused third.
     rounded backdrops so they stay readable over a light slide (SCREENSAVER SETTINGS > TEXT BACKDROP, on by default).
     While the screensaver runs, `device/screensaver-panel.sh` (ES's screensaver-start/-stop and wake scripts) turns
     the bottom panel's backlight off, and back on after. A one-panel layout (any other theme) is unchanged.
+  - `es-rgds-screensaver-controls.patch`: a tap on the dark bottom panel during the screensaver shows touch controls
+    there for 10 s: Wi-Fi and battery, the slide's game (next slide, play it) and the music (next song, stop or play),
+    lighting the bottom backlight while they show.
 - **Other themes** (since 1.4): pick any theme that is not `dii-ess-aye`, `canvas-ds`, `rocknixds-pixel-light` or
   `rocknixds-pixel-dark` and ES restarts in stock ROCKNIX's layout, the top panel at 640x480 with the bottom panel off.
   Pick one of those four again and it spans both panels. Switching between dark and light does not restart ES:
