@@ -19,6 +19,9 @@ disconnected Wi-Fi stays the dimmed ink, since Wi-Fi is often off on purpose. Th
 `ok` (#5fd068 dark, #2e9a44 light); the red is the palette's own. COLOURED STATUS ICONS (RndsStatusColors, on by
 default), next to SHOW BATTERY STATUS for the ROCKNIXDS Pixel themes, turns the colours off; the steps stay.
 
+On a charger a pixel bolt also crosses the battery (8 x 11 CSS px, centred on the 22 px body): the ink, outlined by
+1 px of the screen's background, so it reads over the green fill, the empty bar and a fill in the ink alike.
+
 diff --git a/es-app/src/guis/GuiMenu.cpp b/es-app/src/guis/GuiMenu.cpp
 index cf58694c..87cc2293 100644
 --- a/es-app/src/guis/GuiMenu.cpp
@@ -55,7 +58,7 @@ index b4487728..0cc1f6a6 100644
  		{
  			auto w = WatchersManager::GetComponent<NetworkStateWatcher>();
 diff --git a/es-app/src/rnds/RndsUI.cpp b/es-app/src/rnds/RndsUI.cpp
-index 6ad71c6b..3070b53b 100644
+index 6ad71c6b..598439e1 100644
 --- a/es-app/src/rnds/RndsUI.cpp
 +++ b/es-app/src/rnds/RndsUI.cpp
 @@ -62,6 +62,7 @@ namespace rnds
@@ -91,7 +94,7 @@ index 6ad71c6b..3070b53b 100644
  		double topAt = -1e9, shellAt = -1e9, popAt = -1e9;
  		std::string shellKey;
  		std::vector<SlotState> slots;
-@@ -1226,18 +1231,38 @@ namespace rnds
+@@ -1226,18 +1231,72 @@ namespace rnds
  		void drawStatus(float ry)
  		{
  			// wifi, battery, brand
@@ -129,10 +132,44 @@ index 6ad71c6b..3070b53b 100644
  				if (fw > 0)
 -					be->fill(std::round(X(bx + 3)), std::round(X(28 + ry)), std::round(X(fw)), std::round(X(8)), INK);
 +					be->fill(std::round(X(bx + 3)), std::round(X(28 + ry)), std::round(X(fw)), std::round(X(8)), fc);
++				// on a charger, a pixel bolt across the battery's body (8 x 11 CSS px, centred on the 22 px body, not the
++				// terminal): the ink, outlined by 1 px of the screen's background so it reads over the fill, the empty
++				// bar and a fill in the ink alike
++				if (charging)
++				{
++					static const char* bolt[11] = {
++						".....###",
++						"....###.",
++						"...###..",
++						"..###...",
++						".#######",
++						"#######.",
++						"...###..",
++						"..###...",
++						".###....",
++						".##.....",
++						"##......" };
++					float ox = bx + 7, oy = 26 + ry;
++					auto px = [&](int c, int r, Color col)
++					{
++						float l = std::round(X(ox + c)), t = std::round(X(oy + r));
++						be->fill(l, t, std::round(X(ox + c + 1)) - l, std::round(X(oy + r + 1)) - t, col);
++					};
++					for (int r = 0; r < 11; r++)
++						for (int c = 0; c < 8; c++)
++							if (bolt[r][c] == '#')
++								for (int dr = -1; dr <= 1; dr++)
++									for (int dc = -1; dc <= 1; dc++)
++										px(c + dc, r + dr, P.screenBg);
++					for (int r = 0; r < 11; r++)
++						for (int c = 0; c < 8; c++)
++							if (bolt[r][c] == '#')
++								px(c, r, INK);
++				}
  			};
  			// on the left after the Wi-Fi: "icon only" the battery icon; "icon and text" the percentage and then the icon
  			// ("78% [battery]"), the percentage right-aligned in room for "100%" so nothing moves as it changes, and
-@@ -2065,6 +2090,9 @@ namespace rnds
+@@ -2065,6 +2124,9 @@ namespace rnds
  		double t = now - d->topAt;
  		auto nextOf = [t](double period) { return (std::floor(t / period) + 1) * period - t; };
  		double next = d->holdStill ? 1e9 : nextOf(600);	// held still: no bob to step
