@@ -779,6 +779,11 @@ the top panel, the bottom panel, and an unused third.
     closes under the screensaver too.
     The theme's looping animations now stop after a few cycles. Idle menu: ~101% -> ~13% CPU (of 400), average clock
     ~1390 -> ~530 MHz, GPU at its lowest clock.
+  - `es-rgds-slideshow-wake.patch`: the slideshow screensaver drew a whole frame every 100 ms between slides, to
+    update its clock (or, without the clock, to poll for lightguns). It now wakes when the clock's text next changes
+    (each second with seconds in the time format, each minute without) or for the next slide, and without the clock
+    only for the next slide. RG DS Plus, slideshow with SHOW DATE TIME on: ES 14% -> 4% of a core, battery
+    ~525 -> ~498 mA.
 - **Other themes** (since 1.4): pick any theme that is not `dii-ess-aye`, `canvas-ds`, `rocknixds-pixel-light` or
   `rocknixds-pixel-dark` and ES restarts in stock ROCKNIX's layout, the top panel at 640x480 with the bottom panel off.
   Pick one of those four again and it spans both panels. Switching between dark and light does not restart ES:
