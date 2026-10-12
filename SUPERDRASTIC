@@ -32,4 +32,6 @@
 # CPU governor holding the power profile's bound from the start, and going past it (and remembering a clock as too
 # slow) only when the game is CPU-bound. Test build 4 ran at 1992 MHz whatever the profile on the RG DS Plus. Source:
 # SuperDrastic's refs/testers/sd-9-test.6.
+# Released unchanged in ROCKNIXDS 1.6.2 (2026-10-12): the same package test build 7 shipped, its name kept; the
+# source is tagged rocknixds-1.6.2 in SuperDrastic (783d86f).
 0.5.0-beta.1-rocknixds.9-test.6 378e54bf517a82417c9c019d8ded4992c815c18db72795f45508888e0c269e60
