@@ -1,0 +1,275 @@
+es-rgds-screensaver: the screensaver on the top panel, with a backdrop behind its text
+
+The dual-screen themes run ES on a canvas three panels wide (1920x480 on the RG DS, 3072x768 on the Plus), and
+es-rgds-uiwidth.patch sizes the menus against one panel (ES_UI_WIDTH). The screensaver was still sized against the
+whole canvas:
+
+- A slide was fitted to the canvas' height and centred on the canvas, which put it on the bottom panel. A slide wider
+  than the panel (anything wider than 4:3, and most screenshots with a bezel) ran over the panel's edges, onto the top
+  screen on one side and off the canvas on the other. A long game name did the same.
+- The date and time (SHOW DATE TIME) sat in the canvas' top-left corner, on the top screen, while the slide was on
+  the bottom one.
+- A decoration's (bezel's) frame and its .info viewport were fitted to the canvas.
+
+The screensaver now takes the top panel: the slide, its game and system names or marquee, the decoration and the
+clock are all laid out inside it, and the bottom screen stays black. A device propped open with the top screen up
+shows the slideshow and the time like a desk clock. On a one-panel layout (any other theme, ES_UI_WIDTH unset or the
+screen's width) the panel is the whole screen, so nothing changes there.
+
+The clock and the game's name also get a soft backdrop: a rounded half-transparent box behind the date and time, and
+one behind the game and system names, each as wide as its longer line, so the text stays readable over a light
+slide. The names' box fades with them. It is a switch in both screensaver menus (TEXT BACKDROP,
+ScreenSaverTextBackdrop), on by default.
+
+diff --git a/es-app/src/SystemScreenSaver.cpp b/es-app/src/SystemScreenSaver.cpp
+index 779f24fa..6e2827ba 100644
+--- a/es-app/src/SystemScreenSaver.cpp
++++ b/es-app/src/SystemScreenSaver.cpp
+@@ -556,8 +556,21 @@ void SystemScreenSaver::launchGame()
+ // GAME SCREEN SAVER BASE CLASS
+ // ------------------------------------------------------------------------------------------------------------------------
+ 
++// ROCKNIXDS: the dual-screen themes run ES on a canvas three panels wide (ES_UI_WIDTH each, es-rgds-uiwidth.patch). The
++// screensaver is sized against one panel, the top one (the canvas' left third): fitted to the whole canvas, a slide
++// that isn't 4:3 or a long game name ran over onto the bottom screen, and the clock sat in the canvas' top-left corner
++// while the slide was centred on the bottom panel. On a one-panel layout this is the whole screen, as stock.
++static Renderer::Rect screenSaverPanel()
++{
++	int w = Renderer::getUIWidth();
++	if (w > 0 && w < Renderer::getScreenWidth())
++		return Renderer::Rect(0, 0, w, Renderer::getScreenHeight());
++
++	return Renderer::Rect(0, 0, Renderer::getScreenWidth(), Renderer::getScreenHeight());
++}
++
+ GameScreenSaverBase::GameScreenSaverBase(Window* window) : GuiComponent(window),
+-	mViewport(0, 0, Renderer::getScreenWidth(), Renderer::getScreenHeight())
++	mViewport(screenSaverPanel())
+ {
+ 	mDecoration = nullptr;
+ 	mMarquee = nullptr;
+@@ -671,7 +684,8 @@ void GameScreenSaverBase::setGame(FileData* game)
+ 	if (game == nullptr)
+ 		return;
+ 
+-	mViewport = Renderer::Rect(0, 0, Renderer::getScreenWidth(), Renderer::getScreenHeight());
++	mViewport = screenSaverPanel();
++	const Renderer::Rect panel = mViewport;
+ 
+ 	std::string decos = Settings::getInstance()->getString("ScreenSaverDecorations");
+ 
+@@ -750,13 +764,13 @@ void GameScreenSaverBase::setGame(FileData* game)
+ 							auto height = doc["height"].GetInt();
+ 							if (width > 0 && height > 0)
+ 							{
+-								Vector2i sz = ImageIO::adjustPictureSize(Vector2i(width, height), Vector2i(Renderer::getScreenWidth(), Renderer::getScreenHeight()));
++								Vector2i sz = ImageIO::adjustPictureSize(Vector2i(width, height), Vector2i(panel.w, panel.h));
+ 
+ 								float px = (float) sz.x() / (float)width;
+ 								float py = (float) sz.y() / (float)height;
+ 
+-								float dx = (Renderer::getScreenWidth() - sz.x()) / 2.0;
+-								float dy = (Renderer::getScreenHeight() - sz.y()) / 2.0;
++								float dx = panel.x + (panel.w - sz.x()) / 2.0;
++								float dy = panel.y + (panel.h - sz.y()) / 2.0;
+ 
+ 								auto top = doc["top"].GetInt();
+ 								auto left = doc["left"].GetInt();
+@@ -777,8 +791,8 @@ void GameScreenSaverBase::setGame(FileData* game)
+ 				mDecoration = new ImageComponent(mWindow, true);
+ 				mDecoration->setImage(sets[setId].imageUrl);
+ 				mDecoration->setOrigin(0.5f, 0.5f);
+-				mDecoration->setPosition(Renderer::getScreenWidth() / 2.0f, (float)Renderer::getScreenHeight() / 2.0f);
+-				mDecoration->setMaxSize((float)Renderer::getScreenWidth() * Renderer::getScreenProportion(), (float)Renderer::getScreenHeight());
++				mDecoration->setPosition(panel.x + panel.w / 2.0f, panel.y + panel.h / 2.0f);
++				mDecoration->setMaxSize((float)panel.w * ((float)panel.w / (float)panel.h), (float)panel.h);
+ 			}
+ 		}
+ 	}
+@@ -827,6 +841,9 @@ void GameScreenSaverBase::setGame(FileData* game)
+ 
+ void GameScreenSaverBase::render(const Transform4x4f& transform)
+ {
++	bool showSystem = mLabelSystem && (mDecoration == nullptr || Settings::getInstance()->getString("ScreenSaverDecorations") != "systems");
++	renderTextBackdrop(transform, mMarquee ? nullptr : mLabelGame, showSystem ? mLabelSystem : nullptr, true, mOpacity);
++
+ 	if (mMarquee)
+ 	{
+ 		mMarquee->setOpacity(mOpacity);
+@@ -838,8 +855,7 @@ void GameScreenSaverBase::render(const Transform4x4f& transform)
+ 		mLabelGame->render(transform);
+ 	}
+ 
+-	if (mDecoration == nullptr || Settings::getInstance()->getString("ScreenSaverDecorations") != "systems")
+-	if (mLabelSystem)
++	if (showSystem)
+ 	{
+ 		mLabelSystem->setOpacity(mOpacity);
+ 		mLabelSystem->render(transform);
+@@ -851,17 +867,70 @@ void GameScreenSaverBase::render(const Transform4x4f& transform)
+ 		mDecoration->render(transform);
+ 	}
+ 
+-	if (mLabelDate)
+-	{
+-		mLabelDate->setOpacity(255);
+-		mLabelDate->render(transform);
+-	}
++	renderDateTime(transform);
++}
++
++// ROCKNIXDS: the area a one-line label's text takes, as the screensaver lays its labels out (left-aligned or centred,
++// vertically centred)
++static void labelTextBox(TextComponent* label, bool centred, float& x, float& y, float& w, float& h)
++{
++	w = h = 0;
++	if (label == nullptr || label->getFont() == nullptr || label->getText().empty())
++		return;
+ 
+-	if (mLabelTime)
++	Vector2f sz = label->getFont()->sizeText(label->getText(), 1.0f);
++	w = Math::min(sz.x(), label->getSize().x());
++	h = sz.y();
++	x = label->getPosition().x() + (centred ? (label->getSize().x() - w) / 2.0f : 0.0f);
++	y = label->getPosition().y() + (label->getSize().y() - h) / 2.0f;
++}
++
++// ROCKNIXDS: a soft backdrop behind a group of labels (TEXT BACKDROP, ScreenSaverTextBackdrop, on by default), so the
++// clock and the game's name stay readable over a light slide: one rounded half-transparent box around the lines' text,
++// as transparent as the labels it backs.
++void GameScreenSaverBase::renderTextBackdrop(const Transform4x4f& transform, TextComponent* first, TextComponent* second, bool centred, unsigned char opacity)
++{
++	if (opacity == 0 || !Settings::getInstance()->getBool("ScreenSaverTextBackdrop"))
++		return;
++
++	float x0 = 0, y0 = 0, x1 = 0, y1 = 0, line = 0;
++	bool any = false;
++	for (TextComponent* label : { first, second })
+ 	{
+-		mLabelTime->setOpacity(255);
+-		mLabelTime->render(transform);
++		float x, y, w, h;
++		labelTextBox(label, centred, x, y, w, h);
++		if (w <= 0 || h <= 0)
++			continue;
++
++		x0 = any ? Math::min(x0, x) : x;
++		y0 = any ? Math::min(y0, y) : y;
++		x1 = any ? Math::max(x1, x + w) : x + w;
++		y1 = any ? Math::max(y1, y + h) : y + h;
++		line = Math::max(line, h);
++		any = true;
+ 	}
++
++	if (!any)
++		return;
++
++	float pad = line * 0.4f;
++	unsigned int alpha = 0xA0 * opacity / 255;
++	Renderer::setMatrix(transform);
++	Renderer::drawRoundRect(x0 - pad, y0 - pad, x1 - x0 + pad * 2, y1 - y0 + pad * 2, pad, alpha);
++}
++
++void GameScreenSaverBase::renderDateTime(const Transform4x4f& transform)
++{
++	if (mLabelDate == nullptr || mLabelTime == nullptr)
++		return;
++
++	renderTextBackdrop(transform, mLabelDate, mLabelTime, false, 255);
++
++	mLabelDate->setOpacity(255);
++	mLabelDate->render(transform);
++
++	mLabelTime->setOpacity(255);
++	mLabelTime->render(transform);
+ }
+ 
+ void GameScreenSaverBase::update(int deltaTime)
+@@ -1053,6 +1122,12 @@ void VideoScreenSaver::render(const Transform4x4f& transform)
+ 
+ 	if (Settings::getInstance()->getString("ScreenSaverGameInfo") != "never")
+ 	{
++		if (mFade != 0)
++		{
++			bool showSystem = mLabelSystem && (mDecoration == nullptr || Settings::getInstance()->getString("ScreenSaverDecorations") != "systems");
++			renderTextBackdrop(transform, mMarquee ? nullptr : mLabelGame, showSystem ? mLabelSystem : nullptr, true, (unsigned char)(mOpacity * mFade));
++		}
++
+ 		if (mMarquee && mFade != 0)
+ 		{
+ 			mMarquee->setOpacity(mOpacity * mFade);
+@@ -1078,17 +1153,7 @@ void VideoScreenSaver::render(const Transform4x4f& transform)
+ 		mDecoration->render(transform);		
+ 	}
+ 
+-	if (mLabelDate)
+-	{
+-		mLabelDate->setOpacity(255);
+-		mLabelDate->render(transform);
+-	}
+-
+-	if (mLabelTime)
+-	{
+-		mLabelTime->setOpacity(255);
+-		mLabelTime->render(transform);
+-	}
++	renderDateTime(transform);
+ 
+ 	if (Settings::DebugImage())
+ 		Renderer::drawRect(mViewport.x, mViewport.y, mViewport.w, mViewport.h, 0xFFFF0090, 0xFFFF0090);
+diff --git a/es-app/src/SystemScreenSaver.h b/es-app/src/SystemScreenSaver.h
+index b6781adf..e4fe64e3 100644
+--- a/es-app/src/SystemScreenSaver.h
++++ b/es-app/src/SystemScreenSaver.h
+@@ -25,6 +25,9 @@ public:
+ 	void setOpacity(unsigned char opacity) override;
+ 
+ protected:
++	void renderDateTime(const Transform4x4f& transform);
++	void renderTextBackdrop(const Transform4x4f& transform, TextComponent* first, TextComponent* second, bool centred, unsigned char opacity);
++
+ 	ImageComponent*		mMarquee;
+ 	TextComponent*		mLabelGame;
+ 	TextComponent*		mLabelSystem;
+diff --git a/es-app/src/guis/GuiGeneralScreensaverOptions.cpp b/es-app/src/guis/GuiGeneralScreensaverOptions.cpp
+index d945359b..3ee36e02 100644
+--- a/es-app/src/guis/GuiGeneralScreensaverOptions.cpp
++++ b/es-app/src/guis/GuiGeneralScreensaverOptions.cpp
+@@ -154,6 +154,12 @@ void GuiGeneralScreensaverOptions::addVideoScreensaverOptions(int selectItem)
+ 		}
+ 	}
+ 
++	// ROCKNIXDS: a soft backdrop behind the clock and the game's name (es-rgds-screensaver.patch)
++	auto ss_text_backdrop = std::make_shared<SwitchComponent>(mWindow);
++	ss_text_backdrop->setState(Settings::getInstance()->getBool("ScreenSaverTextBackdrop"));
++	addWithLabel(_("TEXT BACKDROP"), ss_text_backdrop);
++	addSaveFunc([ss_text_backdrop] { Settings::getInstance()->setBool("ScreenSaverTextBackdrop", ss_text_backdrop->getState()); });
++
+ 	bool advancedOptions = true;
+ 
+ #ifdef _RPI_
+@@ -277,6 +283,12 @@ void GuiGeneralScreensaverOptions::addSlideShowScreensaverOptions(int selectItem
+ 		}
+ 	}
+ 
++	// ROCKNIXDS: a soft backdrop behind the clock and the game's name (es-rgds-screensaver.patch)
++	auto ss_text_backdrop = std::make_shared<SwitchComponent>(mWindow);
++	ss_text_backdrop->setState(Settings::getInstance()->getBool("ScreenSaverTextBackdrop"));
++	addWithLabel(_("TEXT BACKDROP"), ss_text_backdrop);
++	addSaveFunc([ss_text_backdrop] { Settings::getInstance()->setBool("ScreenSaverTextBackdrop", ss_text_backdrop->getState()); });
++
+ 	auto marquee_screensaver = std::make_shared<SwitchComponent>(mWindow);
+ 	marquee_screensaver->setState(Settings::getInstance()->getBool("ScreenSaverMarquee"));
+ 	addWithLabel(_("USE MARQUEE AS GAME INFO"), marquee_screensaver);
+diff --git a/es-core/src/Settings.cpp b/es-core/src/Settings.cpp
+index 89b3f482..a145e422 100644
+--- a/es-core/src/Settings.cpp
++++ b/es-core/src/Settings.cpp
+@@ -259,6 +259,7 @@ void Settings::setDefaults()
+ 	mBoolMap["ScrapeShortTitle"] = false;
+ 
+ 	mBoolMap["ScreenSaverDateTime"] = false;
++	mBoolMap["ScreenSaverTextBackdrop"] = true;
+ 	mStringMap["ScreenSaverDateFormat"] = "%Y-%m-%d";
+ 	mStringMap["ScreenSaverTimeFormat"] = "%H:%M:%S";
+ 	mBoolMap["ScreenSaverMarquee"] = true;
