@@ -780,6 +780,17 @@ the top panel, the bottom panel, and an unused third.
     closes under the screensaver too.
     The theme's looping animations now stop after a few cycles. Idle menu: ~101% -> ~13% CPU (of 400), average clock
     ~1390 -> ~530 MHz, GPU at its lowest clock.
+  - `es-rgds-screensaver.patch`: the screensaver on the top panel. Stock ES sized it against the whole three-panel
+    canvas: a slide was centred on the bottom panel, a slide wider than 4:3 or a long game name ran onto the other
+    screens, and SHOW DATE TIME put the clock in the canvas' top-left corner, on the top screen. The slide, its names
+    or marquee, a decoration and the clock now all sit inside the top panel and the bottom screen stays black, so a
+    device propped open shows the slideshow and the time like a desk clock. The clock and the game's name get soft
+    rounded backdrops so they stay readable over a light slide (SCREENSAVER SETTINGS > TEXT BACKDROP, on by default).
+    While the screensaver runs, `device/screensaver-panel.sh` (ES's screensaver-start/-stop and wake scripts) turns
+    the bottom panel's backlight off, and back on after. A one-panel layout (any other theme) is unchanged.
+  - `es-rgds-screensaver-controls.patch`: a tap on the dark bottom panel during the screensaver shows touch controls
+    there for 10 s: Wi-Fi and battery, the slide's game (next slide, play it) and the music (next song, stop or play),
+    lighting the bottom backlight while they show.
 - **Other themes** (since 1.4): pick any theme that is not `dii-ess-aye`, `canvas-ds`, `rocknixds-pixel-light` or
   `rocknixds-pixel-dark` and ES restarts in stock ROCKNIX's layout, the top panel at 640x480 with the bottom panel off.
   Pick one of those four again and it spans both panels. Switching between dark and light does not restart ES:
