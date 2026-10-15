@@ -34,4 +34,10 @@
 # SuperDrastic's refs/testers/sd-9-test.6.
 # Released unchanged in ROCKNIXDS 1.6.2 (2026-10-12): the same package test build 7 shipped, its name kept; the
 # source is tagged rocknixds-1.6.2 in SuperDrastic (783d86f).
-0.5.0-beta.1-rocknixds.9-test.6 378e54bf517a82417c9c019d8ded4992c815c18db72795f45508888e0c269e60
+# 0.5.0-beta.1-rocknixds.10 (ROCKNIXDS 1.6.4 for the RG DS Plus, a hotfix): .9-test.6 plus the audio crackle fix,
+# SuperDrastic branch plus-audio-hotfix (d8f4105 on 783d86f). DraStic's sound ran out in heavy games (Mario Kart DS
+# racing: 18-33 gaps a minute, filled with zeros by DraStic's callback) when the full frame queue held it 20 ms and when
+# the CPU governor tried 1104 MHz again; the hold now lets DraStic go while its sound still covers its next frame, and
+# a step down that runs the sound out or drops a frame is undone for the session. Built with build.sh on a Debian trixie arm64
+# sysroot (needs glibc 2.38, like .9-test.6) and package.sh.
+0.5.0-beta.1-rocknixds.10 29c146a7d313cdf7361ba8ec47b015054f7ff9ddb9c17cb7675c357d15bcb60d
