@@ -4,12 +4,22 @@
 # ROCKNIX 111-sway-init regenerates /storage/.config/sway/config on every boot
 # (stock layout: ES fullscreen on one panel, DSI-1 powered off), which blacks out
 # the 1920-wide ES window -- so the theme sway config is restored here too.
-# Keep DUAL_THEMES in sync with start_es_rgds.sh and theme-changed.sh.
+# Keep DUAL_THEMES and dual_theme in sync with start_es_rgds.sh and theme-changed.sh.
 DUAL_THEMES="dii-ess-aye canvas-ds rocknixds-pixel-dark rocknixds-pixel-light"
+# A theme not in the list gets the canvas too when it has a layout for it: an aspect-ratio include for the canvas'
+# 4:1 ratio in its theme.xml (if="{screen.ratio} == '4/1'"), such as TechDweeb's RG DS layout.
+dual_theme() {
+    case " $DUAL_THEMES " in *" $1 "*) return 0 ;; esac
+    [ -n "$1" ] || return 1
+    for d in /storage/.config/emulationstation/themes /storage/roms/themes /usr/share/emulationstation/themes; do
+        grep -qsF "{screen.ratio} == '4/1'" "$d/$1/theme.xml" && return 0
+    done
+    return 1
+}
 LAUNCHER=/storage/.config/emulationstation/themes/dii-ess-aye/scripts/start_es_rgds.sh
 SWAYCFG=/storage/dii-ess-aye-backup/sway-config.theme
 THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
-dual=0; case " $DUAL_THEMES " in *" $THEME_SET "*) dual=1 ;; esac
+dual=0; dual_theme "$THEME_SET" && dual=1
 if [ -x "$LAUNCHER" ] && [ "$dual" = 1 ]; then
     grep -q " /usr/bin/start_es.sh " /proc/mounts || mount --bind "$LAUNCHER" /usr/bin/start_es.sh
     [ -s "$SWAYCFG" ] && cp "$SWAYCFG" /storage/.config/sway/config
