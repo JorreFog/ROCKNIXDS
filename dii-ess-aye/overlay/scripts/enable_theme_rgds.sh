@@ -70,17 +70,25 @@ fi
 
 # Keep a dual-screen theme the user already picked. A fresh install, or any other
 # theme, starts on ROCKNIXDS Pixel Light; the others are in the theme menu.
+# The dual-screen themes: the four built in, and any theme whose theme.xml has an aspect-ratio include for the
+# canvas' 4:1 ratio (if="{screen.ratio} == '4/1'"), such as TechDweeb's RG DS layout. Same check as start_es_rgds.sh.
+DUAL_THEMES="dii-ess-aye canvas-ds rocknixds-pixel-dark rocknixds-pixel-light"
+dual_theme() {
+    case " $DUAL_THEMES " in *" $1 "*) return 0 ;; esac
+    [ -n "$1" ] || return 1
+    for d in /storage/.config/emulationstation/themes /storage/roms/themes /usr/share/emulationstation/themes; do
+        grep -qsF "{screen.ratio} == '4/1'" "$d/$1/theme.xml" && return 0
+    done
+    return 1
+}
 CURRENT_THEME=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' "$ES_SETTINGS" 2>/dev/null)
-case "$CURRENT_THEME" in
-    dii-ess-aye|canvas-ds|rocknixds-pixel-dark|rocknixds-pixel-light) ;;
-    *)
+if ! dual_theme "$CURRENT_THEME"; then
         if grep -q '<string name="ThemeSet"' "$ES_SETTINGS" 2>/dev/null; then
             sed -i 's|<string name="ThemeSet" value="[^"]*" />|<string name="ThemeSet" value="rocknixds-pixel-light" />|' "$ES_SETTINGS"
         else
             sed -i 's|</config>|\t<string name="ThemeSet" value="rocknixds-pixel-light" />\n</config>|' "$ES_SETTINGS"
         fi
-        ;;
-esac
+fi
 
 if [ ! -f "/tmp/has-restarted-for-theme" ]; then
     touch /tmp/has-restarted-for-theme
