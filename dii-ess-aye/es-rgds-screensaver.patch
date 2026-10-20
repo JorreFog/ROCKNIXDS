@@ -21,8 +21,11 @@ one behind the game and system names, each as wide as its longer line, so the te
 slide. The names' box fades with them. It is a switch in both screensaver menus (TEXT BACKDROP,
 ScreenSaverTextBackdrop), on by default.
 
+A game name too long for the panel stays on one line: it takes a smaller font, down to two thirds of the size, and
+ends with "..." past that. ES wrapped it onto a second line that ran into the system's name and past its backdrop.
+
 diff --git a/es-app/src/SystemScreenSaver.cpp b/es-app/src/SystemScreenSaver.cpp
-index 779f24fa..6e2827ba 100644
+index 779f24fa..ab5f46a4 100644
 --- a/es-app/src/SystemScreenSaver.cpp
 +++ b/es-app/src/SystemScreenSaver.cpp
 @@ -556,8 +556,21 @@ void SystemScreenSaver::launchGame()
@@ -86,7 +89,22 @@ index 779f24fa..6e2827ba 100644
  			}
  		}
  	}
-@@ -827,6 +841,9 @@ void GameScreenSaverBase::setGame(FileData* game)
+@@ -810,7 +824,13 @@ void GameScreenSaverBase::setGame(FileData* game)
+ 	mLabelGame->setColor(0xFFFFFFFF);
+ 	mLabelGame->setGlowColor(0x00000040);
+ 	mLabelGame->setGlowSize(3);
+-	mLabelGame->setFont(font);
++	// ROCKNIXDS: the name on one line. ES wrapped a long one onto a second line that ran into the system's name and
++	// past its backdrop; it now takes a smaller font (down to two thirds) and ends with "..." past that.
++	auto nameFont = font;
++	for (int s = (int)sz - 1; s >= (int)(sz * 2 / 3) && nameFont->sizeText(game->getName(), 1.0f).x() > mViewport.w * 0.92f; s--)
++		nameFont = Font::get(s, ph);
++	mLabelGame->setMultiLine(TextComponent::MultiLineType::SINGLELINE);
++	mLabelGame->setFont(nameFont);
+ 	mLabelGame->setText(game->getName());
+ 
+ 	mLabelSystem = new TextComponent(mWindow);
+@@ -827,6 +847,9 @@ void GameScreenSaverBase::setGame(FileData* game)
  
  void GameScreenSaverBase::render(const Transform4x4f& transform)
  {
@@ -96,7 +114,7 @@ index 779f24fa..6e2827ba 100644
  	if (mMarquee)
  	{
  		mMarquee->setOpacity(mOpacity);
-@@ -838,8 +855,7 @@ void GameScreenSaverBase::render(const Transform4x4f& transform)
+@@ -838,8 +861,7 @@ void GameScreenSaverBase::render(const Transform4x4f& transform)
  		mLabelGame->render(transform);
  	}
  
@@ -106,7 +124,7 @@ index 779f24fa..6e2827ba 100644
  	{
  		mLabelSystem->setOpacity(mOpacity);
  		mLabelSystem->render(transform);
-@@ -851,17 +867,70 @@ void GameScreenSaverBase::render(const Transform4x4f& transform)
+@@ -851,17 +873,70 @@ void GameScreenSaverBase::render(const Transform4x4f& transform)
  		mDecoration->render(transform);
  	}
  
@@ -185,7 +203,7 @@ index 779f24fa..6e2827ba 100644
  }
  
  void GameScreenSaverBase::update(int deltaTime)
-@@ -1053,6 +1122,12 @@ void VideoScreenSaver::render(const Transform4x4f& transform)
+@@ -1053,6 +1128,12 @@ void VideoScreenSaver::render(const Transform4x4f& transform)
  
  	if (Settings::getInstance()->getString("ScreenSaverGameInfo") != "never")
  	{
@@ -198,7 +216,7 @@ index 779f24fa..6e2827ba 100644
  		if (mMarquee && mFade != 0)
  		{
  			mMarquee->setOpacity(mOpacity * mFade);
-@@ -1078,17 +1153,7 @@ void VideoScreenSaver::render(const Transform4x4f& transform)
+@@ -1078,17 +1159,7 @@ void VideoScreenSaver::render(const Transform4x4f& transform)
  		mDecoration->render(transform);		
  	}
  

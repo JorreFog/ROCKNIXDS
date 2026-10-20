@@ -5,7 +5,9 @@ off (dii-ess-aye/device/screensaver-panel.sh). A tap on the bottom panel now sho
 
 - the status: the theme's own Wi-Fi and battery icons (rnds/wifi@*.png, battery@*.png), drawn as its status bar
   draws them (the battery's level fill, a bolt while it charges, the percentage), in the status bar's colours when
-  COLOURED STATUS ICONS is on (es-rgds-battery-charging.patch; plain without it), words for a theme without them;
+  COLOURED STATUS ICONS is on (es-rgds-battery-charging.patch; plain without it). A theme without them gets its own
+  <batteryIcon> and <networkIcon> from its system view (at any depth, such as inside a stackpanel), else ES's
+  built-in battery and network icons, with the percentage; words only if neither exists;
 - the slide's game, with NEXT SLIDE and PLAY THIS GAME (ES's slideshow is random and keeps no history, so there is no
   previous slide);
 - the music: the song, NEXT SONG and STOP MUSIC (PLAY MUSIC when none plays), or "Music is off".
@@ -21,15 +23,16 @@ status and the song, and when they close; fades still draw every frame. One-pane
 no controls.
 
 diff --git a/es-app/src/SystemScreenSaver.cpp b/es-app/src/SystemScreenSaver.cpp
-index 6e2827ba..2d00a9b6 100644
+index 52c0be4f..cea03c0f 100644
 --- a/es-app/src/SystemScreenSaver.cpp
 +++ b/es-app/src/SystemScreenSaver.cpp
-@@ -26,6 +26,12 @@
+@@ -26,6 +26,13 @@
  #include "Paths.h"
  #include "ApiSystem.h"
  #include <algorithm>
 +#include "ThemeData.h"
 +#include "resources/Font.h"
++#include "resources/ResourceManager.h"
 +#include "watchers/WatchersManager.h"
 +#include "watchers/BatteryLevelWatcher.h"
 +#include "watchers/NetworkStateWatcher.h"
@@ -37,7 +40,7 @@ index 6e2827ba..2d00a9b6 100644
  
  #define FADE_TIME					(500)
  #define DATE_TIME_UPDATE_INTERVAL	(100)
-@@ -78,6 +84,10 @@ int SystemScreenSaver::getNextUpdateTimeout()
+@@ -90,6 +97,10 @@ int SystemScreenSaver::getNextUpdateTimeout()
  	if (mState != STATE_SCREENSAVER_ACTIVE || mVideoScreensaver)
  		return 0;
  
@@ -48,7 +51,7 @@ index 6e2827ba..2d00a9b6 100644
  	// Black/dim periodically wake for polling-based input such as lightguns. ROCKNIXDS: the RG DS has none, so only once
  	// a minute (for the clock under a dim screensaver): at 100 ms ES drew 10 frames a second of a static screen.
  	if (!mImageScreensaver)
-@@ -234,6 +244,14 @@ void SystemScreenSaver::stopScreenSaver()
+@@ -248,6 +259,14 @@ void SystemScreenSaver::stopScreenSaver()
  	bool isExitingScreenSaver = !mLoadingNext;
  	bool isVideoScreenSaver = (mVideoScreensaver != nullptr);
  
@@ -63,7 +66,7 @@ index 6e2827ba..2d00a9b6 100644
  	if (mLoadingNext)
  		mFadingImageScreensaver = mImageScreensaver;
  	else
-@@ -318,6 +336,9 @@ void SystemScreenSaver::renderScreenSaver()
+@@ -332,6 +351,9 @@ void SystemScreenSaver::renderScreenSaver()
  		unsigned char color = screensaver_behavior == "dim" ? 0x000000A0 : 0x000000FF;
  		Renderer::drawRect(0.0f, 0.0f, Renderer::getScreenWidth(), Renderer::getScreenHeight(), color, color);
  	}
@@ -73,7 +76,7 @@ index 6e2827ba..2d00a9b6 100644
  }
  
  unsigned long SystemScreenSaver::countGameListNodes(bool video)
-@@ -485,6 +506,10 @@ std::string SystemScreenSaver::pickRandomCustomImage(bool video)
+@@ -499,6 +521,10 @@ std::string SystemScreenSaver::pickRandomCustomImage(bool video)
  
  void SystemScreenSaver::update(int deltaTime)
  {
@@ -84,7 +87,7 @@ index 6e2827ba..2d00a9b6 100644
  	// Use this to update the fade value for the current fade stage
  	if (mState == STATE_FADE_OUT_WINDOW)
  	{
-@@ -551,6 +576,233 @@ void SystemScreenSaver::launchGame()
+@@ -565,6 +591,285 @@ void SystemScreenSaver::launchGame()
  	}
  }
  
@@ -169,6 +172,31 @@ index 6e2827ba..2d00a9b6 100644
 +	return true;
 +}
 +
++// ROCKNIXDS: a theme's own status icon for the controls, when it has no rnds icons: the <batteryIcon> or <networkIcon>
++// in its system view, at any depth (TechDweeb's sit in a stackpanel); empty when it has none
++static const ThemeData::ThemeElement* findThemeElementOfType(const ThemeData::ThemeElement& e, const std::string& type)
++{
++	if (e.type == type)
++		return &e;
++	for (auto& child : e.children)
++		if (auto found = findThemeElementOfType(child.second, type))
++			return found;
++	return nullptr;
++}
++
++static std::string themeStatusIcon(SystemData* sys, const std::string& type, const std::string& property)
++{
++	auto theme = sys ? sys->getTheme() : nullptr;
++	auto view = theme ? theme->getView("system") : nullptr;
++	if (view == nullptr)
++		return "";
++	for (auto& elem : view->elements)
++		if (auto found = findThemeElementOfType(elem.second, type))
++			if (found->has(property))
++				return found->get<std::string>(property);
++	return "";
++}
++
 +void SystemScreenSaver::renderControls()
 +{
 +	Renderer::Rect p = controlsPanel();
@@ -219,9 +247,9 @@ index 6e2827ba..2d00a9b6 100644
 +	// the theme has no rnds folder
 +	bool colours = Settings::getInstance()->getBool("RndsStatusColors");
 +	std::string dir;
++	SystemData* sys = ViewController::get()->getState().getSystem();
++	if (sys == nullptr && !SystemData::sSystemVector.empty()) sys = SystemData::sSystemVector.front();
 +	{
-+		SystemData* sys = ViewController::get()->getState().getSystem();
-+		if (sys == nullptr && !SystemData::sSystemVector.empty()) sys = SystemData::sSystemVector.front();
 +		auto elem = sys && sys->getTheme() ? sys->getTheme()->getElement("rnds", "assets", "image") : nullptr;
 +		if (elem != nullptr && elem->has("path"))
 +			dir = Utils::FileSystem::getParent(elem->get<std::string>("path"));
@@ -240,6 +268,23 @@ index 6e2827ba..2d00a9b6 100644
 +		Renderer::setMatrix(Transform4x4f::Identity());
 +		return true;
 +	};
++	// a theme without rnds icons: its own status icon (themeStatusIcon), else ES's built-in one, kept to its shape
++	// inside the same box and tinted like the rest of the status
++	auto plainIcon = [&](const std::string& themed, const std::string& builtin, float x, float y, float boxW, float boxH, unsigned int col)
++	{
++		std::string path = !themed.empty() && Utils::FileSystem::exists(themed) ? themed :
++			ResourceManager::getInstance()->fileExists(builtin) ? ResourceManager::getInstance()->getResourcePath(builtin) : "";
++		if (path.empty()) return false;
++		ImageComponent ic(mWindow, true);
++		ic.setImage(path);
++		ic.setOrigin(0.0f, 0.5f);
++		ic.setPosition(std::round(x), std::round(y + boxH * u / 2));
++		ic.setMaxSize(std::round(boxW * u), std::round(boxH * u));
++		ic.setColorShift(col);
++		ic.render(Transform4x4f::Identity());
++		Renderer::setMatrix(Transform4x4f::Identity());
++		return true;
++	};
 +	auto cell = [&](float ox, float oy, int c, int r, unsigned int col)	// one CSS pixel of a pixel-art glyph
 +	{
 +		float l = std::round(ox + c * u), t = std::round(oy + r * u);
@@ -251,7 +296,8 @@ index 6e2827ba..2d00a9b6 100644
 +	unsigned int wifiCol = !colours ? ink : online ? 0x5FD068FF : wifiOn ? 0xF2B33DFF : ink;
 +	if (!online && !(colours && wifiOn)) wifiCol = (wifiCol & 0xFFFFFF00) | 0x59;	// switched off: dimmed, as in the status bar
 +	float y = p.y + 34 * u;
-+	if (!icon("wifi", x0, y, 18, 16, wifiCol))
++	if (!icon("wifi", x0, y, 18, 16, wifiCol) &&
++		!plainIcon(themeStatusIcon(sys, "networkIcon", online || wifiOn ? "networkIcon" : "planemodeIcon"), ":/network.svg", x0, y, 24, 20, wifiCol))
 +		text(small, online ? _("Wi-Fi connected") : wifiOn ? _("Wi-Fi not connected") : _("Wi-Fi off"), x0, y, w / 2, wifiCol, ALIGN_LEFT);
 +
 +	auto batt = WatchersManager::GetComponent<BatteryLevelWatcher>();
@@ -286,7 +332,16 @@ index 6e2827ba..2d00a9b6 100644
 +			text(small, pct, x0 + w / 2, y, w / 2 - 26 * u - 8 * u, ink, ALIGN_RIGHT);
 +		}
 +		else
-+			text(small, pct + (bi.isCharging ? " " + _("charging") : ""), x0 + w / 2, y, w / 2, fill, ALIGN_RIGHT);
++		{
++			// the theme's battery icon for this level (the levels its <batteryIcon> has), else ES's own
++			int l = bi.level;
++			std::string level = bi.isCharging ? "incharge" : l > 75 ? "full" : l > 50 ? "at75" : l > 25 ? "at50" : l > 5 ? "at25" : "empty";
++			std::string builtin = bi.isCharging ? "incharge" : l > 75 ? "full" : l > 50 ? "75" : l > 25 ? "50" : l > 5 ? "25" : "empty";
++			if (plainIcon(themeStatusIcon(sys, "batteryIcon", level), ":/battery/" + builtin + ".svg", x0 + w - 40 * u, y, 40, 20, fill))
++				text(small, pct, x0 + w / 2, y, w / 2 - 40 * u - 8 * u, ink, ALIGN_RIGHT);
++			else
++				text(small, pct + (bi.isCharging ? " " + _("charging") : ""), x0 + w / 2, y, w / 2, fill, ALIGN_RIGHT);
++		}
 +	}
 +
 +	// the slide's game
