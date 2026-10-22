@@ -9,6 +9,19 @@
 Anbernic RG DS and RG DS Plus on ROCKNIX.</b></p>
 
 <p align="center">
+  <a href="https://github.com/JorreFog/BananaLinux"><img src="docs/img/bananaos-moved.png" width="100%" alt="Development has moved to BananaOS: ROCKNIXDS's work goes on as BananaOS, a whole Linux of its own for the RG DS and RG DS Plus, with the same menu, two DS emulators and a fast boot. ROCKNIXDS stays here for those who use it. Go to BananaOS"></a>
+</p>
+
+> [!IMPORTANT]
+> **Development has moved to [BananaOS](https://github.com/JorreFog/BananaLinux).** Everything ROCKNIXDS started
+> (ROCKNIXDS Pixel, SuperDrastic's display path, the in-game menu, the Store) now lives on in BananaOS: its own
+> Linux for the RG DS and RG DS Plus instead of changes on top of ROCKNIX. It boots to the menu in about 4 to 6
+> seconds, has two DS emulators (SuperDrastic and BananaDS, with RetroAchievements and online play), RetroArch,
+> PortMaster and the App Store, and gets the new work. ROCKNIXDS 1.6.3 (RG DS) and 1.6.4 (RG DS Plus) stay here
+> and keep working. Coming from ROCKNIXDS? BananaOS takes a ROCKNIX `.dsv` next to a game as its save, and the
+> [Save Mover](https://jorrefog.github.io/BananaLinux/save-mover/) converts the rest.
+
+<p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/img/demo-dark.webp">
     <img src="docs/img/demo-light.webp" width="372" alt="Animation: ROCKNIXDS Pixel scrolling the system shelf on the bottom screen while the top screen shows the system's stats, opening the Nintendo DS library with the box cover bobbing on the top screen, then starting Mario Kart DS: the cartridge slides into the console">
@@ -69,8 +82,9 @@ erased**), and a computer with an SD card reader.
 
 1. **Download the image for your handheld.** Don't unzip it.
    - RG DS Plus: [rocknixds-v1.6-plus-rocknix-20261001.img.gz](https://github.com/JorreFog/ROCKNIXDS/releases/download/v1.6-plus/rocknixds-v1.6-plus-rocknix-20261001.img.gz)
-     (then update to 1.6.1 from the menu)
+     (then update to 1.6.4 from the menu)
    - RG DS: [rocknixds-v1.6.1-rocknix-20261001.img.gz](https://github.com/JorreFog/ROCKNIXDS/releases/download/v1.6.1/rocknixds-v1.6.1-rocknix-20261001.img.gz)
+     (then update to 1.6.3 from the menu)
 2. **Install [balenaEtcher](https://etcher.balena.io/)** on your computer (free, for Windows, macOS and Linux).
 3. **Write the image to the card.** Put the microSD card in your computer and open balenaEtcher.
    Click *Flash from file* and pick the file you downloaded. Click *Select target* and pick the microSD card.
@@ -121,9 +135,25 @@ Mali-G52); the RG DS Plus has two 1024×768 panels. ROCKNIXDS (formerly `rgds-ro
 - **ROCKNIXDS Bank & Trade** (new, in `bank/`): a Pokémon bank, PKHeX legality checks and Wi-Fi trading between two
   handhelds, on both screens. See [below](#bank-rocknixds-bank--trade).
 
+### New in 1.6.2 to 1.6.4
+
+The last updates, from the menu (*Updates & downloads > ROCKNIXDS*):
+
+- **1.6.2** ([RG DS](https://github.com/JorreFog/ROCKNIXDS/releases/tag/v1.6.2),
+  [Plus](https://github.com/JorreFog/ROCKNIXDS/releases/tag/v1.6.2-plus)): **the ROCKNIXDS Store**, a Store tile that
+  installs, updates and removes Döda Kvarter, Bank & Trade and what comes next (an Updates tab, a check every 6
+  hours, every download checked against its checksum); a faster 3×; clocks that keep to the power profile; Döda
+  Kvarter 0.3.
+- **1.6.3** ([RG DS](https://github.com/JorreFog/ROCKNIXDS/releases/tag/v1.6.3),
+  [Plus](https://github.com/JorreFog/ROCKNIXDS/releases/tag/v1.6.3-plus)): **the date and time set by hand**
+  (*Main menu > System settings > Date & time*), for a handheld without Wi-Fi.
+- **1.6.4, RG DS Plus only** ([Plus](https://github.com/JorreFog/ROCKNIXDS/releases/tag/v1.6.4-plus)): a hotfix for
+  the **audio crackle** in some DS games: SuperDrastic paces DraStic so its sound no longer runs out in heavy 3D
+  scenes.
+
 ### New in 1.6
 
-The last big update, on both handhelds: the RG DS release is [v1.6.1](docs/releases/v1.6.1.md) (1.6 and 1.6.1 in
+The last big feature update, on both handhelds: the RG DS release is [v1.6.1](docs/releases/v1.6.1.md) (1.6 and 1.6.1 in
 one), the RG DS Plus's [v1.6-plus](docs/releases/v1.6-plus.md) and [v1.6.1-plus](docs/releases/v1.6.1-plus.md).
 
 - **A stuck game never needs a restart.** The freeze at a game's start is found and fixed (DraStic started helper
