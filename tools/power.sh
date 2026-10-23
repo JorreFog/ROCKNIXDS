@@ -1,7 +1,8 @@
 #!/bin/sh
 # power.sh <tag> <secs> [VAR=value...]   (run on a PC; RGDS_SSH=<ssh command> or RGDS_HOST=<ip>)
 # Runs tools/hgpower.sh on the device with the display free (ES and sway stopped, then started again) and prints
-# its result. See hgpower.sh for the options.
+# its result. See hgpower.sh for the options. HGWRAP=<command words>: run hgpower.sh under that command on the device
+# (tools/irqtest.sh: HGWRAP="/storage/dsflip/irqab.sh <tag> <layout>").
 HERE=$(cd "$(dirname "$0")" && pwd)
 SSH=${RGDS_SSH:-ssh root@${RGDS_HOST:?set RGDS_HOST or RGDS_SSH}}
 TAG=${1:?tag}; SECS=${2:?secs}; shift 2
@@ -26,4 +27,4 @@ while time.monotonic() < end:
         ev(1, k, 1); ev(0, 0, 0); time.sleep(1.5); ev(1, k, 0); ev(0, 0, 0)
 PY
 $SSH "chmod +x /storage/dsflip/*.sh; KMSRUN_TIMEOUT=$((SECS + 90)) systemd-run --wait --quiet --unit=dsflip-kms --collect \
-      -E KMSRUN_TIMEOUT=$((SECS + 90)) /storage/dsflip/kmsrun.sh /storage/dsflip/hgpower.sh $TAG $SECS $*; cat /storage/dsflip/probe/$TAG.txt"
+      -E KMSRUN_TIMEOUT=$((SECS + 90)) /storage/dsflip/kmsrun.sh $HGWRAP /storage/dsflip/hgpower.sh $TAG $SECS $*; cat /storage/dsflip/probe/$TAG.txt"
