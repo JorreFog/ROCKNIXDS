@@ -1,0 +1,13 @@
+diff --git a/src/GPU_Soft.h b/src/GPU_Soft.h
+index d6396af..5630f76 100644
+--- a/src/GPU_Soft.h
++++ b/src/GPU_Soft.h
+@@ -54,6 +54,8 @@ public:
+ private:
+     friend class SoftRenderer2D;
+     friend class SoftRenderer3D;
++    friend class BananaRenderer2D;
++    friend class BananaRenderer;
+ 
+     u32* Framebuffer[2][2];
+ 
