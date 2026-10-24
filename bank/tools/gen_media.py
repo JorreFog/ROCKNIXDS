@@ -12,6 +12,7 @@ writes, at the sizes and names the menu and the Store expect:
                                shows its middle about 90 px wide)
     bank-marquee.png  400x164  the title strip                   }
     icon.png          32x32    the Store's icon (RGBA)           } device/logo (BananaOS's store/apps/bank, pages)
+    screen.png        320x240  the Store's picture of it         }
     logo-256.png      256x256  the logo alone, 8x (RGBA)         }
 Needs Pillow. The font defaults to ../assets/fonts/PixelifySans-Medium.ttf (tools/fetch-assets.sh puts it there).
 """
@@ -243,6 +244,18 @@ def marquee(path, mark, font):
     img.save(path)
 
 
+def screen(path, mark, font):
+    # the Store's picture: the cover again, drawn at its own size so every pixel stays whole
+    img = sheet(320, 240)
+    card(img, 12, 8, 307, 227, 2)
+    place(img, mark, 4, 160, 20)
+    title = outlined(words([('POKE', WORD_YELLOW), ('TOOL', WORD_CREAM)], 13, font))
+    place(img, title, 3, 160, 150)
+    sub = word('BANK · EDITOR · TRADE', 10, MUTED, font, bold=False)
+    place(img, sub, 1, 160, 202)
+    img.save(path)
+
+
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else '.'
     font = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, '..', 'assets', 'fonts', 'PixelifySans-Medium.ttf')
@@ -253,6 +266,7 @@ def main():
     cover(os.path.join(out, 'bank-image.png'), mark, font)
     label(os.path.join(out, 'bank-thumb.png'), mark, font)
     marquee(os.path.join(out, 'bank-marquee.png'), mark, font)
+    screen(os.path.join(out, 'screen.png'), mark, font)
 
 
 if __name__ == '__main__':
