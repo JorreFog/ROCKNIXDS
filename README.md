@@ -62,16 +62,6 @@ Anbernic RG DS and RG DS Plus on ROCKNIX.</b></p>
 > The area this project is focusing on the most right now is improving NDS emulation performance at the lowest clock speeds possible. This means that other functionality, minor bugs, and things like that will be prioritized a bit less. I will try to address as many of the bugs being reported as possible. But just keep this in mind when using ROCKNIXDS.
 >
 > The `.img` file is out: see [Get started](#get-started) below for the easiest way to install.
->
-> I also have a lot of school stuff happening right now, so I will have to prioritize those things a bit more moving forward, and updates will come less frequently.
->
-> Thanks to everyone who has tested this and contributed to its development.
-
-> [!IMPORTANT]
-> **ROCKNIXDS does not support piracy.** It contains no games, ROMs, BIOS or firmware, and it is meant only for game
-> data you made yourself from original cartridges you own. Don't download or share copies of games. Nintendo, Pokémon
-> and all other names and trademarks belong to their respective owners; ROCKNIXDS is a fan project, not affiliated with
-> or endorsed by them. By using ROCKNIXDS you accept its [terms of use and legal notice](LEGAL.md).
 
 ## Get started
 
