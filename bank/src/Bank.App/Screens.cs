@@ -199,6 +199,7 @@ public static class MainMenu
         app.Menu("Menu",
         [
             new("Choose a game save", () => app.Push(new SavePickerScreen(app)), app.Trade is null),
+            new("Edit the game: trainer, bag, Pokédex", () => SaveEditMenu(app), app.Trade is null && app.Mover.Save is not null),
             new("Trade with another handheld", () => app.Push(new TradeMenuScreen(app)), app.Trade is null),
             new("Import files from the import folder", () =>
             {
@@ -210,7 +211,22 @@ public static class MainMenu
             new("About", () => app.Push(new AboutScreen(app))),
             new("Quit", () => app.QuitRequested = true),
             new("Close", () => { }),
-        ], cancelIndex: 6);
+        ], cancelIndex: 7);
+    }
+
+    /// <summary>The open game's own data: each is edited on a copy and written with its Save.</summary>
+    public static void SaveEditMenu(App app)
+    {
+        var save = app.Mover.Save;
+        if (save is null)
+            return;
+        app.Menu(save.Entry.GameName,
+        [
+            new("Trainer: name, ID, money, play time, badges", () => app.Push(new TrainerScreen(app))),
+            new("Bag: items", () => app.Push(new BagScreen(app)), save.Sav.Inventory.Pouches.Count > 0),
+            new("Pokédex: seen and caught", () => app.Push(new DexScreen(app)), save.Sav.HasPokeDex),
+            new("Close", () => { }),
+        ], cancelIndex: 3);
     }
 }
 
@@ -382,7 +398,7 @@ public sealed class AboutScreen(App app) : Screen(app)
 /// <summary>An on-screen keyboard on the bottom screen, the text on the top one.</summary>
 public sealed class KeyboardScreen : Screen
 {
-    public enum Kind { Code, Address, Text }
+    public enum Kind { Code, Address, Text, Number }
 
     private readonly string _title;
     private readonly Kind _kind;
@@ -413,6 +429,14 @@ public sealed class KeyboardScreen : Screen
             ["K", "L", "M", "N", "P", "Q", "R", "T"],
             ["U", "V", "W", "X", "Y", "2", "3", "4"],
             ["5", "6", "7", "8", "9"],
+            ["Del", "OK"],
+        ],
+        Kind.Number =>
+        [
+            ["1", "2", "3"],
+            ["4", "5", "6"],
+            ["7", "8", "9"],
+            ["0"],
             ["Del", "OK"],
         ],
         Kind.Address =>
@@ -467,6 +491,7 @@ public sealed class KeyboardScreen : Screen
             {
                 Kind.Code => ShareCode.Alphabet.Contains(c),
                 Kind.Address => char.IsAsciiLetterOrDigit(c) || c is '.' or ':' or '-',
+                Kind.Number => char.IsAsciiDigit(c),
                 _ => !char.IsControl(c),
             };
             if (ok)
@@ -545,6 +570,7 @@ public sealed class KeyboardScreen : Screen
         {
             Kind.Code => "The code the host shows: 6 letters and digits.",
             Kind.Address => "The host's address, like 192.168.1.23 (a port after a colon if it isn't the usual one).",
+            Kind.Number => "A number. START or OK takes it; B deletes a digit, and with none left goes back.",
             _ => $"Up to {_max} characters.",
         };
         c.Paragraph(hint, 60, 270, 520, 17, p.Muted);

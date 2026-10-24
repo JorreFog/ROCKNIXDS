@@ -15,6 +15,7 @@ public class EditingTests
     [InlineData(GameVersion.HG, Species.Cyndaquil)]
     [InlineData(GameVersion.HG, Species.Treecko)] // not in HeartGold: from a Gen 3 game, as Pal Park brings it
     [InlineData(GameVersion.Pt, Species.Pikachu)]
+    [InlineData(GameVersion.HG, Species.Pikachu)] // the wild one, not the event's (its OT is the event's)
     [InlineData(GameVersion.B2, Species.Snivy)]
     [InlineData(GameVersion.B2, Species.Mudkip)]
     public void NewPokemonPassTheLegalityCheck(GameVersion v, Species species)

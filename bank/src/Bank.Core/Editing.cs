@@ -42,6 +42,8 @@ public static class MonEdit
     {
         var lang = trainer.Language is > 0 ? trainer.Language : (int)LanguageID.English;
         var gen = trainer.Generation;
+        PKM? fallback = null;
+        GameVersion fallbackFrom = version;
         foreach (var v in Origins(version, gen))
         {
             var tr = new SimpleTrainerInfo(v)
@@ -55,13 +57,15 @@ public static class MonEdit
             IEnumerable<IEncounterable> encounters;
             try
             {
-                encounters = EncounterMovesetGenerator.GenerateEncounters(template, tr, ReadOnlyMemory<ushort>.Empty, v).Take(40).ToList();
+                encounters = EncounterMovesetGenerator.GenerateEncounters(template, tr, ReadOnlyMemory<ushort>.Empty, v).Take(300).ToList();
             }
             catch (Exception)
             {
                 continue;
             }
-            foreach (var enc in encounters)
+            // the trainer's own catch first: events come with their own OT ("Ash's Pikachu"), and are taken only when
+            // the game has nothing else
+            foreach (var enc in encounters.OrderBy(e => e is MysteryGift ? 1 : 0))
             {
                 if (enc.Species != species)
                     continue;
@@ -83,13 +87,23 @@ public static class MonEdit
                         continue;
                     pk = converted;
                 }
-                if (new LegalityAnalysis(pk).Valid)
+                if (!new LegalityAnalysis(pk).Valid)
+                    continue;
+                pk.ResetPartyStats();
+                if (pk.OriginalTrainerName != trainer.OT || pk.TID16 != trainer.TID16)
                 {
-                    pk.ResetPartyStats();
-                    note = v == version ? $"Caught in {Names.Game(v)}, as the game makes it." : $"Caught in {Names.Game(v)} and moved up, as the games allow.";
-                    return pk;
+                    if (fallback is null)
+                        (fallback, fallbackFrom) = (pk, v);
+                    continue;
                 }
+                note = v == version ? $"A real {Names.Game(v)} encounter." : $"A real {Names.Game(v)} encounter, moved up as the games allow.";
+                return pk;
             }
+        }
+        if (fallback is not null)
+        {
+            note = $"An event {Names.Species(species)} from {Names.Game(fallbackFrom)}: it keeps its event's trainer, as the real one does.";
+            return fallback;
         }
 
         // nothing legal: a plain one in the target's format

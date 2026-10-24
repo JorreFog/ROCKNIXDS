@@ -177,9 +177,12 @@ public sealed class BankStore
     }
 
     /// <summary>Writes a copy of a bank Pokémon to <c>export/</c> (for PKHeX, or another bank).</summary>
-    public string Export(int box, int slot)
+    public string Export(int box, int slot) => ExportPokemon(Get(box, slot) ?? throw new InvalidOperationException("empty slot"));
+
+    /// <summary>Writes a copy of any Pokémon (a game's too) to <c>export/</c>, named as PKHeX names its files.</summary>
+    public string ExportPokemon(PKM pk)
     {
-        var pk = Get(box, slot) ?? throw new InvalidOperationException("empty slot");
+        Directory.CreateDirectory(_cfg.ExportFolder);
         var name = FileUtil.Sanitize(EntityFileNamer.GetName(pk)) + PkmIO.Extension(pk);
         var path = Path.Combine(_cfg.ExportFolder, name);
         FileUtil.WriteAtomic(path, PkmIO.ToFileBytes(pk));

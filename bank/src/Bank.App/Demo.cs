@@ -23,15 +23,18 @@ public static class Demo
         var hg = Gen4HGSS();
         Fill(hg, GameVersion.HG, "JORRE", [Species.Cyndaquil, Species.Kadabra, Species.Togepi, Species.Mareep, Species.Onix, Species.Eevee,
             Species.Pikachu, Species.Heracross, Species.Wooper, Species.Magikarp, Species.Gastly, Species.Sneasel]);
+        Party(hg, GameVersion.HG, [Species.Cyndaquil, Species.Pidgey, Species.Geodude]);
         File.WriteAllBytes(Path.Combine(roms, "nds", "Pokemon - HeartGold Version (USA).dsv"), WithDsvFooter(hg.Write().ToArray()));
 
         var b2 = BlankSaveFile.Get(GameVersion.B2, "JORRE");
         Trainer(b2, "JORRE");
         Fill(b2, GameVersion.B2, "JORRE", [Species.Snivy, Species.Karrablast, Species.Riolu, Species.Zorua, Species.Litwick, Species.Deino]);
+        Party(b2, GameVersion.B2, [Species.Snivy, Species.Patrat]);
         File.WriteAllBytes(Path.Combine(roms, "nds", "Pokemon - Black Version 2 (USA, Europe).sav"), b2.Write().ToArray());
 
         var fr = Gen3FRLG();
         Fill(fr, GameVersion.FR, "JORRE", [Species.Charmander, Species.Abra, Species.Machop, Species.Eevee, Species.Snorlax]);
+        Party(fr, GameVersion.FR, [Species.Charmander, Species.Pidgey]);
         File.WriteAllBytes(Path.Combine(roms, "gba", "Pokemon - FireRed Version (USA).srm"), fr.Write().ToArray());
 
         var cfg = new BankConfig { SaveFolders = [roms], DataFolder = data, TrainerName = "Jorre's RG DS", BankBoxes = 12 };
@@ -64,6 +67,20 @@ public static class Demo
             var converted = EntityConverter.ConvertToType(pk, sav.PKMType, out _) ?? pk;
             sav.SetBoxSlotAtIndex(converted, i / 6 == 0 ? 0 : 1, i % 6 + (i / 6 == 0 ? 0 : 6));
         }
+    }
+
+    /// <summary>The trainer's party: the game's own Pokémon, with the stats a party Pokémon carries.</summary>
+    private static void Party(SaveFile sav, GameVersion v, Species[] species)
+    {
+        var list = new List<PKM>();
+        foreach (var s in species)
+        {
+            var pk = Make(s, v, sav.OT, sav.TID16, sav.SID16);
+            pk = EntityConverter.ConvertToType(pk, sav.PKMType, out _) ?? pk;
+            pk.ResetPartyStats();
+            list.Add(pk);
+        }
+        sav.PartyData = list;
     }
 
     private static PKM Make(Species species, GameVersion version, string ot, ushort tid = 12345, ushort sid = 54321, bool shiny = false)

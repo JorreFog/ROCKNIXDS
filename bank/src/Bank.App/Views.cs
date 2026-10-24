@@ -160,6 +160,32 @@ public static class Views
         }
     }
 
+    /// <summary>PKHeX's legality report for <paramref name="pk"/>, from line <paramref name="scroll"/>; returns the scroll
+    /// kept within the report.</summary>
+    public static int Report(Canvas c, PKM pk, LegalityVerdict? v, int scroll, string scrollHint = "Up/Down to scroll")
+    {
+        var p = c.P;
+        var s = MonSummary.From(pk);
+        c.Fill(0, 42, Canvas.W, 50, p.Body);
+        c.Mon(pk, 12, 44, 60, 46, 1);
+        c.Text($"{s.Title}  Lv {s.Level}", 80, 50, 20, p.Ink, bold: true, maxW: 360);
+        Views.Badge(c, v, 620 - 130, 52);
+        var text = v is null ? "Checking..." : v.Report;
+        var lines = c.Wrap(text, 15, 600);
+        int visible = 17;
+        scroll = Math.Clamp(scroll, 0, Math.Max(0, lines.Count - visible));
+        for (int i = 0; i < visible && i + scroll < lines.Count; i++)
+        {
+            var line = lines[i + scroll];
+            var col = line.StartsWith("Invalid", StringComparison.OrdinalIgnoreCase) ? p.Bad
+                : line.StartsWith("Fishy", StringComparison.OrdinalIgnoreCase) ? p.Warn : p.Ink;
+            c.Text(line, 20, 100 + i * 21, 15, col);
+        }
+        if (lines.Count > visible)
+            c.Text($"{scrollHint}  ({scroll + 1}-{Math.Min(lines.Count, scroll + visible)} of {lines.Count})", 620, 458, 13, p.Muted, Align.Right);
+        return scroll;
+    }
+
     /// <summary>A Pokémon put up for trade: one of the two cards on the trade's top screen.</summary>
     public static void OfferCard(Canvas c, float x, float y, float w, float h, string heading, Trade.TradeOffer? o,
         LegalityVerdict? v, bool accepted, string? partnerCheck, bool partnerValid)

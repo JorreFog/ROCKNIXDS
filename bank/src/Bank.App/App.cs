@@ -510,7 +510,7 @@ public sealed class TradeStorage(App app) : ITradeStorage
     public void RemoveOffered(TradeOffer offer)
     {
         var (slot, save) = ((Slot, SaveSession?))offer.Source!;
-        if (slot.Area == Area.Save && save != app.Mover.Save)
+        if (slot.InGame && save != app.Mover.Save)
             throw new BankException("its game isn't open any more");
         var pk = app.Mover.Read(slot);
         if (pk is null || PkmIO.Hash(pk) != offer.Hash)
@@ -576,7 +576,7 @@ public sealed record HostedLobby(PKM Pk, Slot Slot, SaveSession? Save, ushort Wa
     /// <summary>The listed Pokémon is still in its slot (it wasn't traded or moved).</summary>
     public bool StillThere(App app)
     {
-        if (Slot.Area == Area.Save && Save != app.Mover.Save)
+        if (Slot.InGame && Save != app.Mover.Save)
             return false;
         var now = app.Mover.Read(Slot);
         return now is not null && PkmIO.Hash(now) == Hash;

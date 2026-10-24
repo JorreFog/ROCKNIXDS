@@ -7,6 +7,8 @@ namespace Rocknixds.Bank.App;
 /// The main screen, laid out like Pokémon Bank: the open game's box on the left of the bottom screen, the bank's on
 /// the right, the Pokémon under the cursor in full on the top screen. A picks a Pokémon up and puts it down (moving it,
 /// converting it, checking it); touch does the same with a tap or a drag. In a trade, A offers the Pokémon instead.
+/// The game's party is a page of the left side, before its first box (L, or the Party button): its six slots take and
+/// give Pokémon as the boxes do. Y (or Options) has the rest: edit, duplicate, create, release, export, import.
 /// </summary>
 public sealed class BoxScreen(App app) : Screen(app)
 {
@@ -21,7 +23,12 @@ public sealed class BoxScreen(App app) : Screen(app)
         public readonly string?[] Keys = new string?[30];
         public readonly bool[] Locked = new bool[30];
         public int Count => Slots.Count(s => s is not null);
+
+        /// <summary>The game's party is shown instead of a box.</summary>
+        public bool Party => Area == Area.Save && Box == PartyPage;
     }
+
+    private const int PartyPage = -1;
 
     private const float GridY = 48, Cell = 50, PaneW = 308, PaneY = 6, PaneH = 298;
     private static readonly float[] PaneX = [6, 326];
@@ -29,7 +36,8 @@ public sealed class BoxScreen(App app) : Screen(app)
     private readonly Pane _game = new(Area.Save);
     private readonly Pane _bank = new(Area.Bank);
     private int _pane = 1, _col, _row;
-    private (Slot From, PKM Pk)? _held;
+    // what A picked up; Copy: a duplicate to put down (the original stays)
+    private (Slot From, PKM Pk, bool Copy)? _held;
     private bool _report;
     private int _reportScroll;
     private bool _dragging;
@@ -70,6 +78,8 @@ public sealed class BoxScreen(App app) : Screen(app)
         }
     }
 
+    private int FirstPage(Pane pane) => pane.Area == Area.Save && App.Mover.Save is { HasParty: true } ? PartyPage : 0;
+
     private void Load(Pane pane)
     {
         if (pane.Area == Area.Bank)
@@ -83,8 +93,10 @@ public sealed class BoxScreen(App app) : Screen(app)
             pane.BoxCount = save?.BoxCount ?? 0;
             pane.SlotCount = save?.SlotsPerBox ?? 30;
         }
-        pane.Box = pane.BoxCount == 0 ? 0 : Math.Clamp(pane.Box, 0, pane.BoxCount - 1);
-        pane.Name = pane.BoxCount == 0 ? "" : pane.Area == Area.Bank ? App.Bank.BoxName(pane.Box) : App.Mover.Save!.BoxName(pane.Box);
+        pane.Box = pane.BoxCount == 0 ? 0 : Math.Clamp(pane.Box, FirstPage(pane), pane.BoxCount - 1);
+        if (pane.Party)
+            pane.SlotCount = SaveSession.PartySize;
+        pane.Name = pane.BoxCount == 0 ? "" : pane.Party ? "Party" : pane.Area == Area.Bank ? App.Bank.BoxName(pane.Box) : App.Mover.Save!.BoxName(pane.Box);
         for (int i = 0; i < 30; i++)
         {
             PKM? pk = null;
@@ -93,7 +105,7 @@ public sealed class BoxScreen(App app) : Screen(app)
             {
                 try
                 {
-                    var slot = new Slot(pane.Area, pane.Box, i);
+                    var slot = SlotOf(pane, i);
                     pk = App.Mover.Read(slot);
                     locked = App.Mover.IsLocked(slot);
                 }
@@ -108,7 +120,7 @@ public sealed class BoxScreen(App app) : Screen(app)
         }
     }
 
-    private Slot SlotOf(Pane pane, int index) => new(pane.Area, pane.Box, index);
+    private static Slot SlotOf(Pane pane, int index) => pane.Party ? Slot.InParty(index) : new(pane.Area, pane.Box, index);
 
     private PKM? UnderCursor => _row >= 0 ? Cur.Slots[_row * 6 + _col] : null;
 
@@ -165,6 +177,8 @@ public sealed class BoxScreen(App app) : Screen(app)
         }
         if (dy != 0)
             _row = Math.Clamp(_row + dy, -1, 4);
+        if (Cur.Party)
+            _row = Math.Min(_row, 0); // the party is one row
         _reportScroll = 0;
     }
 
@@ -172,9 +186,33 @@ public sealed class BoxScreen(App app) : Screen(app)
     {
         if (pane.BoxCount == 0)
             return;
-        pane.Box = (pane.Box + d + pane.BoxCount) % pane.BoxCount;
+        // the game's side turns through its party, then its boxes
+        int first = FirstPage(pane), pages = pane.BoxCount - first;
+        pane.Box = first + ((pane.Box - first + d) % pages + pages) % pages;
         Load(pane);
     }
+
+    /// <summary>The game's side shows its party, or goes back to the box it showed before.</summary>
+    private void ToggleParty()
+    {
+        if (App.Mover.Save is not { HasParty: true })
+        {
+            App.ShowToast(App.Mover.Save is null ? "Open a game save first." : "This game's save has no party.", true);
+            return;
+        }
+        if (_game.Party)
+            _game.Box = _lastGameBox;
+        else
+        {
+            _lastGameBox = Math.Max(0, _game.Box);
+            _game.Box = PartyPage;
+        }
+        _pane = 0;
+        _row = Math.Max(0, _row);
+        Load(_game);
+    }
+
+    private int _lastGameBox;
 
     private void Back()
     {
@@ -302,7 +340,7 @@ public sealed class BoxScreen(App app) : Screen(app)
         _col = index % 6;
         if (index >= pane.SlotCount)
         {
-            App.ShowToast("This game's boxes are smaller: that space doesn't exist.");
+            App.ShowToast(pane.Party ? "The party has six slots: the top row." : "This game's boxes are smaller: that space doesn't exist.");
             return;
         }
         var slot = SlotOf(pane, index);
@@ -334,7 +372,7 @@ public sealed class BoxScreen(App app) : Screen(app)
                 App.ShowToast("The game has locked that slot (its battle box or a team in use).", true);
                 return;
             }
-            _held = (slot, pk);
+            _held = (slot, pk, false);
             return;
         }
         var from = _held.Value.From;
@@ -348,7 +386,48 @@ public sealed class BoxScreen(App app) : Screen(app)
             App.ShowToast("The game has locked that slot.", true);
             return;
         }
-        DoMove(from, slot, false);
+        if (_held.Value.Copy)
+            DoCopy(from, slot, false);
+        else
+            DoMove(from, slot, false);
+    }
+
+    private void DoCopy(Slot from, Slot to, bool confirmed)
+    {
+        App.Run("Copying...", () => App.Mover.Copy(from, to, confirmed), r =>
+        {
+            if (r.Done)
+            {
+                _held = null;
+                Refresh();
+                App.ShowToast(r.Message);
+            }
+            else if (r.NeedsConfirm)
+            {
+                App.Confirm("This Pokémon isn't legal", string.Join("\n", r.Warnings) + "\n\nPut the copy in the game anyway?", "Copy anyway",
+                    () => DoCopy(from, to, true));
+            }
+            else if (r.Blocked is not null)
+            {
+                App.ShowToast(r.Blocked, true);
+            }
+        }, ex =>
+        {
+            Refresh();
+            App.Message("Couldn't copy it", ex.Message);
+        });
+    }
+
+    /// <summary>A copy of the Pokémon in <paramref name="from"/> in the next free slot of the same place.</summary>
+    private void Duplicate(Slot from)
+    {
+        var to = App.Mover.NextFree(from);
+        if (to is null)
+        {
+            App.ShowToast(from.Area == Area.Party ? "The party is full: choose a slot for the copy instead." : "No free slot: choose one for the copy instead.", true);
+            return;
+        }
+        DoCopy(from, to.Value, false);
     }
 
     private void DoMove(Slot from, Slot to, bool confirmed)
@@ -384,12 +463,17 @@ public sealed class BoxScreen(App app) : Screen(app)
             return;
         if (pk is null)
             return;
-        if (slot.Area == Area.Save && App.Mover.Save!.IsLocked(slot.Box, slot.Index))
+        if (App.Mover.IsLocked(slot))
         {
             App.ShowToast("The game has locked that slot.", true);
             return;
         }
-        s.Offer(pk, (slot, slot.Area == Area.Save ? App.Mover.Save : null));
+        if (App.Mover.CantEmpty(slot) is { } why)
+        {
+            App.ShowToast(why, true);
+            return;
+        }
+        s.Offer(pk, (slot, slot.InGame ? App.Mover.Save : null));
         App.ShowToast(s.Theirs is null
             ? $"You offered {MonSummary.From(pk).Title}. START accepts once {s.PartnerName} offers too."
             : $"You offered {MonSummary.From(pk).Title}. Press START to accept the trade.");
@@ -399,38 +483,223 @@ public sealed class BoxScreen(App app) : Screen(app)
     {
         var pk = _held?.Pk ?? UnderCursor;
         var choices = new List<DialogChoice>();
+        int index = _row * 6 + _col;
+        bool onSlot = _row >= 0 && index < Cur.SlotCount && !(Cur.Area == Area.Save && Cur.BoxCount == 0);
+        var slot = SlotOf(Cur, Math.Max(0, index));
         if (Trading && UnderCursor is { } u)
-            choices.Add(new("Offer this Pokémon", () => Offer(SlotOf(Cur, _row * 6 + _col), u), Session!.CanChangeOffer));
-        if (pk is not null)
-            choices.Add(new("Legality report", () => { _report = true; _reportScroll = 0; }));
-        if (pk is not null && _held is null && Cur.Area == Area.Bank)
-        {
-            choices.Add(new("Export a copy (export folder)", () =>
-            {
-                try
-                {
-                    var path = App.Bank.Export(Cur.Box, _row * 6 + _col);
-                    App.ShowToast($"Saved {Path.GetFileName(path)} in the export folder.");
-                }
-                catch (Exception ex)
-                {
-                    App.ShowToast(ex.Message, true);
-                }
-            }));
-        }
-        if (Cur.Area == Area.Bank)
-        {
-            choices.Add(new("Rename this bank box", () => App.Push(new KeyboardScreen(App, "Box name", KeyboardScreen.Kind.Text, _bank.Name, 16,
-                name =>
-                {
-                    App.Bank.RenameBox(_bank.Box, name);
-                    Load(_bank);
-                }))));
-        }
+            choices.Add(new("Offer this Pokémon", () => Offer(slot, u), Session!.CanChangeOffer));
         if (Trading)
+        {
+            if (pk is not null)
+                choices.Add(new("Legality report", () => { _report = true; _reportScroll = 0; }));
             choices.Add(new("Leave the trade", LeaveTrade));
+        }
+        else if (_pick is not null)
+        {
+            choices.Add(new("Cancel choosing", Back));
+        }
+        else if (_held is not null)
+        {
+            choices.Add(new("Legality report", () => { _report = true; _reportScroll = 0; }));
+            choices.Add(new(_held.Value.Copy ? "Don't copy it" : "Put it back", () => _held = null));
+        }
+        else if (onSlot && UnderCursor is { } mon && !Cur.Locked[index])
+        {
+            choices.Add(new("Edit", () => App.Push(new MonEditorScreen(App, slot, mon, false))));
+            choices.Add(new("Duplicate (next free slot)", () => Duplicate(slot)));
+            choices.Add(new("Duplicate into a slot I choose", () =>
+            {
+                _held = (slot, mon, true);
+                App.ShowToast("Now choose an empty slot for the copy (A or a tap). B cancels.");
+            }));
+            choices.Add(new("Legality report", () => { _report = true; _reportScroll = 0; }));
+            choices.Add(new("Export a copy (export folder)", () => Export(mon)));
+            choices.Add(new("Release", () => Release(slot, mon), App.Mover.CantEmpty(slot) is null));
+        }
+        else if (onSlot && UnderCursor is null)
+        {
+            choices.Add(new("Create a Pokémon here", () => Create(slot)));
+            choices.Add(new("Import a file here (import folder)", () => ImportInto(slot)));
+        }
+        else if (onSlot && UnderCursor is not null)
+        {
+            choices.Add(new("Legality report", () => { _report = true; _reportScroll = 0; }));
+        }
+        if (!Trading && _pick is null && _held is null && Cur.BoxCount > 0 && !Cur.Party)
+            choices.Add(new("This box: name, wallpaper", () => BoxOptions(Cur)));
+        if (!Trading && App.Mover.Save is { HasParty: true })
+            choices.Add(new(_game.Party ? "Show the game's boxes" : "Show the game's party", ToggleParty));
         choices.Add(new("Close", () => { }));
         App.Menu(pk is null ? "Options" : MonSummary.From(pk).Title, choices, choices.Count - 1);
+    }
+
+    private void BoxOptions(Pane pane)
+    {
+        if (pane.Area == Area.Bank)
+        {
+            App.Push(new KeyboardScreen(App, "Box name", KeyboardScreen.Kind.Text, _bank.Name, 16, name =>
+            {
+                App.Bank.RenameBox(_bank.Box, name);
+                Load(_bank);
+            }));
+            return;
+        }
+        if (App.Mover.Save!.Sav is not (IBoxDetailName or IBoxDetailWallpaper))
+        {
+            App.ShowToast("This game's boxes have no names or wallpapers to change.", true);
+            return;
+        }
+        App.Push(new SaveBoxScreen(App, pane.Box));
+    }
+
+    private void Export(PKM pk)
+    {
+        try
+        {
+            var path = App.Bank.ExportPokemon(pk);
+            App.ShowToast($"Saved {Path.GetFileName(path)} in the export folder.");
+        }
+        catch (Exception ex)
+        {
+            App.ShowToast(ex.Message, true);
+        }
+    }
+
+    private void Release(Slot slot, PKM pk) =>
+        App.Confirm($"Release {MonSummary.From(pk).Title}?", "It's gone for good (the save's backup and history.log keep a record).", "Release", () =>
+            App.Run("Releasing...", () =>
+            {
+                App.Mover.Remove(slot, "RELEASE");
+                return 0;
+            }, _ =>
+            {
+                Refresh();
+                App.ShowToast($"{MonSummary.From(pk).Title} was released.");
+            }, ex => App.Message("Not released", ex.Message)));
+
+    /// <summary>A new Pokémon for an empty slot: its species (and for the bank, its game), then the editor.</summary>
+    private void Create(Slot slot)
+    {
+        if (slot.InGame)
+        {
+            var sav = App.Mover.Save!.Sav;
+            ChooseSpecies(sav, sav.Version, sav, slot);
+            return;
+        }
+        // the bank keeps any format: which game's Pokémon is it?
+        var games = new List<(int Value, string Text)>();
+        if (App.Mover.Save is { } open)
+            games.Add(((int)open.Sav.Version, $"{Names.Game(open.Sav.Version)} (the open game, its trainer)"));
+        foreach (var v in new[] { GameVersion.RD, GameVersion.BU, GameVersion.YW, GameVersion.GD, GameVersion.SI, GameVersion.C, GameVersion.R, GameVersion.S,
+                     GameVersion.E, GameVersion.FR, GameVersion.LG, GameVersion.D, GameVersion.P, GameVersion.Pt, GameVersion.HG, GameVersion.SS,
+                     GameVersion.B, GameVersion.W, GameVersion.B2, GameVersion.W2 })
+        {
+            if (games.All(g => g.Value != (int)v))
+                games.Add(((int)v, Names.Game(v)));
+        }
+        App.Push(new PickerScreen(App, "Which game is it from?", games, games[0].Value, value =>
+        {
+            var v = (GameVersion)value;
+            if (App.Mover.Save is { } s && s.Sav.Version == v)
+            {
+                ChooseSpecies(s.Sav, v, s.Sav, slot);
+                return;
+            }
+            var blank = BlankSaveFile.Get(v, TrainerName(), (LanguageID)Math.Max(1, App.Mover.Save?.Sav.Language ?? (int)LanguageID.English));
+            blank.TID16 = (ushort)Random.Shared.Next(65536);
+            blank.SID16 = (ushort)Random.Shared.Next(65536);
+            ChooseSpecies(blank, v, blank, slot);
+        }));
+    }
+
+    private string TrainerName()
+    {
+        var name = App.Mover.Save?.Sav.OT ?? App.Cfg.EffectiveTrainerName;
+        return name.Length > 7 ? name[..7] : name;
+    }
+
+    private void ChooseSpecies(SaveFile sav, GameVersion version, ITrainerInfo trainer, Slot slot)
+    {
+        var src = EditSources.For(sav);
+        App.Push(new PickerScreen(App, $"New Pokémon for {Names.Game(version)}", EditSources.List(src.Species), 1, species =>
+        {
+            App.Run($"Finding a {Names.Species((ushort)species)}...", () =>
+            {
+                var pk = MonEdit.Create((ushort)species, sav.PKMType, version, trainer, out var note);
+                return (pk, note);
+            }, r => App.Push(new MonEditorScreen(App, slot, r.pk, true, r.note)));
+        }, (c, s) =>
+        {
+            var p = c.P;
+            c.Panel(170, 70, 300, 230, false);
+            c.Mon((ushort)s, 0, 2, false, false, 180, 80, 280, 200, maxScale: 3);
+            c.Text($"#{s:000}  {Names.Species((ushort)s)}", 320, 316, 26, p.Ink, Align.Center, bold: true, maxW: 600);
+        }));
+    }
+
+    /// <summary>A .pk file from the import folder into this empty slot (converted for the game, as a move would be).</summary>
+    private void ImportInto(Slot slot)
+    {
+        var folder = App.Cfg.ImportFolder;
+        List<string> files;
+        try
+        {
+            files = Directory.Exists(folder)
+                ? Directory.EnumerateFiles(folder).Where(f => Path.GetExtension(f).StartsWith(".pk", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(f) is ".ck3" or ".xk3" or ".bk4")
+                    .OrderBy(f => f, StringComparer.Ordinal).ToList()
+                : [];
+        }
+        catch (IOException ex)
+        {
+            App.ShowToast(ex.Message, true);
+            return;
+        }
+        if (files.Count == 0)
+        {
+            App.Message("Nothing to import", $"Put PKHeX files (.pk1 to .pk9) in {folder}, then choose this again.");
+            return;
+        }
+        App.Push(new PickerScreen(App, "Import which file?", files.Select((f, i) => (i, Path.GetFileName(f))).ToList(), 0, i =>
+        {
+            var file = files[i];
+            PKM? pk = null;
+            try
+            {
+                pk = PkmIO.FromFileBytes(File.ReadAllBytes(file), Path.GetExtension(file));
+            }
+            catch (IOException)
+            {
+                // reported below
+            }
+            if (pk is null)
+            {
+                App.Message("Not a Pokémon file", $"{Path.GetFileName(file)} isn't a Pokémon PKHeX can read.");
+                return;
+            }
+            var check = App.Mover.Check(pk, slot.Area);
+            if (!check.Ok)
+            {
+                App.Message("Can't go there", check.Blocked!);
+                return;
+            }
+            void Place() => App.Run("Importing...", () =>
+            {
+                App.Mover.Replace(slot, check.Result!, "IMPORT");
+                var done = Path.Combine(folder, "done");
+                Directory.CreateDirectory(done);
+                var dest = Path.Combine(done, Path.GetFileName(file));
+                File.Move(file, File.Exists(dest) ? Path.Combine(done, $"{Path.GetFileNameWithoutExtension(file)}-{DateTime.Now:yyyyMMddHHmmss}{Path.GetExtension(file)}") : dest);
+                return 0;
+            }, _ =>
+            {
+                Refresh();
+                App.ShowToast($"{MonSummary.From(check.Result!).Title} imported{(check.Note is null ? "." : ": " + check.Note)}");
+            }, ex => App.Message("Not imported", ex.Message));
+            if (check.Warnings.Count > 0)
+                App.Confirm("This Pokémon isn't legal", string.Join("\n", check.Warnings) + "\n\nPut it in the game anyway?", "Import anyway", Place);
+            else
+                Place();
+        }));
     }
 
     // ---- touch ----
@@ -474,7 +743,7 @@ public sealed class BoxScreen(App app) : Screen(app)
                     // press on a Pokémon with nothing held: pick it up and follow the finger
                     if (!Trading && _pick is null && _held is null && c.Index < pane.SlotCount && pane.Slots[c.Index] is { } pk && !pane.Locked[c.Index])
                     {
-                        _held = (SlotOf(pane, c.Index), pk);
+                        _held = (SlotOf(pane, c.Index), pk, false);
                         _dragging = true;
                         _dragX = e.X;
                         _dragY = e.Y;
@@ -566,28 +835,7 @@ public sealed class BoxScreen(App app) : Screen(app)
         DrawBankOverview(c);
     }
 
-    private void DrawReport(Canvas c, PKM pk, LegalityVerdict? v)
-    {
-        var p = c.P;
-        var s = MonSummary.From(pk);
-        c.Fill(0, 42, Canvas.W, 50, p.Body);
-        c.Mon(pk, 12, 44, 60, 46, 1);
-        c.Text($"{s.Title}  Lv {s.Level}", 80, 50, 20, p.Ink, bold: true, maxW: 360);
-        Views.Badge(c, v, 620 - 130, 52);
-        var text = v is null ? "Checking..." : v.Report;
-        var lines = c.Wrap(text, 15, 600);
-        int visible = 17;
-        _reportScroll = Math.Clamp(_reportScroll, 0, Math.Max(0, lines.Count - visible));
-        for (int i = 0; i < visible && i + _reportScroll < lines.Count; i++)
-        {
-            var line = lines[i + _reportScroll];
-            var col = line.StartsWith("Invalid", StringComparison.OrdinalIgnoreCase) ? p.Bad
-                : line.StartsWith("Fishy", StringComparison.OrdinalIgnoreCase) ? p.Warn : p.Ink;
-            c.Text(line, 20, 100 + i * 21, 15, col);
-        }
-        if (lines.Count > visible)
-            c.Text($"Up/Down to scroll  ({_reportScroll + 1}-{Math.Min(lines.Count, _reportScroll + visible)} of {lines.Count})", 620, 458, 13, p.Muted, Align.Right);
-    }
+    private void DrawReport(Canvas c, PKM pk, LegalityVerdict? v) => _reportScroll = Views.Report(c, pk, v, _reportScroll);
 
     private void DrawNoSave(Canvas c)
     {
@@ -726,6 +974,8 @@ public sealed class BoxScreen(App app) : Screen(app)
             c.Icon(Icons.Left, x + 14, PaneY + 13, 2, p.Muted);
             c.Icon(Icons.Right, x + PaneW - 22, PaneY + 13, 2, p.Muted);
             string title = pane.Area == Area.Bank ? pane.Name : $"{App.Mover.Save!.Entry.GameName}: {pane.Name}";
+            if (pane.Party)
+                title = $"{App.Mover.Save!.Entry.GameName}: Party";
             c.Text(title, x + PaneW / 2, PaneY + 7, 16, p.Ink, Align.Center, bold: true, maxW: PaneW - 80);
             c.Text($"{pane.Count}/{pane.SlotCount}", x + PaneW / 2, PaneY + 25, 11, p.Muted, Align.Center);
         }
@@ -743,12 +993,24 @@ public sealed class BoxScreen(App app) : Screen(app)
             return;
         }
 
+        if (pane.Party)
+        {
+            // the party is the top row: the rest of the page says so, and how to get to the boxes
+            c.Paragraph($"The party, as the game keeps it: {pane.Count} of 6. Pokémon put here join the end of it; the game needs one that isn't an egg. L/R (or Boxes) go to the boxes.",
+                x + 24, GridY + Cell + 40, PaneW - 48, 15, p.Muted);
+        }
         var offered = Session?.Mine?.Source is ValueTuple<Slot, SaveSession?> src ? src.Item1 : (Slot?)null;
         for (int idx = 0; idx < 30; idx++)
         {
             int row = idx / 6, col = idx % 6;
             var (cx, cy) = CellPos(i, row, col);
             bool cursor = focusedPane && _row == row && _col == col;
+            if (idx >= pane.SlotCount && pane.Party)
+            {
+                if (cursor)
+                    c.Frame(cx, cy, Cell, Cell, p.Rule, 2);
+                continue;
+            }
             if (idx >= pane.SlotCount)
             {
                 c.Fill(cx + 2, cy + 2, Cell - 4, Cell - 4, p.Low.WithAlpha(90));
@@ -809,17 +1071,22 @@ public sealed class BoxScreen(App app) : Screen(app)
         }
         else if (_held is { } h)
         {
-            msg = $"Holding {MonSummary.From(h.Pk).Title}: put it in an empty slot, or on another Pokémon to swap.";
+            msg = h.Copy
+                ? $"Copying {MonSummary.From(h.Pk).Title}: put the copy in an empty slot."
+                : $"Holding {MonSummary.From(h.Pk).Title}: put it in an empty slot, or on another Pokémon to swap.";
         }
         else
         {
-            msg = App.Mover.Save is null ? "Open a game save to move Pokémon between it and the bank." : "Pick a Pokémon up with A (or touch it) to move it.";
+            msg = App.Mover.Save is null ? "Open a game save to move Pokémon between it and the bank."
+                : _game.Party && _pane == 0 ? "The party: pick a Pokémon up with A (or touch it) to move it to a box or the bank."
+                : "Pick a Pokémon up with A (or touch it) to move it. Y: edit, duplicate...";
         }
         c.Text(msg, 16, y + 13, 16, col, maxW: 608);
 
         // buttons for touch
         y = 362;
-        float bw = 151, gap = 9;
+        int count = Trading ? 4 : 5;
+        float gap = 9, bw = (632 - gap * (count - 1)) / count;
         string[] labels;
         Action[] actions;
         if (Trading)
@@ -830,10 +1097,10 @@ public sealed class BoxScreen(App app) : Screen(app)
         }
         else
         {
-            labels = ["Games", "Trade", "Report", "Menu"];
-            actions = [() => App.Push(new SavePickerScreen(App)), () => App.Push(new TradeMenuScreen(App)), ToggleReport, () => MainMenu.Show(App)];
+            labels = ["Games", _game.Party ? "Boxes" : "Party", "Options", "Trade", "Menu"];
+            actions = [() => App.Push(new SavePickerScreen(App)), ToggleParty, Options, () => App.Push(new TradeMenuScreen(App)), () => MainMenu.Show(App)];
         }
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < count; i++)
         {
             var r = c.Button(labels[i], 4 + i * (bw + gap), y, bw, 46, false, size: 17);
             _touch.Add((r, actions[i]));
@@ -857,10 +1124,11 @@ public sealed class BoxScreen(App app) : Screen(app)
         }
         else
         {
-            x += c.Hint("A", _held is null ? "Pick up" : "Put down", x, y);
+            x += c.Hint("A", _held is null ? "Pick up" : _held.Value.Copy ? "Put copy" : "Put down", x, y);
             x += c.Hint("B", "Cancel", x, y);
-            x += c.Hint("L/R", "Box", x, y);
+            x += c.Hint("L/R", "Box/Party", x, y);
             x += c.Hint("X", "Report", x, y);
+            x += c.Hint("Y", "Options", x, y);
             c.Hint("SELECT", "Games", x, y);
         }
         if (App.PendingChecks > 0)

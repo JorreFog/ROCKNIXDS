@@ -30,7 +30,7 @@ public static class LobbyFlow
     }
 
     private static void Open(App app, PKM pk, Slot slot, ushort want, bool open) =>
-        app.Push(new LobbyHostScreen(app, new HostedLobby(pk.Clone(), slot, slot.Area == Area.Save ? app.Mover.Save : null, want, open), null));
+        app.Push(new LobbyHostScreen(app, new HostedLobby(pk.Clone(), slot, slot.InGame ? app.Mover.Save : null, want, open), null));
 }
 
 /// <summary>Chooses a species by typing the start of its name: the matches show as you type.</summary>
