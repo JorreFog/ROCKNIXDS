@@ -937,11 +937,11 @@ app in `bank/` is GPL-3.0 (it links PKHeX.Core).
 
 ROCKNIXDS is a fan project. It isn't affiliated with or endorsed by Nintendo, The Pokémon Company, Creatures,
 GAME FREAK, ROCKNIX or Anbernic. Nintendo DS and Pokémon are trademarks of Nintendo; all other names and trademarks
-belong to their respective owners. See [LEGAL.md](LEGAL.md) for the terms of use, including the no-piracy rule.
+belong to their respective owners.
 
 ## License
 
 [MIT](LICENSE): free for anyone to use, change and ship in their own projects, firmwares and forks. `bank/` (ROCKNIXDS Bank &
 Trade) is the exception: it links PKHeX.Core and is GPL-3.0, as its own `bank/LICENSE` says. The parts that
 come from others keep their own terms (the upstream dii-ess-aye theme, rcheevos, stb, AMD FSR, the fonts); `LICENSE`
-lists them. [LEGAL.md](LEGAL.md) (the terms of use) adds no restriction on the rights these licences give you.
+lists them.

@@ -370,8 +370,7 @@ public sealed class AboutScreen(App app) : Screen(app)
             "by Kaphotics and the PKHeX contributors (GPL-3.0), which makes this app GPL-3.0 too. The Pokémon box sprites " +
             "come with PKHeX. Font: Pixelify Sans (SIL Open Font License).\n\n" +
             "ROCKNIXDS does not support piracy: use only games you dumped from cartridges you own. Pokémon, Nintendo and the " +
-            "other names are trademarks of their owners; this fan project isn't affiliated with them. The terms of use " +
-            "are in LEGAL.md in the ROCKNIXDS repository.\n\n" +
+            "other names are trademarks of their owners; this fan project isn't affiliated with them.\n\n" +
             "Saves are backed up the first time they change in a session (the backups folder in the data folder), and every " +
             "move, import and trade is written to history.log there.",
             24, 24, 592, 16, p.Ink);

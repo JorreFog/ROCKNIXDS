@@ -202,7 +202,7 @@ pre-release (never "latest", so ROCKNIXDS's own updater doesn't take it for a RO
 ## License
 
 GPL-3.0 (`LICENSE`), because it links PKHeX.Core; the rest of ROCKNIXDS stays MIT. `THIRD_PARTY.md` lists the parts from
-others. The terms of use ([`LEGAL.md`](../LEGAL.md)) add no restriction on the rights the licence gives you.
+others.
 
 Pokémon and its names are trademarks and copyrights of Nintendo, Creatures, GAME FREAK and The Pokémon Company; all other
 names and trademarks belong to their respective owners. This is a fan-made tool for your own saves, not affiliated with or
