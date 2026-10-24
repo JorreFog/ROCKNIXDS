@@ -46,6 +46,19 @@ internal static class Fixtures
         return sav.Write().ToArray();
     }
 
+    /// <summary>Gen 1 or 2 from PKHeX's blank save, with a Pokémon in the party and one in the current box's last slot:
+    /// PKHeX tells these games apart by those lists, and the blank save's are unwritten.</summary>
+    public static byte[] Gen12(GameVersion version)
+    {
+        var sav = BlankSaveFile.Get(version, "TESTER", LanguageID.English);
+        Trainer(sav);
+        var pk = EntityConverter.ConvertToType(Make(Species.Rattata, version), sav.PKMType, out _)!;
+        pk.ResetPartyStats();
+        sav.PartyData = [pk];
+        sav.SetBoxSlotAtIndex(pk, 0, sav.BoxSlotCount - 1);
+        return sav.Write().ToArray();
+    }
+
     /// <summary>FireRed/LeafGreen (key 1 at 0xAC of the small block) or Ruby/Sapphire (0).</summary>
     public static byte[] Gen3(GameVersion version)
     {

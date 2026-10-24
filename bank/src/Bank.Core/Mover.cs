@@ -2,13 +2,18 @@ using PKHeX.Core;
 
 namespace Rocknixds.Bank;
 
-public enum Area { Bank, Save }
+/// <summary>Where a slot is: the bank, the open game's boxes, or the open game's party (its Box is 0).</summary>
+public enum Area { Bank, Save, Party }
 
-/// <summary>A box slot: in the bank, or in the open game save.</summary>
+/// <summary>A slot: in the bank, in the open game save's boxes, or in its party.</summary>
 public readonly record struct Slot(Area Area, int Box, int Index)
 {
     public static Slot InBank(int box, int index) => new(Area.Bank, box, index);
     public static Slot InSave(int box, int index) => new(Area.Save, box, index);
+    public static Slot InParty(int index) => new(Area.Party, 0, index);
+
+    /// <summary>In the open game (its boxes or its party).</summary>
+    public bool InGame => Area != Area.Bank;
 }
 
 /// <summary>Whether a Pokémon can go into a slot, and in what shape (converted to that game's format).</summary>
@@ -33,7 +38,12 @@ public sealed class Mover(BankConfig cfg, BankStore bank, History history)
     public BankStore Bank { get; } = bank;
     public SaveSession? Save { get; set; }
 
-    public PKM? Read(Slot s) => s.Area == Area.Bank ? Bank.Get(s.Box, s.Index) : Save?.Get(s.Box, s.Index);
+    public PKM? Read(Slot s) => s.Area switch
+    {
+        Area.Bank => Bank.Get(s.Box, s.Index),
+        Area.Party => Save?.GetParty(s.Index),
+        _ => Save?.Get(s.Box, s.Index),
+    };
 
     public bool IsLocked(Slot s) => s.Area == Area.Save && Save is not null && Save.IsLocked(s.Box, s.Index);
 
@@ -85,6 +95,51 @@ public sealed class Mover(BankConfig cfg, BankStore bank, History history)
         return new PlaceCheck(converted, null, warnings, note);
     }
 
+    /// <summary>
+    /// Why the party can't take these changes (null when it can): the game needs at least one Pokémon in the party that
+    /// isn't an egg, and the party holds six at most. <paramref name="writes"/> are (slot, Pokémon or null for empty).
+    /// </summary>
+    public string? PartyProblem(params (Slot Slot, PKM? Pk)[] writes)
+    {
+        if (!writes.Any(w => w.Slot.Area == Area.Party))
+            return null;
+        var save = Save ?? throw new InvalidOperationException("no save open");
+        if (!save.HasParty)
+            return $"{save.Entry.GameName} saves have no party.";
+        var after = PartyAfter(save, writes);
+        if (after.Count > SaveSession.PartySize)
+            return "The party is full: six Pokémon at most.";
+        if (!after.Any(p => !p.IsEgg))
+            return "The party can't be left without a Pokémon that can battle: the game needs at least one that isn't an egg.";
+        return null;
+    }
+
+    private static List<PKM> PartyAfter(SaveSession save, IEnumerable<(Slot Slot, PKM? Pk)> writes)
+    {
+        var slots = new List<PKM?>();
+        for (int i = 0; i < save.PartyCount; i++)
+            slots.Add(save.GetParty(i));
+        foreach (var (s, pk) in writes)
+        {
+            if (s.Area != Area.Party)
+                continue;
+            while (slots.Count <= s.Index)
+                slots.Add(null);
+            slots[s.Index] = pk;
+        }
+        return slots.Where(p => p is not null).Select(p => p!).ToList();
+    }
+
+    /// <summary>Where <paramref name="pk"/>, written into <paramref name="s"/> with the other <paramref name="writes"/>, ends
+    /// up: the party closes its gaps, so a Pokémon put past the last one lands in the first free slot.</summary>
+    private Slot Landing(Slot s, PKM pk, params (Slot Slot, PKM? Pk)[] writes)
+    {
+        if (s.Area != Area.Party || Save is not { } save)
+            return s;
+        int i = PartyAfter(save, writes).FindIndex(p => ReferenceEquals(p, pk));
+        return i < 0 ? s : Slot.InParty(i);
+    }
+
     /// <summary>Moves the Pokémon in <paramref name="from"/> to <paramref name="to"/>, swapping with what's there.</summary>
     public MoveResult Move(Slot from, Slot to, bool confirmed = false)
     {
@@ -94,7 +149,7 @@ public sealed class Mover(BankConfig cfg, BankStore bank, History history)
         var b = Read(to);
         if (IsLocked(from) || IsLocked(to))
             return Refuse("That slot is locked by the game (its battle box or a team in use).");
-        if ((from.Area == Area.Save || to.Area == Area.Save) && Save is null)
+        if ((from.InGame || to.InGame) && Save is null)
             throw new InvalidOperationException("no save open");
 
         var checkA = Check(a, to.Area);
@@ -107,57 +162,135 @@ public sealed class Mover(BankConfig cfg, BankStore bank, History history)
             if (!checkB.Ok)
                 return Refuse(checkB.Blocked!);
         }
+        var aNew = checkA.Result!;
+        var bNew = checkB?.Result;
+        if (PartyProblem((to, aNew), (from, bNew)) is { } partyWhy)
+            return Refuse(partyWhy);
         var warnings = checkA.Warnings.Concat(checkB?.Warnings ?? []).ToList();
         if (warnings.Count > 0 && !confirmed)
             return new MoveResult(false, null, warnings, "");
 
-        var aNew = checkA.Result!;
-        var bNew = checkB?.Result;
-        switch (from.Area, to.Area)
+        var landing = Landing(to, aNew, (to, aNew), (from, bNew));
+        switch (from.InGame, to.InGame)
         {
-            case (Area.Bank, Area.Bank):
+            case (false, false):
                 Bank.Move(from.Box, from.Index, to.Box, to.Index);
                 break;
-            case (Area.Save, Area.Save):
-                ApplyToSave(() =>
-                {
-                    Save!.Set(to.Box, to.Index, aNew);
-                    if (bNew is not null)
-                        Save.Set(from.Box, from.Index, bNew);
-                    else
-                        Save.Clear(from.Box, from.Index);
-                });
+            case (true, true):
+                ApplyToGame((to, aNew), (from, bNew));
                 break;
-            case (Area.Save, Area.Bank):
-                SaveToBank(from, to, a, b, bNew);
+            case (true, false):
+                SaveToBank(from, to, a, bNew);
                 break;
-            case (Area.Bank, Area.Save):
+            case (false, true):
                 BankToSave(from, to, aNew, b);
                 break;
         }
 
-        var what = Describe(a, from, to);
+        var what = Describe(a, from, landing);
         history.Log(b is null ? $"MOVE {what}" : $"SWAP {what} <-> {Describe(b, to, from)}");
-        var msg = b is null ? $"{Names.Species(a.Species)} moved to {Where(to)}." : $"{Names.Species(a.Species)} and {Names.Species(b.Species)} swapped places.";
+        var msg = b is null ? $"{Names.Species(a.Species)} moved to {Where(landing)}." : $"{Names.Species(a.Species)} and {Names.Species(b.Species)} swapped places.";
         var notes = string.Join(" ", new[] { checkA.Note, checkB?.Note }.Where(n => n is not null));
         return new MoveResult(true, null, warnings, notes.Length > 0 ? $"{msg} {notes}" : msg);
 
         MoveResult Refuse(string why) => new(false, why, [], why);
     }
 
+    /// <summary>
+    /// Puts a copy of the Pokémon in <paramref name="from"/> into the empty slot <paramref name="to"/> (converted when it
+    /// goes into a newer game, as a move would). The original stays where it is.
+    /// </summary>
+    public MoveResult Copy(Slot from, Slot to, bool confirmed = false)
+    {
+        var a = Read(from) ?? throw new InvalidOperationException("nothing to copy");
+        if (Read(to) is not null)
+            return Refuse("That slot isn't empty: a copy goes into an empty slot.");
+        if (IsLocked(to))
+            return Refuse("That slot is locked by the game (its battle box or a team in use).");
+        if (to.InGame && Save is null)
+            throw new InvalidOperationException("no save open");
+        var check = Check(a, to.Area);
+        if (!check.Ok)
+            return Refuse(check.Blocked!);
+        var copy = check.Result!;
+        if (PartyProblem((to, copy)) is { } partyWhy)
+            return Refuse(partyWhy);
+        if (check.Warnings.Count > 0 && !confirmed)
+            return new MoveResult(false, null, check.Warnings, "");
+
+        var landing = Landing(to, copy, (to, copy));
+        if (to.InGame)
+            ApplyToGame((to, copy));
+        else
+            Bank.Put(to.Box, to.Index, copy);
+        history.Log($"COPY {Describe(a, from, landing)}");
+        var msg = $"A copy of {Names.Species(a.Species)} is in {Where(landing)}.";
+        return new MoveResult(true, null, check.Warnings, check.Note is null ? msg : $"{msg} {check.Note}");
+
+        MoveResult Refuse(string why) => new(false, why, [], why);
+    }
+
+    /// <summary>The first empty slot for a copy of what's in <paramref name="from"/>: in the same place (its box, then
+    /// the boxes after it; the party's next free slot), or null when that place is full.</summary>
+    public Slot? NextFree(Slot from)
+    {
+        switch (from.Area)
+        {
+            case Area.Bank:
+                return Bank.TryFindFree(out var box, out var slot, from.Box) ? Slot.InBank(box, slot) : null;
+            case Area.Party:
+                return Save is { } p && p.PartyCount < SaveSession.PartySize ? Slot.InParty(p.PartyCount) : null;
+            default:
+                var save = Save ?? throw new InvalidOperationException("no save open");
+                for (int i = 0; i < save.BoxCount; i++)
+                {
+                    int b = (from.Box + i) % save.BoxCount;
+                    for (int s = 0; s < save.SlotsPerBox; s++)
+                    {
+                        if (save.Get(b, s) is null && !save.IsLocked(b, s))
+                            return Slot.InSave(b, s);
+                    }
+                }
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// Writes an edited (or newly made) Pokémon into <paramref name="s"/>, replacing what's there. It must already be in
+    /// the slot's format (the editor works in it). Saves are written at once, after their one backup per session.
+    /// </summary>
+    public void Replace(Slot s, PKM pk, string why = "EDIT")
+    {
+        if (IsLocked(s))
+            throw new BankException("That slot is locked by the game.");
+        var old = Read(s);
+        var landing = Landing(s, pk, (s, pk));
+        if (s.Area == Area.Bank)
+        {
+            if (old is null)
+                Bank.Put(s.Box, s.Index, pk);
+            else
+                Bank.Replace(s.Box, s.Index, pk);
+        }
+        else
+        {
+            var save = Save ?? throw new InvalidOperationException("no save open");
+            if (pk.GetType() != save.Sav.PKMType)
+                throw new BankException($"A {pk.Extension.ToUpperInvariant()} Pokémon can't be written into {save.Entry.GameName} as it is.");
+            if (PartyProblem((s, pk)) is { } partyWhy)
+                throw new BankException(partyWhy);
+            ApplyToGame((s, pk));
+        }
+        history.Log($"{why} {Describe(pk, landing, null)}" + (old is null ? "" : $" (was {Names.Species(old.Species)} Lv{old.CurrentLevel} PID {old.PID:X8})"));
+    }
+
     // save -> bank: the bank copy is written first; the save loses its Pokémon only once the bank has it.
-    private void SaveToBank(Slot from, Slot to, PKM a, PKM? b, PKM? bNew)
+    private void SaveToBank(Slot from, Slot to, PKM a, PKM? bNew)
     {
         var staged = Bank.Stage(a);
         try
         {
-            ApplyToSave(() =>
-            {
-                if (bNew is not null)
-                    Save!.Set(from.Box, from.Index, bNew);
-                else
-                    Save!.Clear(from.Box, from.Index);
-            });
+            ApplyToGame((from, bNew));
         }
         catch
         {
@@ -165,7 +298,6 @@ public sealed class Mover(BankConfig cfg, BankStore bank, History history)
             throw;
         }
         Bank.Place(to.Box, to.Index, a, staged); // replaces b's file, which is in the save now
-        _ = b;
     }
 
     // bank -> save: the save gets its Pokémon first; the bank's file goes only once the save is on the card.
@@ -174,7 +306,7 @@ public sealed class Mover(BankConfig cfg, BankStore bank, History history)
         string? stagedB = b is null ? null : Bank.Stage(b); // the save's Pokémon, on its way into the bank
         try
         {
-            ApplyToSave(() => Save!.Set(to.Box, to.Index, aNew));
+            ApplyToGame((to, aNew));
         }
         catch
         {
@@ -186,6 +318,28 @@ public sealed class Mover(BankConfig cfg, BankStore bank, History history)
             Bank.Place(from.Box, from.Index, b!, stagedB);
         else
             Bank.Take(from.Box, from.Index);
+    }
+
+    /// <summary>Writes Pokémon (or empties, for null) into slots of the open game, then the save to the card. The party's
+    /// slots are written as one list with its gaps closed, as the game keeps it.</summary>
+    private void ApplyToGame(params (Slot Slot, PKM? Pk)[] writes)
+    {
+        var save = Save!;
+        var party = writes.Any(w => w.Slot.Area == Area.Party) ? PartyAfter(save, writes) : null;
+        ApplyToSave(() =>
+        {
+            foreach (var (s, pk) in writes)
+            {
+                if (s.Area != Area.Save)
+                    continue;
+                if (pk is null)
+                    save.Clear(s.Box, s.Index);
+                else
+                    save.Set(s.Box, s.Index, pk);
+            }
+            if (party is not null)
+                save.SetParty(party);
+        });
     }
 
     private void ApplyToSave(Action change)
@@ -202,25 +356,44 @@ public sealed class Mover(BankConfig cfg, BankStore bank, History history)
         }
     }
 
-    /// <summary>Takes a Pokémon out of its slot for good (it was traded away).</summary>
+    /// <summary>
+    /// Changes the open save itself (its trainer, bag, Pokédex, box names) and writes it to the card, after the session's
+    /// one backup; when anything fails the save is read again from the card, so nothing half-done stays in memory.
+    /// </summary>
+    public void EditSave(string what, Action<SaveFile> change)
+    {
+        var save = Save ?? throw new InvalidOperationException("no save open");
+        ApplyToSave(() => change(save.Sav));
+        history.Log($"SAVE EDIT {what} [{Path.GetFileName(save.Path)}]");
+    }
+
+    /// <summary>Why <paramref name="s"/> can't be emptied (null when it can): the party's last Pokémon that can battle.</summary>
+    public string? CantEmpty(Slot s) => s.Area == Area.Party ? PartyProblem((s, null)) : null;
+
+    /// <summary>Takes a Pokémon out of its slot for good (traded away or released).</summary>
     public void Remove(Slot s, string why)
     {
         var pk = Read(s) ?? throw new InvalidOperationException("empty slot");
+        if (CantEmpty(s) is { } problem)
+            throw new BankException(problem);
         if (s.Area == Area.Bank)
             Bank.Take(s.Box, s.Index);
         else
-            ApplyToSave(() => Save!.Clear(s.Box, s.Index));
+            ApplyToGame((s, null));
         history.Log($"{why} {Describe(pk, s, null)}");
     }
 
-    public string Where(Slot s) => s.Area == Area.Bank
-        ? $"{Bank.BoxName(s.Box)}, slot {s.Index + 1}"
-        : $"{Save?.Entry.GameName} {Save?.BoxName(s.Box)}, slot {s.Index + 1}";
+    public string Where(Slot s) => s.Area switch
+    {
+        Area.Bank => $"{Bank.BoxName(s.Box)}, slot {s.Index + 1}",
+        Area.Party => $"{Save?.Entry.GameName} party, slot {s.Index + 1}",
+        _ => $"{Save?.Entry.GameName} {Save?.BoxName(s.Box)}, slot {s.Index + 1}",
+    };
 
     private string Describe(PKM pk, Slot from, Slot? to) =>
         $"{Names.Species(pk.Species)} Lv{pk.CurrentLevel} {pk.Extension} PID {pk.PID:X8} OT {pk.OriginalTrainerName}/{Names.TrainerId(pk)}: " +
         $"{Where(from)}{(to is { } t ? " -> " + Where(t) : "")}" +
-        (from.Area == Area.Save || to?.Area == Area.Save ? $" [{Path.GetFileName(Save?.Path)}]" : "");
+        (from.InGame || to?.InGame == true ? $" [{Path.GetFileName(Save?.Path)}]" : "");
 }
 
 /// <summary>An append-only log of every move and trade, in the data folder (history.log).</summary>

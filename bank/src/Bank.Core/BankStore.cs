@@ -93,6 +93,15 @@ public sealed class BankStore
         _files[box][slot] = path;
     }
 
+    /// <summary>Replaces the Pokémon in a slot with <paramref name="pk"/> (an edit): the new file is written before the
+    /// old one goes.</summary>
+    public void Replace(int box, int slot, PKM pk)
+    {
+        if (_slots[box][slot] is null)
+            throw new InvalidOperationException($"bank slot {box + 1}/{slot + 1} is empty");
+        Place(box, slot, pk, Stage(pk));
+    }
+
     /// <summary>Takes the Pokémon out of its slot and deletes its file.</summary>
     public PKM Take(int box, int slot)
     {

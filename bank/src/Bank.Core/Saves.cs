@@ -193,6 +193,42 @@ public sealed class SaveSession
     /// <summary>The slot can't be changed: the game's battle box, a team in use and the like.</summary>
     public bool IsLocked(int box, int slot) => Sav.IsBoxSlotLocked(box, slot) || Sav.IsBoxSlotOverwriteProtected(box, slot);
 
+    public const int PartySize = 6;
+
+    public bool HasParty => Sav.HasParty;
+
+    /// <summary>The Pokémon in the party; the game keeps them in its first slots, with no gaps.</summary>
+    public int PartyCount => Sav.HasParty ? Math.Clamp(Sav.PartyCount, 0, PartySize) : 0;
+
+    public PKM? GetParty(int index)
+    {
+        if ((uint)index >= PartyCount)
+            return null;
+        var pk = Sav.GetPartySlotAtIndex(index);
+        return pk.Species == 0 ? null : pk;
+    }
+
+    /// <summary>
+    /// Writes the whole party (already in this game's format), first slot first, and empties the slots after it: the
+    /// party count the game reads is the list's length. Pokémon from a box get the stats a party Pokémon carries.
+    /// </summary>
+    internal void SetParty(IReadOnlyList<PKM> party)
+    {
+        if (party.Count is 0 or > PartySize)
+            throw new InvalidOperationException($"a party of {party.Count}");
+        var list = new List<PKM>(party.Count);
+        foreach (var pk in party)
+        {
+            if (pk.GetType() != Sav.PKMType)
+                throw new InvalidOperationException($"{pk.GetType().Name} into a {Sav.PKMType.Name} save");
+            var copy = pk.Clone();
+            if (copy.Stat_HPMax == 0 || copy.Stat_Level != copy.CurrentLevel)
+                copy.ResetPartyStats(); // fresh from a box (or edited): stats for its level, full HP
+            list.Add(copy);
+        }
+        Sav.PartyData = list;
+    }
+
     public IReadOnlyList<PKM> Party
     {
         get
