@@ -1,6 +1,9 @@
-# ROCKNIXDS Bank & Trade
+# Poketool
 
-**A Pokémon bank, legality checker and trading app for the RG DS and RG DS Plus**, on both screens, built on
+<p align="center"><img src="device/logo/logo-256.png" width="128" alt="Poketool's logo: a banana-yellow and cream capture ball with a spanner behind it, in pixel art"></p>
+
+**A Pokémon bank, save editor, legality checker and trading app for the RG DS and RG DS Plus** (formerly ROCKNIXDS
+Bank & Trade; BananaOS ships it), on both screens, built on
 [PKHeX.Core](https://github.com/kwsch/PKHeX), the open-source library behind PKHeX: the same save reading and writing,
 the same conversions between generations and the same legality analysis.
 
@@ -14,6 +17,17 @@ the same conversions between generations and the same legality analysis.
   reads the later ones too.
 - **Stores Pokémon in a bank** of 40 boxes (configurable), as plain PKHeX files (`.pk3`, `.pk4`, `.pk5`...), so they
   can be copied off over the network, opened in PKHeX on a PC, or dropped in from it.
+- **Takes Pokémon in and out of the party.** The game's side shows its party as a page before its first box (L, or the
+  *Party* button): party Pokémon move to boxes and the bank and back like any other, and the party stays as the game
+  keeps it (no gaps, six at most, always one Pokémon that isn't an egg).
+- **Duplicates Pokémon**: Y > *Duplicate* puts a copy in the next free slot (the same box, the boxes after it; the
+  party's next slot), or in a slot you choose.
+- **Edits saves**, as PKHeX does: a Pokémon's species, form, nickname, level and experience, nature, ability, held
+  item, gender, shininess, ball, friendship, Pokérus, moves and PP Ups, original trainer, IVs and EVs, with PKHeX's
+  verdict live on the top screen and *Try to make it legal* (moves, met data, ball, name... what PKHeX can suggest).
+  New Pokémon for empty slots (a real encounter from the game, or one it can be moved up from, so they pass the check),
+  release, export and import of `.pk*` files. The game's trainer (name, IDs, money, play time, badges), bag and
+  Pokédex, and its boxes' names and wallpapers.
 - **Moves Pokémon from one game to another** through the bank. They change format only when they move up a
   generation, the way Pal Park (3 → 4) and Poké Transfer (4 → 5) did, and never back down. A Pokémon the destination
   can't hold (a species, move, item or form it doesn't have) is refused, with the reason.
@@ -63,15 +77,16 @@ is dropped by itself, as it is whenever the save is newer.)
 |---|---|
 | **A** (or touch) | pick a Pokémon up, put it down (moving or swapping). Drag it with a finger. |
 | **B** | put it back / take a trade offer back |
-| **L / R**, d-pad on the box name | change box |
+| **L / R**, d-pad on the box name | change box; on the game's side, before box 1: the party (the *Party* button too) |
 | **X** | the full legality report |
-| **Y** | options: report, export a copy, rename a bank box |
+| **Y** (or *Options*) | on a Pokémon: edit, duplicate (next free slot, or one you choose), report, export a copy, release; on an empty slot: create a Pokémon, import a file; the box's name and wallpaper |
 | **SELECT** | choose the game save shown on the left |
-| **START** | menu; in a trade, accept |
+| **START** | menu (*Edit the game*: trainer, bag, Pokédex); in a trade, accept |
 | **SELECT + START** | quit |
 
-Every change is written straight away. The first change to a save in a session makes a backup of it, and every move,
-import and trade is written to `history.log`. All of that is in the data folder, which is in the roms share so it can be
+Every move is written straight away; an editor works on a copy and writes it with *Save* (START). The first change to
+a save in a session makes a backup of it, and every move, copy, edit, import, release and trade is written to
+`history.log`. All of that is in the data folder, which is in the roms share so it can be
 reached over the network like the games:
 
 ```
@@ -165,11 +180,11 @@ trades fairly.
 
 | | |
 |---|---|
-| `src/Bank.Core` | saves (`Saves.cs`), the bank (`BankStore.cs`), moves and conversions (`Mover.cs`), legality, trade evolutions, the trade protocol (`Trade/`: SPAKE2, the encrypted channel, the trade's state machine, the host/join/LAN discovery) |
-| `src/Bank.App` | the dual-screen app on SDL2: one window over both panels (as the ROCKNIXDS menu's), drawn at each panel's resolution (1× on the RG DS, 1.6× on the Plus) in ROCKNIXDS Pixel's colours and font; the pad read from its evdev node, touch on the bottom panel |
+| `src/Bank.Core` | saves (`Saves.cs`), the bank (`BankStore.cs`), moves, copies and the party (`Mover.cs`), the editors' changes (`Editing.cs`: new Pokémon, PID-bound edits, *make legal*, badges, Pokédex), legality, trade evolutions, the trade protocol (`Trade/`: SPAKE2, the encrypted channel, the trade's state machine, the host/join/LAN discovery) |
+| `src/Bank.App` | the dual-screen app on SDL2: one window over both panels (as the ROCKNIXDS menu's), drawn at each panel's resolution (1× on the RG DS, 1.6× on the Plus) in ROCKNIXDS Pixel's colours and font; the pad read from its evdev node, touch on the bottom panel; the box screen (`BoxScreen.cs`), the editors (`Fields.cs`: the list of values every editor uses, `Editors.cs`: Pokémon, trainer, bag, Pokédex, box) |
 | `tests/Bank.Tests` | xUnit: saves made from scratch for each generation (no game data in the repository), the `.dsv` footer, the bank, conversions, legality, trade evolutions, SPAKE2, whole trades over loopback including dropped connections |
 | `device/` | the launcher, the menu entry and its pictures (`media/`), the installer |
-| `tools/gen_media.py` | draws the menu entry's cover, cartridge label and title strip (no game's artwork) |
+| `tools/gen_media.py` | draws Poketool's logo and the menu entry's cover, cartridge label and title strip in BananaOS's style (Pillow, Pixelify Sans; no game's artwork): `device/media`, `device/logo` |
 | `build.sh` | the handheld's package: self-contained linux-arm64, ReadyToRun, the runtime trimmed |
 
 Build and test on a PC with the .NET 10 SDK:
@@ -191,7 +206,12 @@ pre-release (never "latest", so ROCKNIXDS's own updater doesn't take it for a RO
 
 ## Limits
 
-- Pokémon in the party stay where they are: deposit them in a box in the game first.
+- The editors write what PKHeX writes; a Pokémon edited into something no game makes fails the legality check, and
+  goes into a game only as the settings allow. *Try to make it legal* fixes what PKHeX can suggest a value for; it
+  can't fix a PID no game makes or a species a game can't have.
+- The Pokédex editor sets seen and caught (and for Gen 4-5 the gender, form and language flags a registration sets);
+  it doesn't unlock the national Pokédex. Badges are the gym badges (Johto and Kanto for Gold/Silver/Crystal and
+  HeartGold/SoulSilver).
 - The bank keeps any format; a game takes what it can hold. Gen 1/2 Pokémon go between Gen 1 and Gen 2 games (and the
   bank), not up to Gen 3-5, as in the real games.
 - Trading needs both handhelds on one network that lets them reach each other (some guest Wi-Fi networks don't).

@@ -4,7 +4,8 @@ using System.Runtime.InteropServices;
 namespace Rocknixds.Bank.App;
 
 /// <summary>
-/// ROCKNIXDS Bank &amp; Trade: a Pokémon bank, legality checker and trading app for the RG DS's two screens.
+/// Poketool (formerly ROCKNIXDS Bank &amp; Trade): a Pokémon bank, save editor, legality checker and trading app for
+/// the RG DS's two screens.
 /// <code>
 /// rocknixds-bank [--config FILE] [--layout auto|side|stack|plus|sidex2] [--assets DIR]
 ///                [--script FILE --shots DIR]   (renders without a display: screenshots for the docs and the tests)
@@ -153,7 +154,7 @@ public static class Program
         {
             var layout = Layout.Detect(layoutMode, Log);
             Log($"SDL {Sdl.Version}, video {Sdl.VideoDriver}, layout: {layout.Description} ({layout.WindowW}x{layout.WindowH})");
-            var window = Sdl.CreateWindow("ROCKNIXDS Bank", Sdl.WINDOWPOS_UNDEFINED, Sdl.WINDOWPOS_UNDEFINED, layout.WindowW, layout.WindowH,
+            var window = Sdl.CreateWindow("Poketool", Sdl.WINDOWPOS_UNDEFINED, Sdl.WINDOWPOS_UNDEFINED, layout.WindowW, layout.WindowH,
                 Sdl.WINDOW_SHOWN | (layout.SwayOrigin is null ? 0 : Sdl.WINDOW_BORDERLESS));
             if (window == IntPtr.Zero)
                 throw new InvalidOperationException("SDL_CreateWindow: " + Sdl.GetError());

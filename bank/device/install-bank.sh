@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs (or updates) ROCKNIXDS Bank & Trade on the handheld. As root (ssh in, password rocknix):
+# Installs (or updates) Poketool (formerly ROCKNIXDS Bank & Trade) on the handheld. As root (ssh in, password rocknix):
 #
 #   curl -fsSL https://raw.githubusercontent.com/JorreFog/ROCKNIXDS/main/bank/device/install-bank.sh | sh
 #
@@ -30,12 +30,12 @@ import os, sys
 import xml.etree.ElementTree as ET
 PATH = "./ROCKNIXDS Bank.sh"
 FIELDS = [
-    ("name", "ROCKNIXDS Bank"),
-    ("desc", "A Pokémon bank for both screens: reads your game saves (generation 1 to 5), stores Pokémon in boxes of "
-             "its own, moves them between games through the bank (they change format only when they move up a "
-             "generation), checks them with PKHeX's legality analysis, and trades with another handheld over Wi-Fi, "
-             "in a lobby or a private room. Close the game first: emulators write their own copy of the save when "
-             "they quit."),
+    ("name", "Poketool"),
+    ("desc", "Poketool (formerly Bank & Trade), for both screens: reads your game saves (generation 1 to 5), stores "
+             "Pokémon in boxes of its own, moves them between games and parties through the bank (they change format "
+             "only when they move up a generation), edits Pokémon, trainers, bags and Pokédexes, checks them with "
+             "PKHeX's legality analysis, and trades with another handheld over Wi-Fi, in a lobby or a private room. "
+             "Close the game first: emulators write their own copy of the save when they quit."),
     ("image", "./images/bank-image.png"),
     ("thumbnail", "./images/bank-thumb.png"),
     ("marquee", "./images/bank-marquee.png"),
@@ -109,7 +109,7 @@ case "$1" in
     unlist "$APPS"; unlist "$PORTS"
     rm -rf "${DEST:?}" "${DEST:?}.new" "${DEST:?}.old" "${APPS:?}"
     es_on
-    say "Removed ROCKNIXDS Bank. Your bank, backups and history are still in /storage/roms/rocknixds-bank."
+    say "Removed Poketool. Your bank, backups and history are still in /storage/roms/rocknixds-bank."
     exit 0 ;;
 --version)
     cat "$DEST/VERSION" 2>/dev/null || echo "not installed"
@@ -142,11 +142,11 @@ for r in rel if isinstance(rel, list) else []:
     if t.startswith("bank-v") and not r.get("draft"):
         print(t)
         break' 2>/dev/null)
-        [ -n "$TAG" ] || die "no ROCKNIXDS Bank release found (or GitHub unreachable: check the network)"
+        [ -n "$TAG" ] || die "no Poketool (Bank) release found (or GitHub unreachable: check the network)"
     fi
     VER=${TAG#bank-v}
     URL="https://github.com/$REPO/releases/download/$TAG/rocknixds-bank-$VER-aarch64.tar.gz"
-    say "Downloading ROCKNIXDS Bank $VER"
+    say "Downloading Poketool $VER"
     curl -fL --max-time 600 -o "$WORK/bank.tar.gz" "$URL" || die "couldn't download $URL"
     if curl -fsSL --max-time 30 -o "$WORK/bank.sha256" "$URL.sha256"; then
         want=$(cut -d' ' -f1 < "$WORK/bank.sha256")
@@ -175,7 +175,7 @@ rm -rf "$DEST.old"
 if [ -f /storage/.config/emulationstation/es_systems_rocknixds.cfg ]; then
     DIR=$APPS OLD=$PORTS WHERE="its own tile in the menu: Bank & Trade"
 else
-    DIR=$PORTS OLD=$APPS WHERE="Ports > ROCKNIXDS Bank"
+    DIR=$PORTS OLD=$APPS WHERE="Ports > Poketool"
 fi
 es_off
 unlist "$OLD"
@@ -188,5 +188,5 @@ if [ -f "$DEST/media/bank-image.png" ]; then
 fi
 es_on
 
-say "ROCKNIXDS Bank $(cat "$DEST/VERSION" 2>/dev/null) is installed: $WHERE"
+say "Poketool $(cat "$DEST/VERSION" 2>/dev/null) is installed: $WHERE"
 [ -n "$ES_BACK" ] || say "(It shows the next time the menu starts: restart EmulationStation, or the handheld.)"

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds ROCKNIXDS Bank & Trade for the handheld: dist/rocknixds-bank-<version>-aarch64.tar.gz (and its .sha256).
+# Builds Poketool (formerly ROCKNIXDS Bank & Trade) for the handheld: dist/rocknixds-bank-<version>-aarch64.tar.gz (and its .sha256).
 #
 #   sh bank/build.sh            # needs the .NET 10 SDK; downloads the arm64 runtime pack and PKHeX's sprites
 #

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Starts ROCKNIXDS Bank & Trade on the handheld (the Ports entry runs this). It runs in the sway session the menu runs
+# Starts Poketool (formerly ROCKNIXDS Bank & Trade) on the handheld (the Ports entry runs this). It runs in the sway session the menu runs
 # in, as one window over both panels; the app places it with swaymsg. Arguments go to the app.
 DIR=$(cd "$(dirname "$0")" && pwd)
 

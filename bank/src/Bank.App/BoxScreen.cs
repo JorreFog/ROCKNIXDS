@@ -809,7 +809,7 @@ public sealed class BoxScreen(App app) : Screen(app)
             DrawTradeTop(c);
             return;
         }
-        Views.Header(c, App, "ROCKNIXDS Bank");
+        Views.Header(c, App, "Poketool");
         var pk = _held?.Pk ?? UnderCursor;
         if (_report && pk is not null)
         {

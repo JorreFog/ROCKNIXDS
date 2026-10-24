@@ -8,7 +8,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)VERSION').Trim())</Version>
     <Authors>JorreFog and the ROCKNIXDS contributors</Authors>
-    <Product>ROCKNIXDS Bank</Product>
+    <Product>Poketool</Product>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
 </Project>

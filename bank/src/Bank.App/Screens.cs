@@ -39,9 +39,9 @@ public sealed class LoadingScreen(App app) : Screen(app)
         var p = c.P;
         c.Fill(0, 0, Canvas.W, Canvas.H, p.Bg);
         c.Fill(220, 170, 24, 24, p.Red);
-        c.Text("ROCKNIXDS", 256, 160, 40, p.Ink, bold: true);
-        c.Text("Bank & Trade", 256, 206, 24, p.Muted);
-        c.Text("Pokémon storage, legality checks and trading for the RG DS", 320, 300, 16, p.Muted, Align.Center);
+        c.Text("Poketool", 256, 160, 40, p.Ink, bold: true);
+        c.Text("Bank · Editor · Trade", 256, 206, 24, p.Muted);
+        c.Text("Pokémon storage, save editing, legality checks and trading", 320, 300, 16, p.Muted, Align.Center);
     }
 
     public override void DrawBottom(Canvas c) { }
@@ -360,7 +360,7 @@ public sealed class AboutScreen(App app) : Screen(app)
     {
         Views.Header(c, App, "About");
         var p = c.P;
-        c.Text("ROCKNIXDS Bank & Trade", 32, 64, 28, p.Ink, bold: true);
+        c.Text("Poketool", 32, 64, 28, p.Ink, bold: true);
         c.Text($"Version {typeof(App).Assembly.GetName().Version?.ToString(3)}", 32, 104, 18, p.Muted);
         float y = 150;
         Line("PKHeX.Core", typeof(PKM).Assembly.GetName().Version?.ToString(3) ?? "?");
@@ -389,7 +389,7 @@ public sealed class AboutScreen(App app) : Screen(app)
             "other names are trademarks of their owners; this fan project isn't affiliated with them. The terms of use " +
             "are in LEGAL.md in the ROCKNIXDS repository.\n\n" +
             "Saves are backed up the first time they change in a session (the backups folder in the data folder), and every " +
-            "move, import and trade is written to history.log there.",
+            "move, edit, import and trade is written to history.log there. Poketool was ROCKNIXDS Bank & Trade.",
             24, 24, 592, 16, p.Ink);
         c.Hint("B", "Back", 8, 446);
     }

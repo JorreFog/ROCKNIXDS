@@ -71,7 +71,7 @@ public sealed class SecureChannel : IDisposable
         if (reply.T == "refused")
             throw new TradeRefusedException(TextGuard.Clean(reply.Text, 160) is { Length: > 0 } why ? $"The host refused: {why}" : "The host refused the connection.");
         if (reply.Proto != ProtocolVersion)
-            throw new TradeRefusedException("The other handheld runs a different version of ROCKNIXDS Bank. Update both.");
+            throw new TradeRefusedException("The other handheld runs a different version of Poketool (Bank & Trade). Update both.");
         if (reply.T != "spake" || reply.Msg is null || reply.Confirm is null || reply.Id is null || reply.Sig is null)
             throw new IOException("unexpected handshake reply");
 
@@ -114,7 +114,7 @@ public sealed class SecureChannel : IDisposable
         if (hello.Proto != ProtocolVersion)
         {
             await WriteJsonAsync(stream, new HandshakeMsg { T = "refused", Proto = ProtocolVersion,
-                Text = "The host runs a different version of ROCKNIXDS Bank. Update both." }, t);
+                Text = "The host runs a different version of Poketool (Bank & Trade). Update both." }, t);
             throw new TradeRefusedException("A partner with a different version tried to connect.");
         }
         if (hello.Msg is null || hello.Id is not { Length: >= 32 and <= 200 })
