@@ -1,0 +1,264 @@
+es-rgds-gamedetails: more about the game on the library's top screen (rating, players, developer, description, a screenshot)
+
+The library's top screen showed a game's cover, its title, genre and year, the play stats and the achievements.
+Themes for other frontends (Art Book Next, TechDweeb) also show the rating, the players, the developer and
+publisher, the description, and a screenshot instead of the cover. The rnds engine now draws these in its own style:
+
+- Under the genre and year, a row: the rating as five pixel stars (11 x 11 CSS px on the look's whole-pixel grid, by
+  halves, in INK over LINE: the sheet is tinted with the system's accent, so accent stars vanished into it) and "1-2 players · Developer" (the publisher when there's no
+  developer), cut with an ellipsis.
+- Under the achievements, the description in MUTED, wrapped to 3 lines (2 under a two-line title, so the block stays
+  clear of the help bar at the sheet's foot), the last cut with an ellipsis.
+- The picture can be the gameplay screenshot (the metadata's image) instead of the box cover, in the same frame,
+  shadow and shine. A game without a screenshot keeps its cover.
+
+The block stays centred on the cover as before, its height grown by what is shown. The launch screen ("Starting...")
+shows none of the extras.
+
+Each is a setting, under USER INTERFACE SETTINGS with the theme's other switches (shown for the ROCKNIXDS Pixel
+themes): TOP SCREEN ARTWORK (box art / screenshot, RndsTopArtwork), RATING STARS (RndsShowRating), PLAYERS AND
+DEVELOPER (RndsShowCredits) and GAME DESCRIPTION (RndsShowDescription). The details are on by default and the
+picture stays the box cover, so only the extras are new. The engine reads them as it draws, through new Source
+virtuals (the host's defaults show everything and keep the cover), so a change shows without reloading the list.
+
+diff --git a/es-app/src/guis/GuiMenu.cpp b/es-app/src/guis/GuiMenu.cpp
+index cf58694c..cbe5c98d 100644
+--- a/es-app/src/guis/GuiMenu.cpp
++++ b/es-app/src/guis/GuiMenu.cpp
+@@ -5328,6 +5328,11 @@ void GuiMenu::openUISettings()
+ 	{
+ 		s->addSwitch(_("STILL TOP SCREEN (NO RISE OR BOB)"), "RndsStillTopScreen", true);
+ 		s->addSwitch(_("ROM ICON ON CARTRIDGES (DS)"), "RndsRomIcon", true);
++		// the game list's top screen: its picture and the details beside it
++		s->addOptionList(_("TOP SCREEN ARTWORK"), { { _("BOX ART"), "box" },{ _("SCREENSHOT"), "screenshot" } }, "RndsTopArtwork", true);
++		s->addSwitch(_("RATING STARS"), "RndsShowRating", true);
++		s->addSwitch(_("PLAYERS AND DEVELOPER"), "RndsShowCredits", true);
++		s->addSwitch(_("GAME DESCRIPTION"), "RndsShowDescription", true);
+ 	}
+ 
+ 	s->addGroup(_("GAMELIST OPTIONS"));
+diff --git a/es-app/src/rnds/RndsEs.cpp b/es-app/src/rnds/RndsEs.cpp
+index b4487728..60cca88b 100644
+--- a/es-app/src/rnds/RndsEs.cpp
++++ b/es-app/src/rnds/RndsEs.cpp
+@@ -629,6 +629,28 @@ namespace rnds
+ 			return a + " · " + b;
+ 		}
+ 
++		// "1" -> "1 player", "1-4" / "2" -> "1-4 players" / "2 players"; anything else as it is
++		static std::string playersText(const std::string& p)
++		{
++			std::string t = Utils::String::trim(p);
++			if (t.empty() || t.find_first_not_of("0123456789-+ ") != std::string::npos) return t;
++			return t + (t == "1" ? " player" : " players");
++		}
++
++		// the description as one paragraph: line breaks and runs of spaces to single spaces
++		static std::string oneParagraph(const std::string& d)
++		{
++			std::string r;
++			bool space = false;
++			for (char c : d)
++			{
++				if (c == '\n' || c == '\r' || c == '\t' || c == ' ') { space = !r.empty(); continue; }
++				if (space) { r += ' '; space = false; }
++				r += c;
++			}
++			return r;
++		}
++
+ 		// the ROM whose own icon goes on the bottom screen's cartridge, with the Pixel setting on: a DS game's .nds or
+ 		// .zip (in a collection too); other archives and other systems keep the art
+ 		std::string romIconOf(FileData* f)
+@@ -819,6 +841,17 @@ namespace rnds
+ 			r.last = relDay(f->getMetadata(MetaDataId::LastPlayed));
+ 			r.time = fmtTime(atol(f->getMetadata(MetaDataId::GameTime).c_str()));
+ 			r.box = f->getThumbnailPath(true);
++			// the top screen's extras: rating, players and developer (else publisher), the description, a screenshot
++			{
++				std::string rt = f->getMetadata(MetaDataId::Rating);
++				if (!rt.empty()) r.rating = std::max(0.0f, std::min(1.0f, (float)atof(rt.c_str())));
++				std::string dev = f->getMetadata(MetaDataId::Developer);
++				if (dev.empty()) dev = f->getMetadata(MetaDataId::Publisher);
++				r.credits = join(playersText(f->getMetadata(MetaDataId::Players)), Utils::String::trim(dev));
++				r.desc = oneParagraph(f->getMetadata(MetaDataId::Desc));
++				std::string shot = mediaPath(f, MetaDataId::Image);
++				if (shot != r.box) r.shot = shot;
++			}
+ 			r.cart = mediaPath(f, MetaDataId::Cartridge);
+ 			r.label = mediaPath(f, MetaDataId::BoxBack);
+ 			r.rom = romIconOf(f);
+@@ -871,6 +904,10 @@ namespace rnds
+ 
+ 		std::string batteryMode() override { return Settings::getInstance()->getString("ShowBattery"); }
+ 		bool topMotion() override { return !Settings::getInstance()->getBool("RndsStillTopScreen"); }
++		bool showRating() override { return Settings::getInstance()->getBool("RndsShowRating"); }
++		bool showCredits() override { return Settings::getInstance()->getBool("RndsShowCredits"); }
++		bool showDescription() override { return Settings::getInstance()->getBool("RndsShowDescription"); }
++		bool topScreenshot() override { return Settings::getInstance()->getString("RndsTopArtwork") == "screenshot"; }
+ 
+ 		float battery() override
+ 		{
+diff --git a/es-app/src/rnds/RndsUI.cpp b/es-app/src/rnds/RndsUI.cpp
+index 6ad71c6b..5abf91c2 100644
+--- a/es-app/src/rnds/RndsUI.cpp
++++ b/es-app/src/rnds/RndsUI.cpp
+@@ -1271,8 +1271,10 @@ namespace rnds
+ 		void drawCover(const GameInfo& gm, const SysInfo& sy, float ry)
+ 		{
+ 			const float cx = 163, cy = 263;		// the cover's centre at rest
+-			CacheEntry* ce = coverArt(gm.box);
+-			bool pending = ce == nullptr && !gm.box.empty();
++			// the screenshot instead of the box when the host prefers it (TOP SCREEN ARTWORK) and the game has one
++			const std::string& pic = src->topScreenshot() && !gm.shot.empty() ? gm.shot : gm.box;
++			CacheEntry* ce = coverArt(pic);
++			bool pending = ce == nullptr && !pic.empty();
+ 			if (ce && !ce->sp.valid()) ce = nullptr;
+ 			float w = ce ? ce->cssW : 176, h = ce ? ce->cssH : 176;
+ 			float b = bob();
+@@ -1311,7 +1313,33 @@ namespace rnds
+ 			}
+ 		}
+ 
+-		// the game list's top screen, right: title, genre and year, the play stats and the achievements
++		// a pixel star, 11 x 11 CSS px on the look's whole-pixel grid, its left `fill` (0..1) in `on`, the rest in `off`
++		static constexpr int STAR = 11;
++		void drawStar(float x, float y, float fill, Color on, Color off)
++		{
++			static const char* rows[STAR] = {
++				".....#.....",
++				".....#.....",
++				"....###....",
++				"....###....",
++				"###########",
++				".#########.",
++				"..#######..",
++				"...#####...",
++				"...##.##...",
++				"..##...##..",
++				".##.....##." };
++			for (int r = 0; r < STAR; r++)
++				for (int c = 0; c < STAR; c++)
++					if (rows[r][c] == '#')
++					{
++						float l = std::round(X(x + c)), t = std::round(X(y + r));
++						be->fill(l, t, std::round(X(x + c + 1)) - l, std::round(X(y + r + 1)) - t, c < fill * STAR ? on : off);
++					}
++		}
++
++		// the game list's top screen, right: title, genre and year, the rating and credits, the play stats, the
++		// achievements and the description (each extra the host can switch off)
+ 		void drawGameInfo(const GameInfo& gm, const SysInfo& sy, float ry)
+ 		{
+ 			const float L = 300, W = 296;
+@@ -1353,7 +1381,25 @@ namespace rnds
+ 			}
+ 			float gap = std::min(28.0f, (W - total) / 2);
+ 
++			// the rating (five stars, by halves) and the credits ("1-2 players · Nintendo EAD") on one row under the
++			// genre and year; the description under the achievements, wrapped to 3 lines (2 under a two-line title, so
++			// the block stays clear of the help bar at the sheet's foot)
++			bool stars = !launch && src->showRating() && gm.rating >= 0;
++			const float STARS_W = 5 * STAR + 4 * 3, STARS_GAP = 10;
++			TStyle tc = ts(false, 16);
++			TextLine cl;
++			bool credits = !launch && src->showCredits() && !gm.credits.empty();
++			if (credits)
++				cl = layoutEllipsis(utf8to32(gm.credits), tstyle(tc), (int)(W - (stars ? STARS_W + STARS_GAP : 0)));
++			bool row = stars || credits;
++			TStyle td = ts(false, 15);
++			std::vector<TextLine> dl;
++			if (!launch && src->showDescription() && !gm.desc.empty())
++				dl = layoutWrap(utf8to32(gm.desc), tstyle(td), (int)W, tl.size() > 1 ? 2 : 3);
++
+ 			float titleH = tl.size() * 32.5f, block = titleH + 4 + 24 + 20 + 48 + 22 + 22 + 6 + 14;
++			if (row) block += 22 + 4;
++			if (!dl.empty()) block += 16 + dl.size() * 19.0f;
+ 			float top = std::round(263 - block / 2) + ry;
+ 			float y = top;
+ 			for (size_t i = 0; i < tl.size(); i++)
+@@ -1369,7 +1415,25 @@ namespace rnds
+ 				sx += 16;
+ 			}
+ 			drawLine(sl, tsb, sx, y, 24, launch ? INK : MUTED);
+-			y += 24 + 20;
++			y += 24;
++			if (row)
++			{
++				y += 4;
++				float cx = L;
++				if (stars)
++				{
++					float r = std::round(gm.rating * 10) / 2;		// 0..5 by halves
++					// INK, not the system's accent: the sheet is tinted with the accent, and accent stars vanished into it
++					Color off(LINE.r, LINE.g, LINE.b, 0.6f);
++					for (int i = 0; i < 5; i++)
++						drawStar(L + i * (STAR + 3), y + 5, std::max(0.0f, std::min(1.0f, r - i)), INK, off);
++					cx += STARS_W + STARS_GAP;
++				}
++				if (credits)
++					drawLine(cl, tc, cx, y, 22, MUTED);
++				y += 22;
++			}
++			y += 20;
+ 			be->fill(std::round(X(L)), std::round(X(y - 10)), std::round(X(W)), std::round(X(2)), Color(LINE.r, LINE.g, LINE.b, 0.5f));
+ 			float x = L;
+ 			for (int i = 0; i < 3; i++)
+@@ -1402,6 +1466,14 @@ namespace rnds
+ 				}
+ 				be->popClip();
+ 			}
++
++			// the description
++			if (!dl.empty())
++			{
++				y += 14 + 16;
++				for (size_t i = 0; i < dl.size(); i++)
++					drawLine(dl[i], td, L, y + 19.0f * i, 19, MUTED);
++			}
+ 		}
+ 
+ 		// the game list's top screen with no games: the title and where the games go, in the info column (the frame on
+diff --git a/es-app/src/rnds/RndsUI.h b/es-app/src/rnds/RndsUI.h
+index 31e138fa..4672f275 100644
+--- a/es-app/src/rnds/RndsUI.h
++++ b/es-app/src/rnds/RndsUI.h
+@@ -52,6 +52,10 @@ namespace rnds
+ 		int achA = 0, achB = 0;	// unlocked / total
+ 		std::string achLabel;	// "28 / 50 achievements" (lower case; drawn upper)
+ 		bool fav = false;
++		float rating = -1;		// 0..1 from the metadata, < 0 none (top screen: five stars, by halves)
++		std::string credits;	// "1-2 players · Nintendo EAD" (top screen, under the genre and year)
++		std::string desc;		// the description, one paragraph (top screen, under the achievements)
++		std::string shot;		// a gameplay screenshot (the top screen's picture when the host prefers it to the box)
+ 	};
+ 
+ 	class Source
+@@ -67,6 +71,11 @@ namespace rnds
+ 		virtual float battery() = 0;			// 0..1, < 0 unknown
+ 		virtual std::string batteryMode() { return "icon"; }	// ES's "show battery status": "" none, "icon", "text" (icon and %)
+ 		virtual bool topMotion() { return true; }	// false: the top screen holds still (no rise on a move, no bob)
++		// the library top screen's details, each switchable by the host (ES settings), and its picture
++		virtual bool showRating() { return true; }
++		virtual bool showCredits() { return true; }
++		virtual bool showDescription() { return true; }
++		virtual bool topScreenshot() { return false; }	// the gameplay screenshot instead of the box cover, when there is one
+ 		virtual bool online() = 0;
+ 
+ 		// actions
+diff --git a/es-core/src/Settings.cpp b/es-core/src/Settings.cpp
+index 89b3f482..4695dc6b 100644
+--- a/es-core/src/Settings.cpp
++++ b/es-core/src/Settings.cpp
+@@ -148,6 +148,11 @@ void Settings::setDefaults()
+ 	mBoolMap["SplashScreenProgress"] = true;
+ 	mBoolMap["StartupOnGameList"] = false;
+ 	mStringMap["StartupSystem"] = "lastsystem";
++	// ROCKNIXDS Pixel (rnds): the game list's top screen details, all shown by default; the box cover as its picture
++	mBoolMap["RndsShowRating"] = true;
++	mBoolMap["RndsShowCredits"] = true;
++	mBoolMap["RndsShowDescription"] = true;
++	mStringMap["RndsTopArtwork"] = "box";
+ 	mStringMap["ShowTags"] = "";
+ 	mBoolMap["UseFileCache"] = true;
+ 
