@@ -9,6 +9,17 @@
 GPU=/sys/class/devfreq/fde60000.gpu
 RT=/var/run/0-runtime-dir
 up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamps for the log (switchtime.sh uses the same clock)
+# The dual-screen themes: the four built in, and any theme whose theme.xml has an aspect-ratio include for the
+# canvas' 4:1 ratio (if="{screen.ratio} == '4/1'"), such as TechDweeb's RG DS layout. Same check as start_es_rgds.sh.
+DUAL_THEMES="dii-ess-aye canvas-ds rocknixds-pixel-dark rocknixds-pixel-light"
+dual_theme() {
+    case " $DUAL_THEMES " in *" $1 "*) return 0 ;; esac
+    [ -n "$1" ] || return 1
+    for d in /storage/.config/emulationstation/themes /storage/roms/themes /usr/share/emulationstation/themes; do
+        grep -qsF "{screen.ratio} == '4/1'" "$d/$1/theme.xml" && return 0
+    done
+    return 1
+}
 # After a normal exit this script runs twice, from session.sh and then as the unit's ExecStopPost, and ES waits for
 # both (the launcher waits for the unit). The second run has nothing left to do: it leaves at once (it used to
 # repeat the half-second interrupt check below, with the menu's old picture on the panels all the while).
@@ -66,23 +77,21 @@ vt_back() {
         # (1024x768, the bottom panel black: seen on an RG DS Plus, 1.5.13). A plain resize to 3072 is clamped to the
         # 2048 desktop and the theme scales, so sway's floating size limit is lifted for the resize and put back.
         THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
-        case "$THEME_SET" in
-            ""|dii-ess-aye|canvas-ds|rocknixds-pixel-dark|rocknixds-pixel-light)
-                PANEL=; for m in /sys/class/drm/card*-DSI-*/modes; do read -r PANEL < "$m" 2>/dev/null && [ -n "$PANEL" ] && break; done
-                case "$PANEL" in [0-9]*x[0-9]*) ;; *) PANEL=640x480 ;; esac
-                PW=${PANEL%%x*}
-                if [ "$PW" -gt 640 ]; then
-                    PH=${PANEL#*x}
-                    if [ -n "$S" ]; then
-                        XDG_RUNTIME_DIR=$RT swaymsg -s "$S" -- floating_maximum_size -1 x -1 >/dev/null 2>&1
-                        XDG_RUNTIME_DIR=$RT swaymsg -s "$S" -- "[app_id=\"emulationstation\"] floating enable, fullscreen disable, resize set $((PW * 3)) $PH, move absolute position 0 0" >/dev/null 2>&1
-                        XDG_RUNTIME_DIR=$RT swaymsg -s "$S" -- floating_maximum_size 0 x 0 >/dev/null 2>&1
-                    fi
-                else
-                    [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" '[app_id="emulationstation"] floating enable, fullscreen disable, resize set 1920 480, move absolute position 0 0' >/dev/null 2>&1
+        if [ -z "$THEME_SET" ] || dual_theme "$THEME_SET"; then
+            PANEL=; for m in /sys/class/drm/card*-DSI-*/modes; do read -r PANEL < "$m" 2>/dev/null && [ -n "$PANEL" ] && break; done
+            case "$PANEL" in [0-9]*x[0-9]*) ;; *) PANEL=640x480 ;; esac
+            PW=${PANEL%%x*}
+            if [ "$PW" -gt 640 ]; then
+                PH=${PANEL#*x}
+                if [ -n "$S" ]; then
+                    XDG_RUNTIME_DIR=$RT swaymsg -s "$S" -- floating_maximum_size -1 x -1 >/dev/null 2>&1
+                    XDG_RUNTIME_DIR=$RT swaymsg -s "$S" -- "[app_id=\"emulationstation\"] floating enable, fullscreen disable, resize set $((PW * 3)) $PH, move absolute position 0 0" >/dev/null 2>&1
+                    XDG_RUNTIME_DIR=$RT swaymsg -s "$S" -- floating_maximum_size 0 x 0 >/dev/null 2>&1
                 fi
-                ;;
-        esac
+            else
+                [ -n "$S" ] && XDG_RUNTIME_DIR=$RT swaymsg -s "$S" '[app_id="emulationstation"] floating enable, fullscreen disable, resize set 1920 480, move absolute position 0 0' >/dev/null 2>&1
+            fi
+        fi
     else
         echo "$(date) sway has no outputs after the VT switch: restarting it"
         systemctl restart sway.service; wait_outputs

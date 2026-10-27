@@ -48,10 +48,20 @@ REVEAL_DELAY=1          # stock ES only: after it answers its API, before its wi
 # Which layout: the dual-screen themes span one canvas over both panels (1920x480 on the RG DS, 3072x768 on
 # the Plus). Any other theme is drawn for one screen, so it gets stock ROCKNIX's layout: ES fullscreen on the
 # top panel, the bottom panel off. theme-changed.sh restarts ES when the choice switches between the two.
-# Dark and light share the canvas, so that switch does not restart ES. Keep the list in sync with it.
+# Dark and light share the canvas, so that switch does not restart ES. Keep the list and dual_theme in sync with it.
 DUAL_THEMES="dii-ess-aye canvas-ds rocknixds-pixel-dark rocknixds-pixel-light"
+# A theme not in the list gets the canvas too when it has a layout for it: an aspect-ratio include for the canvas'
+# 4:1 ratio in its theme.xml (if="{screen.ratio} == '4/1'"), such as TechDweeb's RG DS layout.
+dual_theme() {
+    case " $DUAL_THEMES " in *" $1 "*) return 0 ;; esac
+    [ -n "$1" ] || return 1
+    for d in /storage/.config/emulationstation/themes /storage/roms/themes /usr/share/emulationstation/themes; do
+        grep -qsF "{screen.ratio} == '4/1'" "$d/$1/theme.xml" && return 0
+    done
+    return 1
+}
 THEME_SET=$(sed -n 's/.*<string name="ThemeSet" value="\([^"]*\)".*/\1/p' /storage/.config/emulationstation/es_settings.cfg 2>/dev/null)
-if [ -z "$THEME_SET" ] || case " $DUAL_THEMES " in *" $THEME_SET "*) true ;; *) false ;; esac; then
+if [ -z "$THEME_SET" ] || dual_theme "$THEME_SET"; then
     ES_ARGS="--resolution $CANVAS_W $PH"
     LAYOUT='[app_id="emulationstation"] floating enable, fullscreen disable, move absolute position 0 0'
     OUTPUTS='output DSI-1 power on'
