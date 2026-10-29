@@ -230,6 +230,13 @@ if [ $UNINSTALL = 1 ]; then
         fi
     fi
     rm -f /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
+    for ev in screensaver-start screensaver-stop wake start game-start; do
+        rm -f /storage/.config/emulationstation/scripts/$ev/rocknixds-screensaver-panel.sh
+    done
+    if [ -f /tmp/rocknixds-screensaver-backlight-off ]; then       # a backlight the hook left off
+        echo 0 > "$(cat /tmp/rocknixds-screensaver-backlight-off)/bl_power" 2>/dev/null
+        rm -f /tmp/rocknixds-screensaver-backlight-off
+    fi
     rm -f /storage/.config/emulationstation/es_systems_rocknixds.cfg /storage/.config/emulationstation/es_systems_rocknixds-store.cfg
     rm -f /storage/.config/emulationstation/scripts/game-end/rocknixds-menu-power.sh /storage/.config/autostart/rocknixds-menu-power \
           /storage/.config/emulationstation/scripts/start/rocknixds-menu-power.sh \
@@ -257,6 +264,8 @@ if [ $UNINSTALL = 1 ]; then
     { echo performance > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor; } 2>/dev/null || true   # ROCKNIX's menu governor
     rmdir /storage/.config/emulationstation/scripts/theme-changed /storage/.config/emulationstation/scripts/game-end \
           /storage/.config/emulationstation/scripts/game-start /storage/.config/emulationstation/scripts/start \
+          /storage/.config/emulationstation/scripts/screensaver-start /storage/.config/emulationstation/scripts/screensaver-stop \
+          /storage/.config/emulationstation/scripts/wake \
           /storage/.config/emulationstation/scripts 2>/dev/null
     rm -f $VERSION_FILE /storage/.config/rocknixds-es-notice /storage/.config/rocknixds-stock-es /storage/.config/rocknixds-any-rocknix
     rm -f /storage/.config/emulationstation/es-mem.log /storage/.config/emulationstation/es-mem.log.1
@@ -416,6 +425,13 @@ if [ $THEME_ON = 1 ]; then
     mkdir -p /storage/.config/emulationstation/scripts/theme-changed
     cp "$SRC/dii-ess-aye/device/theme-changed.sh" /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
     chmod +x /storage/.config/emulationstation/scripts/theme-changed/rocknixds-layout.sh
+    # the bottom panel's backlight off while the screensaver runs on the top panel (es-rgds-screensaver.patch); back on
+    # when it stops, on wake, and as a safety net when ES starts or a game starts
+    for ev in screensaver-start screensaver-stop wake start game-start; do
+        mkdir -p /storage/.config/emulationstation/scripts/$ev
+        cp "$SRC/dii-ess-aye/device/screensaver-panel.sh" /storage/.config/emulationstation/scripts/$ev/rocknixds-screensaver-panel.sh
+        chmod +x /storage/.config/emulationstation/scripts/$ev/rocknixds-screensaver-panel.sh
+    done
     # ROCKNIXDS's own apps (Döda Kvarter, ROCKNIXDS Bank) as systems of one entry each: a tile each on the menu's shelf,
     # not two lines in Ports. ES leaves a system without a file out, so a tile shows once its app is installed.
     cp "$SRC/dii-ess-aye/device/es_systems_rocknixds.cfg" /storage/.config/emulationstation/es_systems_rocknixds.cfg
