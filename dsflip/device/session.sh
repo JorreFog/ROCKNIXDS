@@ -21,11 +21,17 @@ ROM="$1"
 T0=$(date +%s%N)
 ms() { echo $(( ($(date +%s%N) - T0) / 1000000 )); }
 up() { read u _ < /proc/uptime; echo "[$u]"; }  # uptime stamp: lines up with restore.sh and switchtime.sh
-# DraStic still running: alive and not a zombie (an exited child stays in /proc, and kill -0 succeeds, until waited for)
-alive() { [ -d /proc/$1 ] && ! grep -q '^State:[[:space:]]*Z' /proc/$1/status 2>/dev/null; }
-# a SIGKILL that hasn't been delivered: the process is stuck in the kernel (state D) and can't die until that returns
+# DraStic still running: alive and not a zombie (an exited child stays in /proc, and kill -0 succeeds, until waited for).
+# ROCKNIXDS_PROC is /proc on the handheld; host tests point it at a fixture.
+alive() {
+  _proc=${ROCKNIXDS_PROC:-/proc}
+  [ -d "$_proc/$1" ] && ! grep -q '^State:[[:space:]]*Z' "$_proc/$1/status" 2>/dev/null
+}
+# a SIGKILL that hasn't been delivered: the process is stuck in the kernel (state D) and can't die until that returns.
+# Bit 8 (0x100) is SIGKILL. SIGUSR1, the resume hotkey, is bit 9 and must not count.
 kill_pending() {
-  for m in $(awk '/^(SigPnd|ShdPnd):/ { print $2 }' /proc/$1/status 2>/dev/null); do
+  _proc=${ROCKNIXDS_PROC:-/proc}
+  for m in $(awk '/^(SigPnd|ShdPnd):/ { print $2 }' "$_proc/$1/status" 2>/dev/null); do
     [ $(( 0x$m & 0x100 )) -ne 0 ] && return 0
   done
   return 1
@@ -46,6 +52,72 @@ stuck_report() {
   echo "The game got stuck while starting and couldn't be stopped. If the screens stay white, hold the power button to restart. Details: $F" > $NOTICE
   sync
 }
+
+# The menu's per-game line wins over the system line. An empty per-game line is unset. The system grep is the one
+# this script has always used (^ and an unescaped dot). Host tests source up to ROCKNIXDS_SESSION_FUNCS and call
+# these; the session below calls them in this order. apply_power_profile reads DSFLIP_RAST before apply_renderer
+# changes it.
+cfg_value() { # $1 key, $2 cfg, $3 game basename
+  _v=$(grep -F "nds[\"$3\"].$1=" "$2" 2>/dev/null | tail -n1 | cut -d= -f2)
+  [ -n "$_v" ] || _v=$(grep "^nds.$1=" "$2" 2>/dev/null | tail -n1 | cut -d= -f2)
+  printf '%s\n' "$_v"
+}
+apply_resume() {
+  _test=${ROCKNIXDS_TEST_FLAG:-/tmp/rocknixds-testing}
+  _test_resume=${ROCKNIXDS_TEST_RESUME:-/tmp/rocknixds-testing-resume}
+  _kill=${ROCKNIXDS_KILL_DATA:-/tmp/.process-kill-data}
+  _states=${ROCKNIXDS_SAVESTATES_DIR:-/storage/roms/savestates/nds}
+  RES=$(cfg_value resume_on_quit "$CFG" "$GAME")
+  if [ "$RES" != 0 ] && { [ ! -e "$_test" ] || [ -e "$_test_resume" ]; }; then
+    RSTATE="$_states/${GAME%.*}.resume.dss" DSV="$(dirname "$ROM")/${GAME%.*}.dsv"
+    RLOAD=0
+    if [ -f "$RSTATE" ]; then
+      if [ -f "$DSV" ] && [ "$DSV" -nt "$RSTATE" ]; then rm -f "$RSTATE"; echo "resume state older than the game's save: dropped"
+      else RLOAD=1; echo "resuming from $RSTATE"; fi
+    fi
+    export DSFLIP_RESUME_FILE="$RSTATE" DSFLIP_RESUME_LOAD=$RLOAD
+    echo "-USR1 drastic" > "$_kill"    # ROCKNIX's exit hotkey: killall $(cat this); saves, then quits
+  elif [ ! -e "$_test" ]; then
+    # resume off. ES's start left the hotkey aimed at emulationstation, and this session has already stopped ES,
+    # so killall would signal nothing and DraStic would keep running. Stock start_drastic.sh sets "-9 drastic".
+    echo "-9 drastic" > "$_kill"
+  fi
+}
+apply_power_profile() {
+  PROF=$(cfg_value power_profile "$CFG" "$GAME")
+  RES=$(cfg_value resolution3d "$CFG" "$GAME")
+  RND=$(cfg_value renderer "$CFG" "$GAME")
+  # 3x costs CPU, so the profile is performance unless this game has its own set (a line, even an empty one).
+  # DraStic's own renderer and DSFLIP_RAST=0 do not draw at 3x, so they keep the chosen profile.
+  # The performance profile's wait is 0, but 3x keeps 20 ms: presents come two-then-none, and the second was dropped.
+  P3X=
+  if [ "$RES" = 3x ] && [ "$RND" != drastic ] && [ "${DSFLIP_RAST:-1}" != 0 ] && ! grep -qF "nds[\"$GAME\"].power_profile=" "$CFG" 2>/dev/null; then
+    PROF=performance P3X=1
+  fi
+  case "$PROF" in
+    performance) Q=1 QW=0 CMAX= ;;
+    battery) Q=3 QW=20 CMAX=1104000 ;;
+    *) PROF=balanced Q=1 QW=20 CMAX=1416000 ;;
+  esac
+  [ -n "$P3X" ] && QW=20
+  export DSFLIP_QUEUE=${DSFLIP_QUEUE:-$Q} DSFLIP_QUEUE_WAIT=${DSFLIP_QUEUE_WAIT:-$QW}
+  [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX} DSFLIP_CPU_MAX_SOFT=${DSFLIP_CPU_MAX_SOFT:-1}
+  echo "power profile: $PROF (queue $DSFLIP_QUEUE, wait ${DSFLIP_QUEUE_WAIT} ms, CPU max ${DSFLIP_CPU_MAX:-hardware})"
+}
+apply_renderer() {
+  RND=$(cfg_value renderer "$CFG" "$GAME")
+  RES=$(cfg_value resolution3d "$CFG" "$GAME")
+  case "$RND" in drastic) ;; superdrastic|""|auto) export DSFLIP_RAST=${DSFLIP_RAST:-1} ;; esac
+  [ "$DSFLIP_RAST" = 0 ] && unset DSFLIP_RAST
+  case "$RES" in 3x|3) [ -n "$DSFLIP_RAST" ] && export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-3} ;; 2x|2) [ -n "$DSFLIP_RAST" ] && export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-2} ;; esac
+  TF=$(cfg_value texture_filter "$CFG" "$GAME")
+  case "$TF" in bilinear) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-1} ;; sharp) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-2} ;; esac
+  if [ -n "$DSFLIP_RAST" ]; then echo "3D renderer: Gengis Engine (${RND:-Auto}; scale ${DSFLIP_RAST_SCALE:-2}, texture filter ${DSFLIP_RAST_TEXFILTER:-0})"; else echo "3D renderer: DraStic"; fi
+}
+# Host tests source this file and stop here. A real session does not set the variable.
+if [ "${ROCKNIXDS_SESSION_FUNCS:-}" = 1 ]; then
+  return 0 2>/dev/null || exit 0
+fi
 {
   echo "$(date) start: $ROM (shader: ${DSHOOK_SHADER:-none})"
   # gptokeyb (start_drastic.sh starts it inside ES's unit) takes ~1.1 s to die on the stop's TERM, and the stop
@@ -139,22 +211,7 @@ stuck_report() {
   # player's slots) and quits; the next start of the game loads it, once. A resume state older than the game's own
   # save file is dropped: loading it would put back an older in-game save too (backup_in_savestates).
   CFG=/storage/.config/system/configs/system.cfg GAME=$(basename "$ROM")
-  RES=$(grep -F "nds[\"$GAME\"].resume_on_quit=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  [ -n "$RES" ] || RES=$(grep "^nds.resume_on_quit=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  if [ "$RES" != 0 ] && { [ ! -e /tmp/rocknixds-testing ] || [ -e /tmp/rocknixds-testing-resume ]; }; then
-    RSTATE="/storage/roms/savestates/nds/${GAME%.*}.resume.dss" DSV="$(dirname "$ROM")/${GAME%.*}.dsv"
-    RLOAD=0
-    if [ -f "$RSTATE" ]; then
-      if [ -f "$DSV" ] && [ "$DSV" -nt "$RSTATE" ]; then rm -f "$RSTATE"; echo "resume state older than the game's save: dropped"
-      else RLOAD=1; echo "resuming from $RSTATE"; fi
-    fi
-    export DSFLIP_RESUME_FILE="$RSTATE" DSFLIP_RESUME_LOAD=$RLOAD
-    echo "-USR1 drastic" > /tmp/.process-kill-data    # ROCKNIX's exit hotkey: killall $(cat this); saves, then quits
-  elif [ ! -e /tmp/rocknixds-testing ]; then
-    # resume off. ES's start left the hotkey aimed at emulationstation, and this session has already stopped ES,
-    # so killall would signal nothing and DraStic would keep running. Stock start_drastic.sh sets "-9 drastic".
-    echo "-9 drastic" > /tmp/.process-kill-data
-  fi
+  apply_resume
   # Power profile (ES: the game's or DS system's "power profile"; unset = balanced). libdsflip's CPU governor picks
   # the clock within the profile's range; the frame queue trades a refresh of input latency for riding out late
   # frames, and the wait keeps a full queue from dropping early ones (measured 2026-09-29, Black 2 at 2x, walking:
@@ -170,33 +227,14 @@ stuck_report() {
   # Platinum with a shader) below full speed for 38-83% of their play at the clocks the governor held; a bound that
   # slows the game down saves nothing worth it.
   # DSFLIP_* already in the environment (tests, systemctl set-environment) win over the profile.
-  PROF=$(grep -F "nds[\"$GAME\"].power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  [ -n "$PROF" ] || PROF=$(grep "^nds.power_profile=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  # 3D resolution (ES: the game's or DS system's "3D resolution", nds.resolution3d; Gengis Engine only, read with the
-  # renderer below): 3x draws the 3D at three times the DS's size and brings it down to the 2x frame (smoother edges,
-  # the same layout). It costs CPU, so the power profile is performance unless this game has its own set: HeartGold
-  # walking held 59.8-60.2 fps at 1992 MHz in the 3x test build; the balanced profile's 1416 MHz cap would not.
-  RES=$(grep -F "nds[\"$GAME\"].resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  [ -n "$RES" ] || RES=$(grep "^nds.resolution3d=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  RND=$(grep -F "nds[\"$GAME\"].renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  [ -n "$RND" ] || RND=$(grep "^nds.renderer=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  # That profile keeps the 20 ms wait at 3x, though: DraStic's presents come unevenly there (two in one refresh, none in
-  # the next), and without the wait the second one was dropped. Measured on the RG DS Plus, 2026-10-09, HeartGold at
-  # 3x walking, 60 s each, two rounds: no wait 1.18 and 0.80 repeated frames a second (148 and 100 dropped), the wait
-  # 0.33 and 0.30 (4 and 4 dropped), at the same 59.8-60.0 fps.
-  P3X=
-  if [ "$RES" = 3x ] && [ "$RND" != drastic ] && [ "${DSFLIP_RAST:-1}" != 0 ] && ! grep -qF "nds[\"$GAME\"].power_profile=" $CFG 2>/dev/null; then
-    PROF=performance P3X=1
-  fi
-  case "$PROF" in
-    performance) Q=1 QW=0 CMAX= ;;
-    battery) Q=3 QW=20 CMAX=1104000 ;;
-    *) PROF=balanced Q=1 QW=20 CMAX=1416000 ;;
-  esac
-  [ -n "$P3X" ] && QW=20
-  export DSFLIP_QUEUE=${DSFLIP_QUEUE:-$Q} DSFLIP_QUEUE_WAIT=${DSFLIP_QUEUE_WAIT:-$QW}
-  [ -n "$CMAX" ] && export DSFLIP_CPU_MAX=${DSFLIP_CPU_MAX:-$CMAX} DSFLIP_CPU_MAX_SOFT=${DSFLIP_CPU_MAX_SOFT:-1}
-  echo "power profile: $PROF (queue $DSFLIP_QUEUE, wait ${DSFLIP_QUEUE_WAIT} ms, CPU max ${DSFLIP_CPU_MAX:-hardware})"
+  # 3D resolution (ES: the game's or DS system's "3D resolution", nds.resolution3d; Gengis Engine only): 3x draws the
+  # 3D at three times the DS's size and brings it down to the 2x frame. It costs CPU, so the power profile is
+  # performance unless this game has its own set: HeartGold walking held 59.8-60.2 fps at 1992 MHz in the 3x test
+  # build; the balanced profile's 1416 MHz cap would not. That profile keeps the 20 ms wait at 3x: DraStic's presents
+  # come unevenly there (two in one refresh, none in the next), and without the wait the second one was dropped.
+  # Measured on the RG DS Plus, 2026-10-09, HeartGold at 3x walking, 60 s each, two rounds: no wait 1.18 and 0.80
+  # repeated frames a second (148 and 100 dropped), the wait 0.33 and 0.30 (4 and 4 dropped), at the same 59.8-60.0 fps.
+  apply_power_profile
   # Performance log, the same samples tools/rgds-monitor.py takes, and only after the player allowed the upload
   # (first launch asks; Nintendo DS > Share performance logs changes it). restore.sh uploads on quit. Test
   # launches don't record.
@@ -219,13 +257,7 @@ stuck_report() {
   # the README asked every new player to switch it on by hand. A player who chose DraStic keeps it. "3D texture filter"
   # and "3D resolution" (above) apply to Gengis Engine; DraStic's renderer ignores them.
   # DSFLIP_RAST=0 in the environment (tests, systemctl set-environment) forces DraStic's renderer whatever the setting.
-  case "$RND" in drastic) ;; superdrastic|""|auto) export DSFLIP_RAST=${DSFLIP_RAST:-1} ;; esac
-  [ "$DSFLIP_RAST" = 0 ] && unset DSFLIP_RAST
-  case "$RES" in 3x|3) [ -n "$DSFLIP_RAST" ] && export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-3} ;; 2x|2) [ -n "$DSFLIP_RAST" ] && export DSFLIP_RAST_SCALE=${DSFLIP_RAST_SCALE:-2} ;; esac
-  TF=$(grep -F "nds[\"$GAME\"].texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  [ -n "$TF" ] || TF=$(grep "^nds.texture_filter=" $CFG 2>/dev/null | tail -n1 | cut -d= -f2)
-  case "$TF" in bilinear) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-1} ;; sharp) export DSFLIP_RAST_TEXFILTER=${DSFLIP_RAST_TEXFILTER:-2} ;; esac
-  if [ -n "$DSFLIP_RAST" ]; then echo "3D renderer: Gengis Engine (${RND:-Auto}; scale ${DSFLIP_RAST_SCALE:-2}, texture filter ${DSFLIP_RAST_TEXFILTER:-0})"; else echo "3D renderer: DraStic"; fi
+  apply_renderer
   # Wi-Fi online play is parked for 1.6 (it doesn't get past the game's own Wi-Fi setup yet): ES no longer offers
   # "wfc dns" and libdsflip ignores nds.wfc_dns. Only the test switch turns it on (systemctl set-environment
   # DSFLIP_WFC=kaeru DSFLIP_WFC_DEBUG=1; docs/handoff-local.md, section 4).

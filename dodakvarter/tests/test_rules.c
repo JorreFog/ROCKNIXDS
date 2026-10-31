@@ -18,6 +18,7 @@
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static int fails;
 #define CHECK(c, ...) do { if (!(c)) { fails++; printf("FAIL: "); printf(__VA_ARGS__); printf("\n"); } } while (0)
@@ -400,6 +401,20 @@ int main(void) {
         }
         S.lang = LANG_EN;
         S.radio = 1; S.radio_heard = 0; S.radio_tip = 0;
+        /* the power already on (a test start, a continued run) used to be said before the introduction */
+        game_new(24, 0); calm(); G->rstate = RS_ACTIVE; G->round = 1; G->god = 1; G->power_on = 1;
+        int jumped = 0, guard = 0;
+        while (G->time <= 1.5f && guard < 120) {
+            game_update(&none, &none, 1.0f / 60);
+            guard++;
+            if (G->time <= 1.5f && (G->radio.cur >= 0 || G->radio.nq != 0 || G->radio.started)) jumped = 1;
+        }
+        int power_at = -1;
+        for (int i = 0; i < G->radio.nq; i++) if (strstr(radio_text(G->radio.q[i]), "THE POWER")) power_at = i;
+        CHECK(!jumped && guard < 120 && G->radio.cur == 0 && power_at == 3,
+              "with the power already on, his introduction didn't come first (jumped %d, ticks %d, line %d, power at %d, waiting %d)",
+              jumped, guard, G->radio.cur, power_at, G->radio.nq);
+        S.radio_heard = 0; S.radio_tip = 0;
         game_new(21, 0); calm(); G->rstate = RS_ACTIVE; G->round = 1; G->god = 1;
         int on = -1;
         for (int k = 0; k < 60 * 4 && on < 0; k++) { game_update(&none, &none, 1.0f / 60); if (G->radio.cur >= 0) on = G->radio.cur; }

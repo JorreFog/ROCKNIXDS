@@ -168,6 +168,39 @@ class MediaAutoTest(unittest.TestCase):
         self.assertIn("nothing missing", out)
         self.assertIn("./Other (USA).nds", self._saved()["ra"])
 
+    def test_no_games_yet_logs_nothing_missing(self):
+        self._state()
+        out = self._run([])
+        self.assertIn("0 game(s), nothing missing", out)
+        self.assertFalse(self.continued)
+
+
+class FreshCardGamesTest(unittest.TestCase):
+    """A fresh SD card has no nds system. ES answers /systems/nds/games with text, not a JSON
+    list, and json.loads used to traceback in media.log every time the menu opened."""
+
+    def setUp(self):
+        self.mod = load("rocknixds_media_games", "dii-ess-aye/scrape/rocknixds-media.py")
+
+    def games(self, answer):
+        dev = self.mod.Device.__new__(self.mod.Device)
+
+        def run(cmd, data=None, binary=False):
+            self.assertIn("systems/nds/games", cmd)
+            return answer
+
+        dev.run = run
+        return dev.games()
+
+    def test_an_answer_that_is_not_a_list_is_no_games(self):
+        for answer in ("404 system not found", "404 system not found\n", "  404 system not found", "", "   ", "null", '{"error":"no"}'):
+            self.assertEqual(self.games(answer), [], answer)
+
+    def test_a_json_list_is_still_the_games(self):
+        self.assertEqual(self.games("[]"), [])
+        self.assertEqual(self.games('[{"id":"1","name":"A"}]'), [{"id": "1", "name": "A"}])
+        self.assertEqual(self.games('\n  [{"id":"2"}]'), [{"id": "2"}])
+
 
 if __name__ == "__main__":
     unittest.main()
