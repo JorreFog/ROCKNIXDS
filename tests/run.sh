@@ -7,4 +7,6 @@ cd "$(dirname "$0")/.."
 sh -n dsflip/device/rocknixds-update
 sh -n dsflip/device/es-features.sh
 sh -n install.sh
+sh -n dii-ess-aye/overlay/scripts/es-memwatch.sh
+bash -n dii-ess-aye/overlay/scripts/start_es_rgds.sh
 python3 -m unittest discover -s tests -v

@@ -261,6 +261,36 @@ class StoreTest(unittest.TestCase):
         self.assertNotIn("**", notes[0])
         self.assertNotIn("http", notes[0])
 
+    def test_a_later_numeric_version_wins_and_notes_stay_one_field(self):
+        # 1.10 is newer than 1.9 even when 1.9 is listed first. A draft and a tag that is not just
+        # numbers (1.10.0-rc1) are not the newest. Notes with a newline, a backslash, a tab, an HTML
+        # comment and a link stay one column of the list the app parses.
+        self.sb.publish_hello("1.10.0")
+        self.sb.publish_hello("1.9.0")
+        rel = self.sb.rel / "Someone/hello.json"
+        lst = json.loads(rel.read_text())
+        body = "line\nwith\\slash\tand tab\n<!-- secret http://hidden.example -->\n## Hello\n\nSee [notes](https://example.invalid/x)\n\n" + ("word " * 400)
+        for r in lst:
+            if r["tag_name"] == "v1.10.0":
+                r["body"] = body
+        lst.insert(0, {"tag_name": "v9.0.0", "draft": True, "prerelease": False, "body": "draft", "assets": []})
+        lst.insert(0, {"tag_name": "v1.10.0-rc1", "draft": False, "prerelease": True, "body": "rc", "assets": []})
+        rel.write_text(json.dumps(lst))
+        self.run_cli("refresh")
+        self.assertEqual(self.states()["hello"][6], "1.10.0")
+        self.assertTrue(store.newer("1.10.0", "1.9.0"))
+        plain = store.plain_notes(body)
+        self.assertLessEqual(len(plain), 1200)
+        self.assertTrue(plain.endswith("..."))
+        self.assertNotIn("secret", plain)
+        self.assertNotIn("http", plain)
+        self.assertIn("notes", plain)
+        r, _ = self.run_cli("list")
+        notes = [l for l in r.stdout.splitlines() if l.startswith("NOTES\thello\t")]
+        self.assertEqual(len(notes), 1)
+        self.assertEqual(notes[0].split("\t", 2)[2], store.tsv(plain))
+        self.assertNotIn("\n", notes[0].split("\t", 2)[2])
+
     def _menu(self):
         """the menu's notify API: what it was sent"""
         import http.server
