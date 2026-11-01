@@ -13,7 +13,11 @@ on:
       - 'dsflip/device/session.sh'
       - 'install.sh'
       - 'store/device/rocknixds-store'
+      - 'store/src/catalog.c'
       - 'store/catalog.json'
+      - 'dii-ess-aye/overlay/scripts/es-memwatch.sh'
+      - 'dii-ess-aye/overlay/scripts/start_es_rgds.sh'
+      - 'dii-ess-aye/es-rgds-datetime.patch'
       - 'store/tests/sandbox.py'
       - '.github/workflows/unit.yml'
   pull_request:
@@ -26,7 +30,11 @@ on:
       - 'dsflip/device/session.sh'
       - 'install.sh'
       - 'store/device/rocknixds-store'
+      - 'store/src/catalog.c'
       - 'store/catalog.json'
+      - 'dii-ess-aye/overlay/scripts/es-memwatch.sh'
+      - 'dii-ess-aye/overlay/scripts/start_es_rgds.sh'
+      - 'dii-ess-aye/es-rgds-datetime.patch'
       - 'store/tests/sandbox.py'
       - '.github/workflows/unit.yml'
   workflow_dispatch:
