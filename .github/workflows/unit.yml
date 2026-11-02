@@ -14,7 +14,11 @@ on:
       - 'install.sh'
       - 'store/device/rocknixds-store'
       - 'store/catalog.json'
+      - 'store/src/job.c'
+      - 'store/src/store.h'
       - 'store/tests/sandbox.py'
+      - 'dodakvarter/src/update.c'
+      - 'dodakvarter/src/update.h'
       - '.github/workflows/unit.yml'
   pull_request:
     paths:
@@ -27,7 +31,11 @@ on:
       - 'install.sh'
       - 'store/device/rocknixds-store'
       - 'store/catalog.json'
+      - 'store/src/job.c'
+      - 'store/src/store.h'
       - 'store/tests/sandbox.py'
+      - 'dodakvarter/src/update.c'
+      - 'dodakvarter/src/update.h'
       - '.github/workflows/unit.yml'
   workflow_dispatch:
 
