@@ -825,6 +825,71 @@ def relink():
 
 
 # ---- install, update, remove --------------------------------------------------------------------------------------
+def remove_path(path):
+    """a file, a link, or a tree. ignore_errors on rmtree would leave a file standing and the swap could not rename over it"""
+    if os.path.islink(path) or os.path.isfile(path):
+        os.remove(path)
+    elif os.path.isdir(path):
+        shutil.rmtree(path)
+
+
+def copy_kept(src, dst):
+    """one kept file or folder, copied. The original stays where the app is installed until that whole folder has been
+    renamed aside, so a power cut still has the saves in the copy the person was playing."""
+    if os.path.lexists(dst):
+        remove_path(dst)
+    parent = os.path.dirname(dst)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    if os.path.islink(src):
+        os.symlink(os.readlink(src), dst)
+    elif os.path.isdir(src):
+        shutil.copytree(src, dst, symlinks=True)
+    else:
+        shutil.copy2(src, dst, follow_symlinks=False)
+
+
+def rescue_swap(dest, keep):
+    """An update that died after moving what the app keeps (saves, the run in progress) and before the folder swap
+    left the only copy of those files in dest.new. The next install used to delete dest.new at the start. Put the
+    files back, or finish a swap that had already renamed the installed folder away, before anything is removed."""
+    new, old = dest + ".new", dest + ".old"
+    if not os.path.lexists(new) and not os.path.lexists(old):
+        return
+    keeps = []
+    for k in keep or []:
+        try:
+            keeps.append(safe_rel(k))
+        except Fail:
+            continue
+    keeps.sort(key=lambda p: (p.count("/"), p))          # a folder before a file inside it
+
+    def restore_missing(src_root, dst_root):
+        for k in keeps:
+            src, dst = os.path.join(src_root, k), os.path.join(dst_root, k)
+            if os.path.lexists(src) and not os.path.lexists(dst):
+                parent = os.path.dirname(dst)
+                if parent:
+                    os.makedirs(parent, exist_ok=True)
+                os.replace(src, dst)
+
+    # the installed folder was already renamed to .old, or a first install died before the last rename
+    if os.path.isdir(new) and not os.path.isdir(dest):
+        os.replace(new, dest)
+        if os.path.isdir(old):
+            restore_missing(old, dest)
+            remove_path(old)
+        return
+    if os.path.isdir(new) and os.path.isdir(dest):
+        restore_missing(new, dest)
+        remove_path(new)
+    if os.path.isdir(old) and not os.path.isdir(dest):
+        os.replace(old, dest)
+    elif os.path.isdir(old):
+        restore_missing(old, dest)
+        remove_path(old)
+
+
 def check_device(app):
     devs = app.get("devices")
     if devs and device() not in devs:
@@ -967,21 +1032,27 @@ def install(app_id, version=None):
                     unlist(PORTS, old_lay)
             dest = P(lay["dest"])
             os.makedirs(os.path.dirname(dest), exist_ok=True)
+            rescue_swap(dest, lay.get("keep"))
             new, old = dest + ".new", dest + ".old"
-            shutil.rmtree(new, ignore_errors=True)
-            shutil.rmtree(old, ignore_errors=True)
+            if os.path.lexists(new):
+                remove_path(new)
+            if os.path.lexists(old):
+                remove_path(old)
             shutil.move(src, new)
-            # what an update leaves: the app's saves and settings, moved over from the copy there now
+            # what an update leaves: the app's saves and settings, copied over. They stay in dest until that folder
+            # is renamed to .old, so a crash here still has them, and a later install does not delete the only copy.
             if os.path.isdir(dest):
                 for k in lay["keep"]:
                     k = safe_rel(k)
-                    if os.path.lexists(os.path.join(dest, k)):
-                        shutil.rmtree(os.path.join(new, k), ignore_errors=True)
-                        os.makedirs(os.path.dirname(os.path.join(new, k)), exist_ok=True)
-                        os.replace(os.path.join(dest, k), os.path.join(new, k))
+                    src_k = os.path.join(dest, k)
+                    if os.path.lexists(src_k):
+                        copy_kept(src_k, os.path.join(new, k))
+                if os.environ.get("RNDS_STORE_FAILPOINT") == "swap":
+                    raise Fail("the swap did not finish")          # tests: prove the copy above left dest intact
                 os.replace(dest, old)
             os.replace(new, dest)
-            shutil.rmtree(old, ignore_errors=True)
+            if os.path.lexists(old):
+                remove_path(old)
             if lay["post_install"]:
                 step("Setting it up")
                 r = subprocess.run([os.path.join(dest, safe_rel(lay["post_install"]))], cwd=dest,
