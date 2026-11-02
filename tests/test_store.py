@@ -3,6 +3,7 @@ over what ROCKNIXDS's own installers put there, keeps what an app keeps, refuses
 ROCKNIXDS doesn't know its tile (an ES system and a line in ROCKNIXDS Pixel's systems.cfg) and takes it away again."""
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -34,8 +35,11 @@ class StoreTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def run_cli(self, *args, ok=True):
-        r = subprocess.run([sys.executable, str(CLI)] + list(args), env=self.sb.env(), capture_output=True, text=True)
+    def run_cli(self, *args, ok=True, env=None):
+        e = self.sb.env()
+        if env:
+            e.update(env)
+        r = subprocess.run([sys.executable, str(CLI)] + list(args), env=e, capture_output=True, text=True)
         last = r.stdout.strip().splitlines()[-1] if r.stdout.strip() else ""
         if ok:
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -173,6 +177,53 @@ class StoreTest(unittest.TestCase):
         self.assertFalse((self.sb.storage / "roms/ports/Doda Kvarter.sh").exists())
         _, last = self.run_cli("install", "dodakvarter")          # nothing newer: nothing done
         self.assertEqual(last, "DONE 0.3.0")
+
+    def test_update_interrupted_before_the_swap_keeps_the_saves(self):
+        # saves were moved into the incoming tree and the process died before that tree became the install.
+        # the next update used to delete that tree, and the scores and the saved run with it.
+        d = self.sb.legacy_dodakvarter("0.2.0")
+        scores, run = (d / "data" / "scores.txt").read_text(), "ROUND 12\n"
+        (d / "data" / "run.sav").write_text(run)
+        incoming = Path(str(d) + ".new")
+        (incoming / "data").mkdir(parents=True)
+        shutil.move(str(d / "data" / "scores.txt"), incoming / "data" / "scores.txt")
+        shutil.move(str(d / "data" / "run.sav"), incoming / "data" / "run.sav")
+        (d / "data").rmdir()
+        (incoming / "dodakvarter").write_text("partial\n")
+        (incoming / "VERSION").write_text("0.3.0\n")
+        self.run_cli("refresh")
+        _, last = self.run_cli("install", "dodakvarter")
+        self.assertEqual(last, "DONE 0.3.0")
+        self.assertEqual((d / "data" / "scores.txt").read_text(), scores)
+        self.assertEqual((d / "data" / "run.sav").read_text(), run)
+        self.assertIn("game 0.3.0", (d / "dodakvarter").read_text())
+        self.assertFalse(incoming.exists())
+        self.assertFalse(Path(str(d) + ".old").exists())
+
+    def test_update_interrupted_after_the_old_folder_was_renamed_away(self):
+        d = self.sb.legacy_dodakvarter("0.2.0")
+        old, new = Path(str(d) + ".old"), Path(str(d) + ".new")
+        new.mkdir()
+        (d / "data").rename(new / "data")
+        d.rename(old)
+        (new / "dodakvarter").write_text("partial\n")
+        (new / "VERSION").write_text("0.3.0\n")
+        self.run_cli("refresh")
+        _, last = self.run_cli("install", "dodakvarter")
+        self.assertEqual(last, "DONE 0.3.0")
+        self.assertEqual((d / "data" / "scores.txt").read_text(), "JRF 30\n")
+        self.assertIn("game 0.3.0", (d / "dodakvarter").read_text())
+        self.assertFalse(old.exists())
+        self.assertFalse(new.exists())
+
+    def test_failed_swap_leaves_the_installed_saves(self):
+        d = self.sb.legacy_dodakvarter("0.2.0")
+        self.run_cli("refresh")
+        _, last = self.run_cli("install", "dodakvarter", ok=False, env={"RNDS_STORE_FAILPOINT": "swap"})
+        self.assertEqual(last, "FAIL the swap did not finish")
+        self.assertEqual((d / "VERSION").read_text().strip(), "0.2.0")
+        self.assertEqual((d / "data" / "scores.txt").read_text(), "JRF 30\n")
+        self.assertEqual((d / "dodakvarter").read_text(), "old game\n")
 
     def test_install_pinned_older_version(self):
         self.sb.legacy_dodakvarter("0.3.0")
