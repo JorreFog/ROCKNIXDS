@@ -836,8 +836,12 @@ def check_device(app):
 
 
 def check_idle(lay):
+    """no install or remove while the app's own unit is up. RNDS_STORE_ROOT is a handheld in a folder, with no
+    units, so the tests skip this; RNDS_STORE_CHECK_IDLE runs it there against the systemctl on PATH."""
     u = lay.get("unit")
-    if u and not ROOT and subprocess.run(["systemctl", "is-active", "-q", u + ".service"]).returncode == 0:
+    if not u or (ROOT and not os.environ.get("RNDS_STORE_CHECK_IDLE")):
+        return
+    if subprocess.run(["systemctl", "is-active", "-q", u + ".service"]).returncode == 0:
         raise Fail("It's running: quit it first")
 
 
